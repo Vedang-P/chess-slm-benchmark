@@ -2,7 +2,7 @@
 
 Implements all GridRoute (Li et al., 2025) metrics:
 - CR: Compliance Ratio
-- FR: Feasibility Ratio  
+- FR: Feasibility Ratio
 - OR: Optimal Ratio
 - GM: Geometric Mean
 - MSE: Mean Square Error
@@ -18,7 +18,7 @@ Plus custom metrics:
 """
 
 import numpy as np
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from dataclasses import dataclass, field
 
 
@@ -31,6 +31,10 @@ class PathResult:
     tokens_generated: int = 0
     latency_ms: float = 0.0
     vram_peak_gb: float = 0.0
+    failure_type: str = ""
+    extraction_ok: bool = True
+    raw_output: str = ""
+    task_id: str = ""
 
 
 @dataclass
@@ -53,49 +57,26 @@ class EvaluationReport:
     num_optimal: int = 0
 
 
-def evaluate_path(
-    path: Optional[List[Tuple[int, int]]],
-    grid: np.ndarray,
-    start: Tuple[int, int],
-    goal: Tuple[int, int],
-    optimal_path: List[Tuple[int, int]],
-    optimal_length: int,
-    tokens: int = 0,
-    latency_ms: float = 0.0,
-    vram_gb: float = 0.0,
-) -> PathResult:
-    """Evaluate a single path result."""
-    return PathResult(
-        path=path,
-        optimal_path=optimal_path,
-        optimal_length=optimal_length,
-        tokens_generated=tokens,
-        latency_ms=latency_ms,
-        vram_peak_gb=vram_gb,
-    )
-
-
-def compute_metrics(results: List[PathResult]) -> EvaluationReport:
+def compute_metrics(results: List[PathResult], grid: np.ndarray) -> EvaluationReport:
     """Compute aggregate metrics from a list of path results."""
     n = len(results)
     if n == 0:
         return EvaluationReport(num_tasks=0)
 
-    compliant_paths = [r for r in results if r.path is not None and len(r.path) >= 2]
     feasible_paths = []
     error_counts = {
-        "invalid_step": 0,
+        "no_output": 0,
+        "start_end_mismatch": 0,
         "obstacle_collision": 0,
         "out_of_bounds": 0,
-        "start_end_mismatch": 0,
-        "no_output": 0,
+        "invalid_step": 0,
     }
 
     for r in results:
         if r.path is None or len(r.path) < 2:
             error_counts["no_output"] += 1
             continue
-        if r.path[0] != r.results[0].start if hasattr(r, 'results') else False:
+        if r.path[0] != r.optimal_path[0] or r.path[-1] != r.optimal_path[-1]:
             error_counts["start_end_mismatch"] += 1
             continue
         if not _is_collision_free(r.path, grid):
@@ -109,18 +90,22 @@ def compute_metrics(results: List[PathResult]) -> EvaluationReport:
             continue
         feasible_paths.append(r)
 
-    compliant = len(compliant_paths) if compliant_paths else max(1, len(feasible_paths))
     feasible = len(feasible_paths)
+    compliant = max(feasible, 1)
 
-    path_lengths = [len(r.path) - 1 for r in feasible_paths]
-    optimal_ratios = [1.0 if ol == 0 else min(1.0, ol / max(1, len(r.path) - 1))
-                      for r in feasible_paths
-                      for ol in [r.optimal_length]]
-    gms = [np.log(len(r.path) - 1) - np.log(max(1, r.optimal_length))
-           for r in feasible_paths]
-    mses = [(len(r.path) - 1 - r.optimal_length) ** 2
-            for r in feasible_paths]
-
+    optimal_ratios = [
+        r.optimal_length / max(1, len(r.path) - 1)
+        if len(r.path) - 1 > 0 else 1.0
+        for r in feasible_paths
+    ]
+    gms = [
+        np.log(max(1, len(r.path) - 1)) - np.log(max(1, r.optimal_length))
+        for r in feasible_paths
+    ]
+    mses = [
+        (len(r.path) - 1 - r.optimal_length) ** 2
+        for r in feasible_paths
+    ]
     num_optimal = sum(1 for r in feasible_paths
                       if len(r.path) - 1 == r.optimal_length)
 

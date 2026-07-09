@@ -15,39 +15,40 @@ from typing import Optional
 class Gemma4Env:
     """Gemma 4 E2B inference environment for on-device pathfinding."""
 
-    MODEL_ID = "google/gemma-4-E2B-it"
+    MODEL_ID = "unsloth/gemma-4-E2B-it-unsloth-bnb-4bit"
+    ORIGINAL_MODEL_ID = "google/gemma-4-E2B-it"
 
     def __init__(
         self,
         device: str = "auto",
         load_in_4bit: bool = True,
         enable_thinking: bool = True,
+        model_id: str = None,
     ):
         self.device = device
         self.load_in_4bit = load_in_4bit
         self.enable_thinking = enable_thinking
+        self.model_id = model_id or self.MODEL_ID
         self.model = None
         self.processor = None
 
     def load(self):
-        """Load Gemma 4 E2B model with optional 4-bit quantization."""
-        quantization_config = None
-        if self.load_in_4bit:
-            from transformers import BitsAndBytesConfig
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-                bnb_4bit_use_double_quant=True,
-            )
+        """Load Gemma 4 E2B model. Uses pre-quantized 4-bit by default."""
+        import transformers
+        hf_version = tuple(int(x) for x in transformers.__version__.split(".")[:3])
+        dtype_kwarg = "dtype" if hf_version >= (5, 13, 0) else "torch_dtype"
+
+        load_kwargs = {
+            "device_map": self.device,
+            "attn_implementation": "sdpa",
+            dtype_kwarg: torch.bfloat16,
+        }
 
         self.model = AutoModelForCausalLM.from_pretrained(
-            self.MODEL_ID,
-            quantization_config=quantization_config,
-            device_map=self.device,
-            attn_implementation="sdpa",
-            torch_dtype=torch.bfloat16,
+            self.model_id,
+            **load_kwargs,
         )
-        self.processor = AutoProcessor.from_pretrained(self.MODEL_ID)
+        self.processor = AutoProcessor.from_pretrained(self.model_id)
         return self
 
     def generate(

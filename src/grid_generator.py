@@ -30,22 +30,33 @@ class GridMap:
 @dataclass
 class GridRouteTask:
     """A single pathfinding task."""
-    grid: GridMap
+    task_id: str
+    grid: np.ndarray
+    size: int
     start: Tuple[int, int]
     goal: Tuple[int, int]
+    obstacles_rect: List[Tuple[int, int, int, int]]
     optimal_path: List[Tuple[int, int]] = field(default_factory=list)
     optimal_length: int = 0
+    nl_variants: Dict[str, str] = field(default_factory=dict)
 
 
 DIRECTIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # 4-directional
 DIR_NAMES = ["right", "left", "down", "up"]
 
 
+GRIDROUTE_CONFIGS = [
+    {"size": 10, "obstacle_size": 3, "num_obstacles": 2, "label": "size_10"},
+    {"size": 20, "obstacle_size": 4, "num_obstacles": 3, "label": "size_20"},
+    {"size": 30, "obstacle_size": 5, "num_obstacles": 4, "label": "size_30"},
+]
+
+
 def generate_gridroute_maps(
     size: int = 10,
     obstacle_size: int = 3,
     num_obstacles: int = 2,
-    num_maps: int = 5,
+    num_maps: int = 100,
     pairs_per_map: int = 5,
     seed: int = 42,
 ) -> List[GridRouteTask]:
@@ -59,19 +70,19 @@ def generate_gridroute_maps(
     rng = np.random.RandomState(seed)
     tasks = []
     min_dist = 0.3 * np.sqrt(2 * size**2)
+    task_counter = 0
 
-    for _ in range(num_maps):
+    for map_idx in range(num_maps):
         grid = np.zeros((size, size), dtype=np.int8)
-        obstacles = []
+        obstacles_rect = []
         for _ in range(num_obstacles):
             x = rng.randint(0, size - obstacle_size)
             y = rng.randint(0, size - obstacle_size)
-            obstacles.append((x, y, obstacle_size, obstacle_size))
+            obstacles_rect.append((x, y, obstacle_size, obstacle_size))
             grid[y:y+obstacle_size, x:x+obstacle_size] = 1
 
-        grid_map = GridMap(size=size, obstacles=obstacles, grid=grid)
-
         for _ in range(pairs_per_map):
+            attempts = 0
             while True:
                 start = (rng.randint(0, size), rng.randint(0, size))
                 goal = (rng.randint(0, size), rng.randint(0, size))
@@ -80,17 +91,44 @@ def generate_gridroute_maps(
                     np.linalg.norm(np.array(start) - np.array(goal)) >= min_dist and
                     bfs_connected(grid, start, goal)):
                     break
+                attempts += 1
+                if attempts > 100:
+                    break
 
             path = dijkstra(grid, start, goal)
+            task_id = f"GRID_{size}x{size}_m{map_idx:03d}_p{_}"
+            nl_vars = grid_to_nl_variants(grid, start, goal)
             tasks.append(GridRouteTask(
-                grid=grid_map,
+                task_id=task_id,
+                grid=grid.copy(),
+                size=size,
                 start=start,
                 goal=goal,
+                obstacles_rect=obstacles_rect,
                 optimal_path=path,
                 optimal_length=len(path) - 1 if path else -1,
+                nl_variants=nl_vars,
             ))
+            task_counter += 1
 
     return tasks
+
+
+def generate_all_gridroute(seed: int = 42) -> List[GridRouteTask]:
+    """Generate all 3 GridRoute configs (1,500 total tasks)."""
+    all_tasks = []
+    for cfg in GRIDROUTE_CONFIGS:
+        tasks = generate_gridroute_maps(
+            size=cfg["size"],
+            obstacle_size=cfg["obstacle_size"],
+            num_obstacles=cfg["num_obstacles"],
+            num_maps=100,
+            pairs_per_map=5,
+            seed=seed,
+        )
+        all_tasks.extend(tasks)
+        print(f"  {cfg['label']}: {len(tasks)} tasks")
+    return all_tasks
 
 
 def bfs_connected(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> bool:
@@ -157,6 +195,37 @@ def grid_to_text(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]
         desc += f"Obstacles occupy cells: {obstacles}. "
     desc += "Movement is in 4 cardinal directions (up, down, left, right) with unit steps."
     return desc
+
+
+def grid_to_nl_variants(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> Dict[str, str]:
+    """Generate 3 NL instruction variants for robustness testing."""
+    h, w = grid.shape
+    obstacles = [(x, y) for y in range(h) for x in range(w) if grid[y, x] == 1]
+    obs_str = ", ".join([f"({x},{y})" for x, y in obstacles]) if obstacles else "none"
+
+    a_direct = {
+        "direct": (
+            f"Navigate from ({start[0]},{start[1]}) to ({goal[0]},{goal[1]}) "
+            f"on a {w}x{h} grid with obstacles at [{obs_str}]. Move up/down/left/right."
+        ),
+    }
+    b_descriptive = {
+        "descriptive": (
+            f"Find a path from the start marker at position ({start[0]},{start[1]}) "
+            f"to the goal at ({goal[0]},{goal[1]}) through the {w}x{h} grid world. "
+            f"Cells marked as obstacles at [{obs_str}] cannot be entered. "
+            f"You can only move in cardinal directions."
+        ),
+    }
+    c_constrained = {
+        "constrained": (
+            f"Plan the shortest route from A=({start[0]},{start[1]}) to B=({goal[0]},{goal[1]}) "
+            f"in a {w}x{h} environment. Blocked cells: [{obs_str}]. "
+            f"Allowed moves: up, down, left, right (unit steps only). "
+            f"Return the full path coordinates."
+        ),
+    }
+    return {**a_direct, **b_descriptive, **c_constrained}
 
 
 def generate_maze(size: int, seed: int = 42) -> np.ndarray:

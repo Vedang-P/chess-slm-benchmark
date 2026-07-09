@@ -8,71 +8,140 @@ Main pipeline:
 
 import json
 import time
-from typing import Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional, Dict, Any
 import numpy as np
 
 from .gemma4_env import Gemma4Env
 from .astar_solver import astar, astar_with_replan
 from .prompts import NEURO_SYMBOLIC_SYSTEM_PROMPT, PATHFINDING_TOOL, REPLANNER_SYSTEM_PROMPT
+from .evaluation import PathResult
 
 
 def extract_constraints(
     gemma: Gemma4Env,
     nl_instruction: str,
-) -> Dict:
+    max_retries: int = 2,
+) -> Tuple[Dict, int, float]:
     """Use Gemma 4 function calling to extract structured constraints from NL.
 
-    Returns: {"start": [x,y], "goal": [x,y], "obstacles": [[x1,y1],...], "constraints": str}
+    Returns: (constraints_dict, tokens_used, latency_ms)
     """
+    t0 = time.time()
     messages = [
         {"role": "system", "content": NEURO_SYMBOLIC_SYSTEM_PROMPT},
         {"role": "user", "content": nl_instruction},
     ]
 
-    result = gemma.generate(
-        messages,
-        tools=[PATHFINDING_TOOL],
-        max_tokens=256,
-    )
+    for attempt in range(max_retries):
+        result = gemma.generate(
+            messages,
+            tools=[PATHFINDING_TOOL],
+            max_tokens=256,
+        )
+        tokens = result.get("input_tokens", 0) + result.get("output_tokens", 0) \
+            if isinstance(result, dict) else 0
 
-    tool_calls = result.get("tool_calls", [])
-    if tool_calls:
-        func = tool_calls[0].get("function", {})
-        return json.loads(func.get("arguments", "{}"))
+        tool_calls = result.get("tool_calls", [])
+        if tool_calls:
+            try:
+                func = tool_calls[0].get("function", {})
+                constraints = json.loads(func.get("arguments", "{}"))
+                latency = (time.time() - t0) * 1000
+                return constraints, tokens, latency
+            except (json.JSONDecodeError, KeyError, IndexError):
+                continue
 
-    content = result.get("content", "")
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        return {"start": None, "goal": None, "obstacles": [], "constraints": "parse_error"}
+        content = result.get("content", "")
+        try:
+            constraints = json.loads(content)
+            latency = (time.time() - t0) * 1000
+            return constraints, tokens, latency
+        except json.JSONDecodeError:
+            continue
+
+    latency = (time.time() - t0) * 1000
+    return {"start": None, "goal": None, "obstacles": [], "constraints": "parse_error"}, tokens, latency
 
 
 def neuro_symbolic_plan(
     gemma: Gemma4Env,
     grid: np.ndarray,
     nl_instruction: str,
-) -> Tuple[Optional[List[Tuple[int, int]]], Dict, float, int]:
-    """Full neuro-symbolic pipeline: NL -> JSON -> A* -> path.
-
-    Returns: (path, constraints_dict, latency_ms, tokens_generated)
-    """
+) -> PathResult:
+    """Full neuro-symbolic pipeline: NL -> JSON -> A* -> path."""
     t0 = time.time()
 
-    constraints = extract_constraints(gemma, nl_instruction)
+    constraints, tokens, parse_latency = extract_constraints(gemma, nl_instruction)
 
     start = tuple(constraints.get("start", (None, None)))
     goal = tuple(constraints.get("goal", (None, None)))
-    parsed_obstacles = constraints.get("obstacles", [])
 
-    if None in start or None in goal:
-        return None, constraints, (time.time() - t0) * 1000, 0
+    extraction_ok = (
+        start[0] is not None and start[1] is not None and
+        goal[0] is not None and goal[1] is not None
+    )
+
+    if not extraction_ok:
+        return PathResult(
+            path=None,
+            optimal_path=[(0, 0), (0, 1)],
+            optimal_length=0,
+            tokens_generated=tokens,
+            latency_ms=parse_latency,
+            extraction_ok=False,
+            failure_type="parse_error",
+            raw_output=str(constraints),
+        )
+
+    if not (0 <= start[0] < grid.shape[1] and 0 <= start[1] < grid.shape[0] and
+            0 <= goal[0] < grid.shape[1] and 0 <= goal[1] < grid.shape[0]):
+        return PathResult(
+            path=None,
+            optimal_path=[start, goal],
+            optimal_length=0,
+            tokens_generated=tokens,
+            latency_ms=parse_latency,
+            extraction_ok=True,
+            failure_type="bounds_error",
+            raw_output=str(constraints),
+        )
+
+    if grid[start[1], start[0]] != 0 or grid[goal[1], goal[0]] != 0:
+        return PathResult(
+            path=None,
+            optimal_path=[start, goal],
+            optimal_length=0,
+            tokens_generated=tokens,
+            latency_ms=parse_latency,
+            extraction_ok=True,
+            failure_type="obstacle_start_goal",
+            raw_output=str(constraints),
+        )
 
     path = astar(grid, start, goal)
-
     latency = (time.time() - t0) * 1000
-    tokens = 0  # TODO: track tokens from gemma.generate
 
-    return (path if path else None), constraints, latency, tokens
+    if not path:
+        return PathResult(
+            path=None,
+            optimal_path=[start, goal],
+            optimal_length=0,
+            tokens_generated=tokens,
+            latency_ms=latency,
+            extraction_ok=True,
+            failure_type="no_path",
+            raw_output=str(constraints),
+        )
+
+    return PathResult(
+        path=path,
+        optimal_path=[start, goal],
+        optimal_length=len(path) - 1,
+        tokens_generated=tokens,
+        latency_ms=latency,
+        extraction_ok=True,
+        raw_output=str(constraints),
+    )
 
 
 def neuro_symbolic_replan(
@@ -81,11 +150,8 @@ def neuro_symbolic_replan(
     current_position: Tuple[int, int],
     goal: Tuple[int, int],
     nl_update: str,
-) -> Tuple[Optional[List[Tuple[int, int]]], Dict, float]:
-    """Handle replanning when user updates constraints.
-
-    Returns: (new_path, updated_constraints_dict, latency_ms)
-    """
+) -> PathResult:
+    """Handle replanning when user updates constraints."""
     t0 = time.time()
 
     messages = [
@@ -94,10 +160,16 @@ def neuro_symbolic_replan(
     ]
 
     result = gemma.generate(messages, tools=[PATHFINDING_TOOL], max_tokens=256)
+    tokens = result.get("input_tokens", 0) + result.get("output_tokens", 0) \
+        if isinstance(result, dict) else 0
+
     tool_calls = result.get("tool_calls", [])
     if tool_calls:
-        func = tool_calls[0].get("function", {})
-        constraints = json.loads(func.get("arguments", "{}"))
+        try:
+            func = tool_calls[0].get("function", {})
+            constraints = json.loads(func.get("arguments", "{}"))
+        except (json.JSONDecodeError, KeyError, IndexError):
+            constraints = {}
     else:
         content = result.get("content", "")
         try:
@@ -117,29 +189,11 @@ def neuro_symbolic_replan(
     path = astar(modified_grid, current_position, goal)
     latency = (time.time() - t0) * 1000
 
-    return (path if path else None), constraints, latency
-
-
-# Test
-if __name__ == "__main__":
-    from grid_generator import generate_gridroute_maps
-    tasks = generate_gridroute_maps(size=10, obstacle_size=3, num_obstacles=2, num_maps=1, pairs_per_map=1)
-
-    t = tasks[0]
-    nl_instruction = (
-        f"Navigate from position ({t.start[0]}, {t.start[1]}) "
-        f"to the goal at ({t.goal[0]}, {t.goal[1]}). "
-        f"The grid is {t.grid.size}x{t.grid.size}. "
-        f"Avoid the obstacles at the predefined locations."
+    return PathResult(
+        path=path if path else None,
+        optimal_path=[current_position, goal],
+        optimal_length=len(path) - 1 if path else 0,
+        tokens_generated=tokens,
+        latency_ms=latency,
+        raw_output=str(constraints),
     )
-
-    print(f"NL Instruction: {nl_instruction}")
-    print(f"Optimal path length: {t.optimal_length}")
-
-    env = Gemma4Env(load_in_4bit=True, enable_thinking=True)
-    env.load()
-
-    path, constraints, latency, tokens = neuro_symbolic_plan(env, t.grid.grid, nl_instruction)
-    print(f"Extracted constraints: {constraints}")
-    print(f"Path length: {len(path)-1 if path else 'None'}")
-    print(f"Latency: {latency:.0f}ms")

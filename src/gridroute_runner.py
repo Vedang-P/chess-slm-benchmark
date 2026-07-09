@@ -6,118 +6,194 @@ GridRoute data and computes evaluation metrics.
 
 import json
 import time
+import csv
 from pathlib import Path
-from typing import List
-from dataclasses import dataclass
+from typing import List, Dict, Optional
+import numpy as np
 
-from .grid_generator import generate_gridroute_maps, GridRouteTask
+from .grid_generator import generate_gridroute_maps, generate_all_gridroute, GridRouteTask, GRIDROUTE_CONFIGS
 from .gemma4_env import Gemma4Env
 from .baselines import pure_slm_planner, aop_planner, pure_astar_baseline
 from .neuro_symbolic_pipeline import neuro_symbolic_plan
 from .evaluation import PathResult, compute_metrics, print_report
 
 
-GRIDROUTE_CONFIGS = [
-    {"size": 10, "obstacle_size": 3, "num_obstacles": 2, "num_maps": 100, "pairs_per_map": 5},
-    {"size": 20, "obstacle_size": 4, "num_obstacles": 3, "num_maps": 100, "pairs_per_map": 5},
-    {"size": 30, "obstacle_size": 5, "num_obstacles": 4, "num_maps": 100, "pairs_per_map": 5},
-]
-
-
-def run_gridroute_benchmark(
+def run_method_on_task(
     gemma: Gemma4Env,
-    config: dict,
-    output_dir: Path,
-    seed: int = 42,
-) -> dict:
-    """Run full GridRoute benchmark for a given config."""
-    tasks = generate_gridroute_maps(**config, seed=seed)
+    method: str,
+    task: GridRouteTask,
+    nl_variant: str = "direct",
+) -> PathResult:
+    """Run a single method on a single task."""
+    grid = task.grid
+    start = task.start
+    goal = task.goal
+    nl_instruction = task.nl_variants.get(nl_variant, task.nl_variants["direct"])
 
-    pure_slm_results = []
-    aop_results = []
-    ns_results = []
+    if method == "pure_slm":
+        return pure_slm_planner(gemma, grid, start, goal, nl_instruction)
+    elif method == "aop_astar":
+        return aop_planner(gemma, grid, start, goal, algorithm="astar")
+    elif method == "aop_dijkstra":
+        return aop_planner(gemma, grid, start, goal, algorithm="dijkstra")
+    elif method == "neuro_symbolic":
+        return neuro_symbolic_plan(gemma, grid, nl_instruction)
+    elif method == "pure_astar":
+        return pure_astar_baseline(grid, start, goal)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+
+def run_benchmark(
+    gemma: Gemma4Env,
+    tasks: List[GridRouteTask],
+    methods: List[str],
+    nl_variant: str = "direct",
+    checkpoint_dir: Optional[Path] = None,
+    resume: bool = True,
+) -> Dict[str, List[PathResult]]:
+    """Run multiple methods on a list of tasks with checkpointing."""
+    results: Dict[str, List[PathResult]] = {m: [] for m in methods}
+    total = len(tasks)
+
+    if checkpoint_dir:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        if resume:
+            for m in methods:
+                ckpt = checkpoint_dir / f"{m}_checkpoint.json"
+                if ckpt.exists():
+                    with open(ckpt) as f:
+                        loaded = json.load(f)
+                    for item in loaded:
+                        r = PathResult(
+                            path=[tuple(p) for p in item.get("path", [])] if item.get("path") else None,
+                            optimal_path=[tuple(p) for p in item["optimal_path"]],
+                            optimal_length=item["optimal_length"],
+                            tokens_generated=item.get("tokens_generated", 0),
+                            latency_ms=item.get("latency_ms", 0),
+                            failure_type=item.get("failure_type", ""),
+                            extraction_ok=item.get("extraction_ok", True),
+                            raw_output=item.get("raw_output", ""),
+                            task_id=item.get("task_id", ""),
+                        )
+                        results[m].append(r)
+                    print(f"  Resumed {len(results[m])} {m} results from checkpoint")
+                else:
+                    results[m] = []
 
     for i, task in enumerate(tasks):
-        grid, start, goal = task.grid.grid, task.start, task.goal
-        opt_path = task.optimal_path
-        opt_len = task.optimal_length
+        task_id = task.task_id
+        for method in methods:
+            if i < len(results.get(method, [])):
+                continue
+            try:
+                result = run_method_on_task(gemma, method, task, nl_variant)
+                result.task_id = task_id
+                result.optimal_path = task.optimal_path
+                result.optimal_length = task.optimal_length
+                results[method].append(result)
+            except Exception as e:
+                print(f"  ERROR [{task_id}] {method}: {e}")
+                results[method].append(PathResult(
+                    path=None,
+                    optimal_path=task.optimal_path,
+                    optimal_length=task.optimal_length,
+                    failure_type="runtime_error",
+                    task_id=task_id,
+                ))
 
-        nl = grid_to_text_instruction(grid, start, goal)
+        if (i + 1) % 25 == 0 or i == total - 1:
+            print(f"  Progress: {i+1}/{total}")
+            if checkpoint_dir:
+                _save_checkpoints(checkpoint_dir, results)
 
-        # Pure SLM
-        t0 = time.time()
-        path = pure_slm_planner(gemma, grid, start, goal)
-        lat = (time.time() - t0) * 1000
-        pure_slm_results.append(PathResult(
-            path=path, optimal_path=opt_path, optimal_length=opt_len,
-            latency_ms=lat,
-        ))
-
-        # AoP A*
-        t0 = time.time()
-        path = aop_planner(gemma, grid, start, goal, algorithm="astar")
-        lat = (time.time() - t0) * 1000
-        aop_results.append(PathResult(
-            path=path, optimal_path=opt_path, optimal_length=opt_len,
-            latency_ms=lat,
-        ))
-
-        # Neuro-symbolic
-        path, constraints, lat, tokens = neuro_symbolic_plan(gemma, grid, nl)
-        ns_results.append(PathResult(
-            path=path, optimal_path=opt_path, optimal_length=opt_len,
-            latency_ms=lat, tokens_generated=tokens,
-        ))
-
-        if (i + 1) % 50 == 0:
-            print(f"  Progress: {i+1}/{len(tasks)}")
-
-    return {
-        "config": config,
-        "pure_slm": compute_metrics(pure_slm_results),
-        "aop_astar": compute_metrics(aop_results),
-        "neuro_symbolic": compute_metrics(ns_results),
-    }
+    return results
 
 
-def grid_to_text_instruction(grid, start, goal):
-    """Generate NL instruction for GridRoute task."""
-    return (
-        f"Plan a path from ({start[0]}, {start[1]}) to ({goal[0]}, {goal[1]}) "
-        f"on a {grid.shape[1]}x{grid.shape[0]} grid. Only move up, down, left, right."
-    )
+def _save_checkpoints(checkpoint_dir: Path, results: Dict[str, List[PathResult]]):
+    """Save intermediate results."""
+    for method, res_list in results.items():
+        serialized = []
+        for r in res_list:
+            serialized.append({
+                "path": [[int(x), int(y)] for x, y in r.path] if r.path else None,
+                "optimal_path": [[int(x), int(y)] for x, y in r.optimal_path],
+                "optimal_length": r.optimal_length,
+                "tokens_generated": r.tokens_generated,
+                "latency_ms": r.latency_ms,
+                "vram_peak_gb": r.vram_peak_gb,
+                "failure_type": r.failure_type,
+                "extraction_ok": r.extraction_ok,
+                "raw_output": r.raw_output,
+                "task_id": r.task_id,
+            })
+        with open(checkpoint_dir / f"{method}_checkpoint.json", "w") as f:
+            json.dump(serialized, f, indent=1)
 
 
-def run_all_benchmarks(gemma: Gemma4Env, output_dir: Path):
-    """Run benchmarks for all GridRoute configs."""
-    all_results = {}
+def analyze_results(
+    results: Dict[str, List[PathResult]],
+    tasks: List[GridRouteTask],
+    method_names: List[str],
+) -> Dict:
+    """Compute metrics for all methods."""
+    analysis = {}
+    for method in method_names:
+        if method not in results or not results[method]:
+            continue
+        grid = tasks[0].grid if tasks else None
+        if grid is not None and len(results[method]) > 0:
+            report = compute_metrics(results[method], grid)
+            analysis[method] = report.__dict__
+            print_report(report, method)
+    return analysis
+
+
+def run_full_gridroute_benchmark(
+    gemma: Gemma4Env,
+    methods: List[str] = None,
+    output_dir: Path = None,
+    nl_variant: str = "direct",
+) -> Dict:
+    """Run all 1,500 GridRoute tasks across all methods."""
+    if methods is None:
+        methods = ["pure_slm", "aop_astar", "neuro_symbolic"]
+    if output_dir is None:
+        output_dir = Path("data/results")
+
+    all_analysis = {}
+
     for cfg in GRIDROUTE_CONFIGS:
-        size = cfg["size"]
-        print(f"\nRunning GridRoute benchmark: {size}x{size}...")
-        results = run_gridroute_benchmark(gemma, cfg, output_dir)
-        all_results[f"size_{size}"] = results
+        label = cfg["label"]
+        print(f"\n{'='*60}")
+        print(f"GridRoute Benchmark: {label} ({cfg['size']}x{cfg['size']})")
+        print(f"{'='*60}")
 
-        for name in ["pure_slm", "aop_astar", "neuro_symbolic"]:
-            print_report(results[name], f"{size}x{size} - {name}")
+        tasks = generate_gridroute_maps(
+            size=cfg["size"],
+            obstacle_size=cfg["obstacle_size"],
+            num_obstacles=cfg["num_obstacles"],
+            num_maps=100,
+            pairs_per_map=5,
+            seed=42,
+        )
+        print(f"  Generated {len(tasks)} tasks")
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    # Serialize (convert dataclasses to dicts)
-    serialized = {}
-    for k, v in all_results.items():
-        serialized[k] = {
-            "config": v["config"],
-            "pure_slm": v["pure_slm"].__dict__,
-            "aop_astar": v["aop_astar"].__dict__,
-            "neuro_symbolic": v["neuro_symbolic"].__dict__,
-        }
-    with open(output_dir / "benchmark_results.json", "w") as f:
-        json.dump(serialized, f, indent=2, default=str)
+        ckpt_dir = output_dir / "checkpoints" / label
+        results = run_benchmark(gemma, tasks, methods, nl_variant, ckpt_dir)
 
-    return all_results
+        analysis = analyze_results(results, tasks, methods)
+        all_analysis[label] = analysis
+
+        with open(output_dir / f"results_{label}.json", "w") as f:
+            json.dump(analysis, f, indent=2, default=str)
+
+    return all_analysis
 
 
-# Test
 if __name__ == "__main__":
     env = Gemma4Env(load_in_4bit=True, enable_thinking=True)
     env.load()
-    results = run_all_benchmarks(env, Path("data/results/"))
+    vram = env.measure_vram()
+    print(f"VRAM: {vram}")
+    results = run_full_gridroute_benchmark(env)
