@@ -1,0 +1,193 @@
+"""Grid world environment and dataset generation.
+
+Implements GridRoute (Li et al., 2025) compatible grid generation:
+- NxN grids with square obstacles
+- 4-directional cardinal movement
+- Start/end pairs with minimum distance constraints
+- Dijkstra reference paths for ground truth
+
+Also generates mazes compatible with Lost in Aggregation (Jiang et al., 2026):
+- Tree-structured mazes via DFS randomized generation
+- Per-cell topology annotation (corridor, junction, dead-end)
+- Shortest unique path computation
+"""
+
+import numpy as np
+import json
+import heapq
+from dataclasses import dataclass, field
+from typing import List, Tuple, Optional, Dict
+
+
+@dataclass
+class GridMap:
+    """A single grid map with obstacles."""
+    size: int
+    obstacles: List[Tuple[int, int, int, int]]  # (x, y, w, h) for each obstacle
+    grid: np.ndarray  # 0 = free, 1 = obstacle
+
+
+@dataclass
+class GridRouteTask:
+    """A single pathfinding task."""
+    grid: GridMap
+    start: Tuple[int, int]
+    goal: Tuple[int, int]
+    optimal_path: List[Tuple[int, int]] = field(default_factory=list)
+    optimal_length: int = 0
+
+
+DIRECTIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # 4-directional
+DIR_NAMES = ["right", "left", "down", "up"]
+
+
+def generate_gridroute_maps(
+    size: int = 10,
+    obstacle_size: int = 3,
+    num_obstacles: int = 2,
+    num_maps: int = 5,
+    pairs_per_map: int = 5,
+    seed: int = 42,
+) -> List[GridRouteTask]:
+    """Generate GridRoute-style benchmark data.
+
+    Configs (from paper):
+    - {N=10, n=2, s=3}, {N=20, n=3, s=4}, {N=30, n=4, s=5}
+    - Min Euclidean distance: 30% of grid diagonal
+    - Verified connectivity via BFS
+    """
+    rng = np.random.RandomState(seed)
+    tasks = []
+    min_dist = 0.3 * np.sqrt(2 * size**2)
+
+    for _ in range(num_maps):
+        grid = np.zeros((size, size), dtype=np.int8)
+        obstacles = []
+        for _ in range(num_obstacles):
+            x = rng.randint(0, size - obstacle_size)
+            y = rng.randint(0, size - obstacle_size)
+            obstacles.append((x, y, obstacle_size, obstacle_size))
+            grid[y:y+obstacle_size, x:x+obstacle_size] = 1
+
+        grid_map = GridMap(size=size, obstacles=obstacles, grid=grid)
+
+        for _ in range(pairs_per_map):
+            while True:
+                start = (rng.randint(0, size), rng.randint(0, size))
+                goal = (rng.randint(0, size), rng.randint(0, size))
+                if (grid[start[1], start[0]] == 0 and
+                    grid[goal[1], goal[0]] == 0 and
+                    np.linalg.norm(np.array(start) - np.array(goal)) >= min_dist and
+                    bfs_connected(grid, start, goal)):
+                    break
+
+            path = dijkstra(grid, start, goal)
+            tasks.append(GridRouteTask(
+                grid=grid_map,
+                start=start,
+                goal=goal,
+                optimal_path=path,
+                optimal_length=len(path) - 1 if path else -1,
+            ))
+
+    return tasks
+
+
+def bfs_connected(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> bool:
+    """Check if start and goal are connected via BFS."""
+    from collections import deque
+    h, w = grid.shape
+    visited = np.zeros_like(grid, dtype=bool)
+    q = deque([start])
+    visited[start[1], start[0]] = True
+    while q:
+        x, y = q.popleft()
+        if (x, y) == goal:
+            return True
+        for dx, dy in DIRECTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < w and 0 <= ny < h and not visited[ny, nx] and grid[ny, nx] == 0:
+                visited[ny, nx] = True
+                q.append((nx, ny))
+    return False
+
+
+def dijkstra(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> List[Tuple[int, int]]:
+    """Dijkstra shortest path with 4-directional movement."""
+    h, w = grid.shape
+    dist = {start: 0}
+    prev = {}
+    pq = [(0, start)]
+    visited = set()
+
+    while pq:
+        d, (x, y) = heapq.heappop(pq)
+        if (x, y) in visited:
+            continue
+        visited.add((x, y))
+        if (x, y) == goal:
+            break
+        for dx, dy in DIRECTIONS:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < w and 0 <= ny < h and grid[ny, nx] == 0:
+                nd = d + 1
+                if (nx, ny) not in dist or nd < dist[(nx, ny)]:
+                    dist[(nx, ny)] = nd
+                    prev[(nx, ny)] = (x, y)
+                    heapq.heappush(pq, (nd, (nx, ny)))
+
+    if goal not in prev:
+        return []
+
+    path = [goal]
+    cur = goal
+    while cur in prev:
+        cur = prev[cur]
+        path.append(cur)
+    return path[::-1]
+
+
+def grid_to_text(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> str:
+    """Convert grid to natural language description for LLM input."""
+    h, w = grid.shape
+    obstacles = [(x, y) for y in range(h) for x in range(w) if grid[y, x] == 1]
+    desc = f"The environment is a {w}x{h} grid. "
+    desc += f"Start at ({start[0]}, {start[1]}). Goal at ({goal[0]}, {goal[1]}). "
+    if obstacles:
+        desc += f"Obstacles occupy cells: {obstacles}. "
+    desc += "Movement is in 4 cardinal directions (up, down, left, right) with unit steps."
+    return desc
+
+
+def generate_maze(size: int, seed: int = 42) -> np.ndarray:
+    """Generate a tree-structured maze via randomized DFS.
+
+    Returns grid where 0 = path, 1 = wall.
+    Compatible with Lost in Aggregation format.
+    """
+    rng = np.random.RandomState(seed)
+    grid = np.ones((size, size), dtype=np.int8)
+    visited = np.zeros((size, size), dtype=bool)
+
+    def carve(x, y):
+        visited[y, x] = True
+        grid[y, x] = 0
+        dirs = DIRECTIONS.copy()
+        rng.shuffle(dirs)
+        for dx, dy in dirs:
+            nx, ny = x + 2*dx, y + 2*dy
+            if 0 <= nx < size and 0 <= ny < size and not visited[ny, nx]:
+                grid[y + dy, x + dx] = 0
+                carve(nx, ny)
+
+    carve(1, 1)
+    return grid
+
+
+# Test
+if __name__ == "__main__":
+    tasks = generate_gridroute_maps(size=10, obstacle_size=3, num_obstacles=2, num_maps=1, pairs_per_map=3)
+    for t in tasks:
+        desc = grid_to_text(t.grid.grid, t.start, t.goal)
+        print(desc)
+        print(f"  Optimal path length: {t.optimal_length}")

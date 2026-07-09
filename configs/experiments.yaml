@@ -1,0 +1,85 @@
+# Experiment Configuration
+
+# Hardware
+hardware:
+  gpu: "NVIDIA RTX 4050 Laptop"
+  vram_gb: 6.0
+  cpu: "auto"
+  platform: "linux"
+
+# Model
+model:
+  id: "google/gemma-4-E2B-it"
+  load_in_4bit: true
+  enable_thinking: true
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 64
+  max_new_tokens: 512
+
+# GridRoute Benchmark Config
+gridroute:
+  configs:
+    - size: 10
+      obstacle_size: 3
+      num_obstacles: 2
+      num_maps: 100
+      pairs_per_map: 5
+    - size: 20
+      obstacle_size: 4
+      num_obstacles: 3
+      num_maps: 100
+      pairs_per_map: 5
+    - size: 30
+      obstacle_size: 5
+      num_obstacles: 4
+      num_maps: 100
+      pairs_per_map: 5
+
+# Lost in Aggregation Benchmark Config
+lost_in_aggregation:
+  maze_sizes: [3, 5, 7, 10, 15, 20, 30]
+  mazes_per_size: 150
+  difficulties: ["easy", "medium", "hard"]
+
+# Baseline Configurations
+baselines:
+  pure_slm:
+    enabled: true
+    prompt: "pure_slm"
+  aop_astar:
+    enabled: true
+    prompt: "aop_astar"
+  aop_dijkstra:
+    enabled: true
+    prompt: "aop_dijkstra"
+
+# Ablations
+ablations:
+  no_thinking:
+    enabled: true
+    enable_thinking: false
+  no_function_calling:
+    enabled: true
+    use_function_calling: false
+
+# Experiment Runs
+experiments:
+  - name: "gridroute_full"
+    dataset: "gridroute"
+    configs: ["size_10", "size_20", "size_30"]
+    baselines: ["pure_slm", "aop_astar", "neuro_symbolic"]
+    ablations: ["no_thinking", "no_function_calling"]
+    runs_per_config: 1
+
+  - name: "lost_in_aggregation"
+    dataset: "lost_in_aggregation"
+    configs: ["3", "5", "7", "10", "15"]
+    baselines: ["pure_slm", "neuro_symbolic"]
+    runs_per_config: 1
+
+# Output
+output:
+  results_dir: "data/results/"
+  figures_dir: "assets/"
+  save_intermediate: true
