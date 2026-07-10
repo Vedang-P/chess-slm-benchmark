@@ -108,9 +108,13 @@ def neuro_symbolic_plan(
     t0 = time.time()
 
     constraints, tokens, parse_latency = extract_constraints(gemma, nl_instruction)
+    if constraints is None:
+        constraints = {}
 
-    start = tuple(constraints.get("start", (None, None)))
-    goal = tuple(constraints.get("goal", (None, None)))
+    sv = constraints.get("start") or (None, None)
+    gv = constraints.get("goal") or (None, None)
+    start = tuple(sv)
+    goal = tuple(gv)
 
     extraction_ok = (
         start[0] is not None and start[1] is not None and

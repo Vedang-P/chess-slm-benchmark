@@ -36,6 +36,13 @@ def run_gridroute(env, methods, output_dir):
 
     for cfg in GRIDROUTE_CONFIGS:
         label = cfg["label"]
+        out_file = output_dir / f"gridroute_{label}.json"
+        if out_file.exists():
+            print(f"\n  SKIP {label}: already exists at {out_file}")
+            with open(out_file) as f:
+                all_results[label] = json.load(f)
+            continue
+
         print(f"\n{'='*60}")
         print(f"GridRoute: {label} ({cfg['size']}x{cfg['size']})")
         print(f"{'='*60}")
@@ -75,10 +82,11 @@ def run_gridroute(env, methods, output_dir):
             if (i + 1) % 25 == 0 or i == len(tasks) - 1:
                 print(f"  Progress: {i+1}/{len(tasks)}")
 
+        grids_list = [t.grid for t in tasks] if len(tasks) == len(results[methods[0]]) else None
         analysis = {}
         for method in methods:
             if results[method]:
-                report = compute_metrics(results[method], tasks[0].grid)
+                report = compute_metrics(results[method], grids=grids_list)
                 analysis[method] = report.__dict__
                 print_report(report, method)
 
@@ -157,10 +165,11 @@ def run_lost_in_agg(env, methods, output_dir):
             if (i + 1) % 30 == 0 or i == len(mazes) - 1:
                 print(f"  Progress: {i+1}/{len(mazes)}")
 
+        all_grids = [np.array(m["grid"]) for m in mazes]
         analysis = {}
         for method in methods:
             if results[method]:
-                report = compute_metrics(results[method], grid)
+                report = compute_metrics(results[method], grids=all_grids)
                 analysis[method] = report.__dict__
                 print_report(report, method)
 

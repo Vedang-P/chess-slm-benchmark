@@ -19,6 +19,7 @@ Plus custom metrics:
 
 import numpy as np
 from typing import List, Tuple, Optional, Dict
+import numpy as np
 from dataclasses import dataclass, field
 
 
@@ -57,8 +58,15 @@ class EvaluationReport:
     num_optimal: int = 0
 
 
-def compute_metrics(results: List[PathResult], grid: np.ndarray) -> EvaluationReport:
-    """Compute aggregate metrics from a list of path results."""
+def compute_metrics(results: List[PathResult], grid: Optional[np.ndarray] = None,
+                    grids: Optional[List[np.ndarray]] = None) -> EvaluationReport:
+    """Compute aggregate metrics from a list of path results.
+
+    Args:
+        results: List of path results.
+        grid: Single grid to check all paths against (for shared-grid benchmarks).
+        grids: Per-task grids (one per result). Takes precedence over `grid`.
+    """
     n = len(results)
     if n == 0:
         return EvaluationReport(num_tasks=0)
@@ -72,17 +80,20 @@ def compute_metrics(results: List[PathResult], grid: np.ndarray) -> EvaluationRe
         "invalid_step": 0,
     }
 
-    for r in results:
+    for i, r in enumerate(results):
+        g = grids[i] if grids is not None else grid
+        if g is None:
+            continue
         if r.path is None or len(r.path) < 2:
             error_counts["no_output"] += 1
             continue
         if r.path[0] != r.optimal_path[0] or r.path[-1] != r.optimal_path[-1]:
             error_counts["start_end_mismatch"] += 1
             continue
-        if not _is_collision_free(r.path, grid):
+        if not _is_collision_free(r.path, g):
             error_counts["obstacle_collision"] += 1
             continue
-        if not _is_in_bounds(r.path, grid.shape):
+        if not _is_in_bounds(r.path, g.shape):
             error_counts["out_of_bounds"] += 1
             continue
         if not _is_valid_steps(r.path):
