@@ -30,6 +30,57 @@ def run_method(method, env, task, nl_variant="direct"):
     raise ValueError(f"Unknown method: {method}")
 
 
+CHECKPOINT_INTERVAL = 25  # Save checkpoint every N tasks
+
+
+def _save_checkpoint(path: Path, results: dict, completed: int, total: int, method_order: list):
+    """Save intermediate checkpoint as JSON-serializable dict."""
+    cp = {
+        "completed": completed,
+        "total": total,
+        "results": {},
+        "methods": method_order,
+    }
+    for method, res_list in results.items():
+        cp["results"][method] = [
+            {
+                "path": r.path,
+                "optimal_path": r.optimal_path,
+                "optimal_length": r.optimal_length,
+                "tokens_generated": r.tokens_generated,
+                "latency_ms": r.latency_ms,
+                "failure_type": r.failure_type,
+                "extraction_ok": r.extraction_ok,
+                "task_id": r.task_id,
+            }
+            for r in res_list
+        ]
+    with open(path, "w") as f:
+        json.dump(cp, f, indent=2, default=str)
+    print(f"  Checkpoint saved: {completed}/{total}")
+
+
+def _load_checkpoint(path: Path, methods: list):
+    """Load checkpoint and return (results_list_dict, completed_count)."""
+    with open(path) as f:
+        cp = json.load(f)
+    results = {m: [] for m in methods}
+    for method, res_list in cp.get("results", {}).items():
+        for r_data in res_list:
+            r = PathResult(
+                path=r_data.get("path"),
+                optimal_path=r_data.get("optimal_path", [(0, 0), (0, 1)]),
+                optimal_length=r_data.get("optimal_length", 0),
+                tokens_generated=r_data.get("tokens_generated", 0),
+                latency_ms=r_data.get("latency_ms", 0),
+                failure_type=r_data.get("failure_type", ""),
+                extraction_ok=r_data.get("extraction_ok", True),
+                task_id=r_data.get("task_id", ""),
+            )
+            results[method].append(r)
+    return results, cp.get("completed", 0)
+
+
 def run_gridroute(env, methods, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     all_results = {}
@@ -37,6 +88,9 @@ def run_gridroute(env, methods, output_dir):
     for cfg in GRIDROUTE_CONFIGS:
         label = cfg["label"]
         out_file = output_dir / f"gridroute_{label}.json"
+        cp_file = output_dir / f"gridroute_{label}_checkpoint.json"
+
+        # Check if final results exist
         if out_file.exists():
             print(f"\n  SKIP {label}: already exists at {out_file}")
             with open(out_file) as f:
@@ -52,10 +106,19 @@ def run_gridroute(env, methods, output_dir):
             num_obstacles=cfg["num_obstacles"],
             num_maps=100, pairs_per_map=5, seed=42,
         )
-        print(f"  Tasks: {len(tasks)}")
+        n_total = len(tasks)
+        print(f"  Tasks: {n_total}")
 
-        results = {m: [] for m in methods}
-        for i, task in enumerate(tasks):
+        # Resume from checkpoint if exists
+        if cp_file.exists():
+            results, completed = _load_checkpoint(cp_file, methods)
+            print(f"  Resuming from checkpoint: {completed}/{n_total} tasks done")
+        else:
+            results = {m: [] for m in methods}
+            completed = 0
+
+        for i in range(completed, n_total):
+            task = tasks[i]
             for method in methods:
                 if method == "pure_astar":
                     res = run_method(method, env, task)
@@ -79,10 +142,16 @@ def run_gridroute(env, methods, output_dir):
                         failure_type="runtime_error", task_id=task.task_id,
                     ))
 
-            if (i + 1) % 25 == 0 or i == len(tasks) - 1:
-                print(f"  Progress: {i+1}/{len(tasks)}")
+            # Save checkpoint periodically
+            if (i + 1) % CHECKPOINT_INTERVAL == 0:
+                _save_checkpoint(cp_file, results, i + 1, n_total, methods)
+                print(f"  Progress: {i+1}/{n_total}")
 
-        grids_list = [t.grid for t in tasks] if len(tasks) == len(results[methods[0]]) else None
+        # Final: save results, remove checkpoint
+        if cp_file.exists():
+            cp_file.unlink()
+
+        grids_list = [t.grid for t in tasks] if len(results[methods[0]]) == n_total else None
         analysis = {}
         for method in methods:
             if results[method]:
@@ -91,8 +160,9 @@ def run_gridroute(env, methods, output_dir):
                 print_report(report, method)
 
         all_results[label] = analysis
-        with open(output_dir / f"gridroute_{label}.json", "w") as f:
+        with open(out_file, "w") as f:
             json.dump(analysis, f, indent=2, default=str)
+        print(f"  ✅ {label} complete, saved to {out_file}")
 
     return all_results
 
