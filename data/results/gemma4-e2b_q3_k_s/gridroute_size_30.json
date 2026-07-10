@@ -1,0 +1,48 @@
+{
+  "neuro_symbolic": {
+    "compliance_ratio": 1.0,
+    "feasibility_ratio": 1.0,
+    "optimal_ratio": 1.0,
+    "geometric_mean": 1.0,
+    "mse": 0.0,
+    "avg_runtime_ms": 967.5532584190369,
+    "success_rate": 1.0,
+    "valid_move_ratio": 0.0,
+    "avg_tokens": 781.608,
+    "avg_vram_gb": NaN,
+    "failure_types": {
+      "no_output": 0,
+      "start_end_mismatch": 0,
+      "obstacle_collision": 0,
+      "out_of_bounds": 0,
+      "invalid_step": 0
+    },
+    "num_tasks": 500,
+    "num_compliant": 500,
+    "num_feasible": 500,
+    "num_optimal": 500
+  },
+  "pure_astar": {
+    "compliance_ratio": 1.0,
+    "feasibility_ratio": 1.0,
+    "optimal_ratio": 1.0,
+    "geometric_mean": 1.0,
+    "mse": 0.0,
+    "avg_runtime_ms": 0.17050409317016602,
+    "success_rate": 1.0,
+    "valid_move_ratio": 0.0,
+    "avg_tokens": NaN,
+    "avg_vram_gb": NaN,
+    "failure_types": {
+      "no_output": 0,
+      "start_end_mismatch": 0,
+      "obstacle_collision": 0,
+      "out_of_bounds": 0,
+      "invalid_step": 0
+    },
+    "num_tasks": 500,
+    "num_compliant": 500,
+    "num_feasible": 500,
+    "num_optimal": 500
+  }
+}
