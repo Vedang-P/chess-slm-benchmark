@@ -7,6 +7,7 @@ Main pipeline:
 """
 
 import json
+import re
 import time
 from typing import Tuple, List, Optional, Dict, Any
 import numpy as np
@@ -17,47 +18,82 @@ from .prompts import NEURO_SYMBOLIC_SYSTEM_PROMPT, PATHFINDING_TOOL, REPLANNER_S
 from .evaluation import PathResult
 
 
+def _extract_json_from_text(text: str) -> Optional[Dict]:
+    """Extract JSON object from text, trying multiple strategies."""
+    # Strategy 1: Find complete JSON object
+    brace_match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+    if brace_match:
+        try:
+            return json.loads(brace_match.group())
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 2: Find coordinate patterns like start: (x,y) or goal: [x,y]
+    coords = {"start": None, "goal": None, "obstacles": []}
+    for key, patterns in [
+        ("start", [r"start[:\s]*\(?(\d+)[,\s]+(\d+)\)?", r"from[:\s]*\(?(\d+)[,\s]+(\d+)\)?"]),
+        ("goal", [r"goal[:\s]*\(?(\d+)[,\s]+(\d+)\)?", r"to[:\s]*\(?(\d+)[,\s]+(\d+)\)?"]),
+    ]:
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                coords[key] = [int(m.group(1)), int(m.group(2))]
+                break
+
+    # Strategy 3: Match coordinates from navigation instruction
+    inst_match = re.search(r"Navigate from\s*\(?(\d+),\s*(\d+)\)?\s*to\s*\(?(\d+),\s*(\d+)\)?", text, re.IGNORECASE)
+    if inst_match:
+        coords["start"] = [int(inst_match.group(1)), int(inst_match.group(2))]
+        coords["goal"] = [int(inst_match.group(3)), int(inst_match.group(4))]
+
+    # Extract obstacles
+    obs_match = re.findall(r"obstacle[:\s]*\[([^\]]+)\]", text, re.IGNORECASE)
+    if obs_match:
+        try:
+            obs_list = json.loads("[" + obs_match[0] + "]")
+            coords["obstacles"] = obs_list
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if coords["start"] and coords["goal"]:
+        coords["obstacles"] = coords.get("obstacles", [])
+        return coords
+    return None
+
+
 def extract_constraints(
     gemma: Gemma4Env,
     nl_instruction: str,
     max_retries: int = 2,
 ) -> Tuple[Dict, int, float]:
-    """Use Gemma 4 function calling to extract structured constraints from NL.
+    """Extract structured constraints from NL instruction.
+
+    Uses plain-text prompt (no function calling) for Gemma 4 compatibility.
+    Falls back to regex extraction from thinking text.
 
     Returns: (constraints_dict, tokens_used, latency_ms)
     """
     t0 = time.time()
-    messages = [
-        {"role": "system", "content": NEURO_SYMBOLIC_SYSTEM_PROMPT},
-        {"role": "user", "content": nl_instruction},
-    ]
+    system = NEURO_SYMBOLIC_SYSTEM_PROMPT
+    user = f"Instruction: {nl_instruction}\n\nExtract start and goal coordinates as JSON: {{\"start\": [x, y], \"goal\": [x, y]}}"
 
     for attempt in range(max_retries):
         result = gemma.generate(
-            messages,
-            tools=[PATHFINDING_TOOL],
-            max_tokens=256,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            max_tokens=1024,
         )
-        tokens = result.get("input_tokens", 0) + result.get("output_tokens", 0) \
-            if isinstance(result, dict) else 0
-
-        tool_calls = result.get("tool_calls", [])
-        if tool_calls:
-            try:
-                func = tool_calls[0].get("function", {})
-                constraints = json.loads(func.get("arguments", "{}"))
-                latency = (time.time() - t0) * 1000
-                return constraints, tokens, latency
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
-
+        tokens = (result.get("input_tokens", 0) + result.get("output_tokens", 0)
+                  if isinstance(result, dict) else 0)
         content = result.get("content", "")
-        try:
-            constraints = json.loads(content)
+
+        # Try JSON extraction from response
+        constraints = _extract_json_from_text(content)
+        if constraints and constraints.get("start") and constraints.get("goal"):
             latency = (time.time() - t0) * 1000
             return constraints, tokens, latency
-        except json.JSONDecodeError:
-            continue
 
     latency = (time.time() - t0) * 1000
     return {"start": None, "goal": None, "obstacles": [], "constraints": "parse_error"}, tokens, latency

@@ -4,15 +4,7 @@ Templates use {env} as the placeholder for environment description.
 """
 
 # Pure SLM Planner - vanilla independent route planning
-PURE_SLM_PROMPT_TEMPLATE = """You are a pathfinding agent in a grid environment.
-Your task is to find a continuous, obstacle-free path from start to goal.
-
-{env}
-
-Output the path as a list of (x,y) coordinate pairs, one per step.
-Example: (0,0) -> (1,0) -> (2,0) -> (2,1)
-
-Path:"""
+PURE_SLM_PROMPT_TEMPLATE = """Path from {start} to {goal}, avoid obstacles at {obstacles}:"""
 
 # Algorithm of Planning - A* (GridRoute AoP/A*)
 AOP_ASTAR_PROMPT_TEMPLATE = """You are a pathfinding agent. Use the A* algorithm logic to plan.
@@ -49,17 +41,8 @@ Path:"""
 
 # Neuro-Symbolic Parser - System Prompt (for function calling)
 NEURO_SYMBOLIC_SYSTEM_PROMPT = """You are a spatial constraint extraction agent.
-Your task is to parse natural language navigation instructions into structured JSON.
-DO NOT solve the pathfinding problem. Only extract the constraints.
-
-Extract: start coordinates, goal coordinates, and any obstacles/constraints mentioned.
-
-Return a JSON object with:
-- "start": [x, y]
-- "goal": [x, y]
-- "obstacles": [[x1, y1], [x2, y2], ...]
-- "constraints": string describing any additional rules
-"""
+Parse natural language navigation instructions into structured JSON.
+Only call the extract_pathfinding_constraints function. Do not think, do not reason, do not plan the path. Just call the function with the correct coordinates."""
 
 # Neuro-Symbolic Path Extraction - Function Definition
 PATHFINDING_TOOL = {
