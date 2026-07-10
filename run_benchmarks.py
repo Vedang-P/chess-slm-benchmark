@@ -3,16 +3,41 @@
 
 import sys
 import json
+import argparse
 from pathlib import Path
 
 SRC = Path(__file__).parent / "src"
 sys.path.insert(0, str(SRC.parent))
+
+import numpy as np
 
 from src.ollama_env import OllamaEnv
 from src.grid_generator import generate_gridroute_maps, GRIDROUTE_CONFIGS, GridRouteTask
 from src.baselines import pure_slm_planner, pure_astar_baseline
 from src.neuro_symbolic_pipeline import neuro_symbolic_plan
 from src.evaluation import PathResult, compute_metrics, print_report
+
+VERBOSE = False
+
+
+def print_grid(task):
+    grid = task.grid
+    print(f"\nGrid ({grid.shape[1]}x{grid.shape[0]}):")
+    print("    " + "".join(f"{x:2}" for x in range(grid.shape[1])))
+    for y in range(grid.shape[0]):
+        row = f"{y:2}  "
+        for x in range(grid.shape[1]):
+            if (x, y) == task.start:
+                row += " S"
+            elif (x, y) == task.goal:
+                row += " G"
+            elif grid[y, x] == 1:
+                row += "██"
+            else:
+                row += " ."
+        print(row)
+    print(f"  Start: {task.start}  →  Goal: {task.goal}")
+    print(f"  NL: {task.nl_variants['direct'][:150]}...")
 
 
 def run_method(method, env, task, nl_variant="direct"):
@@ -81,11 +106,15 @@ def _load_checkpoint(path: Path, methods: list):
     return results, cp.get("completed", 0)
 
 
-def run_gridroute(env, methods, output_dir):
+def run_gridroute(env, methods, output_dir, config_indices=None):
     output_dir.mkdir(parents=True, exist_ok=True)
     all_results = {}
 
-    for cfg in GRIDROUTE_CONFIGS:
+    configs = GRIDROUTE_CONFIGS
+    if config_indices is not None:
+        configs = [GRIDROUTE_CONFIGS[i] for i in config_indices]
+
+    for cfg in configs:
         label = cfg["label"]
         out_file = output_dir / f"gridroute_{label}.json"
         cp_file = output_dir / f"gridroute_{label}_checkpoint.json"
@@ -119,21 +148,78 @@ def run_gridroute(env, methods, output_dir):
 
         for i in range(completed, n_total):
             task = tasks[i]
+
+            if VERBOSE:
+                print(f"\n\n{'='*70}")
+                print(f"TASK {i+1}/{n_total}  |  {label}  |  {task.task_id}")
+                print(f"{'='*70}")
+                print_grid(task)
+
             for method in methods:
                 if method == "pure_astar":
+                    if VERBOSE:
+                        print(f"\n  ── pure_astar ──")
                     res = run_method(method, env, task)
                     res.task_id = task.task_id
                     res.optimal_path = task.optimal_path
                     res.optimal_length = task.optimal_length
                     results[method].append(res)
+                    if VERBOSE:
+                        opt_len = res.optimal_length or 1
+                        print(f"  Path: {res.path}  ({len(res.path)-1} steps, optimal={opt_len})")
                     continue
 
                 try:
+                    if VERBOSE:
+                        print(f"\n  ── {method} ──")
                     res = run_method(method, env, task)
                     res.task_id = task.task_id
                     res.optimal_path = task.optimal_path
                     res.optimal_length = task.optimal_length
                     results[method].append(res)
+                    if VERBOSE:
+                        from src.evaluation import _is_collision_free
+                        from src.astar_solver import astar
+                        valid = (res.path and len(res.path) >= 2 and
+                                 _is_collision_free(res.path, task.grid) and
+                                 res.path[0] == task.start and res.path[-1] == task.goal)
+                        optimal = astar(task.grid, task.start, task.goal)
+                        is_opt = valid and optimal and len(res.path) - 1 == len(optimal) - 1
+                        status = "✅ VALID" if valid else "❌ FAIL"
+                        if is_opt:
+                            status += " ★OPTIMAL"
+                        elif valid:
+                            status += f" (subopt: {len(res.path)-1} vs opt {len(optimal)-1})"
+                        print(f"\n  ╔══ {method} ═══ {status}  ({res.latency_ms/1000:.1f}s) ═══╗")
+                        if hasattr(res, 'raw_output') and res.raw_output:
+                            raw = str(res.raw_output)
+                            print(f"  ║ Gemma CoT:")
+                            for line in raw.split('\n')[:15]:
+                                print(f"  ║   {line[:120]}")
+                            if len(raw.split('\n')) > 15:
+                                print(f"  ║   ... ({len(raw.split('\n'))-15} more lines)")
+                        if res.path:
+                            print(f"  ║")
+                            print(f"  ║ A* path: {len(res.path)-1} steps")
+                            # Show path on grid
+                            path_set = set(res.path)
+                            print(f"  ║")
+                            print(f"  ║   " + "".join(f"{x:2}" for x in range(task.grid.shape[1])))
+                            for y in range(task.grid.shape[0]):
+                                row = f"  ║ {y:2} "
+                                for x in range(task.grid.shape[1]):
+                                    if (x, y) == task.start:
+                                        row += " S"
+                                    elif (x, y) == task.goal:
+                                        row += " G"
+                                    elif task.grid[y, x] == 1:
+                                        row += "██"
+                                    elif (x, y) in path_set:
+                                        row += " ◆"
+                                    else:
+                                        row += " ."
+                                print(row)
+                        print(f"  ╚{'═'*60}╝")
                 except Exception as e:
                     print(f"  ERROR [{task.task_id}] {method}: {e}")
                     results[method].append(PathResult(
@@ -141,6 +227,10 @@ def run_gridroute(env, methods, output_dir):
                         optimal_length=task.optimal_length,
                         failure_type="runtime_error", task_id=task.task_id,
                     ))
+
+            if VERBOSE:
+                print(f"\n{'─'*60}\n⏎ (auto-advancing in 4s...)")
+                time.sleep(4)
 
             # Save checkpoint periodically
             if (i + 1) % CHECKPOINT_INTERVAL == 0:
@@ -253,7 +343,15 @@ def run_lost_in_agg(env, methods, output_dir):
 if __name__ == "__main__":
     import time
 
-    MODEL = "gemma4-e2b:q3_k_s"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show per-task grid and results")
+    parser.add_argument("--model", default="gemma4-e2b:q3_k_s", help="Ollama model name")
+    parser.add_argument("--configs", type=int, nargs="*", default=None,
+                        help="GridRoute config indices to run (0=10,1=20,2=30). Default: all")
+    args = parser.parse_args()
+    VERBOSE = args.verbose
+
+    MODEL = args.model
 
     env = OllamaEnv(model=MODEL, base_url="http://localhost:11434")
     print(f"Using model: {MODEL}")
@@ -265,7 +363,7 @@ if __name__ == "__main__":
 
     # GridRoute
     t0 = time.time()
-    gridroute_results = run_gridroute(env, methods, out)
+    gridroute_results = run_gridroute(env, methods, out, config_indices=args.configs)
     print(f"\nGridRoute done in {(time.time()-t0)/60:.1f} min")
 
     # Lost in Aggregation
