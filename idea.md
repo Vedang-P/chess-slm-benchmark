@@ -62,10 +62,21 @@ reward for GRPO). That's the headline contribution.
 
 ## Novelty
 
-7/10 (updated from 6/10 — see `novelty-assessment.md`). The addition of a proposed, motivated
-technique (not just a diagnostic test of an existing pattern) is a genuinely stronger claim than
-the earlier pure-measurement framing. Still needs a final targeted novelty spot-check on the
-cross-format-consistency reward specifically before committing full training time to it.
+6/10 — see `novelty-assessment.md`. Step 6's consistency-reward idea was checked against
+literature and found to be an application of a very recently validated technique (Elhady et al.,
+arXiv:2606.01464 — consistency-reward RL for cross-*lingual* math reasoning) to a new domain
+(cross-*format* spatial reasoning), not an invention of a new technique. Honest framing: "does
+this technique transfer to a structurally different domain," not "we propose a new method."
+Still a real, worthwhile contribution — just correctly scoped.
+
+## Immediate Next Step (scoped down from the full plan)
+
+Before committing to the full 4-model x 3-training-condition plan, get one empirical GRPO timing
+number: a short run (~50-100 steps) on Gemma 4 E2B only, to see how long a real run actually takes
+on the A5000. Compute is not VRAM-constrained (Unsloth needs ~9GB, card has 24GB) but wall-clock
+time for the full plan is genuinely uncertain and could easily exceed what's feasible before the
+deadline if run across all 4 models x 3 conditions sequentially on one GPU. Decide model/condition
+scope based on that real number, not on secondhand estimates.
 
 ## Target Venue
 

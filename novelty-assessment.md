@@ -41,25 +41,34 @@ close precedent; the combination doesn't.
 specifically the cross-benchmark structural transfer test in this new setting, not the general
 pattern.
 
-## Novelty Score: 7/10
+## Novelty Score: 6/10 (revised back down from 7/10 -- see below)
 
-"Genuine novelty in method, application, or insight." The diagnostic half (does GRPO-trained
-spatial reasoning transfer cross-benchmark, and why) sits at the same 6/10 level as before for
-the same reasons -- the general pattern is established elsewhere, this setting isn't. The
-technique half (a consistency reward motivated by original failure analysis) pushes it higher:
-proposing and validating a fix, not just measuring a gap, is a stronger contribution class.
+"Genuine novelty in application/insight," not "genuine novelty in method." The diagnostic half
+(does GRPO-trained spatial reasoning transfer cross-benchmark, and why) is solid for the reasons
+already established -- the general pattern is known elsewhere, this specific setting isn't. The
+technique half (Step 6) is real but more modest than first assessed: it's an *application* of an
+existing technique to a new domain, not a new technique.
 
-## Open Item Before Treating This As Final
+## Step 6 Novelty Check Result (resolved)
 
-The cross-format-consistency reward specifically has NOT been searched for yet -- everything
-checked so far (AlphaMaze, Ji et al., Xi et al., Beyond Specialization, Unsloth's Gemma 4 docs)
-was about the diagnostic half of the plan. Before committing real training time to Step 6, run a
-targeted search for: reward shaping for cross-domain/cross-format consistency in RL-fine-tuned
-LLMs, and specifically whether anyone has done format-consistency or representation-consistency
-rewards in GRPO training generally (not necessarily spatial). This is a reasonably natural idea --
-worth confirming it's not already done before building around it.
+**Elhady et al. (arXiv:2606.01464, May 2026)** already do the core mechanism proposed for Step 6:
+an unsupervised RL reward for producing the same correct answer when the same problem is posed in
+different *representations*, requiring no gold labels for every representation -- tested on
+cross-*lingual* math reasoning (MGSM), with real gains (up to 21.7%). This is the same underlying
+idea as our cross-format-consistency reward, just for language variation instead of structural-
+format variation, and math instead of spatial navigation. The honest framing for Step 6 is
+therefore: **testing whether a very recently validated technique (consistency-reward RL),
+demonstrated in exactly one domain (cross-lingual math), transfers to a structurally different one
+(cross-format spatial navigation)** -- not inventing a new technique.
+
+Two other "consistency-aware GRPO" papers looked close on title alone but checked out as
+non-overlapping: GRPO-CARE (arXiv:2506.16141) and Faithful GRPO (arXiv:2604.08476) both define
+"consistency" as coherence between a model's own reasoning trace and its final answer *within one
+response* -- a different, unrelated notion from cross-representation agreement. Cite as related
+work, not competitors.
 
 ## Recommendation
 
-Proceed with the diagnostic pipeline (Steps 1-5) now -- fully checked, no blockers. Run the
-Step 6 novelty spot-check before finalizing the consistency-reward design specifically.
+Proceed with the full pipeline. Frame Step 6 honestly in any writeup as an application/transfer
+test of Elhady et al.'s technique to a new domain, not as a novel method -- claiming otherwise
+would be an easy, embarrassing catch for a reviewer who knows that paper.

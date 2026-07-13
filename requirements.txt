@@ -6,3 +6,7 @@ sentencepiece
 protobuf
 huggingface_hub
 modal
+unsloth
+trl
+datasets
+peft

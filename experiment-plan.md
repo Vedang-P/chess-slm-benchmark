@@ -1,5 +1,14 @@
 # Experiment Plan — Diagnose and Fix Cross-Benchmark Generalization in Gemma 4 GRPO Fine-Tuning
 
+## Immediate First Step
+
+Before running the full plan below across 4 models x 3 training conditions, get one empirical
+timing number: a short (~50-100 step) GRPO run on Gemma 4 E2B only (`train_grpo.py`). Wall-clock
+time for GRPO on small models varies enormously in reports found (roughly 5-30+ GPU-hours per
+epoch depending on setup) — not reliable enough to extrapolate from secondhand numbers. VRAM is
+not the constraint (9GB needed, 24GB available); time against the deadline might be. Decide final
+model/condition scope from this real number, not before.
+
 ## Objective
 
 Measure whether GRPO fine-tuning improves Gemma 4 E2B's spatial navigation accuracy, whether that

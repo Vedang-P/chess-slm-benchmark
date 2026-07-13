@@ -1,6 +1,9 @@
 # Refined Research Idea (v4 — diagnose, then fix cross-benchmark generalization)
 
-Novelty score: 7/10 (see `novelty-assessment.md`).
+Novelty score: 6/10 (see `novelty-assessment.md` — Step 6 checked against Elhady et al.,
+arXiv:2606.01464, which already does consistency-reward RL for cross-*lingual* math; our
+contribution there is testing whether it transfers to cross-*format* spatial reasoning, not
+inventing the mechanism).
 
 ## Problem Statement
 
@@ -36,9 +39,10 @@ failure mode close the gap better than naive mixed-format training alone.
 - First GRPO fine-tuning applied to Gemma 4 for spatial reasoning.
 - First test of true cross-benchmark (not reworded-query) structural generalization for
   GRPO-trained spatial reasoning in a text-only on-device model.
-- First proposed technique (not just measurement) targeting cross-format generalization
-  specifically for GRPO-trained spatial reasoning, motivated by a rigorous, multi-angle failure
-  analysis rather than proposed speculatively.
+- First test of whether consistency-reward RL (Elhady et al.'s technique, validated only for
+  cross-lingual math so far) transfers to cross-*format* spatial reasoning — an application/
+  transfer contribution, not a new method. Framed honestly, motivated by original failure
+  analysis (Step 4) rather than applied speculatively.
 - Extends "Beyond Specialization"'s classical-RL finding (diverse training fixes cross-environment
   transfer) into the LLM/GRPO setting, and goes further by testing whether a *targeted* technique
   beats naive data mixing.
@@ -81,10 +85,12 @@ failure mode close the gap better than naive mixed-format training alone.
 
 ## Next Actions
 
-1. Quick novelty spot-check specifically on "cross-format-consistency reward for GRPO" before
-   committing full training time to step 6 — the rest of the pipeline is already checked, this
-   specific piece isn't yet.
-2. Follow Unsloth's Gemma 4 GRPO guide, adapt to maze/grid data (steps 2 and 5).
-3. Run step 1 (already built) to get a fresh baseline number.
-4. Design the failure-analysis categorization scheme (step 4) before results come in, so
+1. ~~Novelty spot-check on Step 6~~ — done, see `novelty-assessment.md`.
+2. **Empirical timing test, Gemma 4 E2B only:** short GRPO run (~50-100 steps) to get a real
+   wall-clock/GPU-hour number on the A5000 before committing to the full plan. This determines
+   whether all 4 models x 3 conditions is realistic or needs cutting down.
+3. Based on that number, decide final model/condition scope, then follow Unsloth's Gemma 4 GRPO
+   guide for the real training runs (steps 2 and 5 of the pipeline).
+4. Run step 1 (baseline eval, already built) to get a fresh baseline number.
+5. Design the failure-analysis categorization scheme (step 4) before results come in, so
    categorization is principled and decided in advance, not post-hoc.
