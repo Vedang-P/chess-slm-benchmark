@@ -1,59 +1,85 @@
-# Experiment Plan — Gemma 4 E2B GRPO Fine-Tuning for Cross-Benchmark Spatial Reasoning
+# Experiment Plan — Diagnose and Fix Cross-Benchmark Generalization in Gemma 4 GRPO Fine-Tuning
 
 ## Objective
 
-Measure whether GRPO fine-tuning improves Gemma 4 E2B's spatial navigation accuracy, and whether
-that improvement transfers from the training benchmark (GridRoute) to a structurally different
-one (Lost in Aggregation), or is format-specific like every prior GRPO-for-maze result.
+Measure whether GRPO fine-tuning improves Gemma 4 E2B's spatial navigation accuracy, whether that
+improvement transfers to a structurally different benchmark than it was trained on, diagnose
+*why* it does or doesn't via multi-angle failure analysis, and test whether a technique targeted
+at the diagnosed failure mode (cross-format-consistency reward) closes the gap better than naive
+mixed-format training.
 
 ## Dataset
 
-- **Training:** AlphaMaze's public GRPO dataset (`homebrewltd/Maze-Reasoning-GRPO-v0.1`, Apache
-  2.0), adapted to our task format, or regenerated GridRoute-style tasks via
-  `src/grid_generator.py` if the format doesn't translate cleanly.
-- **In-distribution eval:** GridRoute (held-out tasks, same format as training).
-- **Out-of-distribution eval:** Lost in Aggregation (`data/lost_in_aggregation/`, already in repo)
-  — tree-structured mazes with topology annotations, structurally different from GridRoute's
-  rectangular-obstacle grids.
-- **Stretch:** MazeEval (partial observability) — no loader built yet.
+- **Training (single-format):** AlphaMaze's `homebrewltd/Maze-Reasoning-GRPO-v0.1` (Apache 2.0),
+  adapted to our task format, or regenerated GridRoute-style tasks via `src/grid_generator.py`.
+- **Training (mixed-format):** the above, combined with an equivalent-scale sample of Lost in
+  Aggregation-style tasks.
+- **In-distribution eval:** GridRoute held-out tasks.
+- **Out-of-distribution eval:** Lost in Aggregation (`data/lost_in_aggregation/`, already in repo).
+- **Stretch:** MazeEval (partial observability) as a third, even more different transfer target.
 
 ## Model
 
-Gemma 4 E2B, fine-tuned via Unsloth (SFT then GRPO), following Unsloth's official Gemma 4 guide.
-Not building the training loop from scratch — adapting their documented recipe.
+Gemma 4 E2B (primary), DeepSeek-R1-Distill-Qwen-1.5B, Qwen2.5-1.5B/3B — all loaded and fine-tuned
+via Unsloth (plain transformers+peft cannot attach LoRA to Gemma 4 at all — confirmed on hardware).
 
 ## Training Protocol
 
-- Stage 1 (SFT): tokenized maze/path representations, teach step-by-step movement prediction.
-- Stage 2 (GRPO): reward = valid path + optimal path length, following AlphaMaze's reward design.
-- Compute: Unsloth documents ~9GB VRAM for Gemma 4 E2B RL training — fits the A5000 (24GB) with
-  large margin.
+- Stage 1 (SFT): tokenized maze/path representations, step-by-step movement prediction.
+- Stage 2 (GRPO), three reward variants tested in sequence:
+  - **Single-format condition:** AlphaMaze's original reward (valid path + optimal length),
+    trained on GridRoute only.
+  - **Mixed-format condition:** same reward, trained on GridRoute + Lost in Aggregation combined.
+  - **Consistency-reward condition:** reward augmented with a cross-format consistency term,
+    design finalized after the failure analysis (see below) — trained on GridRoute only (the
+    interesting test is whether a *targeted* reward, not more diverse data, closes the gap).
+- Compute: ~9GB VRAM for GRPO per Unsloth's Gemma 4 documentation, comfortably within the A5000's
+  24GB.
 - Seed 42 throughout.
+
+## Failure Analysis Protocol (Step 4 — do this thoroughly, it drives Step 6's design)
+
+For every failed transfer-eval case (single-format model on Lost in Aggregation), categorize
+along at least these independent axes:
+- **Representation confusion:** does the model apply GridRoute-style assumptions to Lost in
+  Aggregation's different wall/path encoding or topology structure?
+- **Stage of failure:** does it fail at parsing the problem (wrong start/goal/obstacles extracted)
+  vs. planning (valid parse, invalid or suboptimal path) vs. partial execution (starts correctly,
+  loses track partway through)?
+- **Cross-model consistency:** do Qwen2.5/DeepSeek-distill fail the same way, or differently —
+  tells us whether the failure mode is Gemma-specific or general to the recipe.
+- **Severity gradient:** does failure rate/type change smoothly with maze size/complexity, or is
+  it a cliff?
+
+Do not skip straight to aggregate pass/fail rates — the categorized breakdown is itself a result,
+and it's what step 6's reward design should be built from, not designed speculatively in advance.
 
 ## Baselines
 
 - Untrained Gemma 4 E2B on both benchmarks (already runnable via `train.py`).
-- AlphaMaze's own reported numbers (86% SFT / 93% SFT+GRPO on their single format) as a sanity
-  check that the recipe is implemented correctly, not as a benchmark we're directly compared
-  against (different model, different task format).
+- Single-format-trained model (this is itself a baseline for the mixed-format and
+  consistency-reward conditions).
+- AlphaMaze's own reported numbers as a recipe-correctness sanity check (different model/format,
+  not a direct comparison).
 
 ## Evaluation Metrics
 
-- Valid-path rate and optimal-path rate per benchmark (via the fixed `src/evaluation.py`).
-- Primary quantity: the **gap** between in-distribution (GridRoute) and out-of-distribution (Lost
-  in Aggregation) performance, for the fine-tuned model vs. the baseline model. A shrinking gap
-  after fine-tuning suggests generalization; a stable or widening gap suggests overfitting to the
-  training format (matching Xi et al.'s general finding).
+- Valid-path rate, optimal-path rate per benchmark per training condition (fixed `src/evaluation.py`).
+- Primary: the ID-vs-OOD performance gap, compared across all three trained conditions
+  (single-format / mixed-format / consistency-reward) plus the untrained baseline.
+- Secondary: failure-mode category distribution (from Step 4), compared before/after each fix.
 
 ## Ablations
 
-- SFT-only vs. SFT+GRPO (matches AlphaMaze's own ablation, confirms the RL stage's specific
-  contribution to any generalization effect, not just the SFT stage).
-- Cross-model check with Qwen2.5-1.5B/3B and DeepSeek-R1-Distill-Qwen-1.5B (AlphaMaze's own base
-  model, doubling as a replication sanity check) to see whether any generalization (or lack
-  thereof) is Gemma-specific or general to the recipe. All models loaded/fine-tuned via Unsloth.
+- SFT-only vs. SFT+GRPO, for each training condition (confirms the RL stage's specific
+  contribution, not just SFT).
+- Cross-model check (Qwen2.5-1.5B/3B, DeepSeek-R1-Distill-Qwen-1.5B) — is any effect (positive or
+  negative) Gemma-specific or general to the recipe.
 
 ## Not Yet Built
 
-The actual SFT/GRPO training script (next step, via Unsloth). MazeEval loader. Everything above
-this line describes the plan; `train.py` currently only implements the baseline evaluation half.
+- The actual SFT/GRPO training scripts for all three conditions (next, via Unsloth).
+- The failure-analysis categorization tooling (design before results come in, not after).
+- The consistency-reward's exact mechanism (finalize after Step 4's findings; needs a novelty
+  spot-check before committing full training time to it).
+- MazeEval loader (stretch).

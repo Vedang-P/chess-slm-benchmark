@@ -1,10 +1,20 @@
-# Novelty Assessment (v3 — GRPO fine-tuning for Gemma 4 spatial reasoning)
+# Novelty Assessment (v4 — diagnose, then fix cross-benchmark generalization)
 
 ## Candidate Idea
 
-GRPO fine-tune Gemma 4 E2B for spatial/maze navigation (AlphaMaze's recipe, new model), then test
+GRPO fine-tune Gemma 4 E2B for spatial/maze navigation (AlphaMaze's recipe, new model), test
 whether the improvement generalizes across structurally different benchmarks (GridRoute →
-Lost in Aggregation), not just within the training format.
+Lost in Aggregation), run a rigorous multi-angle failure analysis on the transfer gap, then
+propose and test a cross-format-consistency GRPO reward -- motivated directly by that analysis --
+against a naive mixed-format-training baseline.
+
+## Update From v3 (6/10 -> 7/10)
+
+The earlier version was fundamentally a measurement paper: does a known pattern (GRPO generalizes
+better than SFT) hold in a new setting. This version adds a genuinely proposed technique (the
+consistency reward), motivated by original diagnostic work (the failure analysis), not just a
+test of an existing idea. That's a stronger claim, hence the higher score -- but see the open
+item below before treating 7/10 as final.
 
 ## Closest Comparators
 
@@ -31,15 +41,25 @@ close precedent; the combination doesn't.
 specifically the cross-benchmark structural transfer test in this new setting, not the general
 pattern.
 
-## Novelty Score: 6/10
+## Novelty Score: 7/10
 
-Real, correctly scoped, "genuine novelty in application/insight" — not higher because the general
-finding this extends is already established in adjacent settings (VLM spatial OOD, general LLM
-agent environment transfer); not lower because the specific combination and the practically
-relevant on-device/text-only setting are genuinely untested, and either outcome (generalizes or
-doesn't) is a real, citable contribution.
+"Genuine novelty in method, application, or insight." The diagnostic half (does GRPO-trained
+spatial reasoning transfer cross-benchmark, and why) sits at the same 6/10 level as before for
+the same reasons -- the general pattern is established elsewhere, this setting isn't. The
+technique half (a consistency reward motivated by original failure analysis) pushes it higher:
+proposing and validating a fix, not just measuring a gap, is a stronger contribution class.
+
+## Open Item Before Treating This As Final
+
+The cross-format-consistency reward specifically has NOT been searched for yet -- everything
+checked so far (AlphaMaze, Ji et al., Xi et al., Beyond Specialization, Unsloth's Gemma 4 docs)
+was about the diagnostic half of the plan. Before committing real training time to Step 6, run a
+targeted search for: reward shaping for cross-domain/cross-format consistency in RL-fine-tuned
+LLMs, and specifically whether anyone has done format-consistency or representation-consistency
+rewards in GRPO training generally (not necessarily spatial). This is a reasonably natural idea --
+worth confirming it's not already done before building around it.
 
 ## Recommendation
 
-Proceed. This is a live space (Ji et al. and Xi et al. are both from 2026, within the last few
-months) — move to building rather than continuing to search.
+Proceed with the diagnostic pipeline (Steps 1-5) now -- fully checked, no blockers. Run the
+Step 6 novelty spot-check before finalizing the consistency-reward design specifically.
