@@ -1,0 +1,90 @@
+{
+  "_methodology": "Fixed instruction TEMPLATES are translated once per language (not per-task-instance), holding task difficulty constant across languages so language is the only varying factor. Each translation was produced and then independently back-translated to English by the same process; back_translation is compared to source_en to catch semantic drift. confidence is a self-reported estimate of translation reliability, not a formal metric -- see notes. Slots ({start_x} etc.) must remain literal placeholders substituted at runtime; numeric coordinates are kept as digits in every language (standard practice, not a translation gap).",
+  "source_en": {
+    "template": "Navigate from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid with obstacles at [{obstacles}]. Move up/down/left/right.",
+    "resource_tier": "reference"
+  },
+  "languages": {
+    "es": {
+      "name": "Spanish",
+      "resource_tier": "high",
+      "script": "Latin",
+      "template": "Navega desde ({start_x},{start_y}) hasta ({goal_x},{goal_y}) en una cuadrícula de {w}x{h} con obstáculos en [{obstacles}]. Muévete arriba/abajo/izquierda/derecha.",
+      "back_translation": "Navigate from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid with obstacles at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "high",
+      "notes": "Clean round-trip, no ambiguity."
+    },
+    "fr": {
+      "name": "French",
+      "resource_tier": "high",
+      "script": "Latin",
+      "template": "Naviguez de ({start_x},{start_y}) à ({goal_x},{goal_y}) sur une grille de {w}x{h} avec des obstacles en [{obstacles}]. Déplacez-vous vers le haut/bas/gauche/droite.",
+      "back_translation": "Navigate from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid with obstacles at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "high",
+      "notes": "Clean round-trip, no ambiguity."
+    },
+    "zh": {
+      "name": "Mandarin Chinese",
+      "resource_tier": "high",
+      "script": "Han",
+      "template": "从({start_x},{start_y})导航到({goal_x},{goal_y})，在一个{w}x{h}的网格中，障碍物位于[{obstacles}]。向上/下/左/右移动。",
+      "back_translation": "Navigate from ({start_x},{start_y}) to ({goal_x},{goal_y}), in a {w}x{h} grid, obstacles are located at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "high",
+      "notes": "Grid dimensions kept as Arabic numerals + 'x', which is standard/natural in technical Chinese text, not a gap."
+    },
+    "hi": {
+      "name": "Hindi",
+      "resource_tier": "high",
+      "script": "Devanagari",
+      "template": "({start_x},{start_y}) से ({goal_x},{goal_y}) तक {w}x{h} ग्रिड पर नेविगेट करें, जिसमें बाधाएँ [{obstacles}] पर हैं। ऊपर/नीचे/बाएँ/दाएँ चलें।",
+      "back_translation": "Navigate from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid, with obstacles at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "high",
+      "notes": "Literal, technical sentence, low idiom risk."
+    },
+    "is": {
+      "name": "Icelandic",
+      "resource_tier": "mid",
+      "script": "Latin",
+      "template": "Farðu frá ({start_x},{start_y}) til ({goal_x},{goal_y}) á {w}x{h} reitakerfi með hindrunum við [{obstacles}]. Hreyfðu þig upp/niður/vinstri/hægri.",
+      "back_translation": "Go from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid system with obstacles at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "medium",
+      "notes": "RECOMMEND NATIVE-SPEAKER SPOT-CHECK before relying on this: (1) I have less training exposure to Icelandic than the 'high' tier languages, (2) this is the direct comparison point to MazeEval's own English-vs-Icelandic finding, so getting it exactly right matters more here than for any other language in this set."
+    },
+    "th": {
+      "name": "Thai",
+      "resource_tier": "mid",
+      "script": "Thai",
+      "template": "นำทางจาก ({start_x},{start_y}) ไปยัง ({goal_x},{goal_y}) บนตาราง {w}x{h} ที่มีสิ่งกีดขวางอยู่ที่ [{obstacles}] เคลื่อนที่ขึ้น/ลง/ซ้าย/ขวา",
+      "back_translation": "Navigate from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid with obstacles located at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "medium",
+      "notes": "Also used by MentalMap, useful cross-reference. Recommend spot-check before final results are reported."
+    },
+    "vi": {
+      "name": "Vietnamese",
+      "resource_tier": "mid",
+      "script": "Latin (diacritics)",
+      "template": "Di chuyển từ ({start_x},{start_y}) đến ({goal_x},{goal_y}) trên lưới {w}x{h} với chướng ngại vật tại [{obstacles}]. Di chuyển lên/xuống/trái/phải.",
+      "back_translation": "Move from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid with obstacles at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "medium",
+      "notes": "Recommend spot-check before final results are reported."
+    },
+    "sw": {
+      "name": "Swahili",
+      "resource_tier": "low",
+      "script": "Latin",
+      "template": "Safiri kutoka ({start_x},{start_y}) hadi ({goal_x},{goal_y}) kwenye gridi ya {w}x{h} yenye vizuizi kwenye [{obstacles}]. Songa juu/chini/kushoto/kulia.",
+      "back_translation": "Travel from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid with obstacles at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "medium-low",
+      "notes": "RECOMMEND NATIVE-SPEAKER OR PROFESSIONAL REVIEW: lower training exposure for me at this resource tier. Chosen deliberately over rarer languages because it is comparatively well-documented in NLP literature, giving a better shot at a reliable data-availability proxy too."
+    },
+    "ne": {
+      "name": "Nepali",
+      "resource_tier": "low",
+      "script": "Devanagari",
+      "template": "({start_x},{start_y}) बाट ({goal_x},{goal_y}) सम्म {w}x{h} ग्रिडमा नेभिगेट गर्नुहोस्, जहाँ बाधाहरू [{obstacles}] मा छन्। माथि/तल/बायाँ/दायाँ सर्नुहोस्।",
+      "back_translation": "Navigate from ({start_x},{start_y}) to ({goal_x},{goal_y}) on a {w}x{h} grid, where obstacles are at [{obstacles}]. Move up/down/left/right.",
+      "confidence": "medium-low",
+      "notes": "RECOMMEND NATIVE-SPEAKER OR PROFESSIONAL REVIEW. Chosen alongside Hindi to give a same-script (Devanagari), different-resource-level pair -- isolates script effects from raw data-availability effects."
+    }
+  }
+}

@@ -102,7 +102,13 @@ def compute_metrics(results: List[PathResult], grid: Optional[np.ndarray] = None
         feasible_paths.append(r)
 
     feasible = len(feasible_paths)
-    compliant = max(feasible, 1)
+    compliant = sum(1 for r in results if r.path is not None and len(r.path) >= 2)
+
+    vmr_scores = [
+        _valid_move_ratio(r.path, grids[i] if grids is not None else grid)
+        for i, r in enumerate(results)
+        if r.path is not None and len(r.path) >= 2 and (grids[i] if grids is not None else grid) is not None
+    ]
 
     optimal_ratios = [
         r.optimal_length / max(1, len(r.path) - 1)
@@ -128,7 +134,7 @@ def compute_metrics(results: List[PathResult], grid: Optional[np.ndarray] = None
         mse=np.mean(mses) if mses else 0,
         avg_runtime_ms=np.mean([r.latency_ms for r in results if r.latency_ms > 0]) if results else 0,
         success_rate=feasible / n if n > 0 else 0,
-        valid_move_ratio=0.0,
+        valid_move_ratio=np.mean(vmr_scores) if vmr_scores else 0.0,
         avg_tokens=np.mean([r.tokens_generated for r in results if r.tokens_generated > 0]) if results else 0,
         avg_vram_gb=np.mean([r.vram_peak_gb for r in results if r.vram_peak_gb > 0]) if results else 0,
         failure_types=error_counts,
@@ -148,6 +154,29 @@ def _is_in_bounds(path: List[Tuple[int, int]], shape: Tuple[int, int]) -> bool:
     """Check all path cells within grid bounds."""
     h, w = shape
     return all(0 <= x < w and 0 <= y < h for x, y in path)
+
+
+def _valid_move_ratio(path: List[Tuple[int, int]], grid: Optional[np.ndarray]) -> float:
+    """Fraction of consecutive steps in `path` that are valid unit moves
+    (4-directionally adjacent, in-bounds, not on an obstacle).
+
+    Gives partial credit for paths that go off-track partway through,
+    distinct from the binary all-or-nothing feasibility check.
+    """
+    if grid is None or path is None or len(path) < 2:
+        return 0.0
+    h, w = grid.shape
+    valid = 0
+    total = len(path) - 1
+    for (x0, y0), (x1, y1) in zip(path[:-1], path[1:]):
+        if abs(x1 - x0) + abs(y1 - y0) != 1:
+            continue
+        if not (0 <= x1 < w and 0 <= y1 < h):
+            continue
+        if grid[y1, x1] != 0:
+            continue
+        valid += 1
+    return valid / total if total > 0 else 0.0
 
 
 def _is_valid_steps(path: List[Tuple[int, int]]) -> bool:

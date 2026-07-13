@@ -55,3 +55,7 @@ huggingface/
 
 # Logs
 *.log
+
+# RStack plumbing and local experiment output
+.rstack/
+/results/
