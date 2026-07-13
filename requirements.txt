@@ -1,12 +1,17 @@
-torch
-transformers>=5.13.0
+# Install order matters here: let unsloth's resolver drive torch/transformers/
+# xformers versions (it pins transformers<=5.5.0, which conflicts with the
+# >=5.13.0 that plain/vanilla transformers needs to recognize Gemma 4's
+# architecture natively -- but Unsloth's own loading path patches around
+# that, so it doesn't need the newer version). Don't add a transformers
+# version pin here again without checking it against unsloth's current
+# constraints first.
+unsloth
+trl
+datasets
+peft
 accelerate
 numpy
 sentencepiece
 protobuf
 huggingface_hub
 modal
-unsloth
-trl
-datasets
-peft
