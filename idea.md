@@ -1,66 +1,57 @@
-# Research Idea (v3 — cross-lingual spatial navigation)
-
-## Status
-Supersedes v2 (representation-behavior gap steering), which was set aside not because it was
-wrong, but because the user judged probing+steering to be an overused technique in current LLM
-research ("the same bs LLMs always propose") and wanted something that felt more genuinely
-distinct. v1 (coordinate-extraction + A*) was superseded earlier for being near-tautological.
+# Research Idea (v4 — GRPO fine-tuning for Gemma 4 spatial reasoning)
 
 ## Core Research Question
 
-Does spatial *navigation* reasoning (path-finding, obstacle avoidance, sequential movement — not
-static spatial question-answering) degrade differently across languages in on-device-scale SLMs
-(1-4B), and if so:
-1. Does the size of the cross-lingual gap correlate quantitatively with each language's
-   pretraining-data availability (a hypothesis the closest related paper raises qualitatively but
-   never tests numerically)?
-2. Does a cheap, training-free mitigation — prompting the model to translate the instruction to
-   English internally before solving — close any of the gap, and does that depend on model
-   architecture (as a related non-spatial study found)?
+Does GRPO fine-tuning (AlphaMaze's recipe) improve Gemma 4 E2B's spatial/maze navigation
+reasoning, and does that improvement generalize across structurally different benchmark formats
+(GridRoute's obstacle grids, Lost in Aggregation's multi-scale mazes) — or does it only work on
+whatever single format it was trained on, the way every existing GRPO-for-spatial-reasoning result
+has only ever been tested on one format?
 
-## Why This Direction, Not the Others Considered
+## Method
 
-Two other candidates were scoped and rejected/deferred at this stage:
-- Representation-behavior gap + activation steering — technically sound (see git history of this
-  file / `.rstack/lit-review.jsonl` ids arxiv-2604.10690, arxiv-2502.16690, arxiv-2605.29247,
-  arxiv-2603.18353) but judged too close in spirit to a saturated interpretability-paper template.
-- Memorization vs. genuine generalization (procedurally-novel instances) and quantization's effect
-  on spatial reasoning specifically were both confirmed as open gaps too, and remain good fallback
-  directions if this one doesn't pan out.
+SFT then GRPO, applied to Gemma 4 E2B via Unsloth (official Gemma 4 GRPO support confirmed,
+~9GB VRAM for the RL stage — comfortably within the A5000's 24GB). Evaluate the base model and
+the fine-tuned model across both benchmarks; the generalization gap (or lack of one) between
+train-format and transfer-format performance is the central result.
 
-Cross-lingual spatial reasoning was chosen because MazeEval (arXiv:2507.20395) found a real,
-striking effect (models solve mazes 3-4 sizes smaller in Icelandic than English) that nobody has
-followed up on systematically, and — critically — this is a *navigation* task, which turns out to
-still be an open combination even after finding the closest comparator (MentalMap, below).
+## Why This, Specifically
 
-## Closest Related Work — Must Differentiate Explicitly
+- AlphaMaze (arXiv:2502.14669) proved the recipe works, but only for DeepSeek-R1-Distill-Qwen-1.5B,
+  only on one 5x5 maze format, only in-distribution.
+- Ji et al. (arXiv:2507.13362) show GRPO beats SFT for spatial-reasoning OOD generalization, but
+  on PaLI-Gemma2-3B (vision-language, not text-only) and only for rephrased-query OOD (not
+  cross-benchmark structural transfer).
+- Xi et al. (arXiv:2603.12011) find RL fine-tuning generalizes well within an environment but
+  transfers weakly to genuinely unseen environments, for LLM agents generally — not tested for
+  spatial/maze navigation specifically.
+- Nobody has combined: text-only on-device SLM + Gemma 4 specifically + true cross-benchmark
+  (not just cross-phrasing) structural transfer for spatial navigation.
+- Either outcome is a real result: if generalization holds, that's a useful, actionable finding
+  for on-device agent deployment; if it doesn't, that directly extends Xi et al.'s general finding
+  into a concrete, previously-untested domain.
 
-**MentalMap** (arXiv:2605.28277, May 2026) is a large, recent, comprehensive multilingual spatial
-reasoning benchmark (8 languages, 13 models, ~47K items/model) asking almost the same top-level
-question ("do LLM spatial world models transfer across languages?"). Verified in detail:
-- Its task is static-scene spatial *question-answering* (viewpoint/frame-of-reference reasoning
-  about ProcTHOR household scenes) — not path-navigation/route-finding.
-- Its models are mostly 7B+; only 2 small models appear as boundary "scale controls," not the
-  focus.
-- It notices a language-family clustering effect and speculates ("consistent with training-data
-  script coverage rather than typology") but does not quantitatively test the correlation.
-- It proposes no mitigation technique.
+## Status
 
-This idea's differentiation is therefore: (a) navigation tasks specifically, reusing/extending
-GridRoute, Lost in Aggregation, and MazeEval rather than scene-QA; (b) on-device SLMs (1-4B) as the
-primary subject, not a boundary case; (c) a quantitative training-data-availability correlation;
-(d) a concrete, tested mitigation (translate-first), informed by "Left Behind" (arXiv:2603.21036)
-showing that mitigation's effect is architecture-dependent (+2.2-4.3pp for bilingual architectures,
-~0 for English-dominant ones) — so the experiment should expect and test for heterogeneity across
-models, not assume a uniform fix.
+- Multilingual angle dropped (was the v2/v3 direction) — see `archive/multilingual-direction/`
+  for that work, preserved but no longer pursued.
+- Feasibility confirmed in principle: Unsloth documents Gemma 4 E2B GRPO training on ~9GB VRAM.
+  Our own from-scratch (transformers+peft) feasibility check hit real dependency issues
+  (transformers version, Pillow version) — recommend using Unsloth's documented path directly
+  rather than continuing to debug a from-scratch implementation.
+- Evaluation harness (`train.py`) reworked to run baseline (and later, fine-tuned) models across
+  GridRoute and Lost in Aggregation. MazeEval integration not yet built.
+- Actual SFT/GRPO training pipeline not yet built — next step, following Unsloth's Gemma 4 guide
+  (https://unsloth.ai/docs/models/gemma-4/train), adapted from their Sudoku GRPO example to maze
+  navigation using AlphaMaze's public training data (`homebrewltd/Maze-Reasoning-GRPO-v0.1`,
+  Apache 2.0) as a starting point.
 
-## Compute
+## Novelty
 
-Bash/tool access in this session runs on a Mac (M1) — cannot execute anything on the user's actual
-RTX 4050 laptop directly. Confirmed available: a working, authenticated Modal account (used for
-cloud GPU runs going forward), plus multiple Kaggle accounts for additional/parallel compute if
-needed. The RTX 4050 + Ollama setup remains available to the user locally for their own
-interactive use, but experiment code in this repo should target Modal by default.
+6/10 — see `novelty-assessment.md`. Real and correctly scoped: the general pattern (GRPO
+generalizes better than SFT for spatial reasoning) is already shown in adjacent settings; this
+specific combination (text-only, on-device, Gemma 4, true cross-benchmark structural transfer)
+is not.
 
 ## Target Venue
 

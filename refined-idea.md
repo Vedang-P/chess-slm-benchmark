@@ -1,115 +1,82 @@
-# Refined Research Idea (v2 — cross-lingual spatial navigation)
+# Refined Research Idea (v3 — GRPO fine-tuning for Gemma 4 spatial reasoning)
 
-Produced by /novelty-check on 2026-07-13. Novelty score: 6/10 (see `novelty-assessment.md`).
+Novelty score: 6/10 (see `novelty-assessment.md`).
 
 ## Problem Statement
 
-On-device SLMs (1-4B parameters) are increasingly deployed as navigation/agentic assistants, but
-a single existing data point (MazeEval, arXiv:2507.20395) shows a striking effect: the same model
-solves mazes 3-4 sizes smaller when the identical task is posed in Icelandic instead of English.
-If spatial-navigation reasoning is this sensitive to input language, on-device agents built for
-non-English-speaking users may be silently and substantially less capable — a real deployment
-concern nobody has systematically measured. A comprehensive multilingual spatial-reasoning
-benchmark exists (MentalMap, arXiv:2605.28277) but tests static scene question-answering, not
-navigation, and treats small on-device models as boundary cases rather than the subject. Whether
-the gap is explainable by training-data availability, and whether it's fixable cheaply, remain
-open questions even after MentalMap.
+On-device SLMs deployed as navigation agents need reliable spatial reasoning, but every existing
+demonstration that RL fine-tuning improves this (AlphaMaze) or generalizes it (Ji et al.) has
+only ever been tested on one model, on one benchmark format, in one modality. Whether the gains
+hold when a *different* on-device model (Gemma 4 E2B) is trained and then tested on a
+*structurally different* benchmark than it was trained on is untested, and directly matters for
+whether this technique is a real deployment strategy or an overfit result.
 
 ## Proposed Approach
 
-**Step 1 — Build the multilingual navigation eval set.** Take the existing GridRoute and Lost in
-Aggregation task instances (grids/mazes + ground-truth optimal paths already generated in this
-repo) and produce parallel NL instruction sets in 8-10 languages spanning high-resource
-(Spanish, Mandarin, French, German), mid-resource (Hindi, Icelandic — matching MazeEval),
-low-resource (e.g. Swahili, Nepali), and differing scripts/directionality. Critically, translate
-the fixed instruction *templates* (a handful of sentence patterns, per `grid_to_nl_variants` in
-`src/grid_generator.py`) once per language rather than per-instance — this holds task difficulty
-constant across languages and isolates language as the only varying factor, avoiding the confound
-of per-instance translation-quality noise.
+**Step 1 — Baseline.** Evaluate untrained Gemma 4 E2B on GridRoute and Lost in Aggregation
+(valid-path rate, optimal-path rate). This is what `train.py` currently does.
 
-**Step 2 — Measure the gap.** Run several on-device SLMs (Gemma 4 E2B; Qwen2.5-1.5B/3B for
-cross-model comparison, matching AlphaMaze/Gideon/SmallPlan's reference points) across all
-languages on the same navigation tasks. Primary metric: valid/optimal path rate per language,
-relative to that model's own English baseline (within-model, within-task normalization — avoids
-comparing absolute capability across models, isolates the language effect specifically).
+**Step 2 — Train.** SFT then GRPO on Gemma 4 E2B via Unsloth, using AlphaMaze's public GRPO
+training data (`homebrewltd/Maze-Reasoning-GRPO-v0.1`) as the starting point, adapted/regenerated
+if needed to match our task format. Train on GridRoute-style tasks only (the "in-distribution"
+condition).
 
-**Step 3 — Test the training-data-availability hypothesis.** Using a public proxy for
-per-language pretraining data volume (e.g. known corpus statistics from mC4/OSCAR/CC-100, or each
-model's own reported training-data language breakdown where available), quantitatively correlate
-per-language performance drop against data availability. This is the test MentalMap's own text
-gestures at but never runs numerically.
+**Step 3 — Evaluate transfer.** Run the fine-tuned model on both GridRoute (in-distribution) and
+Lost in Aggregation (out-of-distribution, structurally different — tree-mazes with topology
+annotations vs. GridRoute's rectangular-obstacle grids). The gap between these two numbers,
+compared against the baseline model's gap, is the central result.
 
-**Step 4 — Test the mitigation.** For each model/language pair, compare direct-language solving
-against a two-step "translate the instruction to English internally, then solve" prompt strategy.
-Per Left Behind's finding (arXiv:2603.21036), expect and explicitly test for
-architecture-dependent heterogeneity (some models gain, some don't) rather than reporting one
-pooled effect size.
+**Step 4 (stretch) — MazeEval.** Add partial-observability navigation as a third, even more
+structurally different transfer target, if time allows. No loader built yet.
 
 ## What Is Novel
 
-- First systematic (8-10 language) cross-lingual study of spatial *navigation* reasoning — the
-  only existing navigation-specific data point (MazeEval) covers 2 languages.
-- First to center on-device SLMs (1-4B) as the primary subject for this question, rather than as a
-  boundary/scale-control case (MentalMap's treatment).
-- First quantitative test of the training-data-availability hypothesis for spatial reasoning
-  specifically — an existing paper (MentalMap) notices the pattern qualitatively but doesn't test
-  it numerically.
-- First test of a training-free mitigation for cross-lingual spatial reasoning specifically.
+- First GRPO fine-tuning applied to Gemma 4 (any Gemma 4 variant) for spatial reasoning
+  specifically — Gemma+GRPO is documented for math/general reasoning (Unsloth guides, Google's
+  own Gemma community blog post) but not spatial/navigation tasks.
+- First test of true cross-benchmark (structurally different, not just reworded) generalization
+  for GRPO-trained spatial reasoning in a text-only (not vision-language) on-device model.
+- Directly extends Xi et al.'s general "RL generalizes poorly across genuinely different
+  environments" finding into a concrete, previously untested, practically relevant domain.
 
 ## Key Assumptions
 
-1. Translating fixed instruction *templates* (not per-instance) into each language, by a
-   competent method (see Next Actions — needs a real decision, not machine-translation-and-hope),
-   produces natural, task-equivalent instructions across languages. Bad translations would
-   confound "language effect" with "translation quality effect."
-2. A usable proxy for per-language pretraining-data volume exists and is reasonably comparable
-   across the specific models tested (models differ in training corpora; this is a real
-   measurement challenge, not a given).
-3. Gemma 4 E2B and the Qwen2.5 comparison models have adequate multilingual coverage to even
-   attempt all chosen languages — needs a quick check before committing to the full language list.
+1. AlphaMaze's GRPO recipe transfers to Gemma 4's architecture without major modification —
+   plausible (Unsloth documents Gemma 4 GRPO support generally) but not yet confirmed for this
+   specific maze/reward setup.
+2. GridRoute and Lost in Aggregation are different enough in structure to count as a genuine
+   cross-benchmark generalization test, not just a size/difficulty variation — true by
+   construction (rectangular obstacle grids vs. tree-structured mazes with topology labels) but
+   worth stating explicitly since Xi et al.'s "difficulty within an environment" vs. "genuinely
+   unseen environment" distinction is exactly what this hinges on.
 
 ## Evaluation Plan
 
-- **Models:** Gemma 4 E2B (primary), Qwen2.5-1.5B and 3B (comparison/reference points).
-- **Tasks:** GridRoute (full-observability grids, already in repo) and Lost in Aggregation
-  (multi-scale mazes, already in repo) — navigation tasks, reusing existing ground-truth optimal
-  paths for scoring. MazeEval-style partial observability as a stretch goal if time allows.
-- **Languages:** 8-10 spanning resource level and script, including Icelandic (direct MazeEval
-  comparison point) and at least one RTL script (e.g. Arabic, also in MentalMap for
-  cross-referencing).
-- **Metrics:** valid-path rate and optimality rate per language (reusing/fixing the existing
-  `src/evaluation.py`, which has known bugs — hardcoded `valid_move_ratio`, `compliance_ratio`
-  conflated with `feasibility_ratio` — that must be fixed before reuse), normalized against each
-  model's own English baseline; correlation coefficient (e.g. Pearson/Spearman) between
-  normalized performance and the data-availability proxy; effect size of the translate-first
-  mitigation, reported per model (not pooled).
-- **Baselines:** each model's own English performance (the natural baseline here, not an external
-  method).
+- **Models:** Gemma 4 E2B (primary). Qwen2.5-1.5B/3B as reference points if time allows.
+- **Benchmarks:** GridRoute (train + in-distribution eval), Lost in Aggregation (out-of-distribution
+  eval), MazeEval (stretch).
+- **Metrics:** valid-path rate, optimal-path rate (via `src/evaluation.py`, already fixed for the
+  compliance/feasibility conflation and VMR bugs), reported separately per benchmark, before and
+  after fine-tuning — the *change in the OOD-vs-ID gap* is the primary quantity, not raw accuracy
+  numbers alone.
+- **Baseline:** untrained Gemma 4 E2B on both benchmarks (Step 1, already runnable).
 
 ## Risks
 
-- **Translation quality is the biggest methodological risk.** Machine-translating templates with
-  the same SLM being tested (or a similarly imperfect translator) risks confounding "the model is
-  bad at this language" with "the instruction is bad in this language." Mitigate by using a
-  strong, separate translation source for the fixed templates (human review of the small number
-  of unique template sentences is feasible — there are only a handful, not per-instance).
-- **Data-availability proxies are noisy and inconsistently defined across corpora/models.** The
-  correlation test needs honest error bars and should not overclaim precision.
-- **MentalMap re-analysis risk:** if MentalMap's authors or someone else publishes the
-  quantitative correlation test before this work does, that specific contribution shrinks —
-  time-sensitive, per the novelty assessment's recommendation to move promptly.
-- **Null result is a real possible outcome** (gap doesn't correlate with data availability, or
-  mitigation doesn't help) — still publishable as a clean negative result extending MentalMap to
-  navigation tasks, but changes the pitch; decide in advance this is an acceptable outcome.
+- **Training may not converge or may not improve over baseline at all** — a real possible outcome,
+  not just a caveat. Still publishable as a negative result if reported honestly, but changes the
+  pitch significantly.
+- **Generalization may simply fail** (per Xi et al.'s general finding) — this is actually a
+  *reasonably likely* outcome given prior literature, not a low-probability edge case. Plan the
+  paper so this is a legitimate, interesting finding, not a failed experiment.
+- **Unsloth/Gemma 4 compatibility** — documented to work, but not yet verified end-to-end on our
+  specific hardware for a full training run (only inference-level loading has been tested so far,
+  and that hit real dependency version issues before being resolved).
 
 ## Next Actions
 
-1. Decide the translation approach for instruction templates (human-reviewed MT, a professional
-   translation API with review, or bilingual-speaker review) — this gates everything else.
-2. Confirm Gemma 4 E2B and the Qwen2.5 comparison models' multilingual training coverage claims
-   for the chosen language list before committing to it.
-3. Select and justify the training-data-availability proxy metric.
-4. Fix `src/evaluation.py`'s known bugs before reuse.
-5. Write `experiment-plan.md` for Step 1-2 (build the multilingual set + measure the gap) as the
-   first concrete, fundable Modal run — Steps 3-4 (correlation + mitigation) follow once Step 2's
-   data exists.
+1. Follow Unsloth's Gemma 4 GRPO guide directly (adapt their Sudoku example) rather than
+   continuing the from-scratch transformers+peft path.
+2. Get/adapt AlphaMaze's public GRPO training data for our task format.
+3. Run Step 1 (baseline eval) now — `train.py` supports this already.
+4. Train, then run Step 3 (transfer eval) and compare.

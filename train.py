@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Cross-lingual spatial navigation gap measurement.
+"""Baseline evaluation harness for Gemma 4 E2B spatial reasoning.
 
-Runs Gemma 4 E2B + Qwen2.5-1.5B/3B on the same GridRoute navigation tasks
-across English + 9 translated languages, measuring valid-path and optimality
-rate per language, normalized against each model's own English baseline.
+Runs a model (base or a fine-tuned checkpoint) across GridRoute and Lost in
+Aggregation, English-only, to establish/compare cross-benchmark performance.
+This is the evaluation side of the GRPO fine-tuning project -- the actual
+SFT/GRPO training follows Unsloth's documented Gemma 4 recipe directly
+(https://unsloth.ai/docs/models/gemma-4/train) rather than a from-scratch
+implementation here.
+
+MazeEval integration is not yet built (no loader exists yet) -- GridRoute
+and Lost in Aggregation are the two benchmarks currently wired up.
 
 Entry point for both local smoke-testing (--smoke_test, CPU, stub model) and
-Modal cloud execution (real models, A100 GPU).
+real runs (local GPU via --backend ollama/hf, or Modal cloud).
 """
 
 import argparse
@@ -14,7 +20,6 @@ import json
 import os
 import random
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
@@ -25,12 +30,10 @@ try:
     import modal
     MODAL_AVAILABLE = True
 except ImportError:
-    # Modal is optional: this script also runs standalone on any machine with
-    # a GPU (e.g. `python3 train.py --n_tasks 20`), no cloud dependency needed.
     MODAL_AVAILABLE = False
 
 if MODAL_AVAILABLE:
-    app = modal.App("rstack-crosslingual-nav")
+    app = modal.App("gemma4-spatial-reasoning")
     image = (
         modal.Image.debian_slim(python_version="3.11")
         .pip_install(
@@ -44,11 +47,12 @@ if MODAL_AVAILABLE:
         )
         .add_local_dir("src", remote_path="/root/src")
         .add_local_dir("data", remote_path="/root/data")
-        .add_local_python_source("hf_models", "multilingual_data")
+        .add_local_python_source("hf_models")
     )
 
 SEED = 42
 MODEL_KEYS = ["gemma4-e2b", "qwen2.5-1.5b", "qwen2.5-3b"]
+BENCHMARKS = ["gridroute", "lost_in_aggregation"]
 
 
 def set_seed(seed: int = SEED):
@@ -63,28 +67,72 @@ def set_seed(seed: int = SEED):
         pass
 
 
+def load_gridroute_instances(n_tasks: int, seed: int = SEED):
+    from src.grid_generator import generate_gridroute_maps
+    tasks = generate_gridroute_maps(
+        size=10, obstacle_size=3, num_obstacles=2,
+        num_maps=100, pairs_per_map=5, seed=seed,
+    )
+    rng = np.random.RandomState(seed)
+    idx = sorted(rng.choice(len(tasks), size=min(n_tasks, len(tasks)), replace=False))
+    instances = []
+    for i in idx:
+        t = tasks[i]
+        instances.append({
+            "task_id": t.task_id, "instruction": t.nl_variants["direct"],
+            "start": t.start, "goal": t.goal, "grid": t.grid,
+            "optimal_path": t.optimal_path, "optimal_length": t.optimal_length,
+        })
+    return instances
+
+
+def load_lost_in_agg_instances(n_tasks: int, size: int = 7, seed: int = SEED):
+    """Load Lost in Aggregation mazes. Instruction is templated from
+    start/goal since the maze JSON doesn't include NL text directly."""
+    path = Path("data/lost_in_aggregation") / f"size_{size}_150.json"
+    with open(path) as f:
+        mazes = json.load(f)
+    rng = np.random.RandomState(seed)
+    idx = sorted(rng.choice(len(mazes), size=min(n_tasks, len(mazes)), replace=False))
+    instances = []
+    for i in idx:
+        m = mazes[i]
+        grid = np.array(m["grid"])
+        h, w = grid.shape
+        start = tuple(m.get("start", (1, 1)))
+        goal = tuple(m.get("goal", (w - 2, h - 2)))
+        instruction = (
+            f"Navigate from ({start[0]},{start[1]}) to ({goal[0]},{goal[1]}) "
+            f"on a {w}x{h} maze grid (1=wall, 0=path). Move up/down/left/right."
+        )
+        solution = m.get("topology", {}).get("shortest_path") or [list(start), list(goal)]
+        optimal_path = [tuple(p) for p in solution]
+        instances.append({
+            "task_id": m["id"], "instruction": instruction,
+            "start": start, "goal": goal, "grid": grid,
+            "optimal_path": optimal_path, "optimal_length": len(optimal_path) - 1,
+        })
+    return instances
+
+
 def run(args):
     set_seed(SEED)
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print(f"Data directory: {args.data_dir}")
-    print(f"Contents: {os.listdir(args.data_dir) if os.path.isdir(args.data_dir) else 'MISSING'}")
-    assert os.path.isdir(args.data_dir), f"Data dir not found: {args.data_dir}"
-
-    from multilingual_data import build_instances
     from hf_models import HFModel, OllamaModel, parse_path_response
     from src.evaluation import PathResult, compute_metrics, print_report
 
     n_tasks = 3 if args.smoke_test else args.n_tasks
     model_keys = MODEL_KEYS[:1] if args.smoke_test else MODEL_KEYS
+    benchmarks = BENCHMARKS[:1] if args.smoke_test else BENCHMARKS
 
-    instances = build_instances(n_tasks=n_tasks, seed=SEED)
-    print(f"Built {len(instances)} (task, language) instances "
-          f"from {n_tasks} tasks x {len(set(i['lang'] for i in instances))} languages")
+    bench_instances = {}
+    if "gridroute" in benchmarks:
+        bench_instances["gridroute"] = load_gridroute_instances(n_tasks)
+    if "lost_in_aggregation" in benchmarks:
+        bench_instances["lost_in_aggregation"] = load_lost_in_agg_instances(n_tasks)
 
-    all_results = {}  # model_key -> lang -> list[PathResult]
-    all_grids = {}     # model_key -> lang -> list[np.ndarray]
-
+    all_results = {}
     for model_key in model_keys:
         print(f"\n{'='*60}\nModel: {model_key} (backend={args.backend})\n{'='*60}")
         if args.backend == "ollama":
@@ -92,56 +140,35 @@ def run(args):
         else:
             model = HFModel(model_key, smoke_test=args.smoke_test).load()
 
-        results_by_lang, grids_by_lang = {}, {}
-        for i, inst in enumerate(instances):
-            task = inst["task"]
-            lang = inst["lang"]
-            gen = model.generate(inst["instruction"], max_new_tokens=1536, temperature=0.0)
-            path = parse_path_response(gen["content"], task.start, task.goal)
+        bench_reports = {}
+        for bench_name, instances in bench_instances.items():
+            results, grids = [], []
+            for i, inst in enumerate(instances):
+                gen = model.generate(inst["instruction"], max_new_tokens=1536, temperature=0.0)
+                path = parse_path_response(gen["content"], inst["start"], inst["goal"])
+                results.append(PathResult(
+                    path=path, optimal_path=inst["optimal_path"],
+                    optimal_length=inst["optimal_length"],
+                    tokens_generated=gen["input_tokens"] + gen["output_tokens"],
+                    latency_ms=gen["latency_ms"], raw_output=gen["content"][:500],
+                    task_id=inst["task_id"],
+                ))
+                grids.append(inst["grid"])
+                if (i + 1) % 25 == 0 or i == len(instances) - 1:
+                    print(f"  [{bench_name}] {i+1}/{len(instances)}")
 
-            r = PathResult(
-                path=path,
-                optimal_path=task.optimal_path,
-                optimal_length=task.optimal_length,
-                tokens_generated=gen["input_tokens"] + gen["output_tokens"],
-                latency_ms=gen["latency_ms"],
-                raw_output=gen["content"][:500],
-                task_id=task.task_id,
-            )
-            results_by_lang.setdefault(lang, []).append(r)
-            grids_by_lang.setdefault(lang, []).append(task.grid)
+            report = compute_metrics(results, grids=grids)
+            bench_reports[bench_name] = report.__dict__
+            print_report(report, f"{model_key} / {bench_name}")
 
-            if (i + 1) % 25 == 0 or i == len(instances) - 1:
-                print(f"  Progress: {i+1}/{len(instances)}")
-
-        lang_reports = {}
-        for lang, results in results_by_lang.items():
-            report = compute_metrics(results, grids=grids_by_lang[lang])
-            lang_reports[lang] = report.__dict__
-            print_report(report, f"{model_key} / {lang}")
-
-        # Normalize each language's rates against this model's own English baseline.
-        en = lang_reports.get("en", {})
-        en_valid = en.get("feasibility_ratio", 0) or 1e-9
-        en_optimal = en.get("optimal_ratio", 0) or 1e-9
-        for lang, rep in lang_reports.items():
-            rep["normalized_valid_gap"] = (en_valid - rep["feasibility_ratio"]) / en_valid
-            rep["normalized_optimal_gap"] = (en_optimal - rep["optimal_ratio"]) / en_optimal
-
-        all_results[model_key] = lang_reports
-
+        all_results[model_key] = bench_reports
         with open(os.path.join(args.output_dir, f"{model_key}_results.json"), "w") as f:
-            json.dump(lang_reports, f, indent=2, default=str)
+            json.dump(bench_reports, f, indent=2, default=str)
 
-    metrics = {
-        "n_tasks": n_tasks,
-        "model_keys": model_keys,
-        "results": all_results,
-        "smoke_test": args.smoke_test,
-    }
+    metrics = {"n_tasks": n_tasks, "model_keys": model_keys, "benchmarks": benchmarks,
+               "results": all_results, "smoke_test": args.smoke_test}
     with open(os.path.join(args.output_dir, "metrics.json"), "w") as f:
         json.dump(metrics, f, indent=2, default=str)
-
     print(f"\nDone. Metrics written to {args.output_dir}/metrics.json")
     return metrics
 
@@ -174,9 +201,8 @@ if __name__ == "__main__":
     parser.add_argument("--models", type=str, default="",
                          help="Comma-separated subset of gemma4-e2b,qwen2.5-1.5b,qwen2.5-3b (default: all)")
     parser.add_argument("--backend", type=str, default="hf", choices=["hf", "ollama"],
-                         help="'hf' loads full weights via transformers (needs real VRAM, "
-                              "used on Modal/A100). 'ollama' talks to a local Ollama server "
-                              "with already-quantized models (fits 6GB laptop GPUs).")
+                         help="'hf' loads full weights via transformers. "
+                              "'ollama' talks to a local Ollama server (quantized models).")
     cli_args = parser.parse_args()
     if cli_args.models:
         MODEL_KEYS = [m.strip() for m in cli_args.models.split(",")]
