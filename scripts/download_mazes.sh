@@ -4,7 +4,7 @@ set -euo pipefail
 # Download Lost in Aggregation maze datasets from GitHub Releases v0.1
 # https://github.com/s-nlp/lost-in-aggregation/releases/tag/v0.1
 
-DATA_DIR="/home/vedang/Desktop/Research/neuro-symbolic-pathfinding/data/lost_in_aggregation"
+DATA_DIR="$(cd "$(dirname "$0")/.." && pwd)/data/lost_in_aggregation"
 mkdir -p "$DATA_DIR"
 
 BASE_URL="https://github.com/s-nlp/lost-in-aggregation/releases/download/v0.1"
