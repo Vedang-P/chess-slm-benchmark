@@ -35,7 +35,7 @@ if MODAL_AVAILABLE:
         modal.Image.debian_slim(python_version="3.11")
         .pip_install(
             "torch",
-            "transformers>=4.46",
+            "transformers>=5.13.0",
             "accelerate",
             "numpy",
             "sentencepiece",

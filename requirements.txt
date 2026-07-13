@@ -1,5 +1,5 @@
 torch
-transformers>=4.46
+transformers>=5.13.0
 accelerate
 numpy
 sentencepiece
