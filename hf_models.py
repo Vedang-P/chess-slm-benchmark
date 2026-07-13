@@ -14,6 +14,12 @@ MODEL_IDS = {
     "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
 }
 
+OLLAMA_MODEL_TAGS = {
+    "gemma4-e2b": "gemma4-e2b:q3_k_s",
+    "qwen2.5-1.5b": "qwen2.5:1.5b",
+    "qwen2.5-3b": "qwen2.5:3b",
+}
+
 
 def strip_gemma_thoughts(text: str) -> str:
     """Gemma 4 emits thinking content before a final-answer marker.
@@ -96,6 +102,49 @@ class HFModel:
             "input_tokens": int(input_len),
             "output_tokens": int(output_ids.shape[-1]),
             "latency_ms": (time.time() - t0) * 1000,
+        }
+
+
+class OllamaModel:
+    """Same .load()/.generate() interface as HFModel, backed by a local
+    Ollama server instead of HF transformers. For running on a machine
+    (e.g. an RTX 4050 laptop) that already has Ollama + the quantized
+    models set up -- avoids the VRAM cost of loading full bf16 weights.
+    """
+
+    def __init__(self, model_key: str, base_url: str = "http://localhost:11434",
+                 smoke_test: bool = False):
+        self.model_key = model_key
+        self.smoke_test = smoke_test
+        self.base_url = base_url
+        self.env = None
+
+    def load(self):
+        if self.smoke_test:
+            return self
+        from src.ollama_env import OllamaEnv
+        self.env = OllamaEnv(model=OLLAMA_MODEL_TAGS[self.model_key],
+                              base_url=self.base_url, temperature=0.0)
+        return self
+
+    def generate(self, prompt: str, max_new_tokens: int = 1536, temperature: float = 0.0) -> dict:
+        if self.smoke_test:
+            content = "(0,0) (0,1) (0,2)"
+            return {
+                "content": content,
+                "input_tokens": len(prompt.split()),
+                "output_tokens": len(content.split()),
+                "latency_ms": 0.0,
+            }
+        result = self.env.generate(
+            [{"role": "user", "content": prompt}],
+            max_tokens=max_new_tokens, temperature=temperature,
+        )
+        return {
+            "content": result.get("content", ""),
+            "input_tokens": result.get("input_tokens", 0),
+            "output_tokens": result.get("output_tokens", 0),
+            "latency_ms": result.get("latency_ms", 0.0),
         }
 
 

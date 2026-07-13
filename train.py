@@ -72,7 +72,7 @@ def run(args):
     assert os.path.isdir(args.data_dir), f"Data dir not found: {args.data_dir}"
 
     from multilingual_data import build_instances
-    from hf_models import HFModel, parse_path_response
+    from hf_models import HFModel, OllamaModel, parse_path_response
     from src.evaluation import PathResult, compute_metrics, print_report
 
     n_tasks = 3 if args.smoke_test else args.n_tasks
@@ -86,8 +86,11 @@ def run(args):
     all_grids = {}     # model_key -> lang -> list[np.ndarray]
 
     for model_key in model_keys:
-        print(f"\n{'='*60}\nModel: {model_key}\n{'='*60}")
-        model = HFModel(model_key, smoke_test=args.smoke_test).load()
+        print(f"\n{'='*60}\nModel: {model_key} (backend={args.backend})\n{'='*60}")
+        if args.backend == "ollama":
+            model = OllamaModel(model_key, smoke_test=args.smoke_test).load()
+        else:
+            model = HFModel(model_key, smoke_test=args.smoke_test).load()
 
         results_by_lang, grids_by_lang = {}, {}
         for i, inst in enumerate(instances):
@@ -152,7 +155,7 @@ if MODAL_AVAILABLE:
             MODEL_KEYS = [m.strip() for m in models.split(",")]
         args = argparse.Namespace(
             data_dir="/root/data", output_dir="/output",
-            n_tasks=n_tasks, smoke_test=smoke_test,
+            n_tasks=n_tasks, smoke_test=smoke_test, backend="hf",
         )
         return run(args)
 
@@ -170,6 +173,10 @@ if __name__ == "__main__":
     parser.add_argument("--n_tasks", type=int, default=100)
     parser.add_argument("--models", type=str, default="",
                          help="Comma-separated subset of gemma4-e2b,qwen2.5-1.5b,qwen2.5-3b (default: all)")
+    parser.add_argument("--backend", type=str, default="hf", choices=["hf", "ollama"],
+                         help="'hf' loads full weights via transformers (needs real VRAM, "
+                              "used on Modal/A100). 'ollama' talks to a local Ollama server "
+                              "with already-quantized models (fits 6GB laptop GPUs).")
     cli_args = parser.parse_args()
     if cli_args.models:
         MODEL_KEYS = [m.strip() for m in cli_args.models.split(",")]
