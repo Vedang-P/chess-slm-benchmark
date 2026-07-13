@@ -63,7 +63,7 @@ failure mode close the gap better than naive mixed-format training alone.
 - **Models:** Gemma 4 E2B (primary). DeepSeek-R1-Distill-Qwen-1.5B (AlphaMaze's own base —
   replication sanity check). Qwen2.5-1.5B/3B (recipe-generalization check). All via Unsloth.
 - **Benchmarks:** GridRoute (train + in-distribution eval), Lost in Aggregation (OOD eval).
-  MazeEval as a stretch third benchmark (no loader built yet).
+  MazeEval dropped entirely — no code or data available anywhere.
 - **Metrics:** valid-path rate, optimal-path rate (via `src/evaluation.py`) per benchmark per
   training condition (baseline / single-format / mixed-format / consistency-reward). Primary
   quantity: the ID-vs-OOD gap, and how each training condition changes it. Secondary: failure-mode

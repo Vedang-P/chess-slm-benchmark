@@ -22,8 +22,9 @@ Datasets prepared but NOT reproducible as baselines (their eval code isn't publi
 - **Lost in Aggregation**: maze data already in repo; their own site states evaluation/baseline
   code is "coming soon," not released as of 2026-07-13. We use the data with our own harness, but
   don't claim to reproduce their published model numbers.
-- **MazeEval**: no code repository found at all. Not a Phase 1 target. If wanted later, it means
-  building a compatible version from the paper's description — Phase 2/stretch scope.
+- **MazeEval**: dropped entirely, not just deferred — no code repository and no dataset release
+  found anywhere, only the paper itself. Nothing to prepare or reproduce. Still fine to cite the
+  paper's cross-lingual finding as motivating context; not usable as a benchmark.
 
 **Phase 2 — our actual novel experiments** (the 7-step pipeline: baseline eval, single-format
 training, transfer eval, failure analysis, mixed-format training, consistency-reward training,
@@ -54,7 +55,7 @@ mixed-format training.
   Aggregation-style tasks.
 - **In-distribution eval:** GridRoute held-out tasks.
 - **Out-of-distribution eval:** Lost in Aggregation (`data/lost_in_aggregation/`, already in repo).
-- **Stretch:** MazeEval (partial observability) as a third, even more different transfer target.
+- ~~MazeEval~~ dropped — no code or data available anywhere, only the paper.
 
 ## Model
 
@@ -120,4 +121,3 @@ and it's what step 6's reward design should be built from, not designed speculat
 - The failure-analysis categorization tooling (design before results come in, not after).
 - The consistency-reward's exact mechanism (finalize after Step 4's findings; needs a novelty
   spot-check before committing full training time to it).
-- MazeEval loader (stretch).
