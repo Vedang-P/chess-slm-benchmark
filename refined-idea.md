@@ -52,7 +52,10 @@ structurally different transfer target, if time allows. No loader built yet.
 
 ## Evaluation Plan
 
-- **Models:** Gemma 4 E2B (primary). Qwen2.5-1.5B/3B as reference points if time allows.
+- **Models:** Gemma 4 E2B (primary). DeepSeek-R1-Distill-Qwen-1.5B (AlphaMaze's own base model —
+  replication sanity check, confirms the pipeline reproduces their reported numbers before
+  trusting results on untested models). Qwen2.5-1.5B/3B (generalization check — is any effect
+  Gemma-specific or general to the recipe). All loaded/fine-tuned via Unsloth uniformly.
 - **Benchmarks:** GridRoute (train + in-distribution eval), Lost in Aggregation (out-of-distribution
   eval), MazeEval (stretch).
 - **Metrics:** valid-path rate, optimal-path rate (via `src/evaluation.py`, already fixed for the

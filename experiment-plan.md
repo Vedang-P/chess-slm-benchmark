@@ -49,8 +49,9 @@ Not building the training loop from scratch — adapting their documented recipe
 
 - SFT-only vs. SFT+GRPO (matches AlphaMaze's own ablation, confirms the RL stage's specific
   contribution to any generalization effect, not just the SFT stage).
-- Cross-model check with Qwen2.5-1.5B/3B if time allows, to see whether any generalization
-  (or lack thereof) is Gemma-specific or general to the recipe.
+- Cross-model check with Qwen2.5-1.5B/3B and DeepSeek-R1-Distill-Qwen-1.5B (AlphaMaze's own base
+  model, doubling as a replication sanity check) to see whether any generalization (or lack
+  thereof) is Gemma-specific or general to the recipe. All models loaded/fine-tuned via Unsloth.
 
 ## Not Yet Built
 

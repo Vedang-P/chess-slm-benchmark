@@ -51,8 +51,11 @@ if MODAL_AVAILABLE:
     )
 
 SEED = 42
-MODEL_KEYS = ["gemma4-e2b", "qwen2.5-1.5b", "qwen2.5-3b"]
+MODEL_KEYS = ["deepseek-r1-distill-qwen-1.5b", "gemma4-e2b", "qwen2.5-1.5b", "qwen2.5-3b"]
 BENCHMARKS = ["gridroute", "lost_in_aggregation"]
+# deepseek-r1-distill-qwen-1.5b is AlphaMaze's own base model -- included as a
+# replication sanity check (do we reproduce their reported numbers) before
+# trusting results on models nobody's tested this recipe on yet.
 
 
 def set_seed(seed: int = SEED):
@@ -119,7 +122,7 @@ def run(args):
     set_seed(SEED)
     os.makedirs(args.output_dir, exist_ok=True)
 
-    from hf_models import HFModel, OllamaModel, parse_path_response
+    from hf_models import HFModel, OllamaModel, UnslothModel, parse_path_response
     from src.evaluation import PathResult, compute_metrics, print_report
 
     n_tasks = 3 if args.smoke_test else args.n_tasks
@@ -137,6 +140,8 @@ def run(args):
         print(f"\n{'='*60}\nModel: {model_key} (backend={args.backend})\n{'='*60}")
         if args.backend == "ollama":
             model = OllamaModel(model_key, smoke_test=args.smoke_test).load()
+        elif args.backend == "unsloth":
+            model = UnslothModel(model_key, smoke_test=args.smoke_test).load()
         else:
             model = HFModel(model_key, smoke_test=args.smoke_test).load()
 
@@ -200,9 +205,11 @@ if __name__ == "__main__":
     parser.add_argument("--n_tasks", type=int, default=100)
     parser.add_argument("--models", type=str, default="",
                          help="Comma-separated subset of gemma4-e2b,qwen2.5-1.5b,qwen2.5-3b (default: all)")
-    parser.add_argument("--backend", type=str, default="hf", choices=["hf", "ollama"],
-                         help="'hf' loads full weights via transformers. "
-                              "'ollama' talks to a local Ollama server (quantized models).")
+    parser.add_argument("--backend", type=str, default="unsloth",
+                         choices=["unsloth", "hf", "ollama"],
+                         help="'unsloth' (default, recommended) handles architecture quirks "
+                              "raw transformers can't. 'hf' is plain transformers, "
+                              "inference-only. 'ollama' talks to a local Ollama server.")
     cli_args = parser.parse_args()
     if cli_args.models:
         MODEL_KEYS = [m.strip() for m in cli_args.models.split(",")]
