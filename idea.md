@@ -69,6 +69,14 @@ arXiv:2606.01464 — consistency-reward RL for cross-*lingual* math reasoning) t
 this technique transfer to a structurally different domain," not "we propose a new method."
 Still a real, worthwhile contribution — just correctly scoped.
 
+## Phasing
+
+**Phase 1** (current): reproduce known baselines using only their public code/data (AlphaMaze
+eval + training reproduction, GridRoute AoP prompting on Qwen2.5-7B), and prepare every dataset
+needed. Don't trust our own pipeline until it reproduces someone else's published result first.
+**Phase 2**: our actual novel experiments (the 7-step pipeline below). Full detail in
+`experiment-plan.md`.
+
 ## Immediate Next Step (scoped down from the full plan)
 
 Before committing to the full 4-model x 3-training-condition plan, get one empirical GRPO timing

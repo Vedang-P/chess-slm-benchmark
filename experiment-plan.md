@@ -1,13 +1,42 @@
 # Experiment Plan — Diagnose and Fix Cross-Benchmark Generalization in Gemma 4 GRPO Fine-Tuning
 
-## Immediate First Step
+## Phasing: Phase 1 (reproduce + prepare) before Phase 2 (our actual experiments)
 
-Before running the full plan below across 4 models x 3 training conditions, get one empirical
-timing number: a short (~50-100 step) GRPO run on Gemma 4 E2B only (`train_grpo.py`). Wall-clock
-time for GRPO on small models varies enormously in reports found (roughly 5-30+ GPU-hours per
-epoch depending on setup) — not reliable enough to extrapolate from secondhand numbers. VRAM is
-not the constraint (9GB needed, 24GB available); time against the deadline might be. Decide final
-model/condition scope from this real number, not before.
+**Phase 1 — reproduce known baselines using only their own public code/data, and prepare every
+dataset we'll need. Do not trust our own pipeline's numbers until it can reproduce a published
+result on someone else's public artifacts first.**
+
+Baselines with confirmed public code (reproducible):
+- **AlphaMaze** (`github.com/menloresearch/visual-thinker`, Apache 2.0): (a) run their public
+  checkpoint (`homebrewltd/AlphaMaze-v0.2-1.5B`) through *our* eval harness on their public
+  `Maze-Bench-v0.2` — validates our eval code; (b) retrain their SFT+GRPO recipe from scratch on
+  their public data (`Maze-Reasoning-v0.1`, `Maze-Reasoning-GRPO-v0.1`) and base model
+  (DeepSeek-R1-Distill-Qwen-1.5B) — validates our training pipeline. Do (a) first, it's cheap
+  (no training) and resolves inconsistent numbers found secondhand in earlier lit review passes.
+- **GridRoute** (`github.com/LinChance/GridRoute`, code confirmed public): run their actual
+  AoP-Dijkstra prompting code on Qwen2.5-7B (public, fits our hardware, also one of their tested
+  models) and compare against their published number. Doubles as a real "algorithm-guided
+  prompting, no training" baseline for our own results table later.
+
+Datasets prepared but NOT reproducible as baselines (their eval code isn't public):
+- **Lost in Aggregation**: maze data already in repo; their own site states evaluation/baseline
+  code is "coming soon," not released as of 2026-07-13. We use the data with our own harness, but
+  don't claim to reproduce their published model numbers.
+- **MazeEval**: no code repository found at all. Not a Phase 1 target. If wanted later, it means
+  building a compatible version from the paper's description — Phase 2/stretch scope.
+
+**Phase 2 — our actual novel experiments** (the 7-step pipeline: baseline eval, single-format
+training, transfer eval, failure analysis, mixed-format training, consistency-reward training,
+final comparison — detailed below). Does not start until Phase 1 confirms the pipeline reproduces
+known results.
+
+## Immediate Next Step Within Phase 1
+
+Cheapest, highest-value first check: AlphaMaze checkpoint + our eval harness (script:
+`reproduce_alphamaze_eval.py`). No training needed, resolves a real open question (their reported
+SFT-only vs SFT+GRPO numbers were inconsistent across secondary sources found earlier). Do this
+before `train_grpo.py`'s timing test — if our eval harness can't correctly score a known-good
+public checkpoint, a training-time GRPO number would be premature anyway.
 
 ## Objective
 
