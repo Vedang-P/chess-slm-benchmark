@@ -11,6 +11,7 @@ from unsloth import FastLanguageModel
 MODELS = {
     "deepseek-r1-distill-qwen-1.5b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
     "gemma4-e2b": "google/gemma-4-E2B-it",
+    "gemma4-e4b": "google/gemma-4-E4B-it",
     "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
     "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
 }

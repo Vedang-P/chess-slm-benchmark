@@ -51,7 +51,7 @@ if MODAL_AVAILABLE:
     )
 
 SEED = 42
-MODEL_KEYS = ["deepseek-r1-distill-qwen-1.5b", "gemma4-e2b", "qwen2.5-1.5b", "qwen2.5-3b"]
+MODEL_KEYS = ["deepseek-r1-distill-qwen-1.5b", "gemma4-e2b", "gemma4-e4b", "qwen2.5-1.5b", "qwen2.5-3b"]
 BENCHMARKS = ["gridroute", "lost_in_aggregation"]
 # deepseek-r1-distill-qwen-1.5b is AlphaMaze's own base model -- included as a
 # replication sanity check (do we reproduce their reported numbers) before
@@ -204,7 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default="./results/local_run")
     parser.add_argument("--n_tasks", type=int, default=100)
     parser.add_argument("--models", type=str, default="",
-                         help="Comma-separated subset of gemma4-e2b,qwen2.5-1.5b,qwen2.5-3b (default: all)")
+                         help="Comma-separated subset of gemma4-e2b,gemma4-e4b,qwen2.5-1.5b,"
+                              "qwen2.5-3b,deepseek-r1-distill-qwen-1.5b (default: all)")
     parser.add_argument("--backend", type=str, default="unsloth",
                          choices=["unsloth", "hf", "ollama"],
                          help="'unsloth' (default, recommended) handles architecture quirks "

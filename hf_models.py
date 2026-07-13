@@ -17,6 +17,7 @@ from typing import Optional
 
 MODEL_IDS = {
     "gemma4-e2b": "google/gemma-4-E2B-it",
+    "gemma4-e4b": "google/gemma-4-E4B-it",
     "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
     "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
     "deepseek-r1-distill-qwen-1.5b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
@@ -24,6 +25,7 @@ MODEL_IDS = {
 
 OLLAMA_MODEL_TAGS = {
     "gemma4-e2b": "gemma4:e2b",
+    "gemma4-e4b": "gemma4:e4b",
     "qwen2.5-1.5b": "qwen2.5:1.5b",
     "qwen2.5-3b": "qwen2.5:3b",
     "deepseek-r1-distill-qwen-1.5b": "deepseek-r1:1.5b",
@@ -103,7 +105,7 @@ class HFModel:
 
         output_ids = outputs[0][input_len:]
         content = self.tokenizer.decode(output_ids, skip_special_tokens=True)
-        if self.model_key == "gemma4-e2b":
+        if "gemma4" in self.model_key:
             content = strip_gemma_thoughts(content)
 
         return {
