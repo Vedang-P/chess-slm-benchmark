@@ -44,38 +44,67 @@ confirms this: Qwen2.5-7B gets 64% FR (feasibility ratio) with CoT prompting.
 
 ## Approach
 
-1. **Replicate AlphaMaze** (✅ done) — 88% on MazeBench, confirms GRPO works for token mazes
-2. **SFT on GridRoute 5×5** — SFT AlphaMaze on natural-language GridRoute 5×5 tasks
-3. **GRPO on GridRoute 5×5** — 1,000 GRPO steps following AlphaMaze's recipe, NL format
-4. **Cross-format eval** — test on MazeBench (did NL training break token skill?) AND GridRoute 5×5
-5. **Baseline comparison** — same SFT+GRPO on base DeepSeek (no token pre-training)
-6. **Scale up** — if 5×5 works, extend to 10×10
+### Option 1: AlphaMaze → NL GridRoute 5×5 (local, on-device)
+1. Take AlphaMaze-v0.2-1.5B (88% on MazeBench token mazes)
+2. SFT on 400 GridRoute 5×5 NL tasks (NL prompt → coordinate path)
+3. GRPO on same tasks (1,000 steps, AlphaMaze recipe)
+4. Test on BOTH MazeBench AND GridRoute 5×5
+5. Compare vs base DeepSeek (same training, no token pre-training)
+   - Hardware: RTX 4050 6GB, 4-bit QLoRA, ~14h per model
 
-## Training Plan (5×5 GridRoute)
+### Option 2: Gemma 4 E2B LoRA on both benchmarks (Kaggle cloud)
+1. LoRA SFT Gemma 4 E2B on MazeBench token mazes + GridRoute 5×5 NL
+2. Test on both benchmarks
+3. Compare vs AlphaMaze (stronger base model, no GRPO)
+   - Hardware: Kaggle T4 16GB free GPU, full precision LoRA
+   - Note: GRPO not possible on T4 (needs 9GB+), SFT-only
 
-| Phase | Time (AlphaMaze) | Time (Base DeepSeek) |
+## Training Plan
+
+| Phase | AlphaMaze (local) | Gemma 4 (Kaggle) |
 |---|---|---|
-| SFT (1 epoch, 400 tasks) | ~2h | ~2h |
-| GRPO (1,000 steps × 40s) | ~11h | ~11h |
-| Evaluation (both benchmarks) | ~1h | ~1h |
-| **Total** | **~14h** | **~14h** |
+| SFT (1 epoch, 400 tasks) | ~2h | ~1h (T4) |
+| GRPO (1,000 steps) | ~11h | ❌ (OOM on T4) |
+| Evaluation (both benchmarks) | ~1h | ~30min |
+| **Total** | **~14h** | **~2h** |
 
-All on 6GB RTX 4050 with 4-bit QLoRA. No cloud. Two runs = ~28h total.
+## Project Log
+
+### July 14, 2026
+- **Pivot**: Gemma 4 E2B GRPO infeasible on 6GB (needs 9GB). Switched to 1.5B models.
+- **Feasibility confirmed**: DeepSeek 1.5B (4.2GB GRPO), SmolLM2 1.7B (3.0GB) both fit.
+- **Dropped Unsloth**: incompatible with torch 2.6 + transformers 5.x. Using bitsandbytes+peft.
+- **AlphaMaze-v0.2-1.5B downloaded**: Apache 2.0 weights from Menlo/AlphaMaze-v0.2-1.5B.
+- **MazeBench replication**: 88% on easy-mazes-96%, medium-80%, hard-80%. Paper claims 93%.
+  - Root cause: max_new_tokens=1024 too short for thinking loops. Fixed to 4096 → all think tags close.
+  - Remaining gap (88% vs 93%): likely Unsloth inference vs plain transformers.
+- **GridRoute baseline**: AlphaMaze 0% on all GridRoute sizes (format lock confirmed).
+  - Same model: 88% on token mazes, 0% on NL coordinate format.
+  - Even at 5×5 (same size as MazeBench), 0% — purely format mismatch.
+- **Gemma 4 E2B tested**: 0% on GridRoute 5×5 via Ollama Q3_K_S.
+- **AoT-Dijkstra tested**: 0% on DeepSeek 1.5B — model too small for algorithmic prompting.
+- **Literature review**: GridRoute paper (May 2025) tested 7B-72B models only. Best: GPT-4 at 84% FR.
+  Tong et al. (Apr 2026): SFT works for spatial transfer, length scaling fails. RL ≤ SFT.
+  AlphaMaze (Feb 2025): SFT+GRPO on 1.5B, 93% on token mazes. Training code public.
+- **Research direction set**: Can we GRPO-train AlphaMaze on NL GridRoute 5×5 and preserve
+  both token AND NL spatial reasoning? Cross-format transfer learning on-device.
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Check what fits on your GPU
+# Check GPU feasibility
 python check_finetune_feasibility.py
 
 # Replicate AlphaMaze on MazeBench
 python eval_baseline.py
 
-# Train a model on GridRoute (coming next)
+# SFT AlphaMaze on GridRoute 5×5 NL
+python train_sft.py --model_path ./data/models/alphamaze-v0.2-1.5b --grid_size 5 --n_tasks 400
+
+# GRPO on GridRoute 5×5 (after SFT)
 python train_grpo.py --model deepseek-r1-distill-qwen-1.5b --n_tasks 400 --max_steps 1000
 ```
 
@@ -83,14 +112,10 @@ python train_grpo.py --model deepseek-r1-distill-qwen-1.5b --n_tasks 400 --max_s
 
 | Week | Dates | Milestone | Status |
 |---|---|---|---|
-| Week 2 | Jul 13–16 | AlphaMaze replication, feasibility check, baselines | ✅ |
-| Week 3 | Jul 16–20 | SFT + GRPO training (both models) | 🔄 |
-| Week 4 | Jul 20–23 | Transfer evaluation, failure analysis | ⏳ |
-| Week 5 | Jul 23–29 | Results analysis, figures, tables | ⏳ |
-| Week 6 | Jul 30–Aug 5 | Paper writing (first draft) | ⏳ |
-| Week 7 | Aug 6–19 | Revisions, proofreading | ⏳ |
-| **Deadline** | **Aug 29** | **Submit to OpenReview** | 📅 |
-
-## Author
-Vedang — BTech Mathematics and Computing, MIT Manipal
-
+| Jul 13–14 | AlphaMaze replication, feasibility, baselines, lit review | ✅ |
+| Jul 14–16 | SFT + GRPO AlphaMaze on GridRoute 5×5 NL | 🔄 |
+| Jul 16–18 | Cross-format eval, baseline DeepSeek run | ⏳ |
+| Jul 18–20 | Gemma 4 LoRA on Kaggle (optional) | ⏳ |
+| Jul 20–29 | Results analysis, figures, tables | ⏳ |
+| Jul 30–Aug 19 | Paper writing, revisions | ⏳ |
+| **Aug 29** | **Submit to OpenReview** | 📅 |
