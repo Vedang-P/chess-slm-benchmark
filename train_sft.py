@@ -19,13 +19,17 @@ MODEL_PRESETS = {
     "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
 }
 
-def build_sft_dataset(n_tasks: int, seed: int = 42) -> Dataset:
+def build_sft_dataset(n_tasks: int, grid_size: int = 10, seed: int = 42) -> Dataset:
     """GridRoute NL prompts → coordinate path pairs for SFT."""
     from src.grid_generator import generate_gridroute_maps
     from src.astar_solver import astar
 
+    # Auto-adjust obstacle config for grid size
+    obs_size = 1 if grid_size == 5 else 3
+    n_obs = 1 if grid_size == 5 else 2
+
     tasks = generate_gridroute_maps(
-        size=10, obstacle_size=3, num_obstacles=2,
+        size=grid_size, obstacle_size=obs_size, num_obstacles=n_obs,
         num_maps=100, pairs_per_map=5, seed=seed,
     )
     rng = np.random.RandomState(seed)
@@ -55,18 +59,16 @@ def format_sft(example):
 def main():
     parser = argparse.ArgumentParser(description="SFT fine-tuning for GridRoute spatial reasoning")
     parser.add_argument("--model", default="deepseek-r1-distill-qwen-1.5b")
+    parser.add_argument("--model_path", default="", help="Local path (overrides --model)")
     parser.add_argument("--n_tasks", type=int, default=400)
+    parser.add_argument("--grid_size", type=int, default=5)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--grad_accum", type=int, default=4)
     parser.add_argument("--lr", type=float, default=1e-5)
-    parser.add_argument("--max_seq_length", type=int, default=1024)
-    parser.add_argument("--output_dir", default="./results/sft_deepseek")
-    args = parser.parse_args()
-
-    model_id = MODEL_PRESETS.get(args.model, args.model)
+    model_id = args.model_path if args.model_path else MODEL_PRESETS.get(args.model, args.model)
     print(f"Model: {model_id}")
-    print(f"Tasks: {args.n_tasks}, Epochs: {args.epochs}, LR: {args.lr}")
+    print(f"Tasks: {args.n_tasks}, Grid: {args.grid_size}x{args.grid_size}, Epochs: {args.epochs}, LR: {args.lr}")
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
@@ -89,8 +91,8 @@ def main():
     model.enable_input_require_grads()
 
     # Dataset
-    print(f"Building SFT dataset ({args.n_tasks} tasks)...")
-    dataset = build_sft_dataset(args.n_tasks)
+    print(f"Building SFT dataset ({args.n_tasks} tasks, {args.grid_size}x{args.grid_size})...")
+    dataset = build_sft_dataset(args.n_tasks, grid_size=args.grid_size)
     dataset = dataset.map(format_sft, remove_columns=dataset.column_names)
 
     # Train
