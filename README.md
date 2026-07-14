@@ -10,15 +10,15 @@
 
 ## The Question
 
-AlphaMaze proved GRPO fine-tuning can teach a 1.5B model to solve 5×5 token-based
-mazes at 93% accuracy. GridRoute showed even 7B models struggle with natural-language
-grid navigation (64% feasibility). **The gap nobody has tested: can GRPO fine-tuning
-bridge this — teaching a small model to spatially reason in natural language, not just
-in a bespoke token format?**
+**Primary**: Can we take AlphaMaze (already GRPO-trained on 5×5 token mazes, 88%) and
+GRPO-train it further on natural-language GridRoute 5×5 — teaching it to spatially reason
+in BOTH formats without losing its existing skill?
 
-If it works: on-device spatial reasoning becomes viable. If it doesn't: we quantify
-exactly how and why format transfer fails, with a direct architectural comparison
-(Qwen2-based vs Llama-based models).
+**Secondary**: Does starting from a model that already knows spatial reasoning accelerate
+NL-format learning vs training from scratch on the base DeepSeek model?
+
+If cross-format transfer works → single 1.5B model, token AND NL spatial reasoning.
+If it doesn't → we quantify format interference and failure modes.
 
 ## Current Results
 
@@ -45,22 +45,22 @@ confirms this: Qwen2.5-7B gets 64% FR (feasibility ratio) with CoT prompting.
 ## Approach
 
 1. **Replicate AlphaMaze** (✅ done) — 88% on MazeBench, confirms GRPO works for token mazes
-2. **SFT on GridRoute** — supervised fine-tuning on 400 GridRoute 10×10 tasks (NL → coordinate path)
-3. **GRPO on GridRoute** — 1,000 GRPO steps following AlphaMaze's recipe, on natural-language format
-4. **Train 2 architectures** — DeepSeek-R1-Qwen-1.5B (Qwen2) + SmolLM2-1.7B (Llama)
-5. **Transfer test** — evaluate on Lost in Aggregation (structurally different mazes)
-6. **Compare** — trained vs untrained, Qwen2 vs Llama, SFT-only vs SFT+GRPO
+2. **SFT on GridRoute 5×5** — SFT AlphaMaze on natural-language GridRoute 5×5 tasks
+3. **GRPO on GridRoute 5×5** — 1,000 GRPO steps following AlphaMaze's recipe, NL format
+4. **Cross-format eval** — test on MazeBench (did NL training break token skill?) AND GridRoute 5×5
+5. **Baseline comparison** — same SFT+GRPO on base DeepSeek (no token pre-training)
+6. **Scale up** — if 5×5 works, extend to 10×10
 
-## Training Plan
+## Training Plan (5×5 GridRoute)
 
-| Phase | Per Model | 2 Models |
+| Phase | Time (AlphaMaze) | Time (Base DeepSeek) |
 |---|---|---|
-| SFT (1 epoch, 400 tasks) | ~3h | 6h |
-| GRPO (1,000 steps × 40s) | ~11h | 22h |
-| Evaluation (500 tasks) | ~1h | 2h |
-| **Total** | **~15h** | **~30h** |
+| SFT (1 epoch, 400 tasks) | ~2h | ~2h |
+| GRPO (1,000 steps × 40s) | ~11h | ~11h |
+| Evaluation (both benchmarks) | ~1h | ~1h |
+| **Total** | **~14h** | **~14h** |
 
-All training on 6GB RTX 4050 with 4-bit QLoRA. No cloud required.
+All on 6GB RTX 4050 with 4-bit QLoRA. No cloud. Two runs = ~28h total.
 
 ## Quick Start
 
