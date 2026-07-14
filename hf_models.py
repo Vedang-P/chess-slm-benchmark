@@ -16,24 +16,27 @@ from typing import Optional
 
 
 MODEL_IDS = {
-    "gemma4-e2b": "google/gemma-4-E2B-it",
-    "gemma4-e4b": "google/gemma-4-E4B-it",
-    "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
-    "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
+    # ── ✅ confirmed trainable on 6 GB with 4-bit LoRA GRPO ──
     "deepseek-r1-distill-qwen-1.5b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+    "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+    # ── ⚠️ marginal (tight, reduce generations) ──
+    "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
+    # ── inference-only (GRPO needs >6 GB VRAM) ──
+    "gemma4-e2b": "google/gemma-4-E2B-it",
+    # ── gated (needs HF access approval) ──
+    # "gemma-3-1b": "google/gemma-3-1b-it",
 }
 
 OLLAMA_MODEL_TAGS = {
-    "gemma4-e2b": "gemma4:e2b",
-    "gemma4-e4b": "gemma4:e4b",
-    "qwen2.5-1.5b": "qwen2.5:1.5b",
-    "qwen2.5-3b": "qwen2.5:3b",
     "deepseek-r1-distill-qwen-1.5b": "deepseek-r1:1.5b",
+    "smollm2-1.7b": "smollm2:1.7b",
+    "qwen2.5-3b": "qwen2.5:3b",
+    "gemma4-e2b": "gemma4:e2b",
 }
 
 
 def strip_gemma_thoughts(text: str) -> str:
-    """Gemma 4 emits thinking content before a final-answer marker.
+    """Gemma 3 & 4 emit thinking content before a final-answer marker.
     Extract everything after the last such marker if present."""
     for marker in ("<channel|>", "<end_of_thought>"):
         parts = text.split(marker)
@@ -105,7 +108,7 @@ class HFModel:
 
         output_ids = outputs[0][input_len:]
         content = self.tokenizer.decode(output_ids, skip_special_tokens=True)
-        if "gemma4" in self.model_key:
+        if "gemma" in self.model_key.lower():
             content = strip_gemma_thoughts(content)
 
         return {
@@ -127,7 +130,7 @@ class UnslothModel:
     """
 
     def __init__(self, model_key: str, max_seq_length: int = 2048,
-                 load_in_4bit: bool = False, smoke_test: bool = False):
+                 load_in_4bit: bool = True, smoke_test: bool = False):
         self.model_key = model_key
         self.max_seq_length = max_seq_length
         self.load_in_4bit = load_in_4bit
@@ -198,7 +201,7 @@ class UnslothModel:
 
         output_ids = outputs[0][input_len:]
         content = self.tokenizer.decode(output_ids, skip_special_tokens=True)
-        if "gemma4" in self.model_key:
+        if "gemma" in self.model_key.lower():
             content = strip_gemma_thoughts(content)
 
         return {

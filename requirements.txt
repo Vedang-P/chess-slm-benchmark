@@ -15,3 +15,4 @@ sentencepiece
 protobuf
 huggingface_hub
 modal
+bitsandbytes

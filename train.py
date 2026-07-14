@@ -51,9 +51,18 @@ if MODAL_AVAILABLE:
     )
 
 SEED = 42
-MODEL_KEYS = ["deepseek-r1-distill-qwen-1.5b", "gemma4-e2b", "gemma4-e4b", "qwen2.5-1.5b", "qwen2.5-3b"]
+MODEL_KEYS = [
+    "deepseek-r1-distill-qwen-1.5b",   # AlphaMaze base — 1.5B, Qwen2 arch
+    "qwen2.5-1.5b",                    # 1.5B, cross-model comparison
+    "qwen2.5-3b",                      # 3.0B, scale check (tight on 6 GB)
+    "gemma-3-1b",                      # 1.0B, Gemma arch, explicit GRPO support
+    "smollm2-1.7b",                    # 1.7B, Llama arch
+    # ── inference-only (Ollama / Unsloth eval; GRPO needs >6 GB) ──
+    "gemma4-e2b",                      # 5.1B total — inference-only baseline
+    # "gemma4-e4b" removed — 10B params, won't fit 6 GB at any precision
+]
 BENCHMARKS = ["gridroute", "lost_in_aggregation"]
-# deepseek-r1-distill-qwen-1.5b is AlphaMaze's own base model -- included as a
+# deepseek-r1-distill-qwen-1.5b is AlphaMaze's own base model — included as a
 # replication sanity check (do we reproduce their reported numbers) before
 # trusting results on models nobody's tested this recipe on yet.
 
@@ -68,6 +77,24 @@ def set_seed(seed: int = SEED):
             torch.cuda.manual_seed_all(seed)
     except ImportError:
         pass
+
+
+def check_vram(required_gb: float = 6.0) -> bool:
+    """Warn if available VRAM may be insufficient for the requested models."""
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            print("⚠️  No CUDA GPU detected.  Inference will fall back to CPU (very slow).")
+            return False
+        total = torch.cuda.get_device_properties(0).total_memory / 1e9
+        print(f"GPU: {torch.cuda.get_device_name(0)} ({total:.1f} GB VRAM)")
+        if total < required_gb:
+            print(f"⚠️  WARNING: only {total:.1f} GB VRAM available.  "
+                  f"Some models may OOM — use --backend ollama for quantized inference.")
+            return False
+        return True
+    except ImportError:
+        return False
 
 
 def load_gridroute_instances(n_tasks: int, seed: int = SEED):
@@ -120,6 +147,7 @@ def load_lost_in_agg_instances(n_tasks: int, size: int = 7, seed: int = SEED):
 
 def run(args):
     set_seed(SEED)
+    check_vram()
     os.makedirs(args.output_dir, exist_ok=True)
 
     from hf_models import HFModel, OllamaModel, UnslothModel, parse_path_response
@@ -204,8 +232,10 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default="./results/local_run")
     parser.add_argument("--n_tasks", type=int, default=100)
     parser.add_argument("--models", type=str, default="",
-                         help="Comma-separated subset of gemma4-e2b,gemma4-e4b,qwen2.5-1.5b,"
-                              "qwen2.5-3b,deepseek-r1-distill-qwen-1.5b (default: all)")
+                         help="Comma-separated model keys (default: all). "
+                              "Trainable on 6GB: deepseek-r1-distill-qwen-1.5b, "
+                              "qwen2.5-1.5b, qwen2.5-3b, gemma-3-1b, smollm2-1.7b. "
+                              "Inference-only: gemma4-e2b.")
     parser.add_argument("--backend", type=str, default="unsloth",
                          choices=["unsloth", "hf", "ollama"],
                          help="'unsloth' (default, recommended) handles architecture quirks "
