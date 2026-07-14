@@ -88,7 +88,7 @@ def make_reward_fn():
             if path is None:
                 rewards.append(-0.5)  # no parseable path at all
                 continue
-            if not (_is_collision_free(path, grid) and _is_in_bounds(path, grid.shape)
+            if not (_is_in_bounds(path, grid.shape) and _is_collision_free(path, grid)
                      and _is_valid_steps(path)):
                 rewards.append(0.0)  # parsed but invalid (collision/OOB/bad step)
                 continue
@@ -197,6 +197,7 @@ def main():
         per_device_train_batch_size=1,
         gradient_accumulation_steps=4,
         num_generations=args.num_generations,
+        generation_batch_size=args.num_generations,  # must be divisible by num_generations
         max_completion_length=args.max_completion_length,
         max_steps=args.max_steps,
         logging_steps=1,

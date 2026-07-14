@@ -146,8 +146,9 @@ def compute_metrics(results: List[PathResult], grid: Optional[np.ndarray] = None
 
 
 def _is_collision_free(path: List[Tuple[int, int]], grid: np.ndarray) -> bool:
-    """Check no path cell intersects an obstacle."""
-    return all(grid[y, x] == 0 for x, y in path)
+    """Check no path cell intersects an obstacle. Returns False for OOB coords."""
+    h, w = grid.shape
+    return all(0 <= y < h and 0 <= x < w and grid[y, x] == 0 for x, y in path)
 
 
 def _is_in_bounds(path: List[Tuple[int, int]], shape: Tuple[int, int]) -> bool:
