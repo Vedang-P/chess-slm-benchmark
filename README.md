@@ -1,122 +1,96 @@
-# Improving Gemma 4's Spatial Reasoning via GRPO Fine-Tuning
+# Can GRPO Teach Small Language Models Spatial Reasoning in Natural Language?
 
 **Target Venue**: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026
 **Deadline**: August 29, 2026
-**Submission**: OpenReview, double-blind, non-archival
-**Format**: Short paper (4p + refs) or Long paper (9p + refs), NeurIPS template
-**Hardware**: NVIDIA RTX A5000 (24GB VRAM)
+**Hardware**: NVIDIA RTX 4050 Laptop GPU (6GB VRAM)
+**Models**: DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B
+
 
 ---
 
 ## The Question
 
-Does GRPO reinforcement fine-tuning improve Gemma 4 E2B's spatial and maze-navigation reasoning —
-and does that improvement hold up when the model is tested on a benchmark it wasn't trained on, or
-does it only work on the exact task format it saw during training?
+AlphaMaze proved GRPO fine-tuning can teach a 1.5B model to solve 5×5 token-based
+mazes at 93% accuracy. GridRoute showed even 7B models struggle with natural-language
+grid navigation (64% feasibility). **The gap nobody has tested: can GRPO fine-tuning
+bridge this — teaching a small model to spatially reason in natural language, not just
+in a bespoke token format?**
 
-AlphaMaze already showed SFT+GRPO takes a small model from ~0% to 93% on maze navigation — but
-only for one model (not Gemma), on one maze format, never tested for transfer to a structurally
-different benchmark. Separately, GRPO has been shown to generalize better than plain SFT for
-spatial reasoning in vision-language models, and reinforcement fine-tuning has been shown to
-generalize well *within* a training environment but transfer poorly to genuinely unseen ones for
-LLM agents generally. Nobody has tested where a text-only, on-device model + true cross-benchmark
-transfer for spatial navigation lands between those two findings. That's what this project measures.
+If it works: on-device spatial reasoning becomes viable. If it doesn't: we quantify
+exactly how and why format transfer fails, with a direct architectural comparison
+(Qwen2-based vs Llama-based models).
+
+## Current Results
+
+### AlphaMaze Replication (July 14, 2026)
+| Benchmark | Format | Accuracy |
+|---|---|---|
+| MazeBench (5×5) | Token mazes `<|up|><|left|>` | **88%** (paper: 93%) |
+| GridRoute (5×5) | NL coords "Navigate from (3,2)..." | **0%** |
+| GridRoute (10×10) | NL coords | **0%** |
+
+**Finding**: GRPO-trained spatial reasoning is **format-locked**. The model scores
+88% in its native token language but 0% when asked the same task in natural language.
+
+### Baselines
+| Model | GridRoute 5×5 | GridRoute 10×10 |
+|---|---|---|
+| DeepSeek 1.5B (untrained) | 0% | 0% |
+| Gemma 4 E2B (4.6B, Ollama) | 0% | — |
+| DeepSeek 1.5B + AoT-Dijkstra | 0% | — |
+
+**No model below 7B can do natural-language grid navigation.** The GridRoute paper
+confirms this: Qwen2.5-7B gets 64% FR (feasibility ratio) with CoT prompting.
 
 ## Approach
 
-1. **Baseline**: evaluate untrained Gemma 4 E2B on two structurally different navigation
-   benchmarks — GridRoute (rectangular obstacle grids) and Lost in Aggregation (tree-structured
-   mazes with topology annotations).
-2. **Fine-tune**: SFT then GRPO on Gemma 4 E2B via Unsloth, adapting AlphaMaze's public training
-   recipe and data.
-3. **Transfer test**: re-evaluate the fine-tuned model on both benchmarks. The gap between
-   in-distribution (GridRoute, the training format) and out-of-distribution (Lost in Aggregation)
-   performance — and how that gap changes after fine-tuning — is the central result.
+1. **Replicate AlphaMaze** (✅ done) — 88% on MazeBench, confirms GRPO works for token mazes
+2. **SFT on GridRoute** — supervised fine-tuning on 400 GridRoute 10×10 tasks (NL → coordinate path)
+3. **GRPO on GridRoute** — 1,000 GRPO steps following AlphaMaze's recipe, on natural-language format
+4. **Train 2 architectures** — DeepSeek-R1-Qwen-1.5B (Qwen2) + SmolLM2-1.7B (Llama)
+5. **Transfer test** — evaluate on Lost in Aggregation (structurally different mazes)
+6. **Compare** — trained vs untrained, Qwen2 vs Llama, SFT-only vs SFT+GRPO
 
-Full detail in `refined-idea.md` (approach, risks, assumptions) and `novelty-assessment.md`
-(comparison against the closest existing work).
+## Training Plan
 
-## Current Status (July 2026)
+| Phase | Per Model | 2 Models |
+|---|---|---|
+| SFT (1 epoch, 400 tasks) | ~3h | 6h |
+| GRPO (1,000 steps × 40s) | ~11h | 22h |
+| Evaluation (500 tasks) | ~1h | 2h |
+| **Total** | **~15h** | **~30h** |
 
-- ✅ Baseline evaluation harness built (`train.py`) — runs a model across GridRoute and Lost in
-  Aggregation, reports valid-path and optimal-path rates
-- ✅ Literature review and novelty check complete (score 6/10) — closest comparators (AlphaMaze,
-  and two 2026 papers on GRPO spatial-reasoning generalization) explicitly differentiated
-- ✅ Fine-tuning feasibility confirmed: Gemma 4 E2B GRPO training needs ~9GB VRAM (Unsloth,
-  official support), comfortably within the 24GB A5000
-- 🔄 SFT/GRPO training pipeline — building now, following Unsloth's Gemma 4 guide
-- ⏳ Transfer evaluation, ablations (SFT-only vs. SFT+GRPO), results, paper
+All training on 6GB RTX 4050 with 4-bit QLoRA. No cloud required.
 
-## Project Structure
-
-```
-├── idea.md                      # Research idea and motivation
-├── lit-review.md                # Literature review
-├── novelty-assessment.md        # Comparison against closest existing work
-├── refined-idea.md              # Approach, risks, evaluation plan
-├── experiment-plan.md           # Current experiment's detailed plan
-├── train.py                     # Baseline/fine-tuned model evaluation harness
-├── hf_models.py                 # Model wrapper: HF transformers backend + Ollama backend
-├── check_finetune_feasibility.py # LoRA/GRPO loading feasibility check
-├── src/
-│   ├── astar_solver.py          # A* pathfinding (ground-truth optimal path scoring)
-│   ├── grid_generator.py        # GridRoute map generation
-│   ├── ollama_env.py            # Ollama API wrapper
-│   └── evaluation.py            # Metrics: compliance/feasibility/optimal ratio, VMR
-├── data/
-│   ├── gridroute/                # GridRoute task data
-│   └── lost_in_aggregation/      # Lost in Aggregation maze corpus
-├── docs/
-│   ├── workshop_info.md          # Target venue CFP
-│   └── benchmark_details.md      # Benchmark specs
-└── scripts/
-    └── download_mazes.sh         # Fetch Lost in Aggregation maze data
-```
-
-## Installation
+## Quick Start
 
 ```bash
+# Install dependencies
 python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt   # transformers>=5.13.0 required -- Gemma 4 support needs it
-```
+pip install -r requirements.txt
 
-For fine-tuning, install [Unsloth](https://unsloth.ai/docs/models/gemma-4/train) following their
-Gemma 4 guide.
+# Check what fits on your GPU
+python check_finetune_feasibility.py
 
-For local evaluation via Ollama instead of full-precision weights:
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama serve &
-ollama pull gemma4:e2b
-```
+# Replicate AlphaMaze on MazeBench
+python eval_baseline.py
 
-## Running
-
-```bash
-# Baseline evaluation, full-precision, local GPU
-python3 train.py --n_tasks 100 --models gemma4-e2b --backend hf --output_dir ./results/baseline
-
-# Quantized/lower-VRAM evaluation via Ollama
-python3 train.py --n_tasks 100 --models gemma4-e2b --backend ollama --output_dir ./results/baseline
-
-# Smoke test (no GPU needed)
-python3 train.py --smoke_test --backend hf
+# Train a model on GridRoute (coming next)
+python train_grpo.py --model deepseek-r1-distill-qwen-1.5b --n_tasks 400 --max_steps 1000
 ```
 
 ## Timeline
 
 | Week | Dates | Milestone | Status |
-|------|-------|-----------|:------:|
-| Week 2 | Jul 13–16 | Baseline eval, fine-tuning feasibility, novelty check | ✅ |
-| Week 2.5 | Jul 16–20 | SFT + GRPO training pipeline built and run | 🔄 |
-| Week 3 | Jul 20–23 | Transfer evaluation, ablations | ⏳ |
-| Week 4 | Jul 23–29 | Results analysis, figures, tables | ⏳ |
-| Week 5 | Jul 30–Aug 5 | Paper writing (first draft) | ⏳ |
-| Week 6 | Aug 6–19 | Revisions, proofreading | ⏳ |
+|---|---|---|---|
+| Week 2 | Jul 13–16 | AlphaMaze replication, feasibility check, baselines | ✅ |
+| Week 3 | Jul 16–20 | SFT + GRPO training (both models) | 🔄 |
+| Week 4 | Jul 20–23 | Transfer evaluation, failure analysis | ⏳ |
+| Week 5 | Jul 23–29 | Results analysis, figures, tables | ⏳ |
+| Week 6 | Jul 30–Aug 5 | Paper writing (first draft) | ⏳ |
+| Week 7 | Aug 6–19 | Revisions, proofreading | ⏳ |
 | **Deadline** | **Aug 29** | **Submit to OpenReview** | 📅 |
 
 ## Author
+Vedang — BTech Mathematics and Computing, MIT Manipal
 
-**Vedang** — BTech Mathematics and Computing, MIT (Manipal)
-Previous: ICML workshop publication
-[GitHub](https://github.com/Vedang-P)
