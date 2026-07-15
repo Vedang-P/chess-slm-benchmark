@@ -50,6 +50,18 @@ def configure_quiet_logging():
     os.environ.setdefault("HF_HUB_VERBOSITY", "error")
     os.environ.setdefault("DATASETS_VERBOSITY", "error")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    # Not just quieting output: trl's base_trainer.py calls transformers'
+    # is_wandb_available() at import time (module-level, unconditional --
+    # runs whether or not a Trainer is ever instantiated, regardless of our
+    # own report_to=[] settings), which does a real `import wandb` to check.
+    # On Kaggle specifically, the preinstalled wandb's SDK and its own
+    # bundled generated protobuf file were observed out of sync ("cannot
+    # import name 'Imports' from wandb.proto.wandb_telemetry_pb2"), which
+    # crashes that check and takes down the entire `import unsloth` chain
+    # with it -- confirmed fix (Unsloth's own Kaggle guidance): disable wandb
+    # before anything imports it, not just suppress its logging.
+    os.environ.setdefault("WANDB_DISABLED", "true")
+    os.environ.setdefault("WANDB_MODE", "disabled")
 
     logging.basicConfig(level=logging.ERROR)
     warnings.filterwarnings("ignore")
