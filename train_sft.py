@@ -18,9 +18,9 @@ import time
 from pathlib import Path
 
 import numpy as np
+import torch
 from datasets import Dataset
-from transformers import TrainingArguments
-from trl import SFTTrainer
+from trl import SFTConfig, SFTTrainer
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -128,7 +128,25 @@ def main():
     print(f"  {len(dataset)} training rows.")
     dataset = dataset.map(format_sft, remove_columns=dataset.column_names)
 
-    training_args = TrainingArguments(
+    # bf16 checked against real hardware support, not hardcoded: a T4 (this
+    # project's actual free-tier Kaggle GPU) has no bf16 tensor-core support,
+    # and some transformers versions raise outright if bf16=True is requested
+    # without it rather than silently falling back -- fp16 is what T4s
+    # actually accelerate. This is untested territory as of this commit:
+    # every prior Kaggle run went through check_finetune_feasibility.py's own
+    # manual forward+backward, which never touches TrainingArguments/
+    # SFTConfig's precision flags at all.
+    bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+
+    # SFTConfig, not plain TrainingArguments -- newer TRL moved SFT-specific
+    # settings (max_seq_length included) out of being accepted as bare
+    # SFTTrainer() kwargs and into this dedicated config class. Passing
+    # max_seq_length directly to SFTTrainer() (the old pattern) raises
+    # TypeError on current TRL; this project already hit one other TRL
+    # breaking change this cycle (ConstantLengthDataset removed in 0.20.0),
+    # so this isn't a hypothetical -- SFTTrainer just hasn't been exercised
+    # on the current environment yet to surface it.
+    training_args = SFTConfig(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
@@ -136,14 +154,16 @@ def main():
         learning_rate=args.lr,
         logging_steps=10,
         save_strategy="epoch",
-        bf16=True,
+        bf16=bf16_ok,
+        fp16=not bf16_ok,
         report_to=[],
         remove_unused_columns=False,
+        max_seq_length=args.max_seq_length,
     )
 
     trainer = SFTTrainer(
         model=model, args=training_args, train_dataset=dataset,
-        processing_class=tokenizer, max_seq_length=args.max_seq_length,
+        processing_class=tokenizer,
     )
 
     print(f"Starting SFT: {args.epochs} epoch(s), {len(dataset)} examples")

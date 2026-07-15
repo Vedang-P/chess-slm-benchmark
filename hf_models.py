@@ -9,9 +9,8 @@ training scripts don't need per-model branching:
     forward pass, not anything about plain transformers' ability to load
     Gemma 4, and peft>=0.19.0 ships proper Gemma4ClippableLinear support --
     see requirements.txt -- closing the original reason Unsloth was needed
-    at all). LoRA attachment (.attach_lora() for inference-time use,
-    load_trainable_model() below for training) works uniformly across every
-    model now, Gemma 4 included.
+    at all). LoRA training (load_trainable_model() below) works uniformly
+    across every model now, Gemma 4 included.
   - OllamaModel: local Ollama server, quantized models. Alternative backend
     for Gemma 4 E2B on very low VRAM machines that already have Ollama set up.
 
@@ -138,17 +137,26 @@ def is_gemma4(model_key: str) -> bool:
 
 
 def _fix_gemma4_dtype_mismatches(model):
-    """Work around a real, confirmed gap in Unsloth's current Gemma 4
+    """Defensive dtype-consistency check, run after loading any Gemma 4 model
+    (both HFModel.load() and load_trainable_model(), regardless of backend).
+
+    Originally written to work around a confirmed gap in Unsloth's Gemma 4
     support (their own source labels this architecture's patches
-    "temporary_patches" -- actively in flux, not a finished implementation):
-    on GPUs forced into a float32 fallback (no bf16 hardware support, and
-    Unsloth's own printed banner says float16 "won't work" for Gemma 4 --
-    both true for a T4), that float32 cast doesn't reach every submodule.
-    Confirmed directly: per_layer_model_projection, a Gemma-4-specific
-    architectural component (not a standard attention/MLP projection, so
-    outside any LoRA target_modules list), stays in the checkpoint's
-    original dtype while the rest of the model is float32, crashing the
-    first forward pass with "expected mat1 and mat2 to have the same dtype".
+    "temporary_patches" -- actively in flux): on GPUs forced into a float32
+    fallback (no bf16 hardware support, and Unsloth's own printed banner said
+    float16 "won't work" for Gemma 4 -- both true for a T4), that float32
+    cast didn't reach every submodule. Confirmed directly:
+    per_layer_model_projection, a Gemma-4-specific architectural component
+    (not a standard attention/MLP projection, so outside any LoRA
+    target_modules list), stayed in the checkpoint's original dtype while
+    the rest of the model was float32, crashing the forward pass with
+    "expected mat1 and mat2 to have the same dtype". This project no longer
+    loads Gemma 4 through Unsloth at all (see load_trainable_model()'s
+    docstring) -- plain transformers' own dtype= cast during from_pretrained
+    is expected to apply uniformly, so this should now be a no-op in
+    practice. Kept as a cheap defensive check rather than removed outright,
+    since "expected to be uniform" isn't the same as verified for every
+    architecture this project might load.
 
     Rather than patch around that one named layer, walk every NON-quantized
     parameter (skip anything bitsandbytes 4-bit-quantized, identified by the
@@ -177,10 +185,11 @@ def _fix_gemma4_dtype_mismatches(model):
 
 
 class HFModel:
-    """Loads a HF causal LM once (optionally 4-bit + LoRA), reused across all
-    generations in a run. Primary backend for every model's baseline
-    inference in this project, including Gemma 4 (LoRA/GRPO training on
-    Gemma 4 uses load_trainable_model() instead, see below)."""
+    """Loads a HF causal LM once (optionally 4-bit, optionally with a saved
+    LoRA adapter via adapter_path), reused across all generations in a run.
+    Inference only -- baselines and evaluating an already-trained checkpoint.
+    Training (attaching a fresh LoRA adapter) goes through the standalone
+    load_trainable_model() below instead, for every model including Gemma 4."""
 
     def __init__(self, model_key: str, smoke_test: bool = False,
                  load_in_4bit: bool = True, system_prompt: Optional[str] = None,
@@ -255,23 +264,6 @@ class HFModel:
             self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
 
         self.model.eval()
-        return self
-
-    def attach_lora(self, r: int = 16, lora_alpha: int = 16):
-        """Attach a LoRA adapter for fine-tuning. Call after load(), before
-        training. Not usable for Gemma 4 -- see load_trainable_model()."""
-        from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-
-        self.model.config.use_cache = False
-        self.model = prepare_model_for_kbit_training(self.model, use_gradient_checkpointing=True)
-        lora_config = LoraConfig(
-            r=r, lora_alpha=lora_alpha,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                             "gate_proj", "up_proj", "down_proj"],
-            lora_dropout=0, bias="none", task_type="CAUSAL_LM",
-        )
-        self.model = get_peft_model(self.model, lora_config)
-        self.model.enable_input_require_grads()
         return self
 
     def generate(self, prompt: str, max_new_tokens: int = 4096, temperature: float = 0.0,

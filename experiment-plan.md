@@ -39,16 +39,17 @@ pipeline -- try recipes, report whichever works, including honest negative resul
 
 ## Models
 
-- **Gemma 4 E2B** -- primary. LoRA/GRPO via Unsloth (`hf_models.load_trainable_model`);
-  `Gemma4ClippableLinear` isn't a recognized peft target module type on plain bitsandbytes+peft,
-  confirmed on this project's own hardware. E2B LoRA measured ~8-10GB elsewhere -- fits Kaggle's
-  free 16GB T4, not a 6GB laptop.
+- **Gemma 4 E2B** -- primary. LoRA/GRPO via plain bitsandbytes+peft (`hf_models.load_trainable_model`),
+  the same path every other model uses. `Gemma4ClippableLinear` needs `peft>=0.19.0` to be a
+  recognized target module type (pinned in requirements.txt) -- older peft genuinely can't attach
+  LoRA to it, which is why this project routed through Unsloth for a while before confirming
+  peft's native support and dropping Unsloth entirely (see `hf_models.load_trainable_model()`'s
+  docstring). E2B LoRA measured ~8-10GB elsewhere -- fits Kaggle's free 16GB T4, not a 6GB laptop.
 - **Gemma 4 E4B** -- secondary, if feasible. ~17GB LoRA footprint reported elsewhere, at/over the
   T4's 16GB ceiling -- `check_finetune_feasibility.py` must confirm this empirically before
   committing a full training run to it.
 - **AlphaMaze-v0.2-1.5B** -- the MazeBench-side reference point (already ~93% there by
-  construction). Also a candidate to continue-train on GridRoute (bitsandbytes+peft, no Unsloth
-  needed for this model).
+  construction). Also a candidate to continue-train on GridRoute, same bitsandbytes+peft path.
 - **DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B, Qwen2.5-3B** -- cheap secondary comparisons via
   bitsandbytes+peft, not primary.
 

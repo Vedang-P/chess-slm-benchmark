@@ -1,30 +1,15 @@
-"""Grid world environment and dataset generation.
-
-Implements GridRoute (Li et al., 2025) compatible grid generation:
+"""GridRoute (Li et al., 2025) compatible grid generation:
 - NxN grids with square obstacles
 - 4-directional cardinal movement
 - Start/end pairs with minimum distance constraints
 - Dijkstra reference paths for ground truth
-
-Also generates mazes compatible with Lost in Aggregation (Jiang et al., 2026):
-- Tree-structured mazes via DFS randomized generation
-- Per-cell topology annotation (corridor, junction, dead-end)
-- Shortest unique path computation
 """
 
-import numpy as np
-import json
 import heapq
 from dataclasses import dataclass, field
-from typing import List, Tuple, Optional, Dict
+from typing import Dict, List, Tuple
 
-
-@dataclass
-class GridMap:
-    """A single grid map with obstacles."""
-    size: int
-    obstacles: List[Tuple[int, int, int, int]]  # (x, y, w, h) for each obstacle
-    grid: np.ndarray  # 0 = free, 1 = obstacle
+import numpy as np
 
 
 @dataclass
@@ -42,14 +27,6 @@ class GridRouteTask:
 
 
 DIRECTIONS = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # 4-directional
-DIR_NAMES = ["right", "left", "down", "up"]
-
-
-GRIDROUTE_CONFIGS = [
-    {"size": 10, "obstacle_size": 3, "num_obstacles": 2, "label": "size_10"},
-    {"size": 20, "obstacle_size": 4, "num_obstacles": 3, "label": "size_20"},
-    {"size": 30, "obstacle_size": 5, "num_obstacles": 4, "label": "size_30"},
-]
 
 
 def generate_gridroute_maps(
@@ -70,7 +47,6 @@ def generate_gridroute_maps(
     rng = np.random.RandomState(seed)
     tasks = []
     min_dist = 0.3 * np.sqrt(2 * size**2)
-    task_counter = 0
 
     for map_idx in range(num_maps):
         grid = np.zeros((size, size), dtype=np.int8)
@@ -81,7 +57,7 @@ def generate_gridroute_maps(
             obstacles_rect.append((x, y, obstacle_size, obstacle_size))
             grid[y:y+obstacle_size, x:x+obstacle_size] = 1
 
-        for _ in range(pairs_per_map):
+        for pair_idx in range(pairs_per_map):
             attempts = 0
             while True:
                 start = (rng.randint(0, size), rng.randint(0, size))
@@ -96,7 +72,7 @@ def generate_gridroute_maps(
                     break
 
             path = dijkstra(grid, start, goal)
-            task_id = f"GRID_{size}x{size}_m{map_idx:03d}_p{_}"
+            task_id = f"GRID_{size}x{size}_m{map_idx:03d}_p{pair_idx}"
             nl_vars = grid_to_nl_variants(grid, start, goal)
             tasks.append(GridRouteTask(
                 task_id=task_id,
@@ -109,7 +85,6 @@ def generate_gridroute_maps(
                 optimal_length=len(path) - 1 if path else -1,
                 nl_variants=nl_vars,
             ))
-            task_counter += 1
 
     return tasks
 
@@ -120,23 +95,6 @@ def gridroute_defaults(grid_size: int) -> Tuple[int, int]:
     place instead of being copy-pasted (and able to silently drift) across
     train_sft.py, train_grpo.py and eval.py."""
     return (1, 1) if grid_size == 5 else (3, 2)
-
-
-def generate_all_gridroute(seed: int = 42) -> List[GridRouteTask]:
-    """Generate all 3 GridRoute configs (1,500 total tasks)."""
-    all_tasks = []
-    for cfg in GRIDROUTE_CONFIGS:
-        tasks = generate_gridroute_maps(
-            size=cfg["size"],
-            obstacle_size=cfg["obstacle_size"],
-            num_obstacles=cfg["num_obstacles"],
-            num_maps=100,
-            pairs_per_map=5,
-            seed=seed,
-        )
-        all_tasks.extend(tasks)
-        print(f"  {cfg['label']}: {len(tasks)} tasks")
-    return all_tasks
 
 
 def bfs_connected(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> bool:
@@ -193,18 +151,6 @@ def dijkstra(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) ->
     return path[::-1]
 
 
-def grid_to_text(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> str:
-    """Convert grid to natural language description for LLM input."""
-    h, w = grid.shape
-    obstacles = [(x, y) for y in range(h) for x in range(w) if grid[y, x] == 1]
-    desc = f"The environment is a {w}x{h} grid. "
-    desc += f"Start at ({start[0]}, {start[1]}). Goal at ({goal[0]}, {goal[1]}). "
-    if obstacles:
-        desc += f"Obstacles occupy cells: {obstacles}. "
-    desc += "Movement is in 4 cardinal directions (up, down, left, right) with unit steps."
-    return desc
-
-
 # The ONE shared instruction for how a model should report its GridRoute NL
 # answer -- imported by eval.py, train_sft.py, and train_grpo.py so SFT
 # training, GRPO training, and evaluation all teach/expect the exact same
@@ -251,35 +197,8 @@ def grid_to_nl_variants(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[in
     return {**a_direct, **b_descriptive, **c_constrained}
 
 
-def generate_maze(size: int, seed: int = 42) -> np.ndarray:
-    """Generate a tree-structured maze via randomized DFS.
-
-    Returns grid where 0 = path, 1 = wall.
-    Compatible with Lost in Aggregation format.
-    """
-    rng = np.random.RandomState(seed)
-    grid = np.ones((size, size), dtype=np.int8)
-    visited = np.zeros((size, size), dtype=bool)
-
-    def carve(x, y):
-        visited[y, x] = True
-        grid[y, x] = 0
-        dirs = DIRECTIONS.copy()
-        rng.shuffle(dirs)
-        for dx, dy in dirs:
-            nx, ny = x + 2*dx, y + 2*dy
-            if 0 <= nx < size and 0 <= ny < size and not visited[ny, nx]:
-                grid[y + dy, x + dx] = 0
-                carve(nx, ny)
-
-    carve(1, 1)
-    return grid
-
-
-# Test
 if __name__ == "__main__":
-    tasks = generate_gridroute_maps(size=10, obstacle_size=3, num_obstacles=2, num_maps=1, pairs_per_map=3)
+    tasks = generate_gridroute_maps(size=5, obstacle_size=1, num_obstacles=1, num_maps=1, pairs_per_map=3)
     for t in tasks:
-        desc = grid_to_text(t.grid.grid, t.start, t.goal)
-        print(desc)
+        print(t.nl_variants["direct"])
         print(f"  Optimal path length: {t.optimal_length}")

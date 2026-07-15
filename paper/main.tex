@@ -180,11 +180,11 @@ budgets large enough that generations reliably complete, confirmed empirically r
 \label{sec:setup}
 
 \textbf{Models.} Gemma 4 E2B (primary) and E4B (if its LoRA memory footprint fits the training
-hardware, confirmed empirically rather than assumed), via Unsloth (required: Gemma 4's
-\texttt{Gemma4ClippableLinear} layers are not a recognized target module type for plain
-\texttt{peft} LoRA). AlphaMaze-v0.2-1.5B as the MazeBench-side reference point. DeepSeek-R1
--Distill-Qwen-1.5B / SmolLM2-1.7B / Qwen2.5-3B as cheap secondary comparisons, via bitsandbytes
-4-bit + \texttt{peft} LoRA.
+hardware, confirmed empirically rather than assumed), via bitsandbytes 4-bit + \texttt{peft} LoRA
+(\texttt{peft}$\,\geq\,$0.19.0; Gemma 4's \texttt{Gemma4ClippableLinear} layers need this version to
+be a recognized target module type at all). AlphaMaze-v0.2-1.5B as the MazeBench-side reference
+point. DeepSeek-R1-Distill-Qwen-1.5B / SmolLM2-1.7B / Qwen2.5-3B as cheap secondary comparisons, via
+the same bitsandbytes 4-bit + \texttt{peft} LoRA path.
 
 \textbf{Benchmarks.} MazeBench-v0.2 (100 held-out mazes), scored with AlphaMaze's own released
 evaluation code (candidate moves simulated against the maze's actual wall structure, parsed

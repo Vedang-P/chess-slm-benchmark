@@ -148,9 +148,18 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
             # than our extract_reported_answer (no FINAL ANSWER/other-marker
             # handling), but this is the exact function that produced the
             # published number, so use it (on the raw generation) rather than
-            # our own for this specific faithfulness check.
-            am_answer = _ALPHAMAZE_BENCH_UTILS.extract_answer(gen["content"])
-            ok = bool(am_answer) and _ALPHAMAZE_BENCH_UTILS.benchmark_maze_solution(row["Prompt"], am_answer)
+            # our own for this specific faithfulness check. Guarded: that
+            # split()[1] raises IndexError outright if "</think>" isn't a
+            # literal substring of the output, which only AlphaMaze's own
+            # checkpoint is known to reliably produce -- any other model
+            # (baselines, our own GRPO checkpoints) could hit this, and
+            # without the guard it crashes the whole n-task loop on one bad
+            # generation, discarding every result already collected.
+            try:
+                am_answer = _ALPHAMAZE_BENCH_UTILS.extract_answer(gen["content"])
+                ok = bool(am_answer) and _ALPHAMAZE_BENCH_UTILS.benchmark_maze_solution(row["Prompt"], am_answer)
+            except Exception:
+                ok = False
         else:
             ok = exact_match
 

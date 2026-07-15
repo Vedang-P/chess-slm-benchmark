@@ -24,18 +24,20 @@ harness" than "novel method" -- say so plainly in the paper).
 
 ## Models
 
-**Primary**: Gemma 4 E2B. LoRA/GRPO via Unsloth (`hf_models.load_trainable_model` --
-Gemma4ClippableLinear isn't a recognized peft target module type, confirmed on this project's own
-hardware; Unsloth's loader patches around it). E2B LoRA measured ~8-10GB elsewhere -- fits
-Kaggle's free 16GB T4, not a 6GB laptop.
+**Primary**: Gemma 4 E2B. LoRA/GRPO via plain bitsandbytes+peft (`hf_models.load_trainable_model`),
+the same path every other model uses -- NOT Unsloth (see Changelog: tried again, hit three separate
+Unsloth-specific bugs in its own import chain and patched forward pass, none of them actually about
+whether plain transformers can load Gemma 4; peft>=0.19.0 ships its own Gemma4ClippableLinear
+support, closing the original reason Unsloth was needed at all). E2B LoRA measured ~8-10GB
+elsewhere -- fits Kaggle's free 16GB T4, not a 6GB laptop.
 **Secondary**: Gemma 4 E4B, if `check_finetune_feasibility.py` confirms it actually fits (E4B LoRA
 reported ~17GB elsewhere -- at/over the T4's ceiling, unconfirmed until measured on the real
 hardware).
 **Reference point for MazeBench**: AlphaMaze-v0.2-1.5B (already at ~93% there by construction --
 the paper's own number, this is what Gemma 4 needs to approach/beat on that side, or at least not
 regress on if we continue training AlphaMaze's own checkpoint on GridRoute too).
-**Also runnable** (bitsandbytes+peft, no Unsloth needed): DeepSeek-R1-Distill-Qwen-1.5B,
-SmolLM2-1.7B, Qwen2.5-3B -- kept in scope as cheap secondary comparisons, not primary.
+**Also runnable** (same bitsandbytes+peft path): DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B,
+Qwen2.5-3B -- kept in scope as cheap secondary comparisons, not primary.
 
 ## Grid Size
 
@@ -100,14 +102,40 @@ Full detail in `experiment-plan.md`.
   training scripts, reconciled docs around a "cross-format-consistency-reward technique on
   MazeBench vs. GridRoute" framing (dropping Gemma 4/Lost-in-Aggregation), built a Kaggle notebook
   and a paper skeleton.
-- **2026-07-15, second pass (this one)**: reconsidered scope with fresh input. Decided: (a) drop
-  the consistency-reward technique as the paper's headline claim -- pure performance push instead,
+- **2026-07-15, second pass**: reconsidered scope with fresh input. Decided: (a) drop the
+  consistency-reward technique as the paper's headline claim -- pure performance push instead,
   since no SLM has been tested on GridRoute at all, which is itself a sufficient motivation; (b)
-  revive Gemma 4 as the primary model (Unsloth's Gemma 4 support has matured since the 07-13
-  finding that blocked it -- verify current status before assuming either way, but current
-  evidence suggests it's no longer the blocker it was); (c) 5x5 GridRoute first, 10x10 optional;
-  (d) clean-final-answer-only scoring policy, generous thinking budgets, faithful replication via
-  the real AlphaMaze codebase (now a proper submodule, was previously a broken/orphaned gitlink
-  with no `.gitmodules` entry) -- this last change caught a real discrepancy: MazeBench's real
-  scoring is geometric-simulation-based (any valid path counts), not exact-match against a stored
-  reference, which an earlier version of `eval_mazebench` got wrong.
+  revive Gemma 4 as the primary model, routed through Unsloth again at this point (its Gemma 4
+  support looked more mature than the 07-13 finding that originally blocked it); (c) 5x5 GridRoute
+  first, 10x10 optional; (d) clean-final-answer-only scoring policy, generous thinking budgets,
+  faithful replication via the real AlphaMaze codebase (now a proper submodule, was previously a
+  broken/orphaned gitlink with no `.gitmodules` entry) -- this last change caught a real
+  discrepancy: MazeBench's real scoring is geometric-simulation-based (any valid path counts), not
+  exact-match against a stored reference, which an earlier version of `eval_mazebench` got wrong.
+- **2026-07-15, third pass: dropped Unsloth entirely.** Real Kaggle runs hit three separate,
+  independently-confirmed Unsloth-specific breakages in a row: an `unsloth_zoo` import of a class
+  TRL 0.20.0 removed, a broken preinstalled `wandb` crashing `trl`'s import-time availability check
+  (which Unsloth's own import chain triggers), and a dtype mismatch inside Unsloth's own
+  patched/compiled Gemma 4 forward pass (`per_layer_model_projection` left in the checkpoint's
+  original dtype while the rest of the model was cast to float32 -- their own "temporary_patches"
+  module naming says this architecture's support is still in flux, not a finished implementation).
+  None of these were about whether plain transformers could load and train Gemma 4 -- it already
+  was, successfully, every time, from inside Unsloth's own loader, which itself just calls
+  `AutoModelForCausalLM.from_pretrained` under the hood. Checked whether the *original* reason
+  Unsloth was needed still held: it didn't -- `peft>=0.19.0` (released before Gemma 4 even
+  launched) ships its own `Gemma4ClippableLinear` support. Switched Gemma 4 to the same plain
+  bitsandbytes+peft path every other model already used successfully on this hardware; kept a
+  defensive dtype-consistency check (`hf_models._fix_gemma4_dtype_mismatches`) as a cheap safety
+  net in case plain transformers ever has a similar gap, since "expected to be uniform" isn't the
+  same as verified. Also did a full repo cleanup at the user's explicit request: removed `archive/`
+  entirely (old abandoned-direction work, previously kept for possible methodology-section
+  reference -- recoverable from git history if that's ever actually needed), removed the unused
+  Lost-in-Aggregation data/download script (dropped from scope back in the first 07-15 pass but the
+  100MB of downloaded data was never actually deleted until now), and removed several genuinely
+  dead code paths found via a systematic file-by-file read (unused metrics/dataclasses in
+  `src/evaluation.py`, unused generators in `src/grid_generator.py`, an unused `HFModel.attach_lora()`
+  method, unreachable tool-calling logic in `src/ollama_env.py`). Also fixed a latent, never-yet-
+  exercised bug: `train_sft.py` passed `max_seq_length` directly to `SFTTrainer()`, which recent TRL
+  versions no longer accept there (moved to a dedicated `SFTConfig` class) -- this had never been
+  caught because every real Kaggle run so far went through `check_finetune_feasibility.py`'s own
+  manual forward+backward, which bypasses `SFTTrainer`/`GRPOTrainer` entirely.

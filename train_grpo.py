@@ -340,6 +340,13 @@ def main():
         max_completion_length=args.max_completion_length,
     )
 
+    # bf16 checked against real hardware support, not left unset -- a T4
+    # (this project's actual free-tier Kaggle GPU) has no bf16 tensor-core
+    # support; fp16 is what it actually accelerates. See train_sft.py's
+    # matching comment -- same untested-territory reasoning applies here,
+    # GRPOTrainer hasn't actually run yet in any session so far either.
+    bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+
     training_args = GRPOConfig(
         output_dir=args.output_dir,
         per_device_train_batch_size=1,
@@ -350,6 +357,8 @@ def main():
         max_steps=args.max_steps,
         logging_steps=1,
         save_steps=args.max_steps,
+        bf16=bf16_ok,
+        fp16=not bf16_ok,
         report_to=[],
     )
 

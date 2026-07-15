@@ -50,23 +50,27 @@ train_sft.py           SFT warm-start: --format {nl, token, mixed}.
 train_grpo.py          GRPO training: --condition {single, mixed, consistency} -- recipes to try,
                        not a hypothesis test (see module docstring).
 check_finetune_feasibility.py   VRAM feasibility check, including Gemma 4 E2B/E4B.
-hf_models.py           Model loading (bitsandbytes 4-bit + peft for most models, Unsloth for
-                       Gemma 4 via load_trainable_model()), the canonical NL path parser, and
-                       extract_reported_answer() -- the clean-final-answer-only scoring policy.
+hf_models.py           Model loading (bitsandbytes 4-bit + peft, one path for every model
+                       including Gemma 4 -- see load_trainable_model()'s docstring for why this
+                       isn't Unsloth despite an earlier pivot that tried it), the canonical NL path
+                       parser, and extract_reported_answer() -- the clean-final-answer-only
+                       scoring policy.
 src/grid_generator.py GridRoute task generation + the shared NL "FINAL ANSWER:" prompt convention.
 src/token_maze.py     Our own AlphaMaze-vocabulary token-maze encoder/decoder.
 src/astar_solver.py   A* solver, used for SFT ground-truth paths.
-src/evaluation.py     Path validity/optimality scoring, shared by eval.py and the GRPO rewards.
+src/evaluation.py     Path validity/optimality primitives, shared by eval.py and the GRPO rewards.
 alphamaze_reference/  Git submodule (github.com/menloresearch/visual-thinker) -- AlphaMaze's real
                        inference/benchmark code, used directly by eval.py for faithful MazeBench
                        scoring rather than a reconstruction.
 notebooks/kaggle_train.ipynb   Kaggle-runnable end-to-end training notebook.
 paper/                LaTeX writeup (NeurIPS workshop template).
-data/lost_in_aggregation/, data/gridroute/   Downloaded/generated task data (Lost in Aggregation
-                       isn't used in the current plan, kept for a possible future robustness check).
-archive/               Earlier abandoned research directions, kept for methodology-section
-                       reference (see project memory / idea.md's Changelog for what's where).
 ```
+
+No `archive/`: this repo intentionally doesn't keep abandoned-direction snapshots in the working
+tree -- git history has them if a methodology section ever genuinely needs to reference what was
+tried and ruled out. No `data/lost_in_aggregation/` either -- that benchmark was dropped from scope
+early (2026-07-14/15) and the downloaded data (100MB, unreferenced by any current code) was removed
+in the 2026-07-15 cleanup below.
 
 ## Quick Start
 
@@ -97,6 +101,26 @@ For Kaggle (free T4, no local GPU needed): open `notebooks/kaggle_train.ipynb`, 
 same pipeline end to end and saves results as downloadable JSON.
 
 ## Project Log
+
+### 2026-07-15 -- Dropped Unsloth entirely; full repo cleanup
+Real Kaggle runs of the "Unsloth revived" plan below hit three separate, independently-confirmed
+Unsloth-specific bugs in a row (an `unsloth_zoo` import of a class TRL 0.20.0 removed, a broken
+preinstalled `wandb` crashing an import-time check `trl` does regardless of Unsloth, then a dtype
+mismatch inside Unsloth's own patched Gemma 4 forward pass) -- none of them about whether plain
+transformers could load and train Gemma 4, which it already was doing successfully every time from
+inside Unsloth's own loader. The original reason Unsloth was needed (`Gemma4ClippableLinear` not a
+recognized peft target module type) turned out to be stale: `peft>=0.19.0` ships its own support.
+Switched Gemma 4 to the same plain bitsandbytes+peft path every other model already used
+successfully on this hardware -- see `hf_models.load_trainable_model()`'s docstring for the full
+reasoning. Also, at the user's explicit request: removed `archive/` entirely and the unused
+Lost-in-Aggregation data/download script, plus several genuinely dead code paths found via a
+systematic file-by-file bug-check pass (unused metrics code in `src/evaluation.py`, unused
+generators in `src/grid_generator.py`, an unused `HFModel.attach_lora()`, unreachable tool-calling
+logic in `src/ollama_env.py`). Fixed one latent bug this caught before it could bite: `train_sft.py`
+passed `max_seq_length` directly to `SFTTrainer()`, which current TRL no longer accepts there (moved
+to a dedicated `SFTConfig`) -- never surfaced before because every real run so far went through
+`check_finetune_feasibility.py`'s own manual forward+backward, bypassing `SFTTrainer`/`GRPOTrainer`
+entirely. Full detail in `idea.md`'s Changelog and git history around this date.
 
 ### 2026-07-15 -- Scope pivot: pure performance push, Gemma 4 revived, faithful replication
 - **Pivoted the paper's framing**: dropped the cross-format-consistency-reward technique as the

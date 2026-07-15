@@ -6,24 +6,32 @@
 - **License**: AGPL 3.0
 
 ### Configurations
-| Param | Size 10 | Size 20 | Size 30 |
-|-------|---------|---------|---------|
-| Grid (N) | 10x10 | 20x20 | 30x30 |
-| Obstacle size (s) | 3x3 | 4x4 | 5x5 |
-| Num obstacles (n) | 2 | 3 | 4 |
-| Maps per config | 100 | 100 | 100 |
-| Start/end pairs | 5 | 5 | 5 |
-| Total tasks | 500 | 500 | 500 |
+| Param | Size 5 (used here) | Size 10 | Size 20 | Size 30 |
+|-------|---------------------|---------|---------|---------|
+| Grid (N) | 5x5 | 10x10 | 20x20 | 30x30 |
+| Obstacle size (s) | 1x1 | 3x3 | 4x4 | 5x5 |
+| Num obstacles (n) | 1 | 2 | 3 | 4 |
 
-### Metrics
-- **CR**: Compliance Ratio (format correctness)
-- **FR**: Feasibility Ratio (valid obstacle-free path)
-- **OR**: Optimal Ratio (= Dijkstra optimal)
-- **GM**: Geometric Mean (path length ratio)
-- **MSE**: Mean Square Error
-- **RT**: Run Time
+This project doesn't use their published task files directly -- `src/grid_generator.py`'s
+`generate_gridroute_maps()` regenerates tasks matching their config parameters
+(obstacle size/count scaled per grid size, min start/goal distance = 30% of the grid
+diagonal, connectivity verified via BFS, ground truth via Dijkstra), seeded and
+reproducible. 5x5 is the size actually used everywhere in this project (matching
+MazeBench's 5x5, for a fair cross-format comparison) -- 10x10 is used only as an
+optional harder follow-up, not the primary evaluation size.
 
-### Baselines (from paper)
+### Metrics (their names; this project's actual scoring)
+- **CR**: Compliance Ratio (format correctness) -- this project's `valid`/`optimal`
+  scoring (`src/evaluation.py`) folds compliance into feasibility: a response with no
+  parseable path is `no_path`, not partially credited.
+- **FR**: Feasibility Ratio (valid, obstacle-free path) -- `valid_rate` here.
+- **OR**: Optimal Ratio (matches Dijkstra optimal length) -- `optimal_rate` here.
+- GM/MSE/RT (geometric mean of length ratio, mean square error, run time) are not
+  currently computed by this project's harness -- valid/optimal rate are the two
+  numbers actually reported.
+
+### Baselines (from their paper -- NOT reproduced by this project; see idea.md's Phase 1
+notes on which baselines are actually replicated vs. cited as literature context)
 | Model | Size | Prompt | CR | FR | OR |
 |-------|------|--------|----|----|-----|
 | GPT-4 Turbo | — | Vanilla | ~90% | ~70% | ~30% |
@@ -31,6 +39,11 @@
 | GPT-4 Turbo | — | AoP-Dijkstra | ~95% | ~85% | ~50% |
 | Qwen2.5-7B | 7B | Vanilla | ~60% | ~30% | ~10% |
 | Qwen2.5-72B | 72B | AoP-Dijkstra | ~90% | ~70% | ~35% |
+
+No SLM (<=~5B) has been tested on GridRoute anywhere in the literature found so far --
+their own tested models are all >=7B. That gap is the actual open question this
+project's baselines answer, not a reproduction of the table above (different model
+scale entirely, not a fair like-for-like comparison).
 
 ### Failure Types
 1. Invalid Step Distance (diagonal/illegal moves)
@@ -41,83 +54,40 @@
 
 ---
 
-## 2. Lost in Aggregation (Jiang et al., 2026)
-- **Paper**: arXiv:2606.22219
-- **Data**: yuhanjiang415.github.io/lost-in-aggregation/ (GitHub Releases v0.1)
-- **License**: CC BY 4.0
+## 2. MazeBench / AlphaMaze (Dao & Vu et al., 2025)
+- **Paper**: arXiv:2502.14669 ("AlphaMaze: Enhancing Large Language Models' Spatial
+  Intelligence via GRPO")
+- **Code**: github.com/menloresearch/visual-thinker (Apache 2.0) -- vendored here as
+  the `alphamaze_reference` git submodule, run `git submodule update --init` to fetch it
+- **Data**: `Menlo/Maze-Bench-v0.2` on HuggingFace (~100 mazes, `test` split)
+- **Checkpoint**: `homebrewltd/AlphaMaze-v0.2-1.5B` (SFT+GRPO on DeepSeek-R1-Distill-Qwen-1.5B)
 
-### Maze Corpus
-| Effective size | Grid size | Mazes | File |
-|---------------|-----------|-------|------|
-| 3x3 | 7x7 | 150 | mazes_s3.json |
-| 5x5 | 11x11 | 150 | mazes_s5.json |
-| 7x7 | 15x15 | 150 | mazes_s7.json |
-| 10x10 | 21x21 | 150 | mazes_s10.json |
-| 15x15 | 31x31 | 150 | mazes_s15.json |
-| 20x20 | 41x41 | 150 | mazes_s20.json |
-| 30x30 | 61x61 | 150 | mazes_s30.json |
+### Format
+Token-based, not natural language -- this is the "other" surface format from
+GridRoute's NL coordinates, and the whole point of testing both is that they're
+genuinely different representations of the same underlying navigation problem.
+Each maze is rendered as a grid of tokens: `<|row-col|>` coordinates (e.g. `<|0-0|>`),
+wall tokens per cell (`<|no_wall|>`, `<|up_wall|>`, `<|up_down_wall|>`, etc.),
+`<|origin|>`/`<|target|>` markers, and the expected output is a sequence of movement
+tokens (`<|up|>`, `<|down|>`, `<|left|>`, `<|right|>`). `src/token_maze.py` implements
+this project's own encoder/decoder for the *same* token vocabulary, used for Phase 2's
+own training data (see that file's docstring for why it's not a byte-for-byte clone of
+AlphaMaze's exact undocumented layout).
 
-### Per-Maze Schema
-```json
-{
-  "id": "maze_s7_medium_000",
-  "effective_size": 7,
-  "grid_size": 15,
-  "algorithm": "dfs",
-  "seed": 30042,
-  "grid": [[1,1,1,...], [1,0,0,...], ...],  // 0=path, 1=wall
-  "start": [5, 1],
-  "goal": [1, 5],
-  "difficulty": "medium",
-  "metrics": {
-    "junction_count_on_path": ...,
-    "dead_end_density": ...,
-    "confusion_ratio": ...,
-    "shortest_path_length": ...
-  },
-  "topology": {
-    "cell_types": {"r,c": "corridor|corner|junction|dead-end"},
-    "passability": {"r,c": {up,down,left,right: bool}},
-    "shortest_path": [[r,c], ...],
-    "junction_choices": {...},
-    "dead_ends": [[r,c], ...]
-  }
-}
-```
+### Scoring -- two different notions, don't conflate them
+- **Their published number (93%)**: presumed exact move-sequence match against a
+  single stored reference solution.
+- **Their real scoring code** (`benchmark_maze_solution` in the submodule, used by
+  `eval.py` when the submodule is present): re-parses the maze's actual wall
+  structure straight out of the prompt text and simulates the candidate's moves
+  against those real walls, accepting *any* sequence that actually reaches the
+  target -- not just the one stored reference path. This is what `eval.py` actually
+  uses (falls back to exact-match, with a loud warning, only if the submodule isn't
+  present) -- it's the more faithful metric, and can score a valid-but-different path
+  as correct where naive exact-match would wrongly fail it.
 
-### Three Modules
-1. **Input Acquisition**: 4 formats (Words, Coordinates, ASCII Map, Image)
-2. **Multi-Scale Representation**: Fine/Meso/Macro probes in isolation
-3. **Hierarchical Route Planning**: 3 delegation regimes
-
-### Baseline Results (from paper)
-| Model | 3x3 SR | 5x5 SR | 7x7 SR | 10x10 SR | 15x15 SR |
-|-------|--------|--------|--------|----------|----------|
-| GPT-4o | ~100% | ~80% | ~2% | ~0% | ~0% |
-| GPT-4o + Topology-aided | — | — | 94% | 80% | 70% |
-| DeepSeek-V3 | ~100% | ~50% | ~28% | ~6% | ~0% |
-| Llama-3.3-70B | ~60% | ~20% | ~0% | ~0% | ~0% |
-
----
-
-## 3. LLM-BabyBench (Choukrani et al., 2025)
-- **Paper**: arXiv:2505.12135
-- **Code**: github.com/choukrani/llm-babybench
-- **Data**: huggingface.co/datasets/salem-mbzuai/LLM-BabyBench
-- **License**: MIT
-
-### Three Tasks
-1. **Predict** (8K rows): Predict final state from action sequence. 16 levels.
-2. **Plan** (8K rows): Generate action sequence for navigation subgoal. Validated via environment.
-3. **Decompose** (8K rows): Break high-level mission into subgoals.
-
-### Decompose Task Metrics
-- **CR** (Comprehension Rate): OmniBot executes LLM subgoals, with additions allowed
-- **PR** (Precision Rate): OmniBot executes ONLY LLM subgoals (no additions)
-- **ACI** (Assistance Curve Integral): Area under SR(k) curve for allowed additions
-
-### BabyAI Environment
-- MiniGrid-based grid world
-- Object interactions: keys, doors, boxes, balls
-- 16 levels: GoToObj -> GoToLocal -> PutNext -> Synth -> BossLevel
-- Partially observable, compositional instructions
+### Published Result
+AlphaMaze-v0.2-1.5B (DeepSeek-R1-Distill-Qwen-1.5B + their SFT+GRPO recipe): 93% on
+MazeBench-v0.2. This project's Phase 1 replication check (`eval.py --model alphamaze
+--benchmark mazebench`) exists specifically to confirm this harness reproduces that
+number on their own checkpoint before trusting any of this project's own numbers.

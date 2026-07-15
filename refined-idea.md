@@ -67,10 +67,11 @@ several -- report it as "we also tried this, here's what happened," not as an in
 
 ## Key Assumptions
 
-1. Gemma 4 E2B/E4B can actually be LoRA/GRPO fine-tuned via Unsloth without the transformers
-   version conflict noted in this project's 2026-07-13 history -- current evidence (Unsloth's own
-   docs advertise Gemma 4 support) suggests this is resolved, but verify directly on the actual
-   training hardware before committing real compute, don't just trust a web search summary.
+1. Gemma 4 E2B/E4B can actually be LoRA/GRPO fine-tuned -- confirmed, via plain bitsandbytes+peft
+   (`peft>=0.19.0`), NOT Unsloth. Unsloth was tried (its own docs advertise Gemma 4 support), but
+   real Kaggle runs hit three separate Unsloth-specific bugs in its own import chain and patched
+   forward pass; none were about whether plain transformers could load Gemma 4, which it already
+   was doing successfully every time. See `hf_models.load_trainable_model()`'s docstring.
 2. Gemma 4 E4B's LoRA footprint (~17GB reported elsewhere) may not fit Kaggle's free 16GB T4 --
    `check_finetune_feasibility.py` needs to confirm this empirically; treat E4B as optional until
    it does.
