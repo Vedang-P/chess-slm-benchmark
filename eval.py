@@ -280,7 +280,12 @@ def main():
     model_tag = args.model.replace("/", "_")
     out_path = Path(args.output_dir) / f"{model_tag}_{args.benchmark}_{ts}.json"
     with open(out_path, "w") as f:
-        json.dump({"model": args.model, "checkpoint": args.checkpoint, "seed": args.seed, **report},
+        # load_in_4bit recorded explicitly -- without it, a 4-bit run and a
+        # --no_4bit ablation run of the same model/benchmark/n are
+        # indistinguishable in the saved JSON, which defeats the point of
+        # running the ablation at all.
+        json.dump({"model": args.model, "checkpoint": args.checkpoint, "seed": args.seed,
+                   "load_in_4bit": args.load_in_4bit, **report},
                    f, indent=2, default=str)
 
     print(f"\nSaved: {out_path}")
