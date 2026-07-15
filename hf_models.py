@@ -270,9 +270,15 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
 
     if is_gemma4(model_id):
         from unsloth import FastLanguageModel
+        # device_map={"": 0}: same reasoning as the bnb_peft path below --
+        # without it, on a multi-GPU box Unsloth's own device selection isn't
+        # guaranteed to put every candidate on the same GPU (observed
+        # directly: one Gemma 4 model landed on cuda:1 while another expected
+        # cuda:0, and a crashed-but-uncleaned earlier model left cuda:1 full,
+        # OOMing the next candidate for a reason unrelated to its own footprint).
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_id, max_seq_length=max_seq_length,
-            dtype=None, load_in_4bit=load_in_4bit,
+            dtype=None, load_in_4bit=load_in_4bit, device_map={"": 0},
         )
         # Explicit finetune_*_layers/modules flags, not left to Unsloth's
         # defaults -- Unsloth intersects target_modules with these filters

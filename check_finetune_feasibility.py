@@ -15,6 +15,8 @@ Kaggle T4's 16GB ceiling. Don't trust that number until this script confirms
 it on the real hardware you'll actually train on.
 """
 
+import traceback
+
 import torch
 
 # ── candidates ────────────────────────────────────────────────────
@@ -27,7 +29,16 @@ CANDIDATES = [
 
 
 def check(key: str, model_id: str) -> dict:
-    """Load, LoRA-attach, forward+backward, measure VRAM."""
+    """Load, LoRA-attach, forward+backward, measure VRAM.
+
+    Cleanup (del model/tokenizer + empty_cache) always runs, success or
+    failure -- a candidate that OOMs or crashes mid-forward-pass previously
+    left its weights resident in VRAM, so the NEXT candidate in CANDIDATES
+    would fail for an unrelated reason (leftover memory from the dead model),
+    not its own actual footprint. On failure, returns the full traceback
+    string (not just the exception message) so a downstream caller/log has
+    enough to diagnose without re-running.
+    """
     from hf_models import load_trainable_model
 
     print(f"\n{'='*60}")
@@ -38,70 +49,76 @@ def check(key: str, model_id: str) -> dict:
     torch.cuda.reset_peak_memory_stats()
     vram_before = torch.cuda.memory_allocated() / 1e9
 
-    print("  Loading + attaching LoRA (r=16)...")
-    model, tokenizer, backend = load_trainable_model(model_id, load_in_4bit=True, lora_r=16, lora_alpha=16)
-    vram_after_lora = torch.cuda.memory_allocated() / 1e9
-    print(f"  Backend: {backend}")
+    model, tokenizer = None, None
+    try:
+        print("  Loading + attaching LoRA (r=16)...")
+        model, tokenizer, backend = load_trainable_model(model_id, load_in_4bit=True, lora_r=16, lora_alpha=16)
+        vram_after_lora = torch.cuda.memory_allocated() / 1e9
+        print(f"  Backend: {backend}")
 
-    # ── forward + backward ──
-    print("  Running forward+backward (seq_len<=256, batch=1)...")
-    model.train()
-    dummy_input = tokenizer(
-        "Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
-        return_tensors="pt", truncation=True, max_length=256,
-    )
-    # .to(model.device), not a bare .cuda() -- explicit about landing on
-    # whichever device the model actually loaded onto, rather than relying on
-    # "current default CUDA device" (normally cuda:0, but don't assume it).
-    target_device = next(model.parameters()).device
-    dummy_input = {k: v.to(target_device) for k, v in dummy_input.items()}
-    dummy_labels = dummy_input["input_ids"].clone()
+        # ── forward + backward ──
+        print("  Running forward+backward (seq_len<=256, batch=1)...")
+        model.train()
+        dummy_input = tokenizer(
+            "Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
+            return_tensors="pt", truncation=True, max_length=256,
+        )
+        # .to(model.device), not a bare .cuda() -- explicit about landing on
+        # whichever device the model actually loaded onto, rather than relying
+        # on "current default CUDA device" (normally cuda:0, but don't assume it).
+        target_device = next(model.parameters()).device
+        dummy_input = {k: v.to(target_device) for k, v in dummy_input.items()}
+        dummy_labels = dummy_input["input_ids"].clone()
 
-    outputs = model(**dummy_input, labels=dummy_labels)
-    loss = outputs.loss
-    loss.backward()
+        outputs = model(**dummy_input, labels=dummy_labels)
+        loss = outputs.loss
+        loss.backward()
 
-    vram_peak = torch.cuda.max_memory_allocated() / 1e9
-    vram_after_bwd = torch.cuda.memory_allocated() / 1e9
+        vram_peak = torch.cuda.max_memory_allocated() / 1e9
+        vram_after_bwd = torch.cuda.memory_allocated() / 1e9
 
-    # ── report ──
-    peak_vram = max(vram_after_lora, vram_peak, vram_after_bwd)
+        # ── report ──
+        peak_vram = max(vram_after_lora, vram_peak, vram_after_bwd)
 
-    print(f"\n  VRAM breakdown:")
-    print(f"    Before:       {vram_before:.2f} GB")
-    print(f"    After LoRA:   {vram_after_lora:.2f} GB  (+{vram_after_lora - vram_before:.2f})")
-    print(f"    After fwd+bwd:{vram_after_bwd:.2f} GB")
-    print(f"    Peak:         {peak_vram:.2f} GB")
+        print(f"\n  VRAM breakdown:")
+        print(f"    Before:       {vram_before:.2f} GB")
+        print(f"    After LoRA:   {vram_after_lora:.2f} GB  (+{vram_after_lora - vram_before:.2f})")
+        print(f"    After fwd+bwd:{vram_after_bwd:.2f} GB")
+        print(f"    Peak:         {peak_vram:.2f} GB")
 
-    # Estimate GRPO: peak * 1.4 (overhead for reference logits + generation KV cache).
-    # This ratio was empirically reasonable for the bitsandbytes+peft models it
-    # was originally measured against -- treat it as a rough estimate for
-    # Unsloth-backed Gemma 4, not a confirmed number, until an actual
-    # train_grpo.py timing test (--max_steps 20) has run.
-    grpo_est = peak_vram * 1.4
-    total = torch.cuda.get_device_properties(0).total_memory / 1e9
+        # Estimate GRPO: peak * 1.4 (overhead for reference logits + generation KV cache).
+        # This ratio was empirically reasonable for the bitsandbytes+peft models it
+        # was originally measured against -- treat it as a rough estimate for
+        # Unsloth-backed Gemma 4, not a confirmed number, until an actual
+        # train_grpo.py timing test (--max_steps 20) has run.
+        grpo_est = peak_vram * 1.4
+        total = torch.cuda.get_device_properties(0).total_memory / 1e9
 
-    if grpo_est < total * 0.85:
-        verdict = "✅ FEASIBLE"
-    elif grpo_est < total * 0.95:
-        verdict = "⚠️  MARGINAL"
-    else:
-        verdict = "❌ INFEASIBLE"
+        if grpo_est < total * 0.85:
+            verdict = "✅ FEASIBLE"
+        elif grpo_est < total * 0.95:
+            verdict = "⚠️  MARGINAL"
+        else:
+            verdict = "❌ INFEASIBLE"
 
-    print(f"    Est. GRPO:    {grpo_est:.2f} GB  → {verdict}  (rough estimate, see docstring)")
+        print(f"    Est. GRPO:    {grpo_est:.2f} GB  → {verdict}  (rough estimate, see docstring)")
 
-    # Cleanup
-    del model, tokenizer
-    torch.cuda.empty_cache()
-
-    return {
-        "key": key,
-        "backend": backend,
-        "load_lora_gb": round(vram_after_lora - vram_before, 2),
-        "peak_gb": round(peak_vram, 2),
-        "est_grpo_gb": round(grpo_est, 2),
-        "verdict": verdict,
-    }
+        return {
+            "key": key,
+            "backend": backend,
+            "load_lora_gb": round(vram_after_lora - vram_before, 2),
+            "peak_gb": round(peak_vram, 2),
+            "est_grpo_gb": round(grpo_est, 2),
+            "verdict": verdict,
+        }
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"\n  ❌ FAILED: {e}\n{tb}")
+        return {"key": key, "backend": "?", "load_lora_gb": 0, "peak_gb": 0,
+                "est_grpo_gb": 0, "verdict": f"ERROR: {e}", "traceback": tb}
+    finally:
+        del model, tokenizer
+        torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
@@ -114,14 +131,7 @@ if __name__ == "__main__":
     print(f"Total VRAM: {total_gb:.2f} GB")
     print(f"CUDA allocated before tests: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
 
-    results = []
-    for key, model_id in CANDIDATES:
-        try:
-            results.append(check(key, model_id))
-        except Exception as e:
-            print(f"\n  ❌ FAILED: {e}")
-            results.append({"key": key, "backend": "?", "load_lora_gb": 0, "peak_gb": 0,
-                             "est_grpo_gb": 0, "verdict": f"ERROR: {e}"})
+    results = [check(key, model_id) for key, model_id in CANDIDATES]
 
     # ── summary ──
     print(f"\n{'='*80}")
