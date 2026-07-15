@@ -97,15 +97,17 @@ MODEL_IDS = {
     # marginal on 6 GB (fine on Kaggle's 16 GB T4)
     "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
     "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
-    # Gemma 4: the unsloth/ org's re-upload, not google/gemma-4-*-it. Kept
-    # even though this project no longer loads Gemma 4 through Unsloth's own
-    # FastLanguageModel loader (see load_trainable_model()'s docstring) --
-    # it's still just a standard HF checkpoint, loadable via plain
-    # AutoModelForCausalLM like any other model_id here, and switching to it
-    # was what surfaced (not caused) the per-layer-projection dtype gap that
-    # _fix_gemma4_dtype_mismatches() now handles regardless of loader.
-    "gemma4-e2b": "unsloth/gemma-4-E2B-it",
-    "gemma4-e4b": "unsloth/gemma-4-E4B-it",
+    # google/'s own official release, not the unsloth/ org's re-upload --
+    # confirmed the same weights (unsloth/gemma-4-E2B-it's model card lists
+    # google/gemma-4-E2B-it as its base model), but google/ is ungated
+    # (Apache 2.0) and is the citable source for a paper claiming to test
+    # Gemma 4. unsloth/ was only ever needed for Unsloth's own
+    # FastLanguageModel loader, which this project no longer uses (see
+    # load_trainable_model()'s docstring). The per-layer-projection dtype
+    # gap _fix_gemma4_dtype_mismatches() handles is a Gemma4 architecture
+    # property, not specific to either org's copy of the weights.
+    "gemma4-e2b": "google/gemma-4-E2B-it",
+    "gemma4-e4b": "google/gemma-4-E4B-it",
 }
 
 OLLAMA_MODEL_TAGS = {

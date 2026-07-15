@@ -31,8 +31,8 @@ MODEL_PRESETS = {
     "deepseek-r1-distill-qwen-1.5b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
     "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
     "alphamaze": ALPHAMAZE_LOCAL_PATH,
-    "gemma4-e2b": "unsloth/gemma-4-E2B-it",
-    "gemma4-e4b": "unsloth/gemma-4-E4B-it",
+    "gemma4-e2b": "google/gemma-4-E2B-it",
+    "gemma4-e4b": "google/gemma-4-E4B-it",
 }
 
 

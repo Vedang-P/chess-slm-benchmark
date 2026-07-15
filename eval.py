@@ -79,13 +79,37 @@ def _load_alphamaze_bench_utils():
 
 _ALPHAMAZE_BENCH_UTILS = _load_alphamaze_bench_utils()
 
-# AlphaMaze's own MazeBench system prompt -- confirmed verbatim (word for
-# word) against their real public inference.py via the submodule above, not
-# just reconstructed from memory. Kept here rather than imported since
-# inference.py isn't structured as an importable module.
-# evaluates against their real published data/format for the Phase 1
-# replication check, not our own token_maze.py encoding.
-MAZEBENCH_SYS = (
+
+def _load_alphamaze_prompt_template():
+    """Load ALPHA_MAZE_PROMPT directly from the alphamaze_reference submodule's
+    real benchmark harness (benchmark/models/instruction_type.py -- what
+    BaseModel.format_prompt() actually applies via
+    prompt_templates[instruction_type].format(maze_prompt=...) in their
+    evaluator, the code path that produced the published 93%), by file path
+    for the same shadowing reason as _load_alphamaze_bench_utils() above.
+
+    A hand-copied version of this text lived here until this was added: same
+    words, but flattened onto fewer lines with different whitespace around
+    the bullet list and "MAZE:" separator than their real template -- close
+    enough to read the same, not close enough to call byte-for-byte faithful.
+    Importing the real constant removes that gap permanently instead of
+    relying on a copy staying in sync by hand.
+    """
+    template_path = (Path(__file__).parent / "alphamaze_reference" / "benchmark"
+                      / "models" / "instruction_type.py")
+    if not template_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("alphamaze_instruction_type", template_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.ALPHA_MAZE_PROMPT
+
+
+# Fallback only: used if the submodule isn't present (see the warning at
+# call time below). Kept textually close to ALPHA_MAZE_PROMPT but was never
+# byte-for-byte identical to it -- prefer `git submodule update --init`
+# over relying on this.
+_MAZEBENCH_PROMPT_FALLBACK = (
     "You are a helpful assistant that solves mazes. You will be given a maze represented by "
     "a series of tokens. The tokens represent: "
     "- Coordinates: <|row-col|> (e.g., <|0-0|>, <|2-4|>) "
@@ -97,8 +121,14 @@ MAZEBENCH_SYS = (
     "(<|up|>, <|down|>, <|left|>, <|right|>) required to navigate "
     "from the origin to the target, based on the provided maze representation. "
     "Think step by step. At each step, predict only the next movement token. "
-    "Output only the move tokens, separated by spaces."
+    "Output only the move tokens, separated by spaces.\nMAZE:\n{maze_prompt}"
 )
+
+MAZEBENCH_PROMPT_TEMPLATE = _load_alphamaze_prompt_template() or _MAZEBENCH_PROMPT_FALLBACK
+if MAZEBENCH_PROMPT_TEMPLATE is _MAZEBENCH_PROMPT_FALLBACK:
+    print("⚠️  alphamaze_reference submodule not found -- using a hand-copied approximation of "
+          "AlphaMaze's MazeBench prompt template, NOT their exact template (run "
+          "`git submodule update --init` to get it).")
 
 def resolve_model_path(args) -> str:
     if args.model == "alphamaze" and not args.checkpoint:
@@ -135,7 +165,7 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
     pbar = tqdm(list(enumerate(idx)), desc="MazeBench", unit="maze")
     for i, j in pbar:
         row = ds[int(j)]
-        prompt = f"{MAZEBENCH_SYS}\n\nMAZE: {row['Prompt']}"
+        prompt = MAZEBENCH_PROMPT_TEMPLATE.format(maze_prompt=row['Prompt'])
         tqdm.write(f"  [{i + 1}/{len(idx)}] generating (streamed below)...")
         gen = model.generate(prompt, max_new_tokens=max_new_tokens, temperature=0.0)
         print()  # streamed tokens don't end with a newline of their own
