@@ -139,4 +139,6 @@ Seed 42 throughout.
 ## Not Yet Run (built, not executed -- no GPU access in this session)
 
 Everything above the "Immediate Next Step" line still needs to actually run on real hardware. See
-`notebooks/kaggle_train.ipynb` for the Kaggle-runnable version of this whole pipeline.
+`notebooks/kaggle_train.ipynb` for the Kaggle-runnable version of this whole pipeline -- run
+`notebooks/kaggle_check.ipynb` first, a tiny-scale dry run of the same pipeline that exists purely
+to catch syntax/OOM/API-compat problems before spending real GPU-hours on the full run.

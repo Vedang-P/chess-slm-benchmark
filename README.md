@@ -63,6 +63,10 @@ alphamaze_reference/  Git submodule (github.com/menloresearch/visual-thinker) --
                        inference/benchmark code, used directly by eval.py for faithful MazeBench
                        scoring rather than a reconstruction.
 notebooks/kaggle_train.ipynb   Kaggle-runnable end-to-end training notebook.
+notebooks/kaggle_check.ipynb   Same pipeline at tiny scale (few samples/steps per stage) --
+                       run this first to catch syntax/OOM/API-compat issues before committing
+                       real GPU-hours to kaggle_train.ipynb. Generated from the same
+                       build_notebook.py, so the two can't structurally drift apart.
 paper/                LaTeX writeup (NeurIPS workshop template).
 ```
 
@@ -98,7 +102,9 @@ python eval.py --model gemma4-e2b --checkpoint ./results/grpo_gemma4-e2b_single 
 ```
 
 For Kaggle (free T4, no local GPU needed): open `notebooks/kaggle_train.ipynb`, which runs this
-same pipeline end to end and saves results as downloadable JSON.
+same pipeline end to end and saves results as downloadable JSON. First run on a given environment,
+or after changing pipeline code? Run `notebooks/kaggle_check.ipynb` first -- same stages, a handful
+of samples/steps each, finishes in well under two hours and fails loudly if anything's broken.
 
 ## Project Log
 
