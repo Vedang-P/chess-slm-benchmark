@@ -1,12 +1,12 @@
 """Feasibility check: can each candidate model be loaded, LoRA-attached, and
 survive a forward+backward pass on available VRAM?
 
-Routes through hf_models.load_trainable_model() -- the same dual-backend
-loader train_sft.py/train_grpo.py use -- so this measures the actual backend
-each model will really train with (Unsloth for Gemma 4, bitsandbytes+peft for
-everything else), not a generic approximation that might not even be able to
-attach LoRA to begin with (this is exactly what breaks for Gemma 4 on plain
-peft: Gemma4ClippableLinear isn't a recognized target module type).
+Routes through hf_models.load_trainable_model() -- the same loader
+train_sft.py/train_grpo.py use, bitsandbytes+peft for every model including
+Gemma 4 (peft>=0.19.0, pinned in requirements.txt, ships its own
+Gemma4ClippableLinear support) -- so this measures the actual path each
+model will really train with, not a generic approximation that might not
+even be able to attach LoRA to begin with.
 
 Run this on the actual training hardware (laptop or Kaggle) before
 committing to a full run -- especially for gemma4-e4b, whose LoRA VRAM
@@ -60,12 +60,13 @@ def check(key: str, model_id: str) -> dict:
         print("  Running forward+backward (seq_len<=256, batch=1)...")
         model.train()
         # text= as an explicit keyword, not a bare positional arg: Gemma 4's
-        # processor is a multimodal ProcessorMixin (__call__(images=,
-        # text=, videos=, ...)), and Unsloth's patched __call__ wrapper reads
-        # `text` by keyword -- a positional string here silently becomes
-        # `text=None` instead of erroring, and Gemma4's own processor then
-        # crashes on `text[0]` with the unhelpful 'NoneType' object is not
-        # subscriptable (confirmed via the full traceback, not a guess).
+        # processor is a multimodal ProcessorMixin (__call__(images=, text=,
+        # videos=, ...)) -- confirmed via a real traceback (when this ran
+        # through Unsloth's patched __call__ wrapper specifically, which
+        # reads `text` by keyword) that a positional string here can
+        # silently become `text=None` instead of erroring, crashing later on
+        # `text[0]` with the unhelpful 'NoneType' object is not subscriptable.
+        # Passing it as a keyword is correct and unambiguous either way.
         dummy_input = tokenizer(
             text="Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
             return_tensors="pt", truncation=True, max_length=256,
@@ -94,10 +95,9 @@ def check(key: str, model_id: str) -> dict:
         print(f"    Peak:         {peak_vram:.2f} GB")
 
         # Estimate GRPO: peak * 1.4 (overhead for reference logits + generation KV cache).
-        # This ratio was empirically reasonable for the bitsandbytes+peft models it
-        # was originally measured against -- treat it as a rough estimate for
-        # Unsloth-backed Gemma 4, not a confirmed number, until an actual
-        # train_grpo.py timing test (--max_steps 20) has run.
+        # This ratio was empirically measured on DeepSeek/SmolLM2 -- treat it as a
+        # rough estimate for Gemma 4 specifically, not a confirmed number, until an
+        # actual train_grpo.py timing test (--max_steps 20) has run.
         grpo_est = peak_vram * 1.4
         total = torch.cuda.get_device_properties(0).total_memory / 1e9
 
@@ -126,7 +126,7 @@ def check(key: str, model_id: str) -> dict:
     finally:
         del model, tokenizer
         # gc.collect() before empty_cache(): a bare `del` drops this scope's
-        # references, but PEFT/Unsloth wrapper objects can hold internal
+        # references, but PEFT wrapper objects can hold internal
         # reference cycles that only actually get freed on a GC pass --
         # without this, empty_cache() sometimes has nothing to reclaim yet,
         # which showed up as one candidate's crash leaving enough VRAM

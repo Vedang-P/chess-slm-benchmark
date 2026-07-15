@@ -6,12 +6,11 @@
                  matches train_grpo.py's mixed/consistency conditions' data
                  recipe, so SFT and GRPO warm-start from the same kind of data.
 
-Uses hf_models.load_trainable_model() for backend selection: Gemma 4 (E2B,
-E4B) via Unsloth, everything else via bitsandbytes+peft. NL prompts use the
-same GRIDROUTE_NL_ANSWER_SUFFIX ("FINAL ANSWER:" convention) that eval.py and
-train_grpo.py expect -- SFT needs to actually teach that exact reporting
-format, not a different one, or the model was never trained on the
-convention it gets scored against later.
+Uses hf_models.load_trainable_model() -- bitsandbytes+peft for every model,
+Gemma 4 (E2B, E4B) included. NL prompts use the same GRIDROUTE_NL_ANSWER_SUFFIX
+("FINAL ANSWER:" convention) that eval.py and train_grpo.py expect -- SFT
+needs to actually teach that exact reporting format, not a different one, or
+the model was never trained on the convention it gets scored against later.
 """
 import argparse
 import sys

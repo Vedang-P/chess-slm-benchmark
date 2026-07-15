@@ -24,11 +24,11 @@ proposed technique, just trying it as one candidate recipe):
                             project's headline contribution).
 
 Target: Kaggle's free T4 (16 GB) for Gemma 4 E2B (primary) and E4B (if it
-fits -- E4B LoRA needs ~17GB, right at/over the T4's ceiling, unconfirmed
-until you actually run check_finetune_feasibility.py with it). Also runs
-DeepSeek-R1-Distill-Qwen-1.5B / SmolLM2-1.7B / AlphaMaze's checkpoint on a
-6 GB consumer GPU. Gemma 4 loads via Unsloth (hf_models.load_trainable_model);
-everything else via bitsandbytes+peft -- see that function's docstring.
+fits -- unconfirmed until you actually run check_finetune_feasibility.py
+with it). Also runs DeepSeek-R1-Distill-Qwen-1.5B / SmolLM2-1.7B /
+AlphaMaze's checkpoint on a 6 GB consumer GPU. Every model, Gemma 4
+included, loads via hf_models.load_trainable_model()'s bitsandbytes+peft
+path -- see that function's docstring for why Gemma 4 no longer needs Unsloth.
 """
 
 import argparse
@@ -70,9 +70,10 @@ MODEL_PRESETS: dict[str, dict] = {
         "model_id": "Qwen/Qwen2.5-3B-Instruct",
         "fits_6gb": "marginal",
     },
-    # ── primary target model. Needs Unsloth (see hf_models.load_trainable_model);
-    #    E2B LoRA measured ~8-10GB elsewhere, comfortable on a 16GB T4, won't
-    #    fit a 6GB laptop. ──
+    # ── primary target model. bitsandbytes+peft (peft>=0.19.0), not Unsloth
+    #    -- see hf_models.load_trainable_model()'s docstring. E2B LoRA
+    #    measured ~8-10GB elsewhere, comfortable on a 16GB T4, won't fit a
+    #    6GB laptop. ──
     "gemma4-e2b": {
         "model_id": "unsloth/gemma-4-E2B-it",
         "fits_6gb": False,

@@ -1,17 +1,17 @@
 """Unified model inference wrapper for the spatial-reasoning project.
 
-Two backends behind one .load()/.generate() interface so eval.py and the
+One backend behind a .load()/.generate() interface so eval.py and the
 training scripts don't need per-model branching:
-  - HFModel: plain HF transformers + bitsandbytes 4-bit for baseline
-    INFERENCE (DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B, Qwen2.5-*,
-    AlphaMaze-v0.2-1.5B). Gemma 4 E2B/E4B are also loaded through this class,
-    but internally routed to Unsloth even for plain inference (see .load()) --
-    confirmed on real hardware that `pip install unsloth` resolves
-    transformers down to a version that doesn't recognize Gemma 4 outside
-    Unsloth's own patched loader, so vanilla AutoModelForCausalLM can't be
-    trusted for it in the same environment. LoRA attachment via
-    .attach_lora() works for the non-Gemma-4 models; Gemma 4 training uses
-    load_trainable_model() below instead.
+  - HFModel: plain HF transformers + bitsandbytes 4-bit, for every model
+    including Gemma 4 E2B/E4B -- see .load()'s comment for why Gemma 4 no
+    longer routes through Unsloth (it did originally; every crash that
+    caused turned out to be inside Unsloth's own import chain or patched
+    forward pass, not anything about plain transformers' ability to load
+    Gemma 4, and peft>=0.19.0 ships proper Gemma4ClippableLinear support --
+    see requirements.txt -- closing the original reason Unsloth was needed
+    at all). LoRA attachment (.attach_lora() for inference-time use,
+    load_trainable_model() below for training) works uniformly across every
+    model now, Gemma 4 included.
   - OllamaModel: local Ollama server, quantized models. Alternative backend
     for Gemma 4 E2B on very low VRAM machines that already have Ollama set up.
 
@@ -98,15 +98,13 @@ MODEL_IDS = {
     # marginal on 6 GB (fine on Kaggle's 16 GB T4)
     "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
     "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
-    # Gemma 4: the unsloth/ org's own re-upload, not google/gemma-4-*-it --
-    # this is Unsloth's own documented model_name for their FastLanguageModel
-    # loader (unsloth.ai/docs/models/gemma-4/train); loading the raw google/
-    # checkpoint through their loader hit a dtype mismatch deep in Gemma 4's
-    # per-layer/shared-KV architecture ("expected mat1 and mat2 to have the
-    # same dtype, but got: float != c10::Half") that their own docs describe
-    # as a known quirk of that architecture family. Both backends (plain
-    # HFModel baseline inference and load_trainable_model()'s Unsloth
-    # training path) route through Unsloth's loader either way -- see below.
+    # Gemma 4: the unsloth/ org's re-upload, not google/gemma-4-*-it. Kept
+    # even though this project no longer loads Gemma 4 through Unsloth's own
+    # FastLanguageModel loader (see load_trainable_model()'s docstring) --
+    # it's still just a standard HF checkpoint, loadable via plain
+    # AutoModelForCausalLM like any other model_id here, and switching to it
+    # was what surfaced (not caused) the per-layer-projection dtype gap that
+    # _fix_gemma4_dtype_mismatches() now handles regardless of loader.
     "gemma4-e2b": "unsloth/gemma-4-E2B-it",
     "gemma4-e4b": "unsloth/gemma-4-E4B-it",
 }
@@ -209,31 +207,6 @@ class HFModel:
 
         model_id = MODEL_IDS.get(self.model_key, self.model_key)
 
-        if is_gemma4(self.model_key):
-            # Route through Unsloth even for plain baseline inference (no
-            # LoRA attached here), not just training. Confirmed on real
-            # Kaggle hardware: `pip install unsloth` resolves transformers
-            # down to 5.5.0 in the same environment, but Gemma 4 needs
-            # transformers>=5.13.0 to be recognized outside Unsloth's own
-            # patched loader -- going through vanilla AutoModelForCausalLM
-            # here would hit that gap. Unsloth's loader works regardless of
-            # the vanilla transformers version, which is exactly why the
-            # training path (load_trainable_model) already uses it.
-            from unsloth import FastLanguageModel
-            self.model, self.tokenizer = FastLanguageModel.from_pretrained(
-                model_name=model_id, max_seq_length=8192,
-                dtype=None, load_in_4bit=self.load_in_4bit, device_map={"": 0},
-                full_finetuning=False,
-            )
-            _fix_gemma4_dtype_mismatches(self.model)
-            if self.adapter_path:
-                from peft import PeftModel
-                self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            FastLanguageModel.for_inference(self.model)
-            return self
-
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
@@ -252,6 +225,15 @@ class HFModel:
         # against layers auto-placed on cuda:1. Pinning to one device avoids
         # that whole class of bug; there's no benefit to sharding a model
         # this size across GPUs anyway.
+        #
+        # Gemma 4 loads through this exact same plain path now, not Unsloth --
+        # every crash hit trying to route it through Unsloth (ConstantLengthDataset
+        # import, a broken wandb install, a dtype mismatch in a Gemma-4-specific
+        # layer) turned out to be inside Unsloth's own import chain or its
+        # patched/compiled forward pass, not anything about whether plain
+        # transformers can load Gemma 4 -- it already was, successfully, every
+        # single time, from inside Unsloth's own loader (which itself just
+        # calls AutoModelForCausalLM.from_pretrained under the hood).
         if self.load_in_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_use_double_quant=True,
@@ -265,6 +247,8 @@ class HFModel:
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
             )
+        if is_gemma4(self.model_key):
+            _fix_gemma4_dtype_mismatches(self.model)
 
         if self.adapter_path:
             from peft import PeftModel
@@ -395,11 +379,22 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     Used by train_sft.py and train_grpo.py so both scripts share one place
     that knows which models need which backend.
 
-    Routes Gemma 4 through Unsloth (its FastLanguageModel loader patches
-    around Gemma4ClippableLinear, which plain peft's LoraConfig doesn't
-    recognize as an attachable target module type -- confirmed by direct
-    test on this project's hardware, not a guess). Everything else goes
-    through the plain bitsandbytes+peft path used throughout this project.
+    Every model, Gemma 4 included, goes through the same plain
+    bitsandbytes+peft path -- Gemma 4 used to route through Unsloth instead
+    (its FastLanguageModel loader patches around Gemma4ClippableLinear,
+    which older peft didn't recognize as an attachable target module type).
+    That's now the wrong call for two independent reasons: (1) every crash
+    hit going through Unsloth (a broken ConstantLengthDataset import, a
+    broken wandb install, a dtype mismatch inside Unsloth's own
+    patched/compiled forward pass) was inside Unsloth's own code, not
+    anything about whether plain transformers can load and train Gemma 4 --
+    it already was loading successfully every single time, from inside
+    Unsloth's own loader, which itself just calls plain
+    AutoModelForCausalLM.from_pretrained under the hood; (2) peft>=0.19.0
+    (see requirements.txt) ships its own built-in Gemma4ClippableLinear
+    support, scoped to the language-model layers via a regex when
+    target_modules is omitted, which is exactly what's needed here and
+    closes the original reason Unsloth was necessary at all.
 
     adapter_path: if given, `model_id` is still the BASE model (e.g. the
     shorthand/HF ID GRPO should keep resolving VRAM/backend warnings against),
@@ -419,60 +414,13 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     callers should pass is_gemma4(<the original --model shorthand>) here
     whenever `model_id` might be a local path rather than that shorthand.
 
-    Returns (model, tokenizer, backend_name) -- backend_name is "unsloth" or
-    "bnb_peft", useful for logging/debugging which path was taken.
+    Returns (model, tokenizer, backend_name) -- backend_name is always
+    "bnb_peft" now; kept as a return value since callers/logging already
+    expect it, in case a model ever needs a genuinely different backend again.
     """
     target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
                        "gate_proj", "up_proj", "down_proj"]
     use_gemma4 = is_gemma4(model_id) if force_gemma4 is None else force_gemma4
-
-    if use_gemma4:
-        from unsloth import FastLanguageModel
-        # device_map={"": 0}: same reasoning as the bnb_peft path below --
-        # without it, on a multi-GPU box Unsloth's own device selection isn't
-        # guaranteed to put every candidate on the same GPU (observed
-        # directly: one Gemma 4 model landed on cuda:1 while another expected
-        # cuda:0, and a crashed-but-uncleaned earlier model left cuda:1 full,
-        # OOMing the next candidate for a reason unrelated to its own footprint).
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=model_id, max_seq_length=max_seq_length,
-            dtype=None, load_in_4bit=load_in_4bit, device_map={"": 0},
-            full_finetuning=False,
-        )
-        _fix_gemma4_dtype_mismatches(model)
-        if adapter_path:
-            # Continue training a previously-saved adapter. NOT independently
-            # confirmed against real Unsloth output as of this writing (no
-            # GPU access in this session) -- Unsloth's from_pretrained is
-            # documented to auto-detect and load a saved LoRA checkpoint
-            # directly when pointed at one, so this loads the base model
-            # fresh and then attaches the saved adapter via PeftModel with
-            # is_trainable=True (peft's own documented "resume training a
-            # saved adapter" pattern) rather than relying on that
-            # auto-detection, since we already have the base model loaded
-            # here. VERIFY the printed backend/adapter path against what you
-            # expect on the first real run -- if this is wrong, the symptom
-            # would be GRPO training an adapter that doesn't reflect the
-            # preceding SFT stage, not a crash, so it's worth checking once.
-            from peft import PeftModel
-            print(f"  [load_trainable_model] loading saved adapter from {adapter_path} "
-                  f"(is_trainable=True) on top of base {model_id}")
-            model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
-        else:
-            # Explicit finetune_*_layers/modules flags, not left to Unsloth's
-            # defaults -- Unsloth intersects target_modules with these filters
-            # ("adapters attach only where both select"), and Gemma 4's Unsloth
-            # loader is vision-model-aware even for text-only "it" checkpoints.
-            # We're doing text-only spatial reasoning, so vision layers are off.
-            model = FastLanguageModel.get_peft_model(
-                model, r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
-                finetune_vision_layers=False, finetune_language_layers=True,
-                finetune_attention_modules=True, finetune_mlp_modules=True,
-                lora_dropout=0, bias="none", use_gradient_checkpointing="unsloth", random_state=42,
-            )
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-        return model, tokenizer, "unsloth"
 
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
@@ -497,6 +445,8 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
         model = AutoModelForCausalLM.from_pretrained(
             model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
         )
+    if use_gemma4:
+        _fix_gemma4_dtype_mismatches(model)
     model = prepare_model_for_kbit_training(model)
     if adapter_path:
         # is_trainable=True: peft's documented pattern for resuming training
@@ -506,6 +456,16 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
         print(f"  [load_trainable_model] loading saved adapter from {adapter_path} "
               f"(is_trainable=True) on top of base {model_id}")
         model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
+    elif use_gemma4:
+        # No target_modules: peft>=0.19.0 ships its own Gemma4ClippableLinear-
+        # aware defaults, scoped to the language-model layers via a regex,
+        # which is exactly what's needed for text-only spatial reasoning --
+        # our own target_modules string list (q_proj/k_proj/... below) names
+        # standard attention/MLP projections that don't match how Gemma 4
+        # wraps them, so passing it here would just fail to attach anything.
+        lora_config = LoraConfig(r=lora_r, lora_alpha=lora_alpha,
+                                  lora_dropout=0, bias="none", task_type="CAUSAL_LM")
+        model = get_peft_model(model, lora_config)
     else:
         lora_config = LoraConfig(r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
                                   lora_dropout=0, bias="none", task_type="CAUSAL_LM")

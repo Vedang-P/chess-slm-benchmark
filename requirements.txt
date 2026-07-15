@@ -1,11 +1,17 @@
-# bitsandbytes + peft for DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B,
-# Qwen2.5-*, AlphaMaze-v0.2-1.5B -- all standard architectures, no Unsloth
-# needed. transformers>=5.13.0 is required to recognize Gemma 4's
-# architecture outside Unsloth's own patched loader.
+# bitsandbytes + peft, the one path every model in this project uses now,
+# Gemma 4 E2B/E4B included -- see hf_models.py's load_trainable_model()
+# docstring for why Gemma 4 no longer needs Unsloth. transformers>=5.13.0 is
+# required to recognize Gemma 4's architecture; peft>=0.19.0 is required for
+# its built-in Gemma4ClippableLinear support (ships default target_modules
+# scoped to the language-model layers via a regex when target_modules is
+# omitted -- exactly what hf_models.py relies on). Both pins are load-bearing,
+# not just "latest is fine" -- older peft genuinely can't attach LoRA to
+# Gemma 4 at all, which is the whole reason this project routed Gemma 4
+# through Unsloth in the first place before this was confirmed fixed upstream.
 transformers>=5.13.0
+peft>=0.19.0
 trl>=0.13.0  # SFTTrainer/GRPOTrainer processing_class= kwarg needs this
 datasets
-peft
 accelerate
 numpy
 sentencepiece
@@ -14,18 +20,16 @@ huggingface_hub
 bitsandbytes
 tqdm
 
-# Gemma 4 E2B/E4B (primary model, both training and baseline inference --
-# see hf_models.py's is_gemma4() routing) needs Unsloth: its
-# Gemma4ClippableLinear layers aren't a recognized peft target module type,
-# so plain transformers+peft can't attach LoRA to it at all, and Unsloth's
-# patched loader is what actually recognizes the architecture correctly
-# regardless of the vanilla transformers version installed alongside it.
-# Confirmed working in the same environment as the >=5.13.0 pin above despite
-# Unsloth's own resolver settling on an older transformers (it doesn't need
-# vanilla transformers to recognize Gemma 4 -- that's the whole point of its
-# patched loader) -- install after the rest of this file, not before, e.g.
-# `pip install -r requirements.txt && pip install unsloth`.
-unsloth
+# Not currently used by any code path (Gemma 4 no longer needs it -- see
+# above), but harmless to have installed and it's a real fallback if
+# peft's Gemma 4 support ever turns out to have its own gaps: Unsloth's
+# FastLanguageModel loader patches around architecture quirks plain
+# transformers+peft can't handle. Install separately if you need it,
+# after the rest of this file, e.g. `pip install unsloth unsloth_zoo`
+# (force-upgrade both, not just unsloth -- older unsloth_zoo unconditionally
+# imports a class TRL 0.20.0 removed).
+# unsloth
+# unsloth_zoo
 
 # Optional: only needed for the Gemma 4 E2B Ollama baseline (see hf_models.OllamaModel).
 # ollama
