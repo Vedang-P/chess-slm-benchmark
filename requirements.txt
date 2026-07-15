@@ -1,7 +1,7 @@
-# bitsandbytes + peft is the primary path for every model in core scope
-# (DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B, Qwen2.5-*, AlphaMaze-v0.2-1.5B)
-# -- all standard architectures, no Unsloth needed. transformers>=5.13.0 is
-# required to recognize Gemma 4's architecture at all, if you ever re-add it.
+# bitsandbytes + peft for DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B,
+# Qwen2.5-*, AlphaMaze-v0.2-1.5B -- all standard architectures, no Unsloth
+# needed. transformers>=5.13.0 is required to recognize Gemma 4's
+# architecture outside Unsloth's own patched loader.
 transformers>=5.13.0
 trl>=0.13.0  # SFTTrainer/GRPOTrainer processing_class= kwarg needs this
 datasets
@@ -12,14 +12,20 @@ sentencepiece
 protobuf
 huggingface_hub
 bitsandbytes
+tqdm
 
-# Optional: only needed if you revisit Gemma 4 (archive/gemma4-primary-direction/).
-# Gemma 4's Gemma4ClippableLinear layers aren't a recognized peft target module
-# type, so plain transformers+peft LoRA can't attach to it -- Unsloth patches
-# around this, but its resolver pins transformers<=5.5.0, which conflicts with
-# the >=5.13.0 pin above. Install in a separate venv if you need it; don't
-# just add it to this file, it'll fight the pin.
-# unsloth
+# Gemma 4 E2B/E4B (primary model, both training and baseline inference --
+# see hf_models.py's is_gemma4() routing) needs Unsloth: its
+# Gemma4ClippableLinear layers aren't a recognized peft target module type,
+# so plain transformers+peft can't attach LoRA to it at all, and Unsloth's
+# patched loader is what actually recognizes the architecture correctly
+# regardless of the vanilla transformers version installed alongside it.
+# Confirmed working in the same environment as the >=5.13.0 pin above despite
+# Unsloth's own resolver settling on an older transformers (it doesn't need
+# vanilla transformers to recognize Gemma 4 -- that's the whole point of its
+# patched loader) -- install after the rest of this file, not before, e.g.
+# `pip install -r requirements.txt && pip install unsloth`.
+unsloth
 
 # Optional: only needed for the Gemma 4 E2B Ollama baseline (see hf_models.OllamaModel).
 # ollama

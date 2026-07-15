@@ -34,6 +34,7 @@ import time
 from pathlib import Path
 
 import numpy as np
+from tqdm.auto import tqdm
 
 from hf_models import HFModel, OllamaModel, MODEL_IDS, parse_path_response, extract_reported_answer
 from src.evaluation import _is_collision_free, _is_in_bounds, _is_valid_steps
@@ -124,7 +125,8 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
 
     records = []
     correct = 0
-    for i, j in enumerate(idx):
+    pbar = tqdm(list(enumerate(idx)), desc="MazeBench", unit="maze")
+    for i, j in pbar:
         row = ds[int(j)]
         prompt = f"{MAZEBENCH_SYS}\n\nMAZE: {row['Prompt']}"
         gen = model.generate(prompt, max_new_tokens=max_new_tokens, temperature=0.0)
@@ -153,8 +155,9 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
             "ntokens": gen["output_tokens"],
         })
         status = "ok " if ok else ("no-answer" if answer is None else "x  ")
-        print(f"  [{i + 1}/{len(idx)}] {status} "
-              f"level={row.get('Level')} pred_len={len(pred)} gt_len={len(gt)}")
+        tqdm.write(f"  [{i + 1}/{len(idx)}] {status} "
+                   f"level={row.get('Level')} pred_len={len(pred)} gt_len={len(gt)}")
+        pbar.set_postfix(acc=f"{correct}/{i + 1}")
 
     n_eval = len(idx)
     return {"benchmark": "mazebench", "n": n_eval, "correct": correct,
@@ -180,7 +183,8 @@ def eval_gridroute(model: HFModel, n: int, seed: int, grid_size: int, fmt: str, 
 
     valid_count, optimal_count = 0, 0
     records = []
-    for i, ti in enumerate(idx):
+    pbar = tqdm(list(enumerate(idx)), desc=f"GridRoute-{fmt}-{grid_size}x{grid_size}", unit="task")
+    for i, ti in pbar:
         t = tasks[ti]
         grid = np.array(t.grid)
 
@@ -215,7 +219,8 @@ def eval_gridroute(model: HFModel, n: int, seed: int, grid_size: int, fmt: str, 
             "path": path, "raw": gen["content"][:2000], "ntokens": gen["output_tokens"],
         })
         status = "OPT  " if optimal else ("VALID" if valid else "INVAL")
-        print(f"  [{i + 1}/{len(idx)}] {status} start={t.start} goal={t.goal} opt_len={t.optimal_length}")
+        tqdm.write(f"  [{i + 1}/{len(idx)}] {status} start={t.start} goal={t.goal} opt_len={t.optimal_length}")
+        pbar.set_postfix(valid=f"{valid_count}/{i + 1}", optimal=f"{optimal_count}/{i + 1}")
 
     n_eval = len(idx)
     return {"benchmark": f"gridroute-{fmt}-{grid_size}x{grid_size}", "n": n_eval,

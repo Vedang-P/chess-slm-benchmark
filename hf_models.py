@@ -2,12 +2,16 @@
 
 Two backends behind one .load()/.generate() interface so eval.py and the
 training scripts don't need per-model branching:
-  - HFModel: plain HF transformers + bitsandbytes 4-bit. Used for every
-    model's baseline INFERENCE (DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B,
-    Qwen2.5-*, AlphaMaze-v0.2-1.5B, and Gemma 4 E2B/E4B). LoRA attachment via
-    .attach_lora() works for all of these except Gemma 4 -- see
-    load_trainable_model() below for why Gemma 4 needs a different path for
-    training specifically (not for plain inference/baselining).
+  - HFModel: plain HF transformers + bitsandbytes 4-bit for baseline
+    INFERENCE (DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B, Qwen2.5-*,
+    AlphaMaze-v0.2-1.5B). Gemma 4 E2B/E4B are also loaded through this class,
+    but internally routed to Unsloth even for plain inference (see .load()) --
+    confirmed on real hardware that `pip install unsloth` resolves
+    transformers down to a version that doesn't recognize Gemma 4 outside
+    Unsloth's own patched loader, so vanilla AutoModelForCausalLM can't be
+    trusted for it in the same environment. LoRA attachment via
+    .attach_lora() works for the non-Gemma-4 models; Gemma 4 training uses
+    load_trainable_model() below instead.
   - OllamaModel: local Ollama server, quantized models. Alternative backend
     for Gemma 4 E2B on very low VRAM machines that already have Ollama set up.
 
@@ -95,13 +99,37 @@ class HFModel:
             # No real model load in smoke-test mode -- keep preflight fast and CPU-only.
             return self
 
+        model_id = MODEL_IDS.get(self.model_key, self.model_key)
+
+        if is_gemma4(self.model_key):
+            # Route through Unsloth even for plain baseline inference (no
+            # LoRA attached here), not just training. Confirmed on real
+            # Kaggle hardware: `pip install unsloth` resolves transformers
+            # down to 5.5.0 in the same environment, but Gemma 4 needs
+            # transformers>=5.13.0 to be recognized outside Unsloth's own
+            # patched loader -- going through vanilla AutoModelForCausalLM
+            # here would hit that gap. Unsloth's loader works regardless of
+            # the vanilla transformers version, which is exactly why the
+            # training path (load_trainable_model) already uses it.
+            from unsloth import FastLanguageModel
+            self.model, self.tokenizer = FastLanguageModel.from_pretrained(
+                model_name=model_id, max_seq_length=8192,
+                dtype=None, load_in_4bit=self.load_in_4bit, device_map={"": 0},
+            )
+            if self.adapter_path:
+                from peft import PeftModel
+                self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            FastLanguageModel.for_inference(self.model)
+            return self
+
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
         # A LoRA adapter checkpoint (what train_sft.py/train_grpo.py save) only
         # contains adapter weights + config -- it must be loaded onto the base
         # model it was trained from, not passed to from_pretrained directly.
-        model_id = MODEL_IDS.get(self.model_key, self.model_key)
         tokenizer_source = self.adapter_path if self.adapter_path else model_id
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, trust_remote_code=True)
         if self.tokenizer.pad_token is None:
