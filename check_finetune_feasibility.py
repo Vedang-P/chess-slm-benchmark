@@ -19,6 +19,24 @@ import traceback
 
 import torch
 
+
+def _vram_allocated_gb() -> float:
+    """Summed across every visible GPU, not just device 0 -- Gemma 4 loads
+    with device_map="auto" now (see hf_models.py), spreading it across both
+    of Kaggle's T4s. torch.cuda.memory_allocated() with no device argument
+    only reports the current device; on a multi-GPU model that silently
+    undercounts whatever landed on the other one(s)."""
+    return sum(torch.cuda.memory_allocated(i) for i in range(torch.cuda.device_count())) / 1e9
+
+
+def _vram_peak_gb() -> float:
+    return sum(torch.cuda.max_memory_allocated(i) for i in range(torch.cuda.device_count())) / 1e9
+
+
+def _vram_capacity_gb() -> float:
+    return sum(torch.cuda.get_device_properties(i).total_memory
+               for i in range(torch.cuda.device_count())) / 1e9
+
 # ── candidates ────────────────────────────────────────────────────
 CANDIDATES = [
     ("deepseek-r1-distill-qwen-1.5b", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"),
@@ -45,15 +63,17 @@ def check(key: str, model_id: str) -> dict:
     print(f"Testing: {key}  ({model_id})")
     print(f"{'='*60}")
 
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-    vram_before = torch.cuda.memory_allocated() / 1e9
+    for i in range(torch.cuda.device_count()):
+        with torch.cuda.device(i):
+            torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(i)
+    vram_before = _vram_allocated_gb()
 
     model, tokenizer = None, None
     try:
         print("  Loading + attaching LoRA (r=16)...")
         model, tokenizer, backend = load_trainable_model(model_id, load_in_4bit=True, lora_r=16, lora_alpha=16)
-        vram_after_lora = torch.cuda.memory_allocated() / 1e9
+        vram_after_lora = _vram_allocated_gb()
         print(f"  Backend: {backend}")
 
         # ── forward + backward ──
@@ -82,13 +102,13 @@ def check(key: str, model_id: str) -> dict:
         loss = outputs.loss
         loss.backward()
 
-        vram_peak = torch.cuda.max_memory_allocated() / 1e9
-        vram_after_bwd = torch.cuda.memory_allocated() / 1e9
+        vram_peak = _vram_peak_gb()
+        vram_after_bwd = _vram_allocated_gb()
 
         # ── report ──
         peak_vram = max(vram_after_lora, vram_peak, vram_after_bwd)
 
-        print(f"\n  VRAM breakdown:")
+        print(f"\n  VRAM breakdown (summed across {torch.cuda.device_count()} GPU(s)):")
         print(f"    Before:       {vram_before:.2f} GB")
         print(f"    After LoRA:   {vram_after_lora:.2f} GB  (+{vram_after_lora - vram_before:.2f})")
         print(f"    After fwd+bwd:{vram_after_bwd:.2f} GB")
@@ -99,7 +119,7 @@ def check(key: str, model_id: str) -> dict:
         # rough estimate for Gemma 4 specifically, not a confirmed number, until an
         # actual train_grpo.py timing test (--max_steps 20) has run.
         grpo_est = peak_vram * 1.4
-        total = torch.cuda.get_device_properties(0).total_memory / 1e9
+        total = _vram_capacity_gb()
 
         if grpo_est < total * 0.85:
             verdict = "✅ FEASIBLE"
@@ -133,7 +153,16 @@ def check(key: str, model_id: str) -> dict:
         # "reserved but unallocated" to OOM the next candidate's load.
         import gc
         gc.collect()
-        torch.cuda.empty_cache()
+        # Every device, not just the current one -- device_map="auto" (Gemma 4,
+        # see hf_models.py) can leave allocations on any GPU. empty_cache()
+        # takes no device argument at all -- it only ever acts on whatever
+        # torch.cuda's CURRENT device context is, so reaching every GPU
+        # requires actually switching context via torch.cuda.device(i), not
+        # just calling empty_cache() in a loop (which would just clear the
+        # same one repeatedly).
+        for i in range(torch.cuda.device_count()):
+            with torch.cuda.device(i):
+                torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":

@@ -227,13 +227,28 @@ class HFModel:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # device_map={"": 0}, not "auto": these models are all small enough to
-        # fit on one GPU, and on a multi-GPU box (e.g. Kaggle's "T4 x2") "auto"
-        # shards the model's layers across both devices by default -- then
-        # anything that does a plain .cuda() (defaults to cuda:0) mismatches
-        # against layers auto-placed on cuda:1. Pinning to one device avoids
-        # that whole class of bug; there's no benefit to sharding a model
-        # this size across GPUs anyway.
+        # device_map={"": 0} for most models -- they're all small enough to fit
+        # on one GPU, and on a multi-GPU box (e.g. Kaggle's "T4 x2") "auto"
+        # shards a model's layers across both devices by default, which used to
+        # cause a cuda:0/cuda:1 device-mismatch crash here when something else
+        # did a plain .cuda() (defaults to cuda:0) against layers auto-placed
+        # on cuda:1. That root cause is fixed now (every device-dependent call
+        # site below reads the model's actual device instead of assuming 0),
+        # but there's still no benefit to sharding a model this small across
+        # GPUs, so keep them pinned for simplicity.
+        #
+        # Gemma 4 is the deliberate exception: device_map="auto", spreading it
+        # across both GPUs. Confirmed on real hardware that its non-quantized
+        # "per-layer" architectural component (see _fix_gemma4_dtype_mismatches's
+        # docstring) makes prepare_model_for_kbit_training's fp32 upcast alone
+        # need more than one T4's 14.56GB -- e.g. E2B: 7.27GB already loaded +
+        # an 8.75GB upcast attempt = ~16GB, OOMs on a single GPU but fits
+        # comfortably across two. This project's own Unsloth loading path
+        # never had this problem for a different reason (Unsloth's compute-
+        # dtype handling doesn't upcast the same way), so this specific
+        # failure mode is new to the plain-transformers path and specific to
+        # Gemma 4's unusually large non-quantized footprint, not a sign every
+        # model needs multi-GPU sharding.
         #
         # Gemma 4 loads through this exact same plain path now, not Unsloth --
         # every crash hit trying to route it through Unsloth (ConstantLengthDataset
@@ -243,18 +258,19 @@ class HFModel:
         # transformers can load Gemma 4 -- it already was, successfully, every
         # single time, from inside Unsloth's own loader (which itself just
         # calls AutoModelForCausalLM.from_pretrained under the hood).
+        device_map = "auto" if is_gemma4(self.model_key) else {"": 0}
         if self.load_in_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
             )
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, quantization_config=bnb_config, device_map={"": 0},
+                model_id, quantization_config=bnb_config, device_map=device_map,
                 trust_remote_code=True, dtype=torch.bfloat16,
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
+                model_id, device_map=device_map, trust_remote_code=True, dtype=torch.bfloat16,
             )
         if is_gemma4(self.model_key):
             _fix_gemma4_dtype_mismatches(self.model)
@@ -424,19 +440,24 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # device_map={"": 0}, not "auto" -- see the comment in HFModel.load() above.
+    # device_map: "auto" (both GPUs) for Gemma 4, {"": 0} (pinned) for
+    # everything else -- see the comment in HFModel.load() above for why.
+    # Training adds LoRA gradients/optimizer state on top of the same
+    # fp32-upcast footprint that already needs both GPUs for inference, so
+    # if anything this matters MORE here than in HFModel.load().
+    device_map = "auto" if use_gemma4 else {"": 0}
     if load_in_4bit:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
         )
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, quantization_config=bnb_config, device_map={"": 0},
+            model_id, quantization_config=bnb_config, device_map=device_map,
             trust_remote_code=True, dtype=torch.bfloat16,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
+            model_id, device_map=device_map, trust_remote_code=True, dtype=torch.bfloat16,
         )
     if use_gemma4:
         _fix_gemma4_dtype_mismatches(model)
