@@ -130,13 +130,79 @@ if MAZEBENCH_PROMPT_TEMPLATE is _MAZEBENCH_PROMPT_FALLBACK:
           "AlphaMaze's MazeBench prompt template, NOT their exact template (run "
           "`git submodule update --init` to get it).")
 
+# Used for every MazeBench call EXCEPT the AlphaMaze-checkpoint replication
+# cell (see faithful_prompt in eval_mazebench()). ALPHA_MAZE_PROMPT above
+# describes the token vocabulary but never states the actual rule for
+# whether a move is legal -- AlphaMaze doesn't need that stated explicitly
+# because it was trained on hundreds of thousands of these examples
+# (Maze-Reasoning-v0.1/GRPO-v0.1) until the mapping became implicit. A model
+# seeing this format cold has no such prior: watched on real hardware,
+# Gemma 4 E2B correctly read out every cell's wall tokens, then spent its
+# entire generation budget (~530s at the 4096-token floor, one maze) flip-
+# flopping between plausible-sounding but different interpretations of what
+# a wall token actually blocks, never settling on one long enough to
+# actually search for a path.
+#
+# The rule below isn't guessed -- it's read directly off AlphaMaze's own
+# real scorer (alphamaze_reference/benchmark/utils.py, simulate_solution()):
+#   if direction in grid[current]["walls"]: <blocked>
+# i.e. a wall token attached to a cell blocks LEAVING that cell in the
+# listed directions, checked only against the cell you are CURRENTLY on --
+# never against the destination cell's own wall token, and never reciprocal
+# (a wall blocking "up" from cell A says nothing about entering A from
+# below). Stating this explicitly doesn't change what's being measured --
+# same task, same scoring against the same simulate_solution() -- it just
+# stops burning the whole token budget on the model re-deriving a rule it
+# was never told and has no way to look up.
+MAZEBENCH_PROMPT_TEMPLATE_CLARIFIED = (
+    "You are a helpful assistant that solves mazes. You will be given a maze represented by a series of tokens.\n"
+    "The tokens represent:\n"
+    "- Coordinates: <|row-col|> (e.g., <|0-0|>, <|2-4|>)\n"
+    "- Walls: <|no_wall|>, <|up_wall|>, <|down_wall|>, <|left_wall|>, <|right_wall|>, <|up_down_wall|>, etc. -- "
+    "one wall token follows each coordinate token, and lists every direction you may NOT leave that cell through.\n"
+    "- Origin: <|origin|>\n"
+    "- Target: <|target|>\n"
+    "- Movement: <|up|>, <|down|>, <|left|>, <|right|>, <|blank|>\n\n"
+    "Exact rule for whether a move is legal: to check if you can move from your CURRENT cell in some direction, "
+    "look ONLY at your current cell's own wall token -- never the destination cell's wall token. If that "
+    "direction appears in your current cell's wall list, the move is illegal. Otherwise the move is legal, as "
+    "long as the destination coordinate is still inside the grid. A cell's wall token never restricts moves "
+    "INTO it from a neighbor; it only restricts moves OUT of it.\n\n"
+    "Worked example: a cell <|1-2|><|up_left_wall|> means from (1,2) you may NOT move up or left, but you MAY "
+    "move down or right if those stay in bounds -- regardless of whatever wall token sits at (0,2) or (1,1).\n\n"
+    "Your task is to output the sequence of movements (<|up|>, <|down|>, <|left|>, <|right|>) required to "
+    "navigate from the origin to the target, based on the provided maze representation. Apply the rule above "
+    "directly and spend your reasoning searching for a path -- don't re-derive or second-guess how the walls "
+    "work, the rule above is exact and complete. Think step by step. At each step, predict only the next "
+    "movement token. Output only the move tokens, separated by spaces.\n"
+    "MAZE:\n{maze_prompt}"
+)
+
+
+def _write_report(path: Path, meta: dict, report: dict, complete: bool):
+    """Write the current report state to `path`, overwriting it -- called
+    after every sample, not just once at the end, so a killed/timed-out run
+    (eval_mazebench/eval_gridroute's n-sample loops can each run for hours;
+    see the Kaggle notebooks' TIMEOUT_* ceilings) still leaves real partial
+    results on disk instead of losing every sample already scored. Writes to
+    a temp file and renames over the real path atomically, so a reader never
+    sees a half-flushed/corrupt JSON file if the process is killed mid-write."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {**meta, **report, "complete": complete}
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp_path, "w") as f:
+        json.dump(payload, f, indent=2, default=str)
+    tmp_path.replace(path)
+
+
 def resolve_model_path(args) -> str:
     if args.model == "alphamaze" and not args.checkpoint:
         return ALPHAMAZE_LOCAL_PATH
     return MODEL_IDS.get(args.model, args.model)
 
 
-def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> dict:
+def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int,
+                    out_path: Path, save_meta: dict, faithful_prompt: bool = True) -> dict:
     """Real Menlo/Maze-Bench-v0.2 data. Correctness uses AlphaMaze's own real
     benchmark_maze_solution (via the alphamaze_reference submodule) when
     available: it re-parses the maze's actual wall structure from the prompt
@@ -150,7 +216,18 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
     via extract_reported_answer), never mined out of the raw text including
     any thinking trace -- a "thinking out loud" model that mentions abandoned
     move sequences before its real answer would otherwise get scored against
-    whatever move-tokens happen to appear anywhere, reasoning included."""
+    whatever move-tokens happen to appear anywhere, reasoning included.
+
+    faithful_prompt=True (AlphaMaze's own checkpoint only) uses their exact
+    ALPHA_MAZE_PROMPT, unmodified -- required for the replication check to
+    mean anything. Every other model gets MAZEBENCH_PROMPT_TEMPLATE_CLARIFIED
+    instead, which states the wall-legality rule explicitly rather than
+    leaving a model untrained on this vocabulary to guess it (see that
+    template's comment for why, and where the rule was verified from).
+    Scoring is identical either way -- still the same simulate_solution().
+
+    Writes `out_path` after every sample via _write_report(), not just once
+    at the end, so a subprocess timeout/kill leaves real partial results."""
     from datasets import load_dataset
     ds = load_dataset("Menlo/Maze-Bench-v0.2", split="test")
     rng = np.random.RandomState(seed)
@@ -160,12 +237,18 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
         print("  ⚠️  alphamaze_reference submodule not found -- falling back to exact-match "
               "against Response (NOT their real scoring; run `git submodule update --init`).")
 
+    template = MAZEBENCH_PROMPT_TEMPLATE if faithful_prompt else MAZEBENCH_PROMPT_TEMPLATE_CLARIFIED
+
     records = []
+    n_eval = len(idx)
+    report = {"benchmark": "mazebench", "n": n_eval, "n_completed": 0, "correct": 0,
+              "accuracy": 0.0, "used_official_scoring": _ALPHAMAZE_BENCH_UTILS is not None,
+              "faithful_prompt": faithful_prompt, "records": records}
     correct = 0
     pbar = tqdm(list(enumerate(idx)), desc="MazeBench", unit="maze")
     for i, j in pbar:
         row = ds[int(j)]
-        prompt = MAZEBENCH_PROMPT_TEMPLATE.format(maze_prompt=row['Prompt'])
+        prompt = template.format(maze_prompt=row['Prompt'])
         tqdm.write(f"  [{i + 1}/{len(idx)}] generating (streamed below)...")
         gen = model.generate(prompt, max_new_tokens=max_new_tokens, temperature=0.0)
         print()  # streamed tokens don't end with a newline of their own
@@ -207,10 +290,13 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
                    f"level={row.get('Level')} pred_len={len(pred)} gt_len={len(gt)}")
         pbar.set_postfix(acc=f"{correct}/{i + 1}")
 
-    n_eval = len(idx)
-    return {"benchmark": "mazebench", "n": n_eval, "correct": correct,
-            "accuracy": correct / n_eval if n_eval else 0.0,
-            "used_official_scoring": _ALPHAMAZE_BENCH_UTILS is not None, "records": records}
+        report["n_completed"] = len(records)
+        report["correct"] = correct
+        report["accuracy"] = correct / len(records) if records else 0.0
+        _write_report(out_path, save_meta, report, complete=False)
+
+    _write_report(out_path, save_meta, report, complete=True)
+    return report
 
 
 def _score_path(path, grid, opt_len):
@@ -219,10 +305,14 @@ def _score_path(path, grid, opt_len):
     return valid, optimal
 
 
-def eval_gridroute(model: HFModel, n: int, seed: int, grid_size: int, fmt: str, max_new_tokens: int) -> dict:
+def eval_gridroute(model: HFModel, n: int, seed: int, grid_size: int, fmt: str, max_new_tokens: int,
+                    out_path: Path, save_meta: dict) -> dict:
     """fmt='nl': natural-language coordinate format. fmt='token': our own
     AlphaMaze-vocabulary token-maze format (src/token_maze.py) -- both score
-    through the same evaluation.py primitives so they're directly comparable."""
+    through the same evaluation.py primitives so they're directly comparable.
+
+    Writes `out_path` after every sample via _write_report(), not just once
+    at the end, so a subprocess timeout/kill leaves real partial results."""
     obs_size, n_obs = gridroute_defaults(grid_size)
     tasks = generate_gridroute_maps(size=grid_size, obstacle_size=obs_size, num_obstacles=n_obs,
                                      num_maps=100, pairs_per_map=5, seed=seed)
@@ -231,6 +321,9 @@ def eval_gridroute(model: HFModel, n: int, seed: int, grid_size: int, fmt: str, 
 
     valid_count, optimal_count = 0, 0
     records = []
+    n_eval = len(idx)
+    report = {"benchmark": f"gridroute-{fmt}-{grid_size}x{grid_size}", "n": n_eval, "n_completed": 0,
+              "valid": 0, "optimal": 0, "valid_rate": 0.0, "optimal_rate": 0.0, "records": records}
     pbar = tqdm(list(enumerate(idx)), desc=f"GridRoute-{fmt}-{grid_size}x{grid_size}", unit="task")
     for i, ti in pbar:
         t = tasks[ti]
@@ -272,11 +365,15 @@ def eval_gridroute(model: HFModel, n: int, seed: int, grid_size: int, fmt: str, 
         tqdm.write(f"  [{i + 1}/{len(idx)}] {status} start={t.start} goal={t.goal} opt_len={t.optimal_length}")
         pbar.set_postfix(valid=f"{valid_count}/{i + 1}", optimal=f"{optimal_count}/{i + 1}")
 
-    n_eval = len(idx)
-    return {"benchmark": f"gridroute-{fmt}-{grid_size}x{grid_size}", "n": n_eval,
-            "valid": valid_count, "optimal": optimal_count,
-            "valid_rate": valid_count / n_eval if n_eval else 0.0,
-            "optimal_rate": optimal_count / n_eval if n_eval else 0.0, "records": records}
+        report["n_completed"] = len(records)
+        report["valid"] = valid_count
+        report["optimal"] = optimal_count
+        report["valid_rate"] = valid_count / len(records) if records else 0.0
+        report["optimal_rate"] = optimal_count / len(records) if records else 0.0
+        _write_report(out_path, save_meta, report, complete=False)
+
+    _write_report(out_path, save_meta, report, complete=True)
+    return report
 
 
 def main():
@@ -327,32 +424,39 @@ def main():
         model = HFModel(model_path, load_in_4bit=args.load_in_4bit,
                          adapter_path=args.checkpoint or None).load()
 
-    if args.benchmark == "mazebench":
-        report = eval_mazebench(model, args.n, args.seed, max(args.max_new_tokens, 4096))
-    elif args.benchmark == "gridroute-nl":
-        report = eval_gridroute(model, args.n, args.seed, args.grid_size, "nl", max(args.max_new_tokens, 4096))
-    else:
-        report = eval_gridroute(model, args.n, args.seed, args.grid_size, "token", max(args.max_new_tokens, 4096))
-
+    # Built before the eval loop starts (not after it returns) so
+    # eval_mazebench/eval_gridroute have a stable path to write to
+    # incrementally throughout -- see _write_report().
     os.makedirs(args.output_dir, exist_ok=True)
     ts = time.strftime("%Y%m%d_%H%M%S")
     model_tag = args.model.replace("/", "_")
     out_path = Path(args.output_dir) / f"{model_tag}_{args.benchmark}_{ts}.json"
-    with open(out_path, "w") as f:
-        # load_in_4bit recorded explicitly -- without it, a 4-bit run and a
-        # --no_4bit ablation run of the same model/benchmark/n are
-        # indistinguishable in the saved JSON, which defeats the point of
-        # running the ablation at all.
-        json.dump({"model": args.model, "checkpoint": args.checkpoint, "seed": args.seed,
-                   "load_in_4bit": args.load_in_4bit, **report},
-                   f, indent=2, default=str)
+    # load_in_4bit recorded explicitly -- without it, a 4-bit run and a
+    # --no_4bit ablation run of the same model/benchmark/n are
+    # indistinguishable in the saved JSON, which defeats the point of
+    # running the ablation at all.
+    save_meta = {"model": args.model, "checkpoint": args.checkpoint, "seed": args.seed,
+                 "load_in_4bit": args.load_in_4bit}
+    print(f"Results saved incrementally to: {out_path}")
+
+    if args.benchmark == "mazebench":
+        report = eval_mazebench(model, args.n, args.seed, max(args.max_new_tokens, 4096),
+                                 out_path, save_meta, faithful_prompt=(args.model == "alphamaze"))
+    elif args.benchmark == "gridroute-nl":
+        report = eval_gridroute(model, args.n, args.seed, args.grid_size, "nl", max(args.max_new_tokens, 4096),
+                                 out_path, save_meta)
+    else:
+        report = eval_gridroute(model, args.n, args.seed, args.grid_size, "token", max(args.max_new_tokens, 4096),
+                                 out_path, save_meta)
 
     print(f"\nSaved: {out_path}")
     if args.benchmark == "mazebench":
-        print(f"MazeBench accuracy: {report['correct']}/{report['n']} ({100 * report['accuracy']:.1f}%)")
+        print(f"MazeBench accuracy: {report['correct']}/{report['n_completed']} completed "
+              f"(of {report['n']} requested) ({100 * report['accuracy']:.1f}%)")
     else:
-        print(f"{report['benchmark']}: valid={report['valid']}/{report['n']} ({100 * report['valid_rate']:.1f}%)  "
-              f"optimal={report['optimal']}/{report['n']} ({100 * report['optimal_rate']:.1f}%)")
+        print(f"{report['benchmark']}: valid={report['valid']}/{report['n_completed']} completed "
+              f"(of {report['n']} requested) ({100 * report['valid_rate']:.1f}%)  "
+              f"optimal={report['optimal']}/{report['n_completed']} ({100 * report['optimal_rate']:.1f}%)")
 
 
 if __name__ == "__main__":
