@@ -136,37 +136,6 @@ def is_gemma4(model_key: str) -> bool:
     return "gemma4" in model_key.lower() or "gemma-4" in model_key.lower()
 
 
-def _gemma4_max_memory():
-    """Force an actual multi-GPU split for Gemma 4, even though its baseline
-    4-bit footprint fits on one GPU.
-
-    device_map="auto" alone isn't enough: confirmed directly on real hardware
-    that with 2 GPUs visible, Gemma 4 still landed entirely on ONE of them
-    (whichever "auto" picked), then OOM'd on that same single device --
-    "auto" sizes its placement decision from the model's SIZE AT LOAD TIME
-    (4-bit quantized weights), which fits on one T4, and has no way to
-    anticipate prepare_model_for_kbit_training's later fp32 upcast of Gemma
-    4's large non-quantized "per-layer" component ballooning well past that.
-    Capping how much "auto" may place on any single device forces it to
-    actually split the model, leaving headroom on each device for that
-    later spike instead of loading the whole thing onto one and hoping.
-
-    Only meaningful with 2+ GPUs -- with exactly one, there's nowhere else
-    for the overflow to go, so this returns None (no constraint) and
-    device_map="auto" behaves normally (i.e. puts everything on the one
-    device that exists, same as {"": 0} would).
-    """
-    import torch
-    n = torch.cuda.device_count()
-    if n < 2:
-        return None
-    # 60% of each device's own total capacity -- leaves the rest of that
-    # device free for the fp32 upcast spike plus later forward/backward
-    # activations, without needing to know Gemma 4's exact parameter layout.
-    return {i: f"{int(torch.cuda.get_device_properties(i).total_memory / 1e9 * 0.6)}GiB"
-            for i in range(n)}
-
-
 def _fix_gemma4_dtype_mismatches(model):
     """Defensive dtype-consistency check, run after loading any Gemma 4 model
     (both HFModel.load() and load_trainable_model(), regardless of backend).
@@ -258,28 +227,20 @@ class HFModel:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # device_map={"": 0} for most models -- they're all small enough to fit
-        # on one GPU, and on a multi-GPU box (e.g. Kaggle's "T4 x2") "auto"
-        # shards a model's layers across both devices by default, which used to
-        # cause a cuda:0/cuda:1 device-mismatch crash here when something else
-        # did a plain .cuda() (defaults to cuda:0) against layers auto-placed
-        # on cuda:1. That root cause is fixed now (every device-dependent call
+        # device_map={"": 0} for every model, Gemma 4 included -- on a
+        # multi-GPU box (e.g. Kaggle's "T4 x2") "auto" shards a model's
+        # layers across both devices by default, which used to cause a
+        # cuda:0/cuda:1 device-mismatch crash here when something else did a
+        # plain .cuda() (defaults to cuda:0) against layers auto-placed on
+        # cuda:1. That root cause is fixed now (every device-dependent call
         # site below reads the model's actual device instead of assuming 0),
         # but there's still no benefit to sharding a model this small across
-        # GPUs, so keep them pinned for simplicity.
-        #
-        # Gemma 4 is the deliberate exception: device_map="auto", spreading it
-        # across both GPUs. Confirmed on real hardware that its non-quantized
-        # "per-layer" architectural component (see _fix_gemma4_dtype_mismatches's
-        # docstring) makes prepare_model_for_kbit_training's fp32 upcast alone
-        # need more than one T4's 14.56GB -- e.g. E2B: 7.27GB already loaded +
-        # an 8.75GB upcast attempt = ~16GB, OOMs on a single GPU but fits
-        # comfortably across two. This project's own Unsloth loading path
-        # never had this problem for a different reason (Unsloth's compute-
-        # dtype handling doesn't upcast the same way), so this specific
-        # failure mode is new to the plain-transformers path and specific to
-        # Gemma 4's unusually large non-quantized footprint, not a sign every
-        # model needs multi-GPU sharding.
+        # GPUs, so keep them pinned for simplicity. This class never runs
+        # prepare_model_for_kbit_training (that's load_trainable_model()'s
+        # job, for actual training) -- the fp32-upcast memory spike that
+        # forced Gemma 4 GRPO training onto both GPUs doesn't apply to plain
+        # inference at all, so there's no reason for this path to differ
+        # from every other model here either.
         #
         # Gemma 4 loads through this exact same plain path now, not Unsloth --
         # every crash hit trying to route it through Unsloth (ConstantLengthDataset
@@ -289,21 +250,18 @@ class HFModel:
         # transformers can load Gemma 4 -- it already was, successfully, every
         # single time, from inside Unsloth's own loader (which itself just
         # calls AutoModelForCausalLM.from_pretrained under the hood).
-        device_map = "auto" if is_gemma4(self.model_key) else {"": 0}
-        max_memory = _gemma4_max_memory() if is_gemma4(self.model_key) else None
         if self.load_in_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
             )
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, quantization_config=bnb_config, device_map=device_map,
-                max_memory=max_memory, trust_remote_code=True, dtype=torch.bfloat16,
+                model_id, quantization_config=bnb_config, device_map={"": 0},
+                trust_remote_code=True, dtype=torch.bfloat16,
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, device_map=device_map, max_memory=max_memory,
-                trust_remote_code=True, dtype=torch.bfloat16,
+                model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
             )
         if is_gemma4(self.model_key):
             _fix_gemma4_dtype_mismatches(self.model)
@@ -473,26 +431,28 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # device_map: "auto" (both GPUs) for Gemma 4, {"": 0} (pinned) for
-    # everything else -- see the comment in HFModel.load() above for why.
-    # Training adds LoRA gradients/optimizer state on top of the same
-    # fp32-upcast footprint that already needs both GPUs for inference, so
-    # if anything this matters MORE here than in HFModel.load().
-    device_map = "auto" if use_gemma4 else {"": 0}
-    max_memory = _gemma4_max_memory() if use_gemma4 else None
+    # device_map={"": 0} for every model, Gemma 4 included -- reverted from
+    # a device_map="auto" + max_memory experiment that didn't hold up: on
+    # real hardware, capping each GPU's share still didn't force an actual
+    # split for E2B (its footprint still fit under the cap on one device,
+    # OOMing there exactly as before) and was simultaneously too tight to
+    # hold E4B's base load at all (a *harder* CPU/disk-offload error,
+    # earlier than the original OOM). The real fix is below: skip the
+    # memory-expensive step that was causing this in the first place,
+    # which removes the need for multi-GPU complexity rather than trying
+    # to out-guess Accelerate's auto device-map sizing.
     if load_in_4bit:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
         )
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, quantization_config=bnb_config, device_map=device_map,
-            max_memory=max_memory, trust_remote_code=True, dtype=torch.bfloat16,
+            model_id, quantization_config=bnb_config, device_map={"": 0},
+            trust_remote_code=True, dtype=torch.bfloat16,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, device_map=device_map, max_memory=max_memory,
-            trust_remote_code=True, dtype=torch.bfloat16,
+            model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
         )
     if use_gemma4:
         _fix_gemma4_dtype_mismatches(model)
@@ -505,7 +465,23 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     # thing to check first when VRAM is the actual problem) requires it off
     # to recompute activations correctly during the backward pass anyway.
     model.config.use_cache = False
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    if use_gemma4:
+        # NOT prepare_model_for_kbit_training for Gemma 4 specifically: it
+        # unconditionally upcasts embeddings/lm_head/layernorms to fp32 for
+        # numerical stability (huggingface/peft#816), and Gemma 4's large
+        # non-quantized "per-layer" component gets caught by that same
+        # embedding-like upcast -- confirmed directly that THIS is what was
+        # OOMing (a single call, "param.data = param.data.to(torch.float32)",
+        # tried to allocate 8.75-10.5GB depending on model size), not a leak
+        # or fragmentation. bf16 (already the compute dtype everywhere else
+        # here) is standard/stable enough for LLM training -- skip the fp32
+        # upcast rather than paying for it. LoRA's own parameter freezing
+        # happens automatically inside get_peft_model()/PeftModel.from_pretrained()
+        # below regardless of which path prepares the base model first, so
+        # the only thing actually lost by skipping this is the upcast itself.
+        model.gradient_checkpointing_enable()
+    else:
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     if adapter_path:
         # is_trainable=True: peft's documented pattern for resuming training
         # on a saved adapter -- without it, PeftModel.from_pretrained loads
