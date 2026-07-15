@@ -139,6 +139,45 @@ def is_gemma4(model_key: str) -> bool:
     return "gemma4" in model_key.lower() or "gemma-4" in model_key.lower()
 
 
+def _fix_gemma4_dtype_mismatches(model):
+    """Work around a real, confirmed gap in Unsloth's current Gemma 4
+    support (their own source labels this architecture's patches
+    "temporary_patches" -- actively in flux, not a finished implementation):
+    on GPUs forced into a float32 fallback (no bf16 hardware support, and
+    Unsloth's own printed banner says float16 "won't work" for Gemma 4 --
+    both true for a T4), that float32 cast doesn't reach every submodule.
+    Confirmed directly: per_layer_model_projection, a Gemma-4-specific
+    architectural component (not a standard attention/MLP projection, so
+    outside any LoRA target_modules list), stays in the checkpoint's
+    original dtype while the rest of the model is float32, crashing the
+    first forward pass with "expected mat1 and mat2 to have the same dtype".
+
+    Rather than patch around that one named layer, walk every NON-quantized
+    parameter (skip anything bitsandbytes 4-bit-quantized, identified by the
+    `quant_state` attribute those carry and plain parameters don't -- must
+    not touch those, they need to stay in their packed 4-bit representation)
+    and force it to match the model's real compute dtype, read off the
+    embedding layer specifically because embeddings are never 4-bit
+    quantized regardless of GPU/dtype policy, so it's a reliable source of
+    "what dtype is this model actually supposed to be". This catches this
+    layer and any sibling with the same problem, not just the one the
+    traceback happened to name first.
+    """
+    ref_dtype = model.get_input_embeddings().weight.dtype
+    fixed = []
+    for name, param in model.named_parameters():
+        if hasattr(param, "quant_state"):
+            continue
+        if param.dtype.is_floating_point and param.dtype != ref_dtype:
+            param.data = param.data.to(ref_dtype)
+            fixed.append(name)
+    if fixed:
+        print(f"  [dtype fixup] cast {len(fixed)} non-quantized param(s) to {ref_dtype} "
+              f"to match the embedding layer (Gemma 4 per-layer-projection dtype gap): "
+              f"{fixed[0]}{f' (+{len(fixed) - 1} more)' if len(fixed) > 1 else ''}")
+    return model
+
+
 class HFModel:
     """Loads a HF causal LM once (optionally 4-bit + LoRA), reused across all
     generations in a run. Primary backend for every model's baseline
@@ -186,6 +225,7 @@ class HFModel:
                 dtype=None, load_in_4bit=self.load_in_4bit, device_map={"": 0},
                 full_finetuning=False,
             )
+            _fix_gemma4_dtype_mismatches(self.model)
             if self.adapter_path:
                 from peft import PeftModel
                 self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
@@ -399,6 +439,7 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
             dtype=None, load_in_4bit=load_in_4bit, device_map={"": 0},
             full_finetuning=False,
         )
+        _fix_gemma4_dtype_mismatches(model)
         if adapter_path:
             # Continue training a previously-saved adapter. NOT independently
             # confirmed against real Unsloth output as of this writing (no
