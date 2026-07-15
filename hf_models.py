@@ -62,6 +62,13 @@ def configure_quiet_logging():
     # before anything imports it, not just suppress its logging.
     os.environ.setdefault("WANDB_DISABLED", "true")
     os.environ.setdefault("WANDB_MODE", "disabled")
+    # PyTorch's own suggested fix (printed directly in the CUDA OOM error
+    # text on this project's actual Kaggle runs) for a specific fragmentation
+    # pattern: a later model load OOMs while the error message itself reports
+    # several GB "reserved but unallocated" -- i.e. VRAM is sitting in the
+    # allocator's pool, not actually in use, just not contiguous enough to
+    # satisfy the new allocation. Must be set before CUDA initializes.
+    os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
     logging.basicConfig(level=logging.ERROR)
     warnings.filterwarnings("ignore")
@@ -91,13 +98,17 @@ MODEL_IDS = {
     # marginal on 6 GB (fine on Kaggle's 16 GB T4)
     "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
     "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
-    # Gemma 4: fine for baseline INFERENCE via plain HFModel below (needs
-    # transformers>=5.13 to recognize the architecture at all, no Unsloth
-    # required just to run it). LoRA/GRPO training on these two specifically
-    # goes through load_trainable_model()'s Unsloth path instead, since plain
-    # peft can't attach LoRA to Gemma 4's Gemma4ClippableLinear layers.
-    "gemma4-e2b": "google/gemma-4-E2B-it",
-    "gemma4-e4b": "google/gemma-4-E4B-it",
+    # Gemma 4: the unsloth/ org's own re-upload, not google/gemma-4-*-it --
+    # this is Unsloth's own documented model_name for their FastLanguageModel
+    # loader (unsloth.ai/docs/models/gemma-4/train); loading the raw google/
+    # checkpoint through their loader hit a dtype mismatch deep in Gemma 4's
+    # per-layer/shared-KV architecture ("expected mat1 and mat2 to have the
+    # same dtype, but got: float != c10::Half") that their own docs describe
+    # as a known quirk of that architecture family. Both backends (plain
+    # HFModel baseline inference and load_trainable_model()'s Unsloth
+    # training path) route through Unsloth's loader either way -- see below.
+    "gemma4-e2b": "unsloth/gemma-4-E2B-it",
+    "gemma4-e4b": "unsloth/gemma-4-E4B-it",
 }
 
 OLLAMA_MODEL_TAGS = {
@@ -173,6 +184,7 @@ class HFModel:
             self.model, self.tokenizer = FastLanguageModel.from_pretrained(
                 model_name=model_id, max_seq_length=8192,
                 dtype=None, load_in_4bit=self.load_in_4bit, device_map={"": 0},
+                full_finetuning=False,
             )
             if self.adapter_path:
                 from peft import PeftModel
@@ -385,6 +397,7 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_id, max_seq_length=max_seq_length,
             dtype=None, load_in_4bit=load_in_4bit, device_map={"": 0},
+            full_finetuning=False,
         )
         if adapter_path:
             # Continue training a previously-saved adapter. NOT independently

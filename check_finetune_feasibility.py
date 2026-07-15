@@ -23,8 +23,8 @@ import torch
 CANDIDATES = [
     ("deepseek-r1-distill-qwen-1.5b", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"),
     ("smollm2-1.7b", "HuggingFaceTB/SmolLM2-1.7B-Instruct"),
-    ("gemma4-e2b", "google/gemma-4-E2B-it"),
-    ("gemma4-e4b", "google/gemma-4-E4B-it"),
+    ("gemma4-e2b", "unsloth/gemma-4-E2B-it"),
+    ("gemma4-e4b", "unsloth/gemma-4-E4B-it"),
 ]
 
 
@@ -125,6 +125,14 @@ def check(key: str, model_id: str) -> dict:
                 "est_grpo_gb": 0, "verdict": f"ERROR: {e}", "traceback": tb}
     finally:
         del model, tokenizer
+        # gc.collect() before empty_cache(): a bare `del` drops this scope's
+        # references, but PEFT/Unsloth wrapper objects can hold internal
+        # reference cycles that only actually get freed on a GC pass --
+        # without this, empty_cache() sometimes has nothing to reclaim yet,
+        # which showed up as one candidate's crash leaving enough VRAM
+        # "reserved but unallocated" to OOM the next candidate's load.
+        import gc
+        gc.collect()
         torch.cuda.empty_cache()
 
 

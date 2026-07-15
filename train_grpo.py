@@ -74,7 +74,7 @@ MODEL_PRESETS: dict[str, dict] = {
     #    E2B LoRA measured ~8-10GB elsewhere, comfortable on a 16GB T4, won't
     #    fit a 6GB laptop. ──
     "gemma4-e2b": {
-        "model_id": "google/gemma-4-E2B-it",
+        "model_id": "unsloth/gemma-4-E2B-it",
         "fits_6gb": False,
         "fits_kaggle_t4": True,
     },
@@ -83,7 +83,7 @@ MODEL_PRESETS: dict[str, dict] = {
     #    committing to a full training run; may need to drop --lora_r or
     #    --num_generations, or may simply not fit. ──
     "gemma4-e4b": {
-        "model_id": "google/gemma-4-E4B-it",
+        "model_id": "unsloth/gemma-4-E4B-it",
         "fits_6gb": False,
         "fits_kaggle_t4": "marginal",
     },
