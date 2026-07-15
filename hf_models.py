@@ -3,14 +3,10 @@
 One backend behind a .load()/.generate() interface so eval.py and the
 training scripts don't need per-model branching:
   - HFModel: plain HF transformers + bitsandbytes 4-bit, for every model
-    including Gemma 4 E2B/E4B -- see .load()'s comment for why Gemma 4 no
-    longer routes through Unsloth (it did originally; every crash that
-    caused turned out to be inside Unsloth's own import chain or patched
-    forward pass, not anything about plain transformers' ability to load
-    Gemma 4, and peft>=0.19.0 ships proper Gemma4ClippableLinear support --
-    see requirements.txt -- closing the original reason Unsloth was needed
-    at all). LoRA training (load_trainable_model() below) works uniformly
-    across every model now, Gemma 4 included.
+    including Gemma 4 E2B/E4B (see load_trainable_model()'s docstring for
+    why no model here needs a special-case loader). LoRA training
+    (load_trainable_model() below) works uniformly across every model now,
+    Gemma 4 included.
   - OllamaModel: local Ollama server, quantized models. Alternative backend
     for Gemma 4 E2B on very low VRAM machines that already have Ollama set up.
 
@@ -56,9 +52,8 @@ def configure_quiet_logging():
     # On Kaggle specifically, the preinstalled wandb's SDK and its own
     # bundled generated protobuf file were observed out of sync ("cannot
     # import name 'Imports' from wandb.proto.wandb_telemetry_pb2"), which
-    # crashes that check and takes down the entire `import unsloth` chain
-    # with it -- confirmed fix (Unsloth's own Kaggle guidance): disable wandb
-    # before anything imports it, not just suppress its logging.
+    # crashes that check outright -- disable wandb before anything imports
+    # it, not just suppress its logging.
     os.environ.setdefault("WANDB_DISABLED", "true")
     os.environ.setdefault("WANDB_MODE", "disabled")
     # PyTorch's own suggested fix (printed directly in the CUDA OOM error
@@ -97,15 +92,10 @@ MODEL_IDS = {
     # marginal on 6 GB (fine on Kaggle's 16 GB T4)
     "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
     "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
-    # google/'s own official release, not the unsloth/ org's re-upload --
-    # confirmed the same weights (unsloth/gemma-4-E2B-it's model card lists
-    # google/gemma-4-E2B-it as its base model), but google/ is ungated
-    # (Apache 2.0) and is the citable source for a paper claiming to test
-    # Gemma 4. unsloth/ was only ever needed for Unsloth's own
-    # FastLanguageModel loader, which this project no longer uses (see
-    # load_trainable_model()'s docstring). The per-layer-projection dtype
-    # gap _fix_gemma4_dtype_mismatches() handles is a Gemma4 architecture
-    # property, not specific to either org's copy of the weights.
+    # google's own official release (Apache 2.0, ungated) -- the citable
+    # source for a paper testing Gemma 4. The per-layer-projection dtype gap
+    # _fix_gemma4_dtype_mismatches() handles is a Gemma4 architecture
+    # property, not specific to any org's copy of the weights.
     "gemma4-e2b": "google/gemma-4-E2B-it",
     "gemma4-e4b": "google/gemma-4-E4B-it",
 }
@@ -142,23 +132,18 @@ def _fix_gemma4_dtype_mismatches(model):
     """Defensive dtype-consistency check, run after loading any Gemma 4 model
     (both HFModel.load() and load_trainable_model(), regardless of backend).
 
-    Originally written to work around a confirmed gap in Unsloth's Gemma 4
-    support (their own source labels this architecture's patches
-    "temporary_patches" -- actively in flux): on GPUs forced into a float32
-    fallback (no bf16 hardware support, and Unsloth's own printed banner said
-    float16 "won't work" for Gemma 4 -- both true for a T4), that float32
-    cast didn't reach every submodule. Confirmed directly:
-    per_layer_model_projection, a Gemma-4-specific architectural component
-    (not a standard attention/MLP projection, so outside any LoRA
-    target_modules list), stayed in the checkpoint's original dtype while
-    the rest of the model was float32, crashing the forward pass with
-    "expected mat1 and mat2 to have the same dtype". This project no longer
-    loads Gemma 4 through Unsloth at all (see load_trainable_model()'s
-    docstring) -- plain transformers' own dtype= cast during from_pretrained
-    is expected to apply uniformly, so this should now be a no-op in
-    practice. Kept as a cheap defensive check rather than removed outright,
-    since "expected to be uniform" isn't the same as verified for every
-    architecture this project might load.
+    On GPUs forced into a float32 fallback (no bf16 hardware support), a
+    dtype cast during model loading doesn't always reach every submodule.
+    Confirmed directly: per_layer_model_projection, a Gemma-4-specific
+    architectural component (not a standard attention/MLP projection, so
+    outside any LoRA target_modules list), can stay in the checkpoint's
+    original dtype while the rest of the model is float32, crashing the
+    forward pass with "expected mat1 and mat2 to have the same dtype".
+    Plain transformers' own dtype= cast during from_pretrained is expected
+    to apply uniformly, so this should be a no-op in practice -- kept as a
+    cheap defensive check rather than removed outright, since "expected to
+    be uniform" isn't the same as verified for every architecture this
+    project might load.
 
     Rather than patch around that one named layer, walk every NON-quantized
     parameter (skip anything bitsandbytes 4-bit-quantized, identified by the
@@ -244,14 +229,9 @@ class HFModel:
         # inference at all, so there's no reason for this path to differ
         # from every other model here either.
         #
-        # Gemma 4 loads through this exact same plain path now, not Unsloth --
-        # every crash hit trying to route it through Unsloth (ConstantLengthDataset
-        # import, a broken wandb install, a dtype mismatch in a Gemma-4-specific
-        # layer) turned out to be inside Unsloth's own import chain or its
-        # patched/compiled forward pass, not anything about whether plain
-        # transformers can load Gemma 4 -- it already was, successfully, every
-        # single time, from inside Unsloth's own loader (which itself just
-        # calls AutoModelForCausalLM.from_pretrained under the hood).
+        # Gemma 4 loads through this exact same plain path, not a special-
+        # cased one -- see load_trainable_model()'s docstring for why no
+        # loader ever needs to special-case it.
         if self.load_in_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_use_double_quant=True,

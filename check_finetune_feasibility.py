@@ -81,12 +81,10 @@ def check(key: str, model_id: str) -> dict:
         model.train()
         # text= as an explicit keyword, not a bare positional arg: Gemma 4's
         # processor is a multimodal ProcessorMixin (__call__(images=, text=,
-        # videos=, ...)) -- confirmed via a real traceback (when this ran
-        # through Unsloth's patched __call__ wrapper specifically, which
-        # reads `text` by keyword) that a positional string here can
-        # silently become `text=None` instead of erroring, crashing later on
-        # `text[0]` with the unhelpful 'NoneType' object is not subscriptable.
-        # Passing it as a keyword is correct and unambiguous either way.
+        # videos=, ...)) -- a positional string here can silently become
+        # text=None instead of erroring, crashing later on text[0] with the
+        # unhelpful 'NoneType' object is not subscriptable. Passing it as a
+        # keyword is correct and unambiguous either way.
         dummy_input = tokenizer(
             text="Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
             return_tensors="pt", truncation=True, max_length=256,
