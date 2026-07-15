@@ -258,10 +258,13 @@ def main():
     p.add_argument("--n", type=int, default=50)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--max_new_tokens", type=int, default=4096,
-                    help="Real leverage to think fully matters more than speed here -- raised "
-                         "automatically to 8192 for token-format benchmarks (MazeBench/token-maze "
-                         "thinking traces routinely need that much; 4096 was already found too "
-                         "short once, see idea.md's changelog).")
+                    help="4096 confirmed sufficient in practice (a real AlphaMaze-on-MazeBench run "
+                         "at this budget had all 100 mazes properly close their think tags, see "
+                         "idea.md's changelog) -- also the floor for every benchmark below, raise "
+                         "explicitly if you have compute to spare. Measured at ~180s/maze for "
+                         "MazeBench at 8192 tokens on a T4 -- that alone is ~5h for n=100, more "
+                         "than this project's whole Kaggle session budget, which is why the floor "
+                         "was brought back down rather than left raised.")
     p.add_argument("--load_in_4bit", action="store_true", default=True)
     p.add_argument("--no_4bit", dest="load_in_4bit", action="store_false")
     p.add_argument("--output_dir", default="./results/eval")
@@ -278,11 +281,11 @@ def main():
                          adapter_path=args.checkpoint or None).load()
 
     if args.benchmark == "mazebench":
-        report = eval_mazebench(model, args.n, args.seed, max(args.max_new_tokens, 8192))
+        report = eval_mazebench(model, args.n, args.seed, max(args.max_new_tokens, 4096))
     elif args.benchmark == "gridroute-nl":
         report = eval_gridroute(model, args.n, args.seed, args.grid_size, "nl", max(args.max_new_tokens, 4096))
     else:
-        report = eval_gridroute(model, args.n, args.seed, args.grid_size, "token", max(args.max_new_tokens, 8192))
+        report = eval_gridroute(model, args.n, args.seed, args.grid_size, "token", max(args.max_new_tokens, 4096))
 
     os.makedirs(args.output_dir, exist_ok=True)
     ts = time.strftime("%Y%m%d_%H%M%S")

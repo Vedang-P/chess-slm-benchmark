@@ -136,6 +136,37 @@ def is_gemma4(model_key: str) -> bool:
     return "gemma4" in model_key.lower() or "gemma-4" in model_key.lower()
 
 
+def _gemma4_max_memory():
+    """Force an actual multi-GPU split for Gemma 4, even though its baseline
+    4-bit footprint fits on one GPU.
+
+    device_map="auto" alone isn't enough: confirmed directly on real hardware
+    that with 2 GPUs visible, Gemma 4 still landed entirely on ONE of them
+    (whichever "auto" picked), then OOM'd on that same single device --
+    "auto" sizes its placement decision from the model's SIZE AT LOAD TIME
+    (4-bit quantized weights), which fits on one T4, and has no way to
+    anticipate prepare_model_for_kbit_training's later fp32 upcast of Gemma
+    4's large non-quantized "per-layer" component ballooning well past that.
+    Capping how much "auto" may place on any single device forces it to
+    actually split the model, leaving headroom on each device for that
+    later spike instead of loading the whole thing onto one and hoping.
+
+    Only meaningful with 2+ GPUs -- with exactly one, there's nowhere else
+    for the overflow to go, so this returns None (no constraint) and
+    device_map="auto" behaves normally (i.e. puts everything on the one
+    device that exists, same as {"": 0} would).
+    """
+    import torch
+    n = torch.cuda.device_count()
+    if n < 2:
+        return None
+    # 60% of each device's own total capacity -- leaves the rest of that
+    # device free for the fp32 upcast spike plus later forward/backward
+    # activations, without needing to know Gemma 4's exact parameter layout.
+    return {i: f"{int(torch.cuda.get_device_properties(i).total_memory / 1e9 * 0.6)}GiB"
+            for i in range(n)}
+
+
 def _fix_gemma4_dtype_mismatches(model):
     """Defensive dtype-consistency check, run after loading any Gemma 4 model
     (both HFModel.load() and load_trainable_model(), regardless of backend).
@@ -259,6 +290,7 @@ class HFModel:
         # single time, from inside Unsloth's own loader (which itself just
         # calls AutoModelForCausalLM.from_pretrained under the hood).
         device_map = "auto" if is_gemma4(self.model_key) else {"": 0}
+        max_memory = _gemma4_max_memory() if is_gemma4(self.model_key) else None
         if self.load_in_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_use_double_quant=True,
@@ -266,11 +298,12 @@ class HFModel:
             )
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id, quantization_config=bnb_config, device_map=device_map,
-                trust_remote_code=True, dtype=torch.bfloat16,
+                max_memory=max_memory, trust_remote_code=True, dtype=torch.bfloat16,
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, device_map=device_map, trust_remote_code=True, dtype=torch.bfloat16,
+                model_id, device_map=device_map, max_memory=max_memory,
+                trust_remote_code=True, dtype=torch.bfloat16,
             )
         if is_gemma4(self.model_key):
             _fix_gemma4_dtype_mismatches(self.model)
@@ -446,6 +479,7 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     # fp32-upcast footprint that already needs both GPUs for inference, so
     # if anything this matters MORE here than in HFModel.load().
     device_map = "auto" if use_gemma4 else {"": 0}
+    max_memory = _gemma4_max_memory() if use_gemma4 else None
     if load_in_4bit:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_use_double_quant=True,
@@ -453,11 +487,12 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
         )
         model = AutoModelForCausalLM.from_pretrained(
             model_id, quantization_config=bnb_config, device_map=device_map,
-            trust_remote_code=True, dtype=torch.bfloat16,
+            max_memory=max_memory, trust_remote_code=True, dtype=torch.bfloat16,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, device_map=device_map, trust_remote_code=True, dtype=torch.bfloat16,
+            model_id, device_map=device_map, max_memory=max_memory,
+            trust_remote_code=True, dtype=torch.bfloat16,
         )
     if use_gemma4:
         _fix_gemma4_dtype_mismatches(model)
