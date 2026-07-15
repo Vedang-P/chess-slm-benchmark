@@ -50,7 +50,11 @@ def check(key: str, model_id: str) -> dict:
         "Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
         return_tensors="pt", truncation=True, max_length=256,
     )
-    dummy_input = {k: v.cuda() for k, v in dummy_input.items()}
+    # .to(model.device), not a bare .cuda() -- explicit about landing on
+    # whichever device the model actually loaded onto, rather than relying on
+    # "current default CUDA device" (normally cuda:0, but don't assume it).
+    target_device = next(model.parameters()).device
+    dummy_input = {k: v.to(target_device) for k, v in dummy_input.items()}
     dummy_labels = dummy_input["input_ids"].clone()
 
     outputs = model(**dummy_input, labels=dummy_labels)

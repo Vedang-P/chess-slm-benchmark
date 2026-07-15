@@ -107,18 +107,25 @@ class HFModel:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
+        # device_map={"": 0}, not "auto": these models are all small enough to
+        # fit on one GPU, and on a multi-GPU box (e.g. Kaggle's "T4 x2") "auto"
+        # shards the model's layers across both devices by default -- then
+        # anything that does a plain .cuda() (defaults to cuda:0) mismatches
+        # against layers auto-placed on cuda:1. Pinning to one device avoids
+        # that whole class of bug; there's no benefit to sharding a model
+        # this size across GPUs anyway.
         if self.load_in_4bit:
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
             )
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, quantization_config=bnb_config, device_map="auto",
+                model_id, quantization_config=bnb_config, device_map={"": 0},
                 trust_remote_code=True, torch_dtype=torch.bfloat16,
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, device_map="auto", trust_remote_code=True, torch_dtype=torch.bfloat16,
+                model_id, device_map={"": 0}, trust_remote_code=True, torch_dtype=torch.bfloat16,
             )
 
         if self.adapter_path:
@@ -267,8 +274,15 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
             model_name=model_id, max_seq_length=max_seq_length,
             dtype=None, load_in_4bit=load_in_4bit,
         )
+        # Explicit finetune_*_layers/modules flags, not left to Unsloth's
+        # defaults -- Unsloth intersects target_modules with these filters
+        # ("adapters attach only where both select"), and Gemma 4's Unsloth
+        # loader is vision-model-aware even for text-only "it" checkpoints.
+        # We're doing text-only spatial reasoning, so vision layers are off.
         model = FastLanguageModel.get_peft_model(
             model, r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
+            finetune_vision_layers=False, finetune_language_layers=True,
+            finetune_attention_modules=True, finetune_mlp_modules=True,
             lora_dropout=0, bias="none", use_gradient_checkpointing="unsloth", random_state=42,
         )
         if tokenizer.pad_token is None:
@@ -283,18 +297,19 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # device_map={"": 0}, not "auto" -- see the comment in HFModel.load() above.
     if load_in_4bit:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
         )
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, quantization_config=bnb_config, device_map="auto",
+            model_id, quantization_config=bnb_config, device_map={"": 0},
             trust_remote_code=True, torch_dtype=torch.bfloat16,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, device_map="auto", trust_remote_code=True, torch_dtype=torch.bfloat16,
+            model_id, device_map={"": 0}, trust_remote_code=True, torch_dtype=torch.bfloat16,
         )
     model = prepare_model_for_kbit_training(model)
     lora_config = LoraConfig(r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
