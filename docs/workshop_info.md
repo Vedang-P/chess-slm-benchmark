@@ -54,7 +54,11 @@ The workshop explicitly calls for:
 - "Tool use and function calling under latency constraints"
 - "Real-world applications ... where on-device agents provide tangible value"
 
-Our Gemma 4 + A* neuro-symbolic pipeline directly addresses ALL of these.
+Our work extending AlphaMaze's SFT+GRPO recipe to Gemma 4 for GridRoute (see
+`idea.md`) directly addresses "small language models tailored for agentic
+tasks," "training under constraints," and "benchmarks and evaluation for
+on-device agents" -- both training and inference stay within a single
+on-device-class model (Gemma 4 E2B/E4B) on free-tier GPU hardware (Kaggle T4).
 
 ### Website
 https://efficient-ondevice-ai-agents.github.io/

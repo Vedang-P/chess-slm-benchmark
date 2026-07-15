@@ -1,74 +1,70 @@
-# Novelty Assessment (v4 — diagnose, then fix cross-benchmark generalization)
+# Novelty Assessment (v7 -- pure performance push, no headline technique)
 
-## Candidate Idea
+## Candidate Claim
 
-GRPO fine-tune Gemma 4 E2B for spatial/maze navigation (AlphaMaze's recipe, new model), test
-whether the improvement generalizes across structurally different benchmarks (GridRoute →
-Lost in Aggregation), run a rigorous multi-angle failure analysis on the transfer gap, then
-propose and test a cross-format-consistency GRPO reward -- motivated directly by that analysis --
-against a naive mixed-format-training baseline.
+Build the best on-device SLM (Gemma 4, primarily) at GridRoute natural-language grid navigation,
+evaluated jointly with MazeBench (AlphaMaze's token-format benchmark), using AlphaMaze's SFT+GRPO
+recipe extended to a new model and format. No proposed technique is the headline contribution.
 
-## Update From v3 (6/10 -> 7/10)
+## Change From the Consistency-Reward-Technique Version
 
-The earlier version was fundamentally a measurement paper: does a known pattern (GRPO generalizes
-better than SFT) hold in a new setting. This version adds a genuinely proposed technique (the
-consistency reward), motivated by original diagnostic work (the failure analysis), not just a
-test of an existing idea. That's a stronger claim, hence the higher score -- but see the open
-item below before treating 7/10 as final.
+The version this replaces (see `idea.md`'s Changelog) scored 6/10 on the strength of a genuinely
+proposed technique (cross-format-consistency GRPO, adapting Elhady et al.) as its central claim.
+Dropping that changes the shape of the novelty argument from "genuine novelty in
+application/insight" (a technique-transfer claim) to something closer to "first result of its
+kind, done rigorously" -- a real but more modest basis for a workshop paper. Scored down
+accordingly (see below), not because anything got worse, but because the claim itself is smaller.
 
 ## Closest Comparators
 
 | Paper | Relationship | Why |
 |---|---|---|
-| **AlphaMaze (arXiv:2502.14669)** | **direct methodological precedent** | Same recipe (SFT+GRPO), different model (DeepSeek-R1-Distill-Qwen-1.5B, not Gemma), single format only (5x5 maze), never tests transfer to a different benchmark |
-| **Ji et al. (arXiv:2507.13362)** | **closest overlap — must differentiate explicitly** | Already shows GRPO > SFT for spatial-reasoning OOD generalization, on PaLI-Gemma2-3B. Different modality (vision-language, not text-only), different OOD type (rephrased queries, not structurally different benchmarks) |
-| **Xi et al. (arXiv:2603.12011)** | **predicts our likely result, not a competitor** | General LLM-agent finding: RL generalizes well within an environment, poorly to genuinely unseen ones. Not spatial-specific, not tested on maze/grid navigation |
-| **Beyond Specialization (arXiv:2605.02528)** | **analogous, different literature** | Same cross-environment transfer problem, but classical DRL policy networks, no language models involved |
-| Unsloth Gemma 4 GRPO guide | **feasibility precedent, not a research contributor** | Confirms GRPO-on-Gemma-4 is a solved engineering problem (~9GB VRAM), demonstrated on Sudoku — not spatial reasoning, not a research claim |
-| DUPLEX, SmallPlan, Gideon | background | Neuro-symbolic / distillation approaches to SLM planning; different method family, still relevant related work |
+| **GridRoute (arXiv:2505.24306)** | **the benchmark itself** | Tests GPT-4 Turbo, Qwen2.5-7B/72B only. No model under 7B appears anywhere in the paper or in anything found citing it. This is the core gap this project fills. |
+| **AlphaMaze (arXiv:2502.14669)** | **direct methodological precedent** | Proved SFT+GRPO takes DeepSeek-R1-Distill-Qwen-1.5B from ~0% to 93% on MazeBench's token format. Never tested a different model family (Gemma), never tested a natural-language format, never tested GridRoute. |
+| **Ji et al. (arXiv:2507.13362)** | background, not a direct comparator now | GRPO > SFT for spatial OOD generalization, vision-language PaLI-Gemma2-3B, reworded-query OOD -- relevant context for why GRPO is a reasonable recipe choice, not a competing claim about this project's specific setting. |
+| **Elhady et al. (arXiv:2606.01464)** | **source of one candidate training recipe, not the headline** | Consistency-reward RL for cross-lingual math (MGSM). The `consistency` GRPO condition adapts this mechanism to cross-format spatial reasoning as one recipe tried among several -- report results honestly, don't frame as this paper's contribution. |
+| Unsloth Gemma 4 documentation | feasibility precedent | Confirms GRPO/LoRA on Gemma 4 is a solved engineering problem via their loader -- necessary infrastructure for this project, not itself a research contribution. |
 
 ## What Is Novel
 
-Nobody has combined: (a) GRPO fine-tuning (b) a text-only on-device SLM (c) Gemma 4 specifically
-(d) spatial/maze navigation (e) tested for true cross-benchmark structural transfer, not
-same-format difficulty variation or rephrased-query OOD. Every individual piece of this has a
-close precedent; the combination doesn't.
+- **First SLM-scale (<8B) results on GridRoute, period.** Not "the best" or "a new approach to" --
+  simply the first. This is a real, unsubtle literature gap, not a marginal framing choice.
+- **First attempt to extend AlphaMaze's specific SFT+GRPO recipe to a different model family
+  (Gemma 4) and a different surface format (natural language).**
+- **A harness built specifically to avoid measurement artifacts this project's own history
+  demonstrates are real** -- a single model's MazeBench score swung 99%/70%/88%/0% across
+  successive versions of this project's own eval code (temperature, token-budget, and parsing
+  differences), and a real scoring discrepancy was caught between exact-match and AlphaMaze's
+  actual geometric-simulation-based metric. Worth stating as a secondary methodological point: SLM
+  spatial-reasoning numbers reported without this level of care are not trustworthy, and this
+  project's numbers are produced with it (clean-final-answer-only policy, generous and verified
+  thinking budgets, official scoring code reused directly via a submodule rather than
+  reconstructed).
 
 ## What's Not Novel (Be Honest About This In The Paper)
 
-"GRPO generalizes better than SFT for spatial reasoning" is already demonstrated (Ji et al.).
-"You can GRPO fine-tune Gemma 4" is already documented (Unsloth). The paper's contribution is
-specifically the cross-benchmark structural transfer test in this new setting, not the general
-pattern.
+"GRPO improves small-model spatial reasoning" is already demonstrated (AlphaMaze). "Consistency-
+reward RL helps cross-representation generalization" is already demonstrated (Elhady et al., for
+language, not format). Neither is this paper's claim. If the consistency condition is included in
+results, frame it explicitly as: "we also tried adapting a technique from [Elhady et al.] as one
+recipe; here is whether it helped in this setting" -- not as a proposed method.
 
-## Novelty Score: 6/10 (revised back down from 7/10 -- see below)
+## Novelty Score: ~5/10
 
-"Genuine novelty in application/insight," not "genuine novelty in method." The diagnostic half
-(does GRPO-trained spatial reasoning transfer cross-benchmark, and why) is solid for the reasons
-already established -- the general pattern is known elsewhere, this specific setting isn't. The
-technique half (Step 6) is real but more modest than first assessed: it's an *application* of an
-existing technique to a new domain, not a new technique.
+Lower than the previous (6/10, technique-centered) version, honestly -- this is now a "did the
+literature simply never test this, and did we do it carefully" claim rather than an
+application/insight claim about a specific technique. That's still a legitimate, publishable
+workshop contribution (the venue's own call for papers explicitly welcomes "benchmarks and
+evaluation for on-device agents" and "training under constraints" as topics, not only new
+algorithms) -- but it should be pitched as exactly that: a rigorous first measurement and a
+best-effort training recipe, not a novel-method paper. If a reviewer's likely pushback is "this is
+just running an existing recipe on a new benchmark," the honest answer is: yes, and nobody had,
+and here's the evidence that doing so carelessly (as this project's own history shows) gives
+wildly wrong numbers.
 
-## Step 6 Novelty Check Result (resolved)
+## What Would Raise This Score
 
-**Elhady et al. (arXiv:2606.01464, May 2026)** already do the core mechanism proposed for Step 6:
-an unsupervised RL reward for producing the same correct answer when the same problem is posed in
-different *representations*, requiring no gold labels for every representation -- tested on
-cross-*lingual* math reasoning (MGSM), with real gains (up to 21.7%). This is the same underlying
-idea as our cross-format-consistency reward, just for language variation instead of structural-
-format variation, and math instead of spatial navigation. The honest framing for Step 6 is
-therefore: **testing whether a very recently validated technique (consistency-reward RL),
-demonstrated in exactly one domain (cross-lingual math), transfers to a structurally different one
-(cross-format spatial navigation)** -- not inventing a new technique.
-
-Two other "consistency-aware GRPO" papers looked close on title alone but checked out as
-non-overlapping: GRPO-CARE (arXiv:2506.16141) and Faithful GRPO (arXiv:2604.08476) both define
-"consistency" as coherence between a model's own reasoning trace and its final answer *within one
-response* -- a different, unrelated notion from cross-representation agreement. Cite as related
-work, not competitors.
-
-## Recommendation
-
-Proceed with the full pipeline. Frame Step 6 honestly in any writeup as an application/transfer
-test of Elhady et al.'s technique to a new domain, not as a novel method -- claiming otherwise
-would be an easy, embarrassing catch for a reviewer who knows that paper.
+A genuinely surprising empirical finding (e.g., Gemma 4 transfers unusually well/poorly compared
+to AlphaMaze's recipe, or the consistency condition has a large, clean effect) would strengthen
+the paper considerably -- but that's a result to report if it happens, not something to assume or
+engineer toward before the data exists.

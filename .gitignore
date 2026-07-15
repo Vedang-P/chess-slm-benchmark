@@ -56,6 +56,26 @@ huggingface/
 # Logs
 *.log
 
+# LaTeX build artifacts (paper/main.pdf is rebuilt with `tectonic paper/main.tex`)
+paper/*.pdf
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.out
+paper/*.synctex.gz
+
 # RStack plumbing and local experiment output
 .rstack/
 /results/
+
+# Unsloth's per-model compiled-kernel cache (regenerated on first import,
+# multi-thousand-line generated files -- never commit this)
+unsloth_compiled_cache/
+
+# Local model weights downloaded for eval/training (re-downloadable from HF)
+data/models/
+
+# Notebooks: ignored by default (outputs/checkpoints are noisy in diffs), but
+# the Kaggle training notebook itself is source we want tracked.
+*.ipynb
+!notebooks/*.ipynb

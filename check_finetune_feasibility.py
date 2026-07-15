@@ -1,23 +1,35 @@
-"""Feasibility check: can each candidate model be loaded at 4-bit,
-LoRA-attached, and survive a forward+backward pass on available VRAM?
+"""Feasibility check: can each candidate model be loaded, LoRA-attached, and
+survive a forward+backward pass on available VRAM?
 
-Uses bitsandbytes + peft (no Unsloth dependency) since Qwen2 and
-Gemma 3 are standard architectures.
+Routes through hf_models.load_trainable_model() -- the same dual-backend
+loader train_sft.py/train_grpo.py use -- so this measures the actual backend
+each model will really train with (Unsloth for Gemma 4, bitsandbytes+peft for
+everything else), not a generic approximation that might not even be able to
+attach LoRA to begin with (this is exactly what breaks for Gemma 4 on plain
+peft: Gemma4ClippableLinear isn't a recognized target module type).
+
+Run this on the actual training hardware (laptop or Kaggle) before
+committing to a full run -- especially for gemma4-e4b, whose LoRA VRAM
+footprint has been reported elsewhere as ~17GB, right at/over a free-tier
+Kaggle T4's 16GB ceiling. Don't trust that number until this script confirms
+it on the real hardware you'll actually train on.
 """
 
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 # ── candidates ────────────────────────────────────────────────────
 CANDIDATES = [
     ("deepseek-r1-distill-qwen-1.5b", "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"),
     ("smollm2-1.7b", "HuggingFaceTB/SmolLM2-1.7B-Instruct"),
+    ("gemma4-e2b", "google/gemma-4-E2B-it"),
+    ("gemma4-e4b", "google/gemma-4-E4B-it"),
 ]
 
 
 def check(key: str, model_id: str) -> dict:
     """Load, LoRA-attach, forward+backward, measure VRAM."""
+    from hf_models import load_trainable_model
+
     print(f"\n{'='*60}")
     print(f"Testing: {key}  ({model_id})")
     print(f"{'='*60}")
@@ -26,48 +38,13 @@ def check(key: str, model_id: str) -> dict:
     torch.cuda.reset_peak_memory_stats()
     vram_before = torch.cuda.memory_allocated() / 1e9
 
-    # ── load tokenizer ──
-    print("  Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    # ── 4-bit config ──
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-
-    # ── load model ──
-    print("  Loading model (4-bit)...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        quantization_config=bnb_config,
-        device_map="auto",
-        trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
-    )
-    vram_after_load = torch.cuda.memory_allocated() / 1e9
-
-    # ── prepare for k-bit training ──
-    model = prepare_model_for_kbit_training(model)
-
-    # ── attach LoRA ──
-    print("  Attaching LoRA (r=16)...")
-    lora_config = LoraConfig(
-        r=16, lora_alpha=16,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                         "gate_proj", "up_proj", "down_proj"],
-        lora_dropout=0, bias="none",
-        task_type="CAUSAL_LM",
-    )
-    model = get_peft_model(model, lora_config)
+    print("  Loading + attaching LoRA (r=16)...")
+    model, tokenizer, backend = load_trainable_model(model_id, load_in_4bit=True, lora_r=16, lora_alpha=16)
     vram_after_lora = torch.cuda.memory_allocated() / 1e9
+    print(f"  Backend: {backend}")
 
     # ── forward + backward ──
-    print("  Running forward+backward (seq_len=256, batch=1)...")
+    print("  Running forward+backward (seq_len<=256, batch=1)...")
     model.train()
     dummy_input = tokenizer(
         "Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
@@ -84,16 +61,19 @@ def check(key: str, model_id: str) -> dict:
     vram_after_bwd = torch.cuda.memory_allocated() / 1e9
 
     # ── report ──
-    peak_vram = max(vram_after_load, vram_after_lora, vram_peak, vram_after_bwd)
+    peak_vram = max(vram_after_lora, vram_peak, vram_after_bwd)
 
     print(f"\n  VRAM breakdown:")
     print(f"    Before:       {vram_before:.2f} GB")
-    print(f"    After load:   {vram_after_load:.2f} GB  (+{vram_after_load - vram_before:.2f})")
-    print(f"    After LoRA:   {vram_after_lora:.2f} GB  (+{vram_after_lora - vram_after_load:.2f})")
+    print(f"    After LoRA:   {vram_after_lora:.2f} GB  (+{vram_after_lora - vram_before:.2f})")
     print(f"    After fwd+bwd:{vram_after_bwd:.2f} GB")
     print(f"    Peak:         {peak_vram:.2f} GB")
 
-    # Estimate GRPO: peak * 1.4 (overhead for reference logits + generation KV cache)
+    # Estimate GRPO: peak * 1.4 (overhead for reference logits + generation KV cache).
+    # This ratio was empirically reasonable for the bitsandbytes+peft models it
+    # was originally measured against -- treat it as a rough estimate for
+    # Unsloth-backed Gemma 4, not a confirmed number, until an actual
+    # train_grpo.py timing test (--max_steps 20) has run.
     grpo_est = peak_vram * 1.4
     total = torch.cuda.get_device_properties(0).total_memory / 1e9
 
@@ -104,7 +84,7 @@ def check(key: str, model_id: str) -> dict:
     else:
         verdict = "❌ INFEASIBLE"
 
-    print(f"    Est. GRPO:    {grpo_est:.2f} GB  → {verdict}")
+    print(f"    Est. GRPO:    {grpo_est:.2f} GB  → {verdict}  (rough estimate, see docstring)")
 
     # Cleanup
     del model, tokenizer
@@ -112,7 +92,8 @@ def check(key: str, model_id: str) -> dict:
 
     return {
         "key": key,
-        "load_gb": round(vram_after_load - vram_before, 2),
+        "backend": backend,
+        "load_lora_gb": round(vram_after_lora - vram_before, 2),
         "peak_gb": round(peak_vram, 2),
         "est_grpo_gb": round(grpo_est, 2),
         "verdict": verdict,
@@ -135,12 +116,14 @@ if __name__ == "__main__":
             results.append(check(key, model_id))
         except Exception as e:
             print(f"\n  ❌ FAILED: {e}")
-            results.append({"key": key, "load_gb": 0, "peak_gb": 0, "est_grpo_gb": 0, "verdict": f"ERROR: {e}"})
+            results.append({"key": key, "backend": "?", "load_lora_gb": 0, "peak_gb": 0,
+                             "est_grpo_gb": 0, "verdict": f"ERROR: {e}"})
 
     # ── summary ──
-    print(f"\n{'='*70}")
-    print(f"{'MODEL':<40} {'LOAD':>6} {'PEAK':>6} {'GRPO':>6}  VERDICT")
-    print(f"{'-'*70}")
+    print(f"\n{'='*80}")
+    print(f"{'MODEL':<24} {'BACKEND':<10} {'LOAD+LORA':>10} {'PEAK':>6} {'GRPO':>6}  VERDICT")
+    print(f"{'-'*80}")
     for r in results:
-        print(f"{r['key']:<40} {r['load_gb']:>5.1f}G {r['peak_gb']:>5.1f}G {r['est_grpo_gb']:>5.1f}G  {r['verdict']}")
-    print(f"{'='*70}")
+        print(f"{r['key']:<24} {r['backend']:<10} {r['load_lora_gb']:>9.1f}G {r['peak_gb']:>5.1f}G "
+              f"{r['est_grpo_gb']:>5.1f}G  {r['verdict']}")
+    print(f"{'='*80}")

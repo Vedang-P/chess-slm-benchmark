@@ -1,96 +1,120 @@
-# Refined Research Idea (v4 — diagnose, then fix cross-benchmark generalization)
+# Refined Research Idea (v7 -- pure performance push: best on-device SLM for GridRoute + MazeBench)
 
-Novelty score: 6/10 (see `novelty-assessment.md` — Step 6 checked against Elhady et al.,
-arXiv:2606.01464, which already does consistency-reward RL for cross-*lingual* math; our
-contribution there is testing whether it transfers to cross-*format* spatial reasoning, not
-inventing the mechanism).
+Novelty score: see `novelty-assessment.md` (~5/10 -- honest framing: this is a first-of-its-kind
+empirical result plus a methodologically rigorous harness, not a new algorithm).
+
+**Last synced with `idea.md`, `novelty-assessment.md`, `experiment-plan.md`, `README.md`:
+2026-07-15.** If reading this later, check `git log --oneline -- idea.md refined-idea.md
+novelty-assessment.md experiment-plan.md README.md` -- these describe one plan and must agree;
+this has drifted out of sync once already (see idea.md's Changelog).
 
 ## Problem Statement
 
-AlphaMaze proved SFT+GRPO can take a small model's maze-solving from ~0% to 93%, and separate
-work shows GRPO-trained models generalize better than SFT-trained ones for spatial reasoning —
-but only within the same task, reworded. Whether that generalization holds across genuinely
-different benchmark structures is untested, and if it doesn't hold, nobody has proposed a fix
-targeted at *why* it fails rather than just training on more data and hoping. This project answers
-both: does it generalize, why (or why not), and can a technique designed around the specific
-failure mode close the gap better than naive mixed-format training alone.
+No small language model (<8B parameters, plausibly on-device-feasible) has been tested on
+GridRoute -- every published result (GridRoute's own paper, everything citing it) tests only
+>=7B models. Separately, AlphaMaze proved SFT+GRPO takes a 1.5B model to 93% on its own
+token-format maze benchmark, but never tried a different model family or a natural-language
+surface format. This project asks a direct, practical question: how good can we actually make an
+on-device SLM (Gemma 4, primarily) at GridRoute, and can we do that without wrecking MazeBench
+performance if starting from or jointly training with AlphaMaze's recipe? No specific proposed
+technique is the point -- the point is a real number, honestly measured, for a setting nobody has
+reported before, using the best training recipe we can find.
 
-## Proposed Approach (7 steps)
+## Approach
 
-1. **Baseline** (built, runnable): untrained Gemma 4 E2B on GridRoute + Lost in Aggregation.
-2. **Train single-format**: SFT + GRPO on GridRoute only, via Unsloth, following AlphaMaze's
-   recipe (adapt their public `Maze-Reasoning-GRPO-v0.1` data/reward design).
-3. **Transfer eval**: single-format model on Lost in Aggregation (OOD).
-4. **Critical failure analysis**: categorize *how* the model fails on the OOD benchmark, from
-   multiple angles (representation confusion, planning vs. execution errors, error localization
-   within the path, cross-model comparison against Qwen2.5/DeepSeek-distill). This is the
-   diagnostic centerpiece and must be thorough — it directly determines what step 6 targets.
-5. **Train mixed-format**: SFT + GRPO on GridRoute + Lost in Aggregation combined. Naive-fix
-   baseline. Evaluate whether this alone closes the gap found in step 3/4.
-6. **Cross-format-consistency reward**: propose a GRPO reward modification, designed around
-   step 4's specific findings, that explicitly targets cross-format consistency rather than
-   per-format correctness alone (e.g., present the same underlying problem in both formats during
-   training, reward consistent correct answers across representations).
-7. **Final comparison**: single-format vs. mixed-format vs. consistency-reward model, across both
-   benchmarks. Central result table.
+1. **Baseline** (current phase): Gemma 4 E2B, Gemma 4 E4B (if it fits, see
+   `check_finetune_feasibility.py`), and AlphaMaze-v0.2-1.5B, all untrained/off-the-shelf, on
+   GridRoute NL 5x5 and MazeBench. AlphaMaze should land near its published 93% on MazeBench --
+   this is the harness sanity check (Phase 1), using their real scoring code via the
+   `alphamaze_reference` submodule, not a reconstruction.
+2. **SFT warm-start** (`train_sft.py --format {nl, token, mixed}`): teach the reporting format
+   ("FINAL ANSWER:" for NL, plain move tokens after thinking for token-format) and basic
+   task competence before GRPO.
+3. **GRPO** (`train_grpo.py --condition {single, mixed, consistency}`): three recipes to try, not
+   three hypotheses to test scientifically --
+   - `single`: GridRoute NL only.
+   - `mixed`: NL + our own token-maze encoding (`src/token_maze.py`) interleaved, naive per-format
+     reward.
+   - `consistency`: same mixed data, reward includes a bonus when the model's own completions on
+     the NL and token versions of the same underlying problem agree on validity/optimality
+     (mechanism adapted from Elhady et al., arXiv:2606.01464 -- cross-lingual consistency-reward
+     RL, applied here to cross-format spatial reasoning as one candidate recipe, not the paper's
+     headline claim).
+4. **Report whichever recipe wins**, on both benchmarks, including honest negative results if
+   nothing beats the simplest baseline. Cross-model check (DeepSeek-R1-Distill-Qwen-1.5B,
+   SmolLM2-1.7B) as a cheap secondary comparison, time permitting.
 
-## What Is Novel
+## What Is (Modestly) Novel
 
-- First GRPO fine-tuning applied to Gemma 4 for spatial reasoning.
-- First test of true cross-benchmark (not reworded-query) structural generalization for
-  GRPO-trained spatial reasoning in a text-only on-device model.
-- First test of whether consistency-reward RL (Elhady et al.'s technique, validated only for
-  cross-lingual math so far) transfers to cross-*format* spatial reasoning — an application/
-  transfer contribution, not a new method. Framed honestly, motivated by original failure
-  analysis (Step 4) rather than applied speculatively.
-- Extends "Beyond Specialization"'s classical-RL finding (diverse training fixes cross-environment
-  transfer) into the LLM/GRPO setting, and goes further by testing whether a *targeted* technique
-  beats naive data mixing.
+- First SLM-scale (<8B) results on GridRoute at all -- the literature gap here is not subtle, it's
+  a total absence.
+- First attempt to extend AlphaMaze's SFT+GRPO recipe to Gemma 4 and to a natural-language
+  surface format, evaluated jointly with the original token-format benchmark.
+- A demonstrably more rigorous evaluation harness than ad hoc alternatives: this project's own
+  history shows a single model's MazeBench score swinging 99%/70%/88%/0% across successive harness
+  versions (temperature/token-budget/parsing bugs), and a real discrepancy caught between
+  exact-match scoring and AlphaMaze's actual geometric-simulation-based scoring. Worth stating
+  explicitly in the paper as a secondary contribution: careless harness design measurably
+  distorts apparent SLM spatial-reasoning ability, and this project's harness (clean-final-answer
+  policy, generous thinking budgets, faithful reuse of official scoring code) is built specifically
+  to avoid that.
+
+## What's Not Claimed
+
+No new training technique, no new benchmark, no theoretical contribution. The consistency-reward
+GRPO condition is Elhady et al.'s mechanism, applied to a new domain as one candidate recipe among
+several -- report it as "we also tried this, here's what happened," not as an invention.
 
 ## Key Assumptions
 
-1. GridRoute and Lost in Aggregation are structurally different enough to be a genuine
-   cross-benchmark test (true by construction — rectangular obstacle grids vs. tree-structured
-   mazes with topology labels).
-2. The failure analysis (step 4) will surface a specific, addressable failure mode, not a diffuse
-   mix of unrelated errors — if failures are too heterogeneous, step 6's targeted technique has
-   nothing clear to target. Worth checking early, not assuming.
-3. AlphaMaze's GRPO recipe transfers to Gemma 4's architecture without major modification beyond
-   the Unsloth loading fix already needed.
+1. Gemma 4 E2B/E4B can actually be LoRA/GRPO fine-tuned via Unsloth without the transformers
+   version conflict noted in this project's 2026-07-13 history -- current evidence (Unsloth's own
+   docs advertise Gemma 4 support) suggests this is resolved, but verify directly on the actual
+   training hardware before committing real compute, don't just trust a web search summary.
+2. Gemma 4 E4B's LoRA footprint (~17GB reported elsewhere) may not fit Kaggle's free 16GB T4 --
+   `check_finetune_feasibility.py` needs to confirm this empirically; treat E4B as optional until
+   it does.
+3. Our own token-maze format (not a byte-identical clone of AlphaMaze's undocumented exact
+   grammar) is close enough in vocabulary to interact meaningfully with any token-format skill a
+   model already has, for the mixed/consistency conditions specifically.
+4. Gemma 4's actual thinking-block delimiter is unconfirmed (multiple inconsistent descriptions
+   found; see `hf_models.THINKING_END_MARKERS`'s docstring) -- verify against real raw output from
+   the first actual Gemma 4 generation before trusting any score that depends on
+   `extract_reported_answer` correctly finding the end of its thinking.
 
 ## Evaluation Plan
 
-- **Models:** Gemma 4 E2B (primary). DeepSeek-R1-Distill-Qwen-1.5B (AlphaMaze's own base —
-  replication sanity check). Qwen2.5-1.5B/3B (recipe-generalization check). All via Unsloth.
-- **Benchmarks:** GridRoute (train + in-distribution eval), Lost in Aggregation (OOD eval).
-  MazeEval dropped entirely — no code or data available anywhere.
-- **Metrics:** valid-path rate, optimal-path rate (via `src/evaluation.py`) per benchmark per
-  training condition (baseline / single-format / mixed-format / consistency-reward). Primary
-  quantity: the ID-vs-OOD gap, and how each training condition changes it. Secondary: failure-mode
-  category breakdown (step 4), not just aggregate rates.
-- **Baseline:** untrained model (already runnable); AlphaMaze's own reported numbers as a
-  recipe-correctness sanity check, not a direct comparison (different model/format).
+- **Models**: Gemma 4 E2B (primary), Gemma 4 E4B (if feasible), AlphaMaze-v0.2-1.5B (MazeBench
+  reference point). DeepSeek-R1-Distill-Qwen-1.5B / SmolLM2-1.7B / Qwen2.5-3B as cheap secondary
+  comparisons.
+- **Benchmarks**: MazeBench-v0.2 (real data, real scoring code via submodule). GridRoute NL, 5x5
+  primary (10x10 optional, later, if time permits).
+- **Metrics**: MazeBench: their own simulation-based accuracy. GridRoute: valid-path rate,
+  optimal-path rate (`src/evaluation.py`, fixed for the vacuous-truth bug). Report both benchmarks
+  for every training condition -- the central table is "best joint performance," not a
+  before/after on one axis.
+- **Baseline**: untrained Gemma 4 (both sizes), untrained AlphaMaze, all four DeepSeek/SmolLM2/
+  Qwen2.5 secondary models, all runnable now via `eval.py`.
 
 ## Risks
 
-- **Training may not converge or may not beat baseline** — real possible outcome, plan for it.
-- **Generalization may already hold without any fix** (contradicting Xi et al.) — in which case
-  steps 5/6 become "we tested whether a fix was needed and found it wasn't," still a valid,
-  interesting result, but changes the pitch from "we fixed X" to "we found X doesn't need fixing
-  here, contrary to the general pattern."
-- **Failure modes may be too heterogeneous** for step 6's targeted reward to have a clean target —
-  check this as soon as step 4's data exists, before investing time designing step 6.
-- **Unsloth/Gemma 4 compatibility** for the actual training loop (not just loading) is not yet
-  verified end-to-end on our hardware.
+- **Gemma 4 training may simply not converge well, or E4B may not fit at all** -- real possible
+  outcomes; a clean negative result (Gemma 4 doesn't get much better at GridRoute no matter the
+  recipe) is still a valid, honestly-reportable finding given nobody has this baseline yet either.
+- **The consistency condition roughly doubles per-step compute** (partner-completion generation
+  inside the reward function) -- get a real timing number before committing to a full run.
+- **Kaggle's free-tier weekly GPU quota (~30h) is a real constraint** against three training
+  conditions x up to two model sizes -- prioritize E2B + single/mixed conditions first, treat E4B
+  and the consistency condition as stretch goals if quota is tight.
 
 ## Next Actions
 
-1. ~~Novelty spot-check on Step 6~~ — done, see `novelty-assessment.md`.
-2. **Empirical timing test, Gemma 4 E2B only:** short GRPO run (~50-100 steps) to get a real
-   wall-clock/GPU-hour number on the A5000 before committing to the full plan. This determines
-   whether all 4 models x 3 conditions is realistic or needs cutting down.
-3. Based on that number, decide final model/condition scope, then follow Unsloth's Gemma 4 GRPO
-   guide for the real training runs (steps 2 and 5 of the pipeline).
-4. Run step 1 (baseline eval, already built) to get a fresh baseline number.
-5. Design the failure-analysis categorization scheme (step 4) before results come in, so
-   categorization is principled and decided in advance, not post-hoc.
+1. Run `check_finetune_feasibility.py` (now includes gemma4-e2b/e4b) on the actual training
+   hardware (Kaggle T4) to get real VRAM numbers before assuming either fits.
+2. Run Phase 1 baselines: `eval.py` for {gemma4-e2b, gemma4-e4b, alphamaze} x {mazebench,
+   gridroute-nl}. Confirm AlphaMaze lands near 93% on MazeBench using the real scoring code --
+   this validates the harness before trusting anything else.
+3. Get a real GRPO timing number (`train_grpo.py --condition single --max_steps 20`) before
+   committing to a full step count, especially for the consistency condition later.
+4. SFT + GRPO single-format on Gemma 4 E2B; evaluate both benchmarks; decide from there whether
+   mixed/consistency are worth the additional compute given what single-format alone achieves.

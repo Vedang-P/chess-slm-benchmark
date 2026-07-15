@@ -1,12 +1,9 @@
-# Install order matters here: let unsloth's resolver drive torch/transformers/
-# xformers versions (it pins transformers<=5.5.0, which conflicts with the
-# >=5.13.0 that plain/vanilla transformers needs to recognize Gemma 4's
-# architecture natively -- but Unsloth's own loading path patches around
-# that, so it doesn't need the newer version). Don't add a transformers
-# version pin here again without checking it against unsloth's current
-# constraints first.
-unsloth
-trl
+# bitsandbytes + peft is the primary path for every model in core scope
+# (DeepSeek-R1-Distill-Qwen-1.5B, SmolLM2-1.7B, Qwen2.5-*, AlphaMaze-v0.2-1.5B)
+# -- all standard architectures, no Unsloth needed. transformers>=5.13.0 is
+# required to recognize Gemma 4's architecture at all, if you ever re-add it.
+transformers>=5.13.0
+trl>=0.13.0  # SFTTrainer/GRPOTrainer processing_class= kwarg needs this
 datasets
 peft
 accelerate
@@ -14,5 +11,18 @@ numpy
 sentencepiece
 protobuf
 huggingface_hub
-modal
 bitsandbytes
+
+# Optional: only needed if you revisit Gemma 4 (archive/gemma4-primary-direction/).
+# Gemma 4's Gemma4ClippableLinear layers aren't a recognized peft target module
+# type, so plain transformers+peft LoRA can't attach to it -- Unsloth patches
+# around this, but its resolver pins transformers<=5.5.0, which conflicts with
+# the >=5.13.0 pin above. Install in a separate venv if you need it; don't
+# just add it to this file, it'll fight the pin.
+# unsloth
+
+# Optional: only needed for the Gemma 4 E2B Ollama baseline (see hf_models.OllamaModel).
+# ollama
+
+# Optional: Modal cloud GPUs -- not usable until a payment method is on file.
+# modal

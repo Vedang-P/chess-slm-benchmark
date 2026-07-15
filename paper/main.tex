@@ -1,0 +1,267 @@
+% Skeleton draft. Uses plain article + manual formatting as a stand-in for the
+% official venue class, since the exact NeurIPS 2026 workshop .sty/.cls was not
+% fetched in this pass (OpenReview submissions opened 2026-07-15, the day this
+% skeleton was written -- the template link may not even be live yet). BEFORE
+% SUBMISSION: download the official template from
+% https://efficient-ondevice-ai-agents.github.io/ (or the OpenReview venue
+% page), drop the .sty/.cls file into this directory, and swap the
+% documentclass/preamble below for theirs. Everything else (content, section
+% structure, citations) should carry over with minimal changes.
+%
+% Target: short paper, 4 pages + unlimited references (docs/workshop_info.md).
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[margin=0.75in,columnsep=0.25in]{geometry}
+\usepackage{times}
+\usepackage[T1]{fontenc}
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+
+\title{\vspace{-1em}Extending AlphaMaze's Recipe to Gemma 4:\\
+First Small-Model Results on GridRoute}
+\author{Vedang Pandey \\ \small{Manuscript in preparation -- Efficient and On-Device AI Agents Workshop @ NeurIPS 2026}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+GridRoute~\citep{gridroute} has, to our knowledge, only ever been evaluated with models of 7B
+parameters or larger (GPT-4 Turbo, Qwen2.5-7B/72B) -- no result for a small, on-device-feasible
+model (under 8B parameters) appears in the benchmark's own paper or in anything citing it.
+Separately, AlphaMaze~\citep{alphamaze} showed that SFT followed by GRPO can take a
+1.5B-parameter model from near-zero to 93\% accuracy on its own token-formatted maze benchmark,
+MazeBench, but never tested a different model family or a natural-language task format. We
+extend AlphaMaze's training recipe to Gemma 4, targeting strong performance on GridRoute (natural
+-language grid navigation, $5\times5$) without regressing MazeBench (token format), and report the
+first small-model numbers on GridRoute we are aware of. We try three training recipes -- GridRoute
+-only, a naive mix of both formats, and a mix with an added cross-format-consistency reward
+adapted from cross-lingual consistency-reward RL~\citep{elhady2026} -- and report whichever
+performs best on both benchmarks jointly, not a specific technique as the point of the paper.
+\textbf{[Placeholder: results pending training runs, see \S\ref{sec:results}.]} A harness built to
+avoid measurement artifacts we demonstrate are real in our own development history (a single
+model's apparent MazeBench accuracy swung from 0\% to 99\% across successive versions of our own
+early evaluation code), all code, and a Kaggle-runnable training notebook are released alongside
+this draft.
+\end{abstract}
+
+\section{Introduction}
+
+Small, on-device language models are increasingly fine-tuned for narrow agentic skills rather than
+general capability, and spatial navigation is a natural test case: cheap to generate supervision
+for, easy to verify programmatically, and directly relevant to on-device agents that plan routes
+or follow spatial instructions under tight compute budgets. Two independent lines of prior work
+set up this paper's question but do not answer it. First, GridRoute~\citep{gridroute} -- a
+benchmark for natural-language grid navigation with cardinal movement -- has only ever been
+evaluated, in its own paper and in every follow-up we found, with models of 7B parameters or
+larger. Whether a genuinely small model (under 8B, plausibly on-device-deployable) can be made to
+perform well at this task at all is, to our knowledge, simply unmeasured. Second,
+AlphaMaze~\citep{alphamaze} demonstrated that supervised fine-tuning followed by Group Relative
+Policy Optimization (GRPO) can take a 1.5B model from essentially no maze-solving ability to 93\%
+accuracy -- but only for one model family, in one token-based maze representation the model was
+specifically trained on, and never tested against a natural-language task format or a different
+base model.
+
+This paper closes the gap between these two facts directly: we take Gemma 4 -- a current-generation
+small on-device model family -- and apply AlphaMaze's SFT+GRPO recipe with the specific goal of
+making it as good as possible at GridRoute, while checking that it does not lose ground on
+MazeBench in the process. We do not propose a new training algorithm. We try three plausible
+recipes (single-format GRPO, naive mixed-format GRPO, and mixed-format GRPO with a cross-format
+-consistency reward adapted from recent cross-lingual work~\citep{elhady2026}) and report whichever
+works, including a negative result if none meaningfully improves on the simplest baseline. The
+contribution is empirical and methodological, not algorithmic: a first measurement where none
+existed, produced by a harness we show is actually necessary.
+
+\textbf{Why the harness matters, concretely.} In the course of this project's own development, a
+single fixed model's measured MazeBench accuracy took values of 0\%, 70\%, 88\%, and 99\% across
+successive versions of an evaluation harness that varied decoding temperature, thinking-token
+budget, and answer-extraction logic without controlling for them independently (\S\ref{sec:setup}).
+Separately, an early version of our own harness scored MazeBench by exact string match against one
+stored reference solution, when the benchmark's real evaluation methodology (which we adopt
+directly, see \S\ref{sec:setup}) simulates a candidate's moves against the maze's actual wall
+structure and accepts any sequence that reaches the target. Both are the kind of error that,
+uncaught, silently produces a wrong headline number. We report our numbers as an existence proof
+that they were checked for exactly this.
+
+\textbf{Contributions.} (1) The first small-model (under 8B) results on GridRoute we are aware of.
+(2) An extension of AlphaMaze's SFT+GRPO recipe to Gemma 4 and to a natural-language task format,
+evaluated jointly with the original token-format benchmark, with a best-effort search over three
+plausible training recipes. (3) An evaluation harness -- clean-final-answer-only scoring, verified
+generous thinking budgets, and direct reuse of AlphaMaze's own scoring code rather than a
+reconstruction -- built specifically to avoid measurement artifacts we demonstrate are real, plus
+a Kaggle-runnable, open-source implementation of the entire pipeline.
+
+\section{Related Work}
+
+\textbf{GridRoute and small models.} GridRoute~\citep{gridroute} defines rectangular-obstacle grid
+navigation with cardinal movement and reports GPT-4 Turbo and Qwen2.5-7B/72B under vanilla,
+chain-of-thought, and algorithm-of-thought prompting. No model below 7B parameters appears in that
+paper or, to our knowledge, in any later work using the benchmark. This is the specific,
+literature-verified gap this paper addresses -- not a novelty argument about method, but an
+absence-of-evidence argument about scale.
+
+\textbf{Fine-tuning small models for spatial reasoning.} AlphaMaze~\citep{alphamaze} is the direct
+methodological precedent: SFT+GRPO on DeepSeek-R1-Distill-Qwen-1.5B, taking token-format maze
+accuracy on MazeBench from near zero to 93\%. It does not test a different model family, a
+different task format, or GridRoute specifically. \citet{jietal2025} show GRPO generalizes better
+than SFT for spatial-reasoning out-of-distribution generalization on a vision-language model, with
+OOD meaning reworded queries within one format and modality -- a different setting from testing a
+new model on a new format entirely, which is what this paper does.
+
+\textbf{Cross-format training recipes.} Among the three recipes we try, one (\S\ref{sec:method})
+augments GRPO with a reward term that scores agreement between a model's own completions on two
+representations of the same problem. This mechanism is not new: \citet{elhady2026} introduce it for
+cross-\emph{lingual} math reasoning (MGSM) and report real gains there. We apply the same
+mechanism to cross-\emph{format} (not cross-lingual) spatial reasoning as one candidate recipe
+among the three we test -- this is a transfer-to-a-new-domain application, reported as one line in
+a results table, not this paper's contribution. Two superficially similar lines of work,
+GRPO-CARE~\citep{grpocare2026} and Faithful GRPO~\citep{faithfulgrpo2026}, define "consistency" as
+within-response coherence between a model's reasoning trace and its own final answer -- a
+different, unrelated notion. \citet{beyondspecialization2026} show that diverse training data
+improves cross-environment transfer for classical (non-LLM) reinforcement learning navigation
+policies; our naive mixed-format recipe is the direct LLM/GRPO analogue of that finding.
+
+\section{Method}
+\label{sec:method}
+
+\subsection{Two Task Formats}
+
+MazeBench's token format (real published data, \texttt{Menlo/Maze-Bench-v0.2}) is used as-is, no
+conversion. For GridRoute, we use natural-language coordinate instructions (start, goal, and
+obstacle coordinates, asking for a Python list of \texttt{(row, col)} tuples as the answer) at
+grid size $5\times5$, matched to MazeBench's own grid size for a fair joint evaluation and chosen
+as an appropriately modest difficulty level for small models -- larger grids ($10\times10$ and up)
+are left as future work pending how well $5\times5$ goes. For the mixed-format and consistency
+recipes below, we additionally render GridRoute grids in our own token-based encoding (reusing
+AlphaMaze's published token vocabulary with our own fully-specified per-cell layout, rather than a
+reverse-engineered clone of their undocumented exact grammar -- see the released code for the
+exact specification), which lets the same underlying grid be presented in both formats during
+training.
+
+\subsection{Training Recipes}
+
+All recipes apply an SFT warm-start (teaching the exact answer-reporting convention scored at
+evaluation time) followed by GRPO, on Gemma 4 E2B (and E4B, VRAM permitting).
+
+\textbf{Single-format}: GRPO on GridRoute NL only.
+\textbf{Mixed-format}: GRPO on GridRoute NL and our token-maze encoding, interleaved over the same
+underlying grids, each scored by its own per-format reward.
+\textbf{Consistency-reward}: identical mixed-format data, but the reward additionally greedy-
+decodes the model's current completion on the paired prompt in the other format and adds a bonus
+when both agree on validity or optimality for the same underlying problem -- requiring
+independent correctness on both, not mere matching output, so two confidently-wrong-but-matching
+completions earn nothing extra.
+
+We report whichever recipe performs best jointly across both benchmarks (\S\ref{sec:results}),
+not a comparison designed to favor any one of them.
+
+\subsection{Evaluation Methodology}
+\label{sec:harness}
+
+Two choices here matter enough to state explicitly, motivated directly by errors caught during
+this project's own development (\S\ref{sec:results-caveat}):
+
+\textbf{Score only the model's own reported final answer.} A model's answer is whatever it states
+after its thinking closes, or after an explicit "final answer" instruction we give it for the NL
+format; if neither ever appears, or generation is truncated before either does, that is scored as
+a failure. Coordinates or moves are never extracted from a thinking trace the model did not itself
+present as its answer -- a chain-of-thought model routinely mentions and discards candidate moves
+before its real answer, and naive extraction over the full output text conflates the two.
+
+\textbf{Generous, and verified, thinking budgets.} Truncating a reasoning model's thinking mid
+-thought measurably changes its apparent accuracy (\S\ref{sec:results-caveat}); we use thinking
+budgets large enough that generations reliably complete, confirmed empirically rather than assumed.
+
+\section{Experimental Setup}
+\label{sec:setup}
+
+\textbf{Models.} Gemma 4 E2B (primary) and E4B (if its LoRA memory footprint fits the training
+hardware, confirmed empirically rather than assumed), via Unsloth (required: Gemma 4's
+\texttt{Gemma4ClippableLinear} layers are not a recognized target module type for plain
+\texttt{peft} LoRA). AlphaMaze-v0.2-1.5B as the MazeBench-side reference point. DeepSeek-R1
+-Distill-Qwen-1.5B / SmolLM2-1.7B / Qwen2.5-3B as cheap secondary comparisons, via bitsandbytes
+4-bit + \texttt{peft} LoRA.
+
+\textbf{Benchmarks.} MazeBench-v0.2 (100 held-out mazes), scored with AlphaMaze's own released
+evaluation code (candidate moves simulated against the maze's actual wall structure, parsed
+directly out of the prompt text; any sequence reaching the target counts as correct) rather than a
+reimplementation. GridRoute-style NL navigation, $5\times5$, seeded generation; valid-path rate
+and optimal-path rate against a Dijkstra reference, as in \citet{gridroute}.
+
+\textbf{Reproducibility.} Fixed seed (42) throughout. All evaluation decoding is greedy
+(temperature 0). Code, including the full training/evaluation harness and a Kaggle notebook
+reproducing every run in this paper end-to-end, is released at the project repository.
+
+\subsection{A Caveat From Our Own Development History}
+\label{sec:results-caveat}
+
+Before arriving at the methodology in \S\ref{sec:harness}, an earlier version of our own harness
+measured the identical AlphaMaze checkpoint at 99\%, 70\%, 88\%, and 0\% on MazeBench across four
+separate runs within roughly 24 hours, driven by uncontrolled changes to decoding temperature,
+thinking-token budget, and answer-extraction logic, plus (separately) scoring by exact string match
+against one stored reference solution rather than simulating candidate moves against the maze's
+actual structure -- the latter approach can fail a valid-but-different solution that the
+benchmark's own methodology would accept. We report this not as an aside but as direct evidence
+for why \S\ref{sec:harness}'s choices are load-bearing: a small-model spatial-reasoning number
+produced without this care is not obviously trustworthy, on this evidence.
+
+\section{Results}
+\label{sec:results}
+
+\textbf{Results are pending as of this draft.} Baselines (Gemma 4 E2B/E4B and AlphaMaze,
+untrained, on both benchmarks) and the three training recipes had not yet been executed on GPU
+hardware at the time this skeleton was written. Table~\ref{tab:main} shows the structure the final
+results table will follow.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Condition & MazeBench (token) & GridRoute (NL) \\
+\midrule
+AlphaMaze ckpt. (untrained) & TBD & TBD \\
+Gemma 4 E2B (untrained) & TBD & TBD \\
+Gemma 4 E2B, single-format & TBD & TBD \\
+Gemma 4 E2B, mixed-format & TBD & TBD \\
+Gemma 4 E2B, consistency & TBD & TBD \\
+\bottomrule
+\end{tabular}
+\caption{Planned central results table (accuracy / valid-path rate by condition and benchmark).
+To be filled in after training runs; Gemma 4 E4B rows added if it fits the training hardware.}
+\label{tab:main}
+\end{table}
+
+\section{Discussion and Limitations}
+
+\textbf{This is a measurement and engineering contribution, not a new algorithm.} The consistency
+-reward recipe is Elhady et al.'s~\citep{elhady2026} mechanism, applied to a new domain as one of
+three recipes tried, not proposed here as a method. If it happens to win, that is reported as "an
+existing technique transfers here too," not as a contribution in its own right.
+
+\textbf{Our token-maze format is not AlphaMaze's exact format} (\S\ref{sec:method}) -- if the
+mixed or consistency recipes show no effect, this is a confound to check before concluding the
+recipe itself doesn't help.
+
+\textbf{A lightweight failure-category breakdown} (no output, start/end mismatch, obstacle
+collision, out-of-bounds, invalid step) accompanies the main table; a fuller per-recipe failure
+analysis is left as future work given the time available for this submission.
+
+\section{Conclusion}
+
+We report, to our knowledge, the first results for a small (under 8B parameter) on-device language
+model on GridRoute, by extending AlphaMaze's SFT+GRPO recipe to Gemma 4 and testing three training
+recipes for joint performance on GridRoute and MazeBench. We make no algorithmic claim; the
+contribution is an absent measurement, taken carefully, with the harness choices motivated
+directly by errors we demonstrate are real in our own development history. Final results,
+including negative ones, will determine which (if any) of the three recipes is worth
+recommending.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

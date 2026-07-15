@@ -114,6 +114,14 @@ def generate_gridroute_maps(
     return tasks
 
 
+def gridroute_defaults(grid_size: int) -> Tuple[int, int]:
+    """(obstacle_size, num_obstacles) scaled for a given grid size -- shared by
+    every training/eval script so the auto-scaling rule lives in exactly one
+    place instead of being copy-pasted (and able to silently drift) across
+    train_sft.py, train_grpo.py and eval.py."""
+    return (1, 1) if grid_size == 5 else (3, 2)
+
+
 def generate_all_gridroute(seed: int = 42) -> List[GridRouteTask]:
     """Generate all 3 GridRoute configs (1,500 total tasks)."""
     all_tasks = []
@@ -195,6 +203,21 @@ def grid_to_text(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]
         desc += f"Obstacles occupy cells: {obstacles}. "
     desc += "Movement is in 4 cardinal directions (up, down, left, right) with unit steps."
     return desc
+
+
+# The ONE shared instruction for how a model should report its GridRoute NL
+# answer -- imported by eval.py, train_sft.py, and train_grpo.py so SFT
+# training, GRPO training, and evaluation all teach/expect the exact same
+# reporting convention. An earlier version of this project had SFT teach one
+# phrasing ("Output the path as a Python list...") while GRPO/eval expected a
+# different one ("FINAL ANSWER:"), which undermines the whole point of asking
+# for a clean, parseable final answer -- the model was never actually trained
+# on the convention being scored against.
+GRIDROUTE_NL_ANSWER_SUFFIX = (
+    "\n\nThink step by step about the path. After your thinking, output your final answer "
+    "on a new line starting with exactly 'FINAL ANSWER:' followed by a Python list of "
+    "(row,col) tuples, like: FINAL ANSWER: [(0,0), (0,1), (1,1)]"
+)
 
 
 def grid_to_nl_variants(grid: np.ndarray, start: Tuple[int, int], goal: Tuple[int, int]) -> Dict[str, str]:

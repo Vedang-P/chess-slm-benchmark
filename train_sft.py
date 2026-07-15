@@ -1,33 +1,49 @@
-"""SFT fine-tuning on GridRoute — natural language → coordinate path.
+"""SFT warm-start, before GRPO. Phase 1 of the training pipeline.
 
-Phase 1 of the training pipeline. Runs before GRPO.
-Uses TRL's SFTTrainer with 4-bit QLoRA.
+--format nl:     GridRoute NL coordinates only.
+--format token:  our own token-maze format only (src/token_maze.py).
+--format mixed:  NL + token interleaved over the same underlying grids --
+                 matches train_grpo.py's mixed/consistency conditions' data
+                 recipe, so SFT and GRPO warm-start from the same kind of data.
+
+Uses hf_models.load_trainable_model() for backend selection: Gemma 4 (E2B,
+E4B) via Unsloth, everything else via bitsandbytes+peft. NL prompts use the
+same GRIDROUTE_NL_ANSWER_SUFFIX ("FINAL ANSWER:" convention) that eval.py and
+train_grpo.py expect -- SFT needs to actually teach that exact reporting
+format, not a different one, or the model was never trained on the
+convention it gets scored against later.
 """
-import argparse, json, os, sys, time
+import argparse
+import sys
+import time
 from pathlib import Path
+
 import numpy as np
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from trl import SFTTrainer
 from datasets import Dataset
+from transformers import TrainingArguments
+from trl import SFTTrainer
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from src.grid_generator import GRIDROUTE_NL_ANSWER_SUFFIX
+
+ALPHAMAZE_LOCAL_PATH = "./data/models/alphamaze-v0.2-1.5b"
 MODEL_PRESETS = {
     "deepseek-r1-distill-qwen-1.5b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
     "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+    "alphamaze": ALPHAMAZE_LOCAL_PATH,
+    "gemma4-e2b": "google/gemma-4-E2B-it",
+    "gemma4-e4b": "google/gemma-4-E4B-it",
 }
 
-def build_sft_dataset(n_tasks: int, grid_size: int = 10, seed: int = 42) -> Dataset:
-    """GridRoute NL prompts → coordinate path pairs for SFT."""
-    from src.grid_generator import generate_gridroute_maps
+
+def build_sft_dataset(fmt: str, n_tasks: int, grid_size: int = 5, seed: int = 42) -> Dataset:
+    """GridRoute tasks -> (prompt, completion) pairs, A* ground-truth paths."""
     from src.astar_solver import astar
+    from src.grid_generator import generate_gridroute_maps, gridroute_defaults
+    from src import token_maze
 
-    # Auto-adjust obstacle config for grid size
-    obs_size = 1 if grid_size == 5 else 3
-    n_obs = 1 if grid_size == 5 else 2
-
+    obs_size, n_obs = gridroute_defaults(grid_size)
     tasks = generate_gridroute_maps(
         size=grid_size, obstacle_size=obs_size, num_obstacles=n_obs,
         num_maps=100, pairs_per_map=5, seed=seed,
@@ -38,11 +54,19 @@ def build_sft_dataset(n_tasks: int, grid_size: int = 10, seed: int = 42) -> Data
     rows = {"prompt": [], "completion": []}
     for i in idx:
         t = tasks[i]
-        instruction = t.nl_variants["direct"]
-        path = astar(t.grid, t.start, t.goal)
-        path_str = str([(int(x), int(y)) for x, y in path])
-        rows["prompt"].append(instruction + "\n\nOutput the path as a Python list of (row,col) tuples.")
-        rows["completion"].append(path_str)
+        grid = np.array(t.grid)
+        path = astar(grid, t.start, t.goal)
+
+        formats = [fmt] if fmt != "mixed" else ["nl", "token"]
+        for f in formats:
+            if f == "token":
+                prompt = token_maze.TASK_INSTRUCTION + "\n\n" + token_maze.grid_to_token_maze(grid, t.start, t.goal)
+                completion = token_maze.path_to_moves(path)
+            else:
+                prompt = t.nl_variants["direct"] + GRIDROUTE_NL_ANSWER_SUFFIX
+                completion = "FINAL ANSWER: " + str([(int(x), int(y)) for x, y in path])
+            rows["prompt"].append(prompt)
+            rows["completion"].append(completion)
 
     return Dataset.from_dict(rows)
 
@@ -57,48 +81,46 @@ def format_sft(example):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SFT fine-tuning for GridRoute spatial reasoning")
-    parser.add_argument("--model", default="deepseek-r1-distill-qwen-1.5b")
+    parser = argparse.ArgumentParser(description="SFT warm-start for GridRoute + MazeBench spatial reasoning")
+    parser.add_argument("--model", default="deepseek-r1-distill-qwen-1.5b",
+                         help="Model shorthand (%s) or full HuggingFace model ID." % ", ".join(MODEL_PRESETS))
     parser.add_argument("--model_path", default="", help="Local path (overrides --model)")
+    parser.add_argument("--format", choices=["nl", "token", "mixed"], default="nl")
     parser.add_argument("--n_tasks", type=int, default=400)
     parser.add_argument("--grid_size", type=int, default=5)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--grad_accum", type=int, default=4)
-    parser.add_argument("--max_seq_length", type=int, default=1024)
-    parser.add_argument("--output_dir", default="./results/sft_deepseek")
+    parser.add_argument("--max_seq_length", type=int, default=2048,
+                         help="Default raised from 1024: GridRoute completions now include a "
+                              "'FINAL ANSWER:' preamble and token-format completions can be long.")
+    parser.add_argument("--output_dir", default="")
     parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--lora_r", type=int, default=16)
+    parser.add_argument("--lora_alpha", type=int, default=16)
+    parser.add_argument("--load_in_4bit", action="store_true", default=True)
+    parser.add_argument("--no_4bit", dest="load_in_4bit", action="store_false")
     args = parser.parse_args()
     model_id = args.model_path if args.model_path else MODEL_PRESETS.get(args.model, args.model)
+    if not args.output_dir:
+        args.output_dir = f"./results/sft_{args.model}_{args.format}"
+
     print(f"Model: {model_id}")
-    print(f"Tasks: {args.n_tasks}, Grid: {args.grid_size}x{args.grid_size}, Epochs: {args.epochs}, LR: {args.lr}")
+    print(f"Format: {args.format}  Tasks: {args.n_tasks}  Grid: {args.grid_size}x{args.grid_size}  "
+          f"Epochs: {args.epochs}  LR: {args.lr}")
 
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    from hf_models import load_trainable_model
+    model, tokenizer, backend = load_trainable_model(
+        model_id, load_in_4bit=args.load_in_4bit, max_seq_length=args.max_seq_length,
+        lora_r=args.lora_r, lora_alpha=args.lora_alpha,
+    )
+    print(f"Model + LoRA ready (backend={backend})")
 
-    # Load model with 4-bit
-    bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_use_double_quant=True,
-                              bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, quantization_config=bnb, device_map="auto", trust_remote_code=True)
-    model = prepare_model_for_kbit_training(model)
-
-    # LoRA
-    lora = LoraConfig(r=16, lora_alpha=16, lora_dropout=0, bias="none",
-                       target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                                        "gate_proj", "up_proj", "down_proj"],
-                       task_type="CAUSAL_LM")
-    model = get_peft_model(model, lora)
-    model.enable_input_require_grads()
-
-    # Dataset
-    print(f"Building SFT dataset ({args.n_tasks} tasks, {args.grid_size}x{args.grid_size})...")
-    dataset = build_sft_dataset(args.n_tasks, grid_size=args.grid_size)
+    print(f"Building SFT dataset ({args.format}, {args.n_tasks} tasks, {args.grid_size}x{args.grid_size})...")
+    dataset = build_sft_dataset(args.format, args.n_tasks, grid_size=args.grid_size)
+    print(f"  {len(dataset)} training rows.")
     dataset = dataset.map(format_sft, remove_columns=dataset.column_names)
 
-    # Train
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
@@ -114,7 +136,7 @@ def main():
 
     trainer = SFTTrainer(
         model=model, args=training_args, train_dataset=dataset,
-        tokenizer=tokenizer, max_seq_length=args.max_seq_length,
+        processing_class=tokenizer, max_seq_length=args.max_seq_length,
     )
 
     print(f"Starting SFT: {args.epochs} epoch(s), {len(dataset)} examples")
