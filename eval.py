@@ -274,6 +274,19 @@ def main():
     p.add_argument("--output_dir", default="./results/eval")
     args = p.parse_args()
 
+    # AlphaMaze never quantizes, regardless of --load_in_4bit/--no_4bit --
+    # enforced here rather than left to every call site remembering to pass
+    # --no_4bit. It's the one fixed reference point every other number in
+    # this project gets compared against (the Phase 1 replication check
+    # exists specifically to confirm this harness reproduces its published
+    # ~93%), and it's never trained further in Phase 2 -- there's no
+    # training-time VRAM constraint forcing a quantization tradeoff here the
+    # way there is for Gemma 4, so there's no reason to ever accept the
+    # noise 4-bit adds to this specific model's numbers.
+    if args.model == "alphamaze" and args.load_in_4bit:
+        print("Note: AlphaMaze always runs full precision (ignoring --load_in_4bit default).")
+        args.load_in_4bit = False
+
     model_path = resolve_model_path(args)
     print(f"Model: {model_path}" + (f"  + adapter: {args.checkpoint}" if args.checkpoint else ""))
     print(f"4bit={args.load_in_4bit}  backend={args.backend}  benchmark={args.benchmark}")

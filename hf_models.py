@@ -565,6 +565,21 @@ def extract_reported_answer(text: str, finished: bool = True, require_marker: bo
     m = re.search(r"FINAL\s*ANSWER\s*:\s*(.+)", remaining, re.IGNORECASE | re.DOTALL)
     if m:
         return m.group(1).strip()
+    # \boxed{...} recognized as an equally valid final-answer marker, not
+    # just a formatting failure -- confirmed directly on a real generation:
+    # AlphaMaze (built on DeepSeek-R1-Distill-Qwen-1.5B) reported
+    # \boxed{[(3,1)]} instead of the requested "FINAL ANSWER:" line.
+    # \boxed{} is DeepSeek-R1-distill's own deeply-trained final-answer
+    # convention, independent of whatever a given prompt asks for -- a
+    # correct path reported this way would otherwise score as a complete
+    # non-answer (require_marker=True returns None below) rather than what
+    # it actually is: a genuine answer in a different, equally legitimate
+    # format. Non-greedy up to the first "}" is deliberately simple (a
+    # coordinate list like [(3,1)] never itself contains "{"), not a general
+    # brace-balancing parser.
+    m = re.search(r"\\boxed\{(.*?)\}", remaining, re.DOTALL)
+    if m:
+        return m.group(1).strip()
     if require_marker:
         return None
     return remaining.strip() or None
