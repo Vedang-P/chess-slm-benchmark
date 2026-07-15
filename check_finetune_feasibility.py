@@ -59,8 +59,15 @@ def check(key: str, model_id: str) -> dict:
         # ── forward + backward ──
         print("  Running forward+backward (seq_len<=256, batch=1)...")
         model.train()
+        # text= as an explicit keyword, not a bare positional arg: Gemma 4's
+        # processor is a multimodal ProcessorMixin (__call__(images=,
+        # text=, videos=, ...)), and Unsloth's patched __call__ wrapper reads
+        # `text` by keyword -- a positional string here silently becomes
+        # `text=None` instead of erroring, and Gemma4's own processor then
+        # crashes on `text[0]` with the unhelpful 'NoneType' object is not
+        # subscriptable (confirmed via the full traceback, not a guess).
         dummy_input = tokenizer(
-            "Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
+            text="Find the shortest path from (0,0) to (9,9) avoiding obstacles.",
             return_tensors="pt", truncation=True, max_length=256,
         )
         # .to(model.device), not a bare .cuda() -- explicit about landing on
