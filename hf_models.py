@@ -262,7 +262,8 @@ class HFModel:
         training. Not usable for Gemma 4 -- see load_trainable_model()."""
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
-        self.model = prepare_model_for_kbit_training(self.model)
+        self.model.config.use_cache = False
+        self.model = prepare_model_for_kbit_training(self.model, use_gradient_checkpointing=True)
         lora_config = LoraConfig(
             r=r, lora_alpha=lora_alpha,
             target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
@@ -447,7 +448,16 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
         )
     if use_gemma4:
         _fix_gemma4_dtype_mismatches(model)
-    model = prepare_model_for_kbit_training(model)
+    # use_cache=False: caching is for autoregressive generation, not training
+    # (nothing to cache across steps when processing a full sequence at
+    # once) -- leaving it on wastes memory holding KV state the backward
+    # pass never uses, and gradient checkpointing (enabled explicitly below,
+    # not left to prepare_model_for_kbit_training's default, since that
+    # default has changed across peft versions and this is directly the
+    # thing to check first when VRAM is the actual problem) requires it off
+    # to recompute activations correctly during the backward pass anyway.
+    model.config.use_cache = False
+    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
     if adapter_path:
         # is_trainable=True: peft's documented pattern for resuming training
         # on a saved adapter -- without it, PeftModel.from_pretrained loads
