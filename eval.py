@@ -136,7 +136,9 @@ def eval_mazebench(model: HFModel, n: int, seed: int, max_new_tokens: int) -> di
     for i, j in pbar:
         row = ds[int(j)]
         prompt = f"{MAZEBENCH_SYS}\n\nMAZE: {row['Prompt']}"
+        tqdm.write(f"  [{i + 1}/{len(idx)}] generating (streamed below)...")
         gen = model.generate(prompt, max_new_tokens=max_new_tokens, temperature=0.0)
+        print()  # streamed tokens don't end with a newline of their own
         answer = extract_reported_answer(gen["content"], finished=gen["finished"], require_marker=False)
 
         gt = re.findall(r"<\|(?:up|down|left|right)\|>", row["Response"])
@@ -209,7 +211,9 @@ def eval_gridroute(model: HFModel, n: int, seed: int, grid_size: int, fmt: str, 
         else:
             prompt = t.nl_variants["direct"] + GRIDROUTE_NL_ANSWER_SUFFIX
 
+        tqdm.write(f"  [{i + 1}/{len(idx)}] generating (streamed below)...")
         gen = model.generate(prompt, max_new_tokens=max_new_tokens, temperature=0.0)
+        print()  # streamed tokens don't end with a newline of their own
         # NL format explicitly asks for a "FINAL ANSWER:" line (require_marker=True);
         # token format doesn't use that convention, just move tokens after
         # thinking closes. Either way, never fall back to scanning the raw

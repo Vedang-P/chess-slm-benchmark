@@ -274,7 +274,7 @@ class HFModel:
         return self
 
     def generate(self, prompt: str, max_new_tokens: int = 4096, temperature: float = 0.0,
-                 top_p: float = 1.0, repetition_penalty: float = 1.0) -> dict:
+                 top_p: float = 1.0, repetition_penalty: float = 1.0, stream: bool = True) -> dict:
         """Returns dict(content, input_tokens, output_tokens, latency_ms, finished).
         `finished` is True iff generation ended on its own (EOS) rather than
         hitting max_new_tokens -- a truncated generation shouldn't be trusted
@@ -311,6 +311,18 @@ class HFModel:
             gen_kwargs["temperature"] = temperature
             gen_kwargs["top_p"] = top_p
             gen_kwargs["repetition_penalty"] = repetition_penalty
+
+        # A single generate() call for a long thinking budget (up to several
+        # thousand tokens) can run for minutes with zero visible output --
+        # tqdm alone doesn't help here (it can only update once per whole
+        # maze/task, not mid-generation), and in a subprocess whose stdout
+        # isn't a real terminal it falls back to reprinting static lines
+        # instead of animating in place anyway. Stream tokens directly to
+        # stdout as they're actually produced, so a long generation reads as
+        # visibly working rather than a silent multi-minute gap.
+        if stream:
+            from transformers import TextStreamer
+            gen_kwargs["streamer"] = TextStreamer(self.tokenizer, skip_prompt=True, skip_special_tokens=True)
 
         with torch.no_grad():
             outputs = self.model.generate(**gen_kwargs)
