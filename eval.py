@@ -36,7 +36,14 @@ from pathlib import Path
 import numpy as np
 from tqdm.auto import tqdm
 
-from hf_models import HFModel, OllamaModel, MODEL_IDS, parse_path_response, extract_reported_answer
+from hf_models import (HFModel, OllamaModel, MODEL_IDS, parse_path_response,
+                        extract_reported_answer, configure_quiet_logging)
+
+# Must run before anything below that might import alphamaze_reference's
+# benchmark/utils.py (which calls logging.basicConfig(level=logging.INFO)
+# itself) -- see configure_quiet_logging()'s docstring for why order matters.
+configure_quiet_logging()
+
 from src.evaluation import _is_collision_free, _is_in_bounds, _is_valid_steps
 from src.grid_generator import generate_gridroute_maps, gridroute_defaults, GRIDROUTE_NL_ANSWER_SUFFIX
 from src import token_maze

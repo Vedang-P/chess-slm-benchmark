@@ -81,6 +81,9 @@ def format_sft(example):
 
 
 def main():
+    from hf_models import configure_quiet_logging
+    configure_quiet_logging()
+
     parser = argparse.ArgumentParser(description="SFT warm-start for GridRoute + MazeBench spatial reasoning")
     parser.add_argument("--model", default="deepseek-r1-distill-qwen-1.5b",
                          help="Model shorthand (%s) or full HuggingFace model ID." % ", ".join(MODEL_PRESETS))

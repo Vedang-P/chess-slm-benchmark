@@ -243,6 +243,9 @@ def make_reward_fn(condition: str, model=None, tokenizer=None, max_completion_le
 
 
 def main():
+    from hf_models import configure_quiet_logging
+    configure_quiet_logging()
+
     parser = argparse.ArgumentParser(
         description="GRPO fine-tuning for on-device spatial reasoning on GridRoute + MazeBench.")
     parser.add_argument("--model", type=str, default="deepseek-r1-distill-qwen-1.5b",

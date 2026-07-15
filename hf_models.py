@@ -25,6 +25,52 @@ import time
 from typing import Optional
 
 
+def configure_quiet_logging():
+    """Suppress library log/warning noise so the only things printed are this
+    project's own progress bars and diagnostic lines. Call this as the very
+    first thing in a script's entry point -- before importing anything else.
+
+    Ordering matters for one specific reason: alphamaze_reference/benchmark/
+    utils.py (imported by eval.py for faithful MazeBench scoring) calls
+    logging.basicConfig(level=logging.INFO) at import time. basicConfig() is
+    a no-op if the root logger already has a handler, so calling it here
+    FIRST (claiming the root logger at a quiet level) prevents that import
+    from silently escalating every other library's logger to INFO globally
+    -- which is what was actually causing most of the "HTTP Request: ...",
+    "TensorFlow version ... available", "NumExpr defaulting to N threads"
+    noise. None of that is this project's own output; it's other libraries'
+    loggers picking up the verbosity AlphaMaze's utils.py's basicConfig call
+    left behind, once something (anything) imports it.
+    """
+    import logging
+    import os
+    import warnings
+
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+    os.environ.setdefault("HF_HUB_VERBOSITY", "error")
+    os.environ.setdefault("DATASETS_VERBOSITY", "error")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+    logging.basicConfig(level=logging.ERROR)
+    warnings.filterwarnings("ignore")
+    for name in ("transformers", "datasets", "huggingface_hub", "urllib3", "filelock", "numexpr"):
+        logging.getLogger(name).setLevel(logging.ERROR)
+
+    # Best-effort only: this is a cosmetic step, never let it crash the
+    # actual run (e.g. an incomplete/mocked module, or a library version
+    # that has moved these functions, should just be silently skipped).
+    try:
+        import transformers
+        transformers.logging.set_verbosity_error()
+    except Exception:
+        pass
+    try:
+        import datasets
+        datasets.logging.set_verbosity_error()
+    except Exception:
+        pass
+
+
 MODEL_IDS = {
     # confirmed trainable on 6 GB with 4-bit LoRA (+GRPO) via bitsandbytes+peft
     # -- see check_finetune_feasibility.py
@@ -149,11 +195,11 @@ class HFModel:
             )
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id, quantization_config=bnb_config, device_map={"": 0},
-                trust_remote_code=True, torch_dtype=torch.bfloat16,
+                trust_remote_code=True, dtype=torch.bfloat16,
             )
         else:
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_id, device_map={"": 0}, trust_remote_code=True, torch_dtype=torch.bfloat16,
+                model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
             )
 
         if self.adapter_path:
@@ -339,11 +385,11 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
         )
         model = AutoModelForCausalLM.from_pretrained(
             model_id, quantization_config=bnb_config, device_map={"": 0},
-            trust_remote_code=True, torch_dtype=torch.bfloat16,
+            trust_remote_code=True, dtype=torch.bfloat16,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, device_map={"": 0}, trust_remote_code=True, torch_dtype=torch.bfloat16,
+            model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
         )
     model = prepare_model_for_kbit_training(model)
     lora_config = LoraConfig(r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,

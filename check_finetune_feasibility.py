@@ -122,6 +122,9 @@ def check(key: str, model_id: str) -> dict:
 
 
 if __name__ == "__main__":
+    from hf_models import configure_quiet_logging
+    configure_quiet_logging()
+
     if not torch.cuda.is_available():
         print("❌ CUDA not available — cannot run feasibility check.")
         exit(1)
