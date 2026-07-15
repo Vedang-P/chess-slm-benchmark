@@ -280,6 +280,12 @@ def main():
                               "is also the single biggest lever on wall-clock cost since it applies "
                               "per completion x num_generations, so run the timing test below before "
                               "committing to a full step count, and lower it if Kaggle quota is tight)")
+    parser.add_argument("--adapter_path", type=str, default="",
+                         help="Continue training a previously-saved LoRA adapter (e.g. train_sft.py's "
+                              "--output_dir) on top of --model, instead of attaching a fresh one. "
+                              "Without this, GRPO always starts from the untrained base model and "
+                              "silently ignores any preceding SFT run -- this is how you actually "
+                              "chain SFT -> GRPO.")
     parser.add_argument("--output_dir", type=str, default="")
     args = parser.parse_args()
     if not args.output_dir:
@@ -306,13 +312,20 @@ def main():
         print("⚠️  NOTE: --no_4bit is set.  Full-precision weights may OOM on 6 GB GPUs.")
 
     from trl import GRPOConfig, GRPOTrainer
-    from hf_models import load_trainable_model
+    from hf_models import is_gemma4, load_trainable_model
 
-    print(f"Loading {model_id} (4bit={args.load_in_4bit}, seq_len={args.max_seq_length})...")
+    print(f"Loading {model_id} (4bit={args.load_in_4bit}, seq_len={args.max_seq_length})..."
+          + (f" + adapter {args.adapter_path}" if args.adapter_path else ""))
     t0 = time.time()
     model, tokenizer, backend = load_trainable_model(
         model_id, load_in_4bit=args.load_in_4bit, max_seq_length=args.max_seq_length,
         lora_r=args.lora_r, lora_alpha=args.lora_alpha,
+        adapter_path=args.adapter_path or None,
+        # args.model is the shorthand/HF-ID (e.g. "gemma4-e2b"); model_id may
+        # already equal it here since --adapter_path doesn't change model_id
+        # (unlike train_sft.py's --model_path) -- passed explicitly anyway so
+        # this stays correct if that ever changes.
+        force_gemma4=is_gemma4(args.model),
     )
     print(f"Model + LoRA ready in {time.time()-t0:.1f}s (backend={backend})")
 
@@ -363,6 +376,16 @@ def main():
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
     print(f"Adapter saved to {args.output_dir}")
+
+    # Written on every run (not just explicit timing tests) so a caller (e.g.
+    # the Kaggle notebook) can size a LATER stage's --max_steps from an
+    # EARLIER stage's measured per-step cost without parsing stdout --
+    # needed for unattended "Save & Run All" execution, where there's no
+    # human reading the timing printout between cells to decide the next one.
+    timing = {"condition": args.condition, "model": args.model, "steps": args.max_steps,
+              "elapsed_s": elapsed, "per_step_s": elapsed / args.max_steps}
+    with open(Path(args.output_dir) / "timing.json", "w") as f:
+        json.dump(timing, f, indent=2)
 
 
 if __name__ == "__main__":

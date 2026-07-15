@@ -325,7 +325,8 @@ class OllamaModel:
 
 
 def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_length: int = 2048,
-                          lora_r: int = 16, lora_alpha: int = 16):
+                          lora_r: int = 16, lora_alpha: int = 16, adapter_path: str = None,
+                          force_gemma4: bool = None):
     """Load a model + attach a LoRA adapter, ready for SFTTrainer/GRPOTrainer.
     Used by train_sft.py and train_grpo.py so both scripts share one place
     that knows which models need which backend.
@@ -336,13 +337,32 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     test on this project's hardware, not a guess). Everything else goes
     through the plain bitsandbytes+peft path used throughout this project.
 
+    adapter_path: if given, `model_id` is still the BASE model (e.g. the
+    shorthand/HF ID GRPO should keep resolving VRAM/backend warnings against),
+    and an EXISTING LoRA adapter is loaded on top of it from this local
+    directory, continuing training from there (e.g. GRPO continuing from an
+    SFT warm-start) -- rather than attaching a fresh, randomly-initialized
+    adapter, which is what happens if this is left unset. Without this,
+    "continue training" would silently discard whatever the prior stage
+    actually learned and start over from the untrained base model, which is
+    exactly the bug this parameter exists to close (see train_grpo.py's
+    --model_path).
+
+    force_gemma4: explicitly say whether this is a Gemma 4 model, overriding
+    the is_gemma4(model_id) string-match. Needed because a local checkpoint
+    directory (e.g. "./results/sft_run_1") won't necessarily contain
+    "gemma4"/"gemma-4" in its name the way a model shorthand/HF ID does --
+    callers should pass is_gemma4(<the original --model shorthand>) here
+    whenever `model_id` might be a local path rather than that shorthand.
+
     Returns (model, tokenizer, backend_name) -- backend_name is "unsloth" or
     "bnb_peft", useful for logging/debugging which path was taken.
     """
     target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
                        "gate_proj", "up_proj", "down_proj"]
+    use_gemma4 = is_gemma4(model_id) if force_gemma4 is None else force_gemma4
 
-    if is_gemma4(model_id):
+    if use_gemma4:
         from unsloth import FastLanguageModel
         # device_map={"": 0}: same reasoning as the bnb_peft path below --
         # without it, on a multi-GPU box Unsloth's own device selection isn't
@@ -354,26 +374,46 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
             model_name=model_id, max_seq_length=max_seq_length,
             dtype=None, load_in_4bit=load_in_4bit, device_map={"": 0},
         )
-        # Explicit finetune_*_layers/modules flags, not left to Unsloth's
-        # defaults -- Unsloth intersects target_modules with these filters
-        # ("adapters attach only where both select"), and Gemma 4's Unsloth
-        # loader is vision-model-aware even for text-only "it" checkpoints.
-        # We're doing text-only spatial reasoning, so vision layers are off.
-        model = FastLanguageModel.get_peft_model(
-            model, r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
-            finetune_vision_layers=False, finetune_language_layers=True,
-            finetune_attention_modules=True, finetune_mlp_modules=True,
-            lora_dropout=0, bias="none", use_gradient_checkpointing="unsloth", random_state=42,
-        )
+        if adapter_path:
+            # Continue training a previously-saved adapter. NOT independently
+            # confirmed against real Unsloth output as of this writing (no
+            # GPU access in this session) -- Unsloth's from_pretrained is
+            # documented to auto-detect and load a saved LoRA checkpoint
+            # directly when pointed at one, so this loads the base model
+            # fresh and then attaches the saved adapter via PeftModel with
+            # is_trainable=True (peft's own documented "resume training a
+            # saved adapter" pattern) rather than relying on that
+            # auto-detection, since we already have the base model loaded
+            # here. VERIFY the printed backend/adapter path against what you
+            # expect on the first real run -- if this is wrong, the symptom
+            # would be GRPO training an adapter that doesn't reflect the
+            # preceding SFT stage, not a crash, so it's worth checking once.
+            from peft import PeftModel
+            print(f"  [load_trainable_model] loading saved adapter from {adapter_path} "
+                  f"(is_trainable=True) on top of base {model_id}")
+            model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
+        else:
+            # Explicit finetune_*_layers/modules flags, not left to Unsloth's
+            # defaults -- Unsloth intersects target_modules with these filters
+            # ("adapters attach only where both select"), and Gemma 4's Unsloth
+            # loader is vision-model-aware even for text-only "it" checkpoints.
+            # We're doing text-only spatial reasoning, so vision layers are off.
+            model = FastLanguageModel.get_peft_model(
+                model, r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
+                finetune_vision_layers=False, finetune_language_layers=True,
+                finetune_attention_modules=True, finetune_mlp_modules=True,
+                lora_dropout=0, bias="none", use_gradient_checkpointing="unsloth", random_state=42,
+            )
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
         return model, tokenizer, "unsloth"
 
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+    tokenizer_source = adapter_path if adapter_path else model_id
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -392,9 +432,18 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
             model_id, device_map={"": 0}, trust_remote_code=True, dtype=torch.bfloat16,
         )
     model = prepare_model_for_kbit_training(model)
-    lora_config = LoraConfig(r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
-                              lora_dropout=0, bias="none", task_type="CAUSAL_LM")
-    model = get_peft_model(model, lora_config)
+    if adapter_path:
+        # is_trainable=True: peft's documented pattern for resuming training
+        # on a saved adapter -- without it, PeftModel.from_pretrained loads
+        # the adapter frozen (inference-only), and GRPO would have nothing
+        # trainable to update, silently or via an obscure error.
+        print(f"  [load_trainable_model] loading saved adapter from {adapter_path} "
+              f"(is_trainable=True) on top of base {model_id}")
+        model = PeftModel.from_pretrained(model, adapter_path, is_trainable=True)
+    else:
+        lora_config = LoraConfig(r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
+                                  lora_dropout=0, bias="none", task_type="CAUSAL_LM")
+        model = get_peft_model(model, lora_config)
     model.enable_input_require_grads()
     return model, tokenizer, "bnb_peft"
 

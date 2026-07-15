@@ -112,10 +112,15 @@ def main():
     print(f"Format: {args.format}  Tasks: {args.n_tasks}  Grid: {args.grid_size}x{args.grid_size}  "
           f"Epochs: {args.epochs}  LR: {args.lr}")
 
-    from hf_models import load_trainable_model
+    from hf_models import is_gemma4, load_trainable_model
     model, tokenizer, backend = load_trainable_model(
         model_id, load_in_4bit=args.load_in_4bit, max_seq_length=args.max_seq_length,
         lora_r=args.lora_r, lora_alpha=args.lora_alpha,
+        # --model_path replaces model_id above with a local path (e.g. a
+        # full merged checkpoint like AlphaMaze's), which won't necessarily
+        # contain "gemma4" in its name -- pass the real hint explicitly
+        # rather than relying on is_gemma4() to guess from that path.
+        force_gemma4=is_gemma4(args.model),
     )
     print(f"Model + LoRA ready (backend={backend})")
 
