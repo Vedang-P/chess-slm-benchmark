@@ -1,0 +1,1466 @@
+{
+  "model": "AlphaMaze-v0.2-1.5B (SFT+GRPO)",
+  "mazebench": {
+    "correct": 0,
+    "total": 10,
+    "accuracy_pct": 0.0,
+    "results": [
+      {
+        "idx": 0,
+        "level": "easy",
+        "correct": false,
+        "gt": [
+          "down",
+          "left",
+          "down"
+        ],
+        "pred": [
+          "right"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_right_wall|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|blank|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|blank|><|blank|><|4-4|><|down_right_wall|><|blank|>\nHit or miss your maze.\n</think>\n\n<|right|>",
+        "ntokens": 41,
+        "time": 1.2
+      },
+      {
+        "idx": 10,
+        "level": "easy",
+        "correct": false,
+        "gt": [
+          "right",
+          "right",
+          "right",
+          "right"
+        ],
+        "pred": [
+          "up",
+          "down",
+          "up"
+        ],
+        "raw": "<think>\nStep 1: Go up\n<|0-0|><|up_down_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|up_left_wall|><|blank|><|1-1|><|up_down_wall|><|blank|><|1-2|><|right_wall|><|blank|><|1-3|><|up_left_right_wall|><|blank|><|1-4|><|left_right_wall|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|up_left_wall|><|blank|><|2-2|><|down_right_wall|><|blank|><|2-3|><|down_left_wall|><|blank|><|2-4|><|up_right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|down_left_right_wall|><|blank|><|3-2|><|up_left_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|down_right_wall|><|blank|>\n<|4-0|><|down_left_wall|><|up|><|4-1|><|up_down_wall|><|blank|><|4-2|><|down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\nHit a dead end.\nRESET.\nStep 1: Go right\n<|0-0|><|up_down_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|up_left_wall|><|blank|><|1-1|><|up_down_wall|><|blank|><|1-2|><|right_wall|><|blank|><|1-3|><|up_left_right_wall|><|blank|><|1-4|><|left_right_wall|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|up_left_wall|><|blank|><|2-2|><|down_right_wall|><|blank|><|2-3|><|down_left_wall|><|blank|><|2-4|><|up_right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|origin|><|3-1|><|down_left_right_wall|><|blank|><|3-2|><|up_left_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|down_right_wall|><|blank|><|4-3|><|up_down_left_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\nHit a dead end.\nRESET.\nStep 1: Go down\n<|0-0|><|up_down_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|up_left_wall|><|blank|><|1-1|><|up_down_wall|><|blank|><|1-2|><|right_wall|><|blank|><|1-3|><|up_left_right_wall|><|blank|><|1-4|><|left_right_wall|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|up_left_wall|><|blank|><|2-2|><|down_right_wall|><|blank|><|2-3|><|down_left_wall|><|blank|><|2-4|><|up_right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|down|><|3-1|><|down_left_right_wall|><|blank|><|3-2|><|up_left_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|down_right_wall|><|blank|><|4-3|><|up_down_left_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\nHit a dead end.\nRESET.\nStep 1: Go left\n<|0-0|><|up_down_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|up_left_wall|><|blank|><|1-1|><|up_down_wall|><|blank|><|1-2|><|right_wall|><|blank|><|1-3|><|up_left_right_wall|><|blank|><|1-4|><|left_right_wall|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|up_left_wall|><|blank|><|2-2|><|down_right_wall|><|blank|><|2-3|><|down_left_wall|><|blank|><|2-4|><|up_right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|origin|><|3-1|><|down_left_right_wall|><|blank|><|3-2|><|up_left_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|down_right_wall|><|blank|><|4-3|><|up_down_left_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\nHit a dead end.\nRESET.\nStep 1: Go up\n<|0-0|><|up_down_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|up_left_wall|><|blank|><|1-1|><|up_down_wall|><|blank|><|1-2|><|right_wall|><|blank|><|1-3|><|up_left_right_wall|><|blank|><|1-4|><|left_right_wall|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|up_left_wall|><|blank|><|2-2|><|down_right_wall|><|blank|><|2-3|><|down_left_wall|><|blank|><|2-4|><|up_right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|origin|><|3-1|><|down_left_right_wall|><|blank|><|3-2|><|up_left_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|down_right_wall|><|blank|><|4-3|><|up_down_left_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\nHit a dead end.\nRESET.\nStep 1: Go right\n<|0-0|><|up_down_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|up_left_wall|><|blank|><|1-1|><|up_down_wall|><|blank|><|1-2|><|right_wall|><|blank|><|1-3|><|up_left_right_wall|><|blank|><|1-4|><|left_right_wall|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|up_left_wall|><|blank|><|2-2|><|down_right_wall|><|blank|><|2-3|><|down_left_wall|><|blank|><|2-4|><|up_right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|origin|><|3-1|><|down_left_right_wall|><|blank|><|3-2|><|up_left_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|down_right_wall|><|blank|><|4-3|><|up_down_left_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\n</think>\n\n<|up|>",
+        "ntokens": 563,
+        "time": 11.4
+      },
+      {
+        "idx": 22,
+        "level": "easy",
+        "correct": false,
+        "gt": [
+          "left",
+          "left",
+          "up"
+        ],
+        "pred": [
+          "up"
+        ],
+        "raw": "<think>\nStep 1: Go up\n<|0-0|><|up_down_left_wall|><|blank|><|0-1|><|up_right_wall|><|blank|><|0-2|><|up_left_wall|><|blank|><|0-3|><|up_right_wall|><|blank|><|0-4|><|up_left_right_wall|><|blank|>\n<|1-0|><|up_left_wall|><|blank|><|1-1|><|down_right_wall|><|blank|><|1-2|><|down_left_wall|><|blank|><|1-3|><|down_right_wall|><|blank|><|1-4|><|left_right_wall|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|up_left_wall|><|blank|><|2-2|><|up_down_wall|><|blank|><|2-3|><|up_down_wall|><|blank|><|2-4|><|right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|left_right_wall|><|blank|><|3-2|><|up_left_wall|><|target|><|3-3|><|up_down_wall|><|blank|><|3-4|><|down_right_wall|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|down_right_wall|><|blank|><|4-2|><|down_left_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\n</think>\n\n<|up|>",
+        "ntokens": 93,
+        "time": 1.9
+      },
+      {
+        "idx": 39,
+        "level": "easy",
+        "correct": false,
+        "gt": [
+          "right",
+          "down",
+          "left"
+        ],
+        "pred": [
+          "left",
+          "left",
+          "left",
+          "left"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_down_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|blank|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|down_right_wall|><|blank|>\n<|4-0|><|up_left_wall|><|blank|><|2-1|><|up_down_wall|><|blank|><|3-2|><|down_right_wall|><|blank|><|2-3|><|up_left_wall|><|blank|><|2-4|><|up_right_wall|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|up_left_wall|><|blank|><|3-2|><|up_down_wall|><|blank|><|3-3|><|down_right_wall|><|blank|><|3-4|><|left_right_wall|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|down_right_wall|><|blank|>\n\nStep 1: Go left\n<|0-0|><|up_left_wall|><|blank|><|0-1|><|blank|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_down_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|left_right_wall|><|blank|><|1-1|><|up_left_wall|><|blank|><|1-2|><|down_right_wall|><|blank|><|1-3|><|up_left_wall|><|blank|><|1-4|><|blank|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|down_left_wall|><|blank|><|2-2|><|blank|><|blank|><|2-3|><|blank|><|blank|><|2-4|><|blank|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|up_left_wall|><|blank|><|3-2|><|up_down_wall|><|blank|><|3-3|><|blank|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|blank|><|blank|>\n\nStep 2: Go left\n<|0-0|><|up_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_down_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|left_right_wall|><|blank|><|1-1|><|up_left_wall|><|blank|><|1-2|><|down_right_wall|><|blank|><|1-3|><|up_left_wall|><|blank|><|1-4|><|blank|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|down_left_wall|><|blank|><|2-2|><|up_down_wall|><|blank|><|2-3|><|blank|><|blank|><|2-4|><|blank|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|up_left_wall|><|blank|><|3-2|><|up_down_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|blank|><|blank|>\n\nStep 3: Go left\n<|0-0|><|up_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_down_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|left_right_wall|><|blank|><|1-1|><|up_left_wall|><|blank|><|1-2|><|down_right_wall|><|blank|><|1-3|><|up_left_wall|><|blank|><|1-4|><|blank|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|down_left_wall|><|blank|><|2-2|><|up_down_wall|><|blank|><|2-3|><|up_down_wall|><|blank|><|2-4|><|blank|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|up_left_wall|><|blank|><|3-2|><|up_down_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|blank|><|blank|>\n\nStep 4: Go left\n<|0-0|><|up_left_wall|><|blank|><|0-1|><|up_down_wall|><|blank|><|0-2|><|up_right_wall|><|blank|><|0-3|><|up_down_left_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|1-0|><|left_right_wall|><|blank|><|1-1|><|up_left_wall|><|blank|><|1-2|><|down_right_wall|><|blank|><|1-3|><|up_left_wall|><|blank|><|1-4|><|blank|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|down_left_wall|><|blank|><|2-2|><|up_down_wall|><|blank|><|2-3|><|up_down_wall|><|blank|><|2-4|><|blank|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|up_left_wall|><|blank|><|3-2|><|up_down_wall|><|blank|><|3-3|><|up_down_wall|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|blank|><|blank|>\nHit a dead End.\n</think>\n\n<|left|><|left|><|left|><|left|>",
+        "ntokens": 438,
+        "time": 8.9
+      },
+      {
+        "idx": 44,
+        "level": "easy",
+        "correct": false,
+        "gt": [
+          "right",
+          "down"
+        ],
+        "pred": [
+          "left"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_right_wall|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|blank|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\nHit or miss your starting position.\n</think>\n\n<|left|>",
+        "ntokens": 42,
+        "time": 0.9
+      },
+      {
+        "idx": 45,
+        "level": "easy",
+        "correct": false,
+        "gt": [
+          "down",
+          "right",
+          "right",
+          "right"
+        ],
+        "pred": [
+          "left"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_right_wall|><|blank|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|blank|><|blank|><|4-3|><|blank|><|blank|><|4-4|><|blank|><|blank|>\n<|4-0|><|up_left_wall|><|blank|><|2-1|><|up_down_wall|><|blank|><|2-2|><|blank|><|blank|><|2-3|><|blank|><|blank|><|2-4|><|blank|><|blank|>\n<|3-0|><|down_left_wall|><|blank|><|3-1|><|up_down_wall|><|blank|><|3-2|><|blank|><|blank|><|3-3|><|blank|><|blank|><|3-4|><|blank|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|blank|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|down_right_wall|><|blank|>\nHit or miss your path with a smart move.\n</think>\n\n<|left|>",
+        "ntokens": 109,
+        "time": 2.3
+      },
+      {
+        "idx": 53,
+        "level": "medium",
+        "correct": false,
+        "gt": [
+          "left",
+          "left",
+          "down",
+          "right",
+          "down",
+          "down",
+          "right",
+          "right"
+        ],
+        "pred": [
+          "left"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_right_wall|><|blank|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|blank|><|blank|><|4-4|><|down_right_wall|><|blank|><\uff5cAssistant\uff5c><think>\nStep 1: Go left\n<|0-0|><|up_left_wall|><|blank|><|0-1|><|up_right_wall|><|blank|><|0-2|><|up_left_wall|><|blank|><|0-3|><|blank|><|blank|><|0-4|><|blank|><|blank|>\n<|1-0|><|left_right_wall|><|blank|><|1-1|><|left_right_wall|><|blank|><|1-2|><|down_left_wall|><|blank|><|1-3|><|blank|><|blank|><|1-4|><|blank|><|blank|>\n<|2-0|><|left_right_wall|><|blank|><|2-1|><|left_right_wall|><|blank|><|2-2|><|up_down_left_wall|><|blank|><|2-3|><|up_down_wall|><|blank|><|2-4|><|blank|><|blank|>\n<|3-0|><|left_right_wall|><|blank|><|3-1|><|down_left_wall|><|blank|><|3-2|><|up_down_wall|><|blank|><|3-3|><|up_down_wall|><|target|><|3-4|><|blank|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|blank|><|blank|>\nHit a dead End.\n</think>\n\n<|left|>",
+        "ntokens": 129,
+        "time": 2.7
+      },
+      {
+        "idx": 70,
+        "level": "medium",
+        "correct": false,
+        "gt": [
+          "down",
+          "down",
+          "right",
+          "right",
+          "up",
+          "left",
+          "up"
+        ],
+        "pred": [
+          "right"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_right_wall|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|blank|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|blank|><|blank|>\nHit or miss your target.\n</think>\n\n<|right|>",
+        "ntokens": 41,
+        "time": 0.9
+      },
+      {
+        "idx": 80,
+        "level": "medium",
+        "correct": false,
+        "gt": [
+          "right",
+          "right",
+          "down",
+          "down",
+          "down",
+          "down",
+          "left"
+        ],
+        "pred": [
+          "up"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|origin|><|blank|><|up_down_wall|><|blank|><|0-4|><|up_right_wall|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|down_right_wall|><|blank|>\n<|4-0|><|up_left_wall|><|blank|><|2-1|><|up_right_wall|><|blank|><|3-2|><|up_left_wall|><|blank|><|2-3|><|up_right_wall|><|blank|><|2-4|><|left_right_wall|><|blank|>\n<|3-0|><|down_left_right_wall|><|blank|><|3-1|><|left_right_wall|><|blank|><|3-2|><|left_right_wall|><|blank|><|3-3|><|down_left_wall|><|blank|><|3-4|><|right_wall|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|down_right_wall|><|blank|><|4-2|><|down_left_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|down_right_wall|><|blank|>\n<|4-0|><|up_down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|up_right_wall|><|blank|>\nHit or miss your first maze challenge.\n</think>\n\n<|up|>",
+        "ntokens": 106,
+        "time": 2.2
+      },
+      {
+        "idx": 83,
+        "level": "medium",
+        "correct": false,
+        "gt": [
+          "right",
+          "right",
+          "right",
+          "up",
+          "up"
+        ],
+        "pred": [
+          "up"
+        ],
+        "raw": "<|blank|><|blank|><|blank|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_down_wall|><|blank|><|blank|><|up_right_wall|><|blank|><|blank|>\n<|4-0|><|down_left_wall|><|blank|><|4-1|><|up_down_wall|><|blank|><|4-2|><|up_down_wall|><|blank|><|4-3|><|up_down_wall|><|blank|><|4-4|><|down_right_wall|><|blank|>\nHit or miss your first maze challenge. Do you think you're up for it?\n</think>\n\n<|up|>",
+        "ntokens": 52,
+        "time": 1.1
+      }
+    ]
+  },
+  "gridroute": {
+    "valid": 6,
+    "optimal": 0,
+    "total": 10,
+    "valid_pct": 60.0,
+    "optimal_pct": 0.0,
+    "results": [
+      {
+        "idx": 0,
+        "start": [
+          2,
+          4
+        ],
+        "goal": [
+          4,
+          1
+        ],
+        "opt_len": 5,
+        "valid": true,
+        "optimal": false,
+        "path": [
+          [
+            3,
+            1
+          ]
+        ],
+        "path_len": 0,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (2,4) to the target position (4,1) on a 5x5 grid. The grid has an obstacle at (1,3), which I will consider when planning the path.\n\nI'll start by moving up to (2,3) to avoid the obstacle. From (2,3), I can move left to (1,3), but that's blocked, so I'll move left again to (1,2). Now, I can move up to (1,4) and then up to (1,5). From (1,5), I'll move down to (2,5) and then down to (3,5). From (3,5), I'll move left to (3,4) and then left to (3,3). Finally, I'll move up to (3,2) and up to (3,1), which is the target.\n\nAlternatively, I could have moved down from (2,4) to (3,4) and then down to (4,4), but that approach doesn't utilize the grid efficiently. The first path I outlined is more efficient, avoiding the obstacle and reaching the target in fewer steps.\n</think>\n\nTo navigate from (2,4) to (4,1) on a 5x5 grid with an obstacle at (1,3), follow these steps:\n\n1. **Move up to (2,3)**\n2. **Move left to (1,3)**\n   - **Move left to (1,2)**\n3. **Move up to (1,4)**\n4. **Move up to (1,5)**\n5. **Move down to (2,5)**\n6. **Move down to (3,5)**\n7. **Move left to (3,4)**\n8. **Move left to (3,3)**\n9. **Move up to (3,2)**\n10. **Move up to (3,1)**\n\n**Final Answer:**\n\\[\n\\boxed{[(3,1)]}\n\\]",
+        "has_final": true,
+        "ntokens": 446,
+        "time": 8.9
+      },
+      {
+        "idx": 6,
+        "start": [
+          4,
+          4
+        ],
+        "goal": [
+          3,
+          0
+        ],
+        "opt_len": 5,
+        "valid": false,
+        "optimal": false,
+        "path": [
+          [
+            3,
+            1
+          ],
+          [
+            2,
+            9
+          ],
+          [
+            1,
+            9
+          ],
+          [
+            0,
+            9
+          ],
+          [
+            0,
+            8
+          ],
+          [
+            0,
+            7
+          ],
+          [
+            0,
+            6
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "path_len": 15,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (4,4) to the target position (3,0) on a 5x5 grid. The grid has an obstacle at (3,1), which I must consider.\n\nI'll start by moving left from (4,4) to (3,4). Then, I'll move up from (3,4) to (3,5). Next, I'll move up from (3,5) to (3,6). After that, I'll move up from (3,6) to (3,7). Finally, I'll move up from (3,7) to (3,8) and then up to (3,9). At this point, I'll move left from (3,9) to (2,9). Then, I'll move left from (2,9) to (1,9). Moving left from (1,9) to (0,9), and then left to (0,8), (0,7), (0,6), (0,5), (0,4), (0,3), (0,2), (0,1), and finally up to (0,0).\n\nThis sequence of movements will take me from (4,4) to (3,0) while avoiding the obstacle at (3,1).\n</think>\n\nTo navigate from (4,4) to (3,0) on a 5x5 grid with an obstacle at (3,1), follow these steps:\n\n1. **Move left** from (4,4) to (3,4).\n2. **Move up** from (3,4) to (3,5).\n3. **Move up** from (3,5) to (3,6).\n4. **Move up** from (3,6) to (3,7).\n5. **Move up** from (3,7) to (3,8).\n6. **Move up** from (3,8) to (3,9).\n7. **Move left** from (3,9) to (2,9).\n8. **Move left** from (2,9) to (1,9).\n9. **Move left** from (1,9) to (0,9).\n10. **Move left** from (0,9) to (0,8).\n11. **Move left** from (0,8) to (0,7).\n12. **Move left** from (0,7) to (0,6).\n13. **Move left** from (0,6) to (0,5).\n14. **Move left** from (0,5) to (0,4).\n15. **Move left** from (0,4) to (0,3).\n16. **Move up** from (0,3) to (0,4).\n17. **Move up** from (0,4) to (0,5).\n18. **Move up** from (0,5) to (0,6).\n19. **Move up** from (0,6) to (0,7).\n20. **Move up** from (0,7) to (0,8).\n21. **Move up** from (0,8) to (0,9).\n22. **Move left** from (0,9) to (1,9).\n23. **Move left** from (1,9) to (2,9).\n24. **Move left** from (2,9) to (3,9).\n25. **Move up** from (3,9) to (3,10) (which is beyond the grid, so adjust to (3,1)).\n\n**Final Answer:**\n\\boxed{[(3,1), (2,9), (1,9), (0,9), (0,8), (0,7), (0,6), (0,5), (0,4), (0,3), (0,2), (0,1), (1,1), (1,0), (2,0), (3,0)]}",
+        "has_final": true,
+        "ntokens": 893,
+        "time": 18.1
+      },
+      {
+        "idx": 7,
+        "start": [
+          2,
+          1
+        ],
+        "goal": [
+          0,
+          3
+        ],
+        "opt_len": 4,
+        "valid": true,
+        "optimal": false,
+        "path": [
+          [
+            0,
+            3
+          ]
+        ],
+        "path_len": 0,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (2,1) to the target (0,3) on a 5x5 grid. The grid has an obstacle at (0,1), which I will need to consider.\n\nI will start by moving up from (2,1) to (1,1). Then, I will move up again to (0,1), but I must avoid the obstacle at (0,1). Instead, I will move left from (0,1) to (-1,1), which is not possible, so I will move down to (0,2).\n\nFrom (0,2), I can move up to (0,3), which is the target. Alternatively, I can move left to (-1,2), but that's not possible, so I will move up to (0,3).\n\nTherefore, the path from (2,1) to (0,3) is: (2,1) \u2192 (1,1) \u2192 (0,1) \u2192 (-1,1) \u2192 (0,2) \u2192 (0,3).\n</think>\n\nTo navigate from (2,1) to (0,3) on a 5x5 grid with an obstacle at (0,1), follow these steps:\n\n1. **Move up from (2,1) to (1,1).**\n2. **Move up from (1,1) to (0,1).** (Note: The obstacle at (0,1) is skipped, but this is a valid move.)\n3. **Move left from (0,1) to (-1,1), which is not possible, so move down to (0,2).**\n4. **Move up from (0,2) to (0,3).**\n\nFinal Answer: \n$$\n\\boxed{[ (0,3) ]}\n$$",
+        "has_final": true,
+        "ntokens": 393,
+        "time": 8.0
+      },
+      {
+        "idx": 10,
+        "start": [
+          3,
+          1
+        ],
+        "goal": [
+          4,
+          4
+        ],
+        "opt_len": 4,
+        "valid": true,
+        "optimal": false,
+        "path": [
+          [
+            4,
+            4
+          ]
+        ],
+        "path_len": 0,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (3,1) to the target position (4,4) on a 5x5 grid. The grid has an obstacle at (3,2), which I must avoid.\n\nI will start by moving up from (3,1) to (2,1). Then, I will move up again to (1,1). Next, I will move up to (0,1), but since the grid starts at (1,1), I will move left to (1,1) again. From (1,1), I will move up to (1,2), but I must avoid the obstacle at (3,2). So, I will move right to (1,3). Then, I will move up to (1,4) and finally up to (1,5), but since the target is (4,4), I need to adjust my path.\n\nI will move down from (1,5) to (2,5), then down to (3,5), and finally down to (4,5). However, I need to reach (4,4), so I will move left from (4,5) to (4,4).\n\nThis path avoids the obstacle at (3,2) and successfully navigates from (3,1) to (4,4).\n</think>\n\nTo navigate from (3,1) to (4,4) on a 5x5 grid with an obstacle at (3,2), follow these steps:\n\n1. **Move up from (3,1) to (2,1).**\n2. **Move up from (2,1) to (1,1).**\n3. **Move up from (1,1) to (0,1) (but adjust to avoid the obstacle).**\n4. **Move left from (1,1) to (1,2) (avoiding the obstacle at (3,2)).**\n5. **Move up from (1,2) to (1,3).**\n6. **Move up from (1,3) to (1,4).**\n7. **Move up from (1,4) to (1,5).**\n8. **Move down from (1,5) to (2,5).**\n9. **Move down from (2,5) to (3,5).**\n10. **Move down from (3,5) to (4,5).**\n11. **Move left from (4,5) to (4,4).**\n\nThis path avoids the obstacle at (3,2) and successfully navigates from (3,1) to (4,4).\n\n**Final Answer:**\n\\[\n\\boxed{[(4,4)]}\n\\]",
+        "has_final": true,
+        "ntokens": 583,
+        "time": 11.8
+      },
+      {
+        "idx": 11,
+        "start": [
+          1,
+          3
+        ],
+        "goal": [
+          3,
+          2
+        ],
+        "opt_len": 3,
+        "valid": true,
+        "optimal": false,
+        "path": [
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            3,
+            2
+          ]
+        ],
+        "path_len": 2,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (1,3) to the target position (3,2) on a 5x5 grid. The grid has an obstacle at (1,1), which I must avoid.\n\nI will start by moving up to (1,2) since that's the only adjacent cell to (1,3) that doesn't hit the obstacle. From (1,2), I can move up to (1,3) or down to (1,1). Moving up to (1,3) is not helpful, so I'll move down to (2,2).\n\nFrom (2,2), I can move up to (2,3) or down to (2,1) or right to (3,2). Moving right to (3,2) is the target, so I'll choose that path.\n\nTo summarize, the path is:\n1. Move up from (1,3) to (1,2).\n2. Move down from (1,2) to (2,2).\n3. Move right from (2,2) to (3,2).\n\nThis sequence successfully navigates from (1,3) to (3,2) while avoiding the obstacle at (1,1).\n</think>\n\nTo navigate from (1,3) to (3,2) on a 5x5 grid with an obstacle at (1,1), follow these steps:\n\n1. **Move Up**: From (1,3) to (1,2).\n2. **Move Down**: From (1,2) to (2,2).\n3. **Move Right**: From (2,2) to (3,2).\n\nFinal Answer: \n$$\n\\boxed{[(1,2), (2,2), (3,2)]}\n$$",
+        "has_final": true,
+        "ntokens": 379,
+        "time": 7.6
+      },
+      {
+        "idx": 12,
+        "start": [
+          0,
+          3
+        ],
+        "goal": [
+          4,
+          3
+        ],
+        "opt_len": 4,
+        "valid": false,
+        "optimal": false,
+        "path": [
+          [
+            0,
+            5
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            4,
+            5
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            4,
+            3
+          ]
+        ],
+        "path_len": 11,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (0,3) to the target position (4,3) on a 5x5 grid. The grid has an obstacle at (3,1), which I must avoid.\n\nI will start by moving up from (0,3) to (0,4). Then, I can move up again to (0,5). At (0,5), I can move left to (0,4) or up to (1,5). Moving left to (0,4) is more efficient.\n\nNext, I will move up to (1,4). From (1,4), I can move up to (2,4) or left to (1,5). Moving left to (1,5) is better. Then, I can move up to (2,5) or left to (1,4). Moving up to (2,5) is a good step.\n\nFrom (2,5), I can move left to (2,4) or up to (3,5). Moving left to (2,4) is better. Then, I can move up to (3,4) or left to (2,5). Moving up to (3,4) is a step forward.\n\nFrom (3,4), I can move up to (4,4) or left to (3,5). Moving up to (4,4) is a good move. Then, I can move up to (4,5) or left to (3,4). Moving up to (4,5) is the next step.\n\nFinally, I can move left to (4,4) and then up to (4,3) to reach the target position (4,3). I need to ensure that I do not pass through the obstacle at (3,1) during my movement.\n</think>\n\nTo navigate from (0,3) to (4,3) on a 5x5 grid with an obstacle at (3,1), follow these steps:\n\n1. **Move up from (0,3) to (0,4).**\n2. **Move up from (0,4) to (0,5).**\n3. **Move left from (0,5) to (0,4).**\n4. **Move up from (0,4) to (1,4).**\n5. **Move up from (1,4) to (2,4).**\n6. **Move up from (2,4) to (3,4).**\n7. **Move up from (3,4) to (4,4).**\n8. **Move up from (4,4) to (4,5).**\n9. **Move left from (4,5) to (4,4).**\n10. **Move up from (4,4) to (4,3).**\n\n**Final Answer:**\n\\[\n\\boxed{[(0,5), (0,4), (0,5), (0,4), (1,4), (2,4), (3,4), (4,4), (4,5), (4,5), (4,4), (4,3)]}\n\\]",
+        "has_final": true,
+        "ntokens": 679,
+        "time": 13.8
+      },
+      {
+        "idx": 14,
+        "start": [
+          1,
+          2
+        ],
+        "goal": [
+          0,
+          0
+        ],
+        "opt_len": 3,
+        "valid": true,
+        "optimal": false,
+        "path": [
+          [
+            0,
+            0
+          ]
+        ],
+        "path_len": 0,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (1,2) to the target (0,0) on a 5x5 grid. The grid has an obstacle at (3,0), which I must avoid.\n\nI'll start by moving left from (1,2) to (0,2). From (0,2), I can move left to (0,1) or up to (0,3). Moving up to (0,3) seems more efficient. From (0,3), I can move left to (0,0), which is my target.\n\nSo, the path is (1,2) \u2192 (0,2) \u2192 (0,3) \u2192 (0,0).\n</think>\n\nTo navigate from (1,2) to (0,0) on a 5x5 grid with an obstacle at (3,0), follow these steps:\n\n1. **Move left from (1,2) to (0,2).**\n2. **Move up from (0,2) to (0,3).**\n3. **Move left from (0,3) to (0,0).**\n\nFinal Answer: \n$$\n\\boxed{[ (0,0) ]}\n$$",
+        "has_final": true,
+        "ntokens": 261,
+        "time": 5.3
+      },
+      {
+        "idx": 15,
+        "start": [
+          1,
+          4
+        ],
+        "goal": [
+          2,
+          0
+        ],
+        "opt_len": 5,
+        "valid": false,
+        "optimal": false,
+        "path": [
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            0,
+            3
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ]
+        ],
+        "path_len": 177,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (1,4) to the target position (2,0) on a 5x5 grid. The grid has an obstacle at (0,3), which I will consider when planning the path.\n\nI will start by moving up from (1,4) to (0,4) to avoid the obstacle. From (0,4), I can move left to (0,3), but that's blocked, so I'll move down instead to (1,3). From (1,3), I can move left to (1,2) or up to (1,4). I'll choose to move left to (1,2) to continue moving left.\n\nFrom (1,2), I can move left to (1,1) or up to (1,3). I'll move up to (1,3) to avoid the obstacle. From (1,3), I can move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move down to (2,3).\n\nFrom (2,3), I can move left to (2,2) or up to (2,4). I'll move up to (2,4) to continue moving up. From (2,4), I can move left to (2,3) or up to (2,5), but (2,5) is out of bounds. I'll move left to (2,4) again, but that's where I started. Instead, I'll move left to (1,4).\n\nFrom (1,4), I can move up to (1,3) or left to (0,4). I'll move up to (1,3) to continue moving left. From (1,3), I can move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nFrom (0,3), I'll move down to (1,3). From (1,3), I can move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nFrom (0,3), I'll move down to (1,3). From (1,3), I can move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nThis path isn't working. Let me try a different approach. From (1,4), I'll move left to (0,4). From (0,4), I'll move left to (0,3), but that's blocked. So, I'll move up instead to (1,3). From (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nFrom (0,3), I'll move down to (1,3). From (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nThis isn't working either. Let me try moving up from (1,4) to (2,4). From (2,4), I'll move left to (2,3) or up to (2,5), but (2,5) is out of bounds. I'll move left to (2,3). From (2,3), I'll move left to (2,2) or up to (2,4). I'll move up to (2,4) again, but that's where I started. Instead, I'll move left to (1,3).\n\nFrom (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nFrom (0,3), I'll move down to (1,3). From (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nThis isn't working. Let me try moving up from (1,4) to (2,4). From (2,4), I'll move left to (2,3) or up to (2,5), but (2,5) is out of bounds. I'll move left to (2,3). From (2,3), I'll move left to (2,2) or up to (2,4). I'll move up to (2,4) again, but that's where I started. Instead, I'll move left to (1,3).\n\nFrom (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nFrom (0,3), I'll move down to (1,3). From (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nThis isn't working. Let me try moving up from (1,4) to (2,4). From (2,4), I'll move left to (2,3) or up to (2,5), but (2,5) is out of bounds. I'll move left to (2,3). From (2,3), I'll move left to (2,2) or up to (2,4). I'll move up to (2,4) again, but that's where I started. Instead, I'll move left to (1,3).\n\nFrom (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nFrom (0,3), I'll move down to (1,3). From (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nThis isn't working. Let me try moving up from (1,4) to (2,4). From (2,4), I'll move left to (2,3) or up to (2,5), but (2,5) is out of bounds. I'll move left to (2,3). From (2,3), I'll move left to (2,2) or up to (2,4). I'll move up to (2,4) again, but that's where I started. Instead, I'll move left to (1,3).\n\nFrom (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nFrom (0,3), I'll move down to (1,3). From (1,3), I'll move left to (1,2) or up to (1,4). I'll move up to (1,4) again, but that's where I started. Instead, I'll move left to (0,3), which is the obstacle. So, I'll move down instead.\n\nThis isn't working. Let me try moving up from (1,4) to (2,4). From (2,4), I'll move left to (2,3) or up to (2,5), but (2,5) is out of bounds. I'll move left to (2,3). From (2,3), I'll move left to (2,2) or up to (2,4). I'll move up to (2,4) again, but that's where I started. Instead",
+        "has_final": false,
+        "ntokens": 2048,
+        "time": 41.6
+      },
+      {
+        "idx": 16,
+        "start": [
+          4,
+          4
+        ],
+        "goal": [
+          4,
+          1
+        ],
+        "opt_len": 3,
+        "valid": false,
+        "optimal": false,
+        "path": [
+          [
+            4,
+            4
+          ],
+          [
+            4,
+            1
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            4,
+            1
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            4,
+            1
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            4,
+            1
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            4,
+            1
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            2,
+            4
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            3,
+            1
+          ],
+          [
+            4,
+            1
+          ]
+        ],
+        "path_len": 49,
+        "raw": "<think>\nFirst, I need to navigate from position (4,4) to (4,1) on a 5x5 grid. The starting point is in the fourth row and fourth column, and the target is in the fourth row and first column. There's an obstacle at position (2,1), which is in the second row and first column.\n\nI will move up from (4,4) to (3,4), then up to (2,4), and up to (1,4). Now, I need to move left to (1,3), left to (1,2), left to (1,1). Next, I move up to (2,1), but there's an obstacle there. So, I'll move up to (3,1), then up to (4,1), which is the target.\n\nThe path taken is: (4,4) \u2192 (3,4) \u2192 (2,4) \u2192 (1,4) \u2192 (1,3) \u2192 (1,2) \u2192 (1,1) \u2192 (3,1) \u2192 (4,1)\n</think>\n\nTo navigate from (4,4) to (4,1) on a 5x5 grid with an obstacle at (2,1), follow these steps:\n\n1. **Move up** from (4,4) to (3,4).\n2. **Move up** from (3,4) to (2,4).\n3. **Move up** from (2,4) to (1,4).\n4. **Move left** from (1,4) to (1,3).\n5. **Move left** from (1,3) to (1,2).\n6. **Move left** from (1,2) to (1,1).\n7. **Move up** from (1,1) to (3,1).\n8. **Move up** from (3,1) to (4,1).\n\nThe final path is:\n\n\\[\n\\boxed{[ (4,4), (3,4), (2,4), (1,4), (1,3), (1,2), (1,1), (3,1), (4,1) ]}\n\\]",
+        "has_final": false,
+        "ntokens": 475,
+        "time": 9.6
+      },
+      {
+        "idx": 18,
+        "start": [
+          3,
+          4
+        ],
+        "goal": [
+          2,
+          0
+        ],
+        "opt_len": 5,
+        "valid": true,
+        "optimal": false,
+        "path": [
+          [
+            0,
+            2
+          ]
+        ],
+        "path_len": 0,
+        "raw": "<think>\nFirst, I need to navigate from the starting position (3,4) to the target position (2,0) on a 5x5 grid. The grid has an obstacle at (2,3), which I must consider.\n\nI'll start by moving left from (3,4) to (2,4). Then, I'll move up from (2,4) to (2,5). Next, I'll move up from (2,5) to (2,6). After that, I'll move left from (2,6) to (1,6). Then, I'll move left from (1,6) to (0,6). Finally, I'll move down from (0,6) to (0,5), (0,4), (0,3), and (0,2) to reach the target position (2,0).\n\nI need to ensure that each move is valid, meaning I don't step on the obstacle at (2,3) and that I'm moving in one of the allowed directions (up, down, left, right).\n</think>\n\nTo navigate from (3,4) to (2,0) on a 5x5 grid with an obstacle at (2,3), follow these steps:\n\n1. **Move left** from (3,4) to (2,4).\n2. **Move up** from (2,4) to (2,5).\n3. **Move up** from (2,5) to (2,6).\n4. **Move left** from (2,6) to (1,6).\n5. **Move left** from (1,6) to (0,6).\n6. **Move down** from (0,6) to (0,5).\n7. **Move down** from (0,5) to (0,4).\n8. **Move down** from (0,4) to (0,3).\n9. **Move down** from (0,3) to (0,2).\n\nAfter these moves, you are at (0,2), which is adjacent to the target (2,0). Continue moving left from (0,2) to reach (2,0).\n\n**Final Answer:**\n\\[\n\\boxed{[ (0,2) ]}\n\\]",
+        "has_final": true,
+        "ntokens": 487,
+        "time": 9.9
+      }
+    ]
+  }
+}
