@@ -65,8 +65,13 @@ alphamaze_reference/  Git submodule (github.com/menloresearch/visual-thinker) --
 notebooks/kaggle_train.ipynb   Kaggle-runnable end-to-end training notebook.
 notebooks/kaggle_check.ipynb   Same pipeline at tiny scale (few samples/steps per stage) --
                        run this first to catch syntax/OOM/API-compat issues before committing
-                       real GPU-hours to kaggle_train.ipynb. Generated from the same
-                       build_notebook.py, so the two can't structurally drift apart.
+                       real GPU-hours to kaggle_train.ipynb.
+notebooks/kaggle_check_phase2.ipynb   Same as kaggle_check.ipynb minus the feasibility check,
+                       Phase 1, and Phase 1b -- for fast iteration once those have already
+                       passed (or hit an already-understood expected failure) on a prior run
+                       and only Phase 2 (SFT -> GRPO -> eval) is still being debugged.
+                       All three notebooks generate from the same build_notebook.py, so
+                       they can't structurally drift apart.
 paper/                LaTeX writeup (NeurIPS workshop template).
 ```
 
