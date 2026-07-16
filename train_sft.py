@@ -139,13 +139,14 @@ def main():
     bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
 
     # SFTConfig, not plain TrainingArguments -- newer TRL moved SFT-specific
-    # settings (max_seq_length included) out of being accepted as bare
-    # SFTTrainer() kwargs and into this dedicated config class. Passing
-    # max_seq_length directly to SFTTrainer() (the old pattern) raises
-    # TypeError on current TRL; this project already hit one other TRL
-    # breaking change this cycle (ConstantLengthDataset removed in 0.20.0),
-    # so this isn't a hypothetical -- SFTTrainer just hasn't been exercised
-    # on the current environment yet to surface it.
+    # settings out of being accepted as bare SFTTrainer() kwargs and into
+    # this dedicated config class. Its length-limit kwarg is max_length, not
+    # max_seq_length -- confirmed via a real Kaggle traceback (TRL renamed
+    # it in 0.16.0; requirements.txt only pins a lower bound, so whatever
+    # TRL Kaggle installs picks up the new name). --max_seq_length is kept
+    # as this project's own CLI flag name (used for more than just this one
+    # kwarg, see load_trainable_model()'s tokenizer.model_max_length) --
+    # only the kwarg passed to SFTConfig itself needed to change.
     training_args = SFTConfig(
         output_dir=args.output_dir,
         per_device_train_batch_size=args.batch_size,
@@ -158,7 +159,7 @@ def main():
         fp16=not bf16_ok,
         report_to=[],
         remove_unused_columns=False,
-        max_seq_length=args.max_seq_length,
+        max_length=args.max_seq_length,
     )
 
     trainer = SFTTrainer(

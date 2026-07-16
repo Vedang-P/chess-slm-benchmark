@@ -424,6 +424,14 @@ def load_trainable_model(model_id: str, load_in_4bit: bool = True, max_seq_lengt
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_source, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    # max_seq_length previously arrived as a parameter here and was never
+    # actually applied to anything -- accepted, logged by callers, then
+    # silently dropped. tokenizer.model_max_length is what apply_chat_template/
+    # tokenizer() calls elsewhere actually fall back to when no explicit
+    # max_length is passed, so this is the one place that makes the
+    # parameter do something for every caller (train_sft.py additionally
+    # passes it straight to SFTConfig(max_length=...) itself).
+    tokenizer.model_max_length = max_seq_length
 
     # device_map={"": 0} for every model, Gemma 4 included -- reverted from
     # a device_map="auto" + max_memory experiment that didn't hold up: on
