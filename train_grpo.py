@@ -262,8 +262,16 @@ def main():
                               "(mixed/consistency conditions use 2x this many rows: NL + token per problem)")
     parser.add_argument("--max_steps", type=int, default=50,
                          help="GRPO training steps -- kept small for a timing test")
-    parser.add_argument("--num_generations", type=int, default=8,
-                         help="GRPO group size: completions sampled per prompt")
+    parser.add_argument("--num_generations", type=int, default=4,
+                         help="GRPO group size: completions sampled per prompt. Default lowered "
+                              "from 8: confirmed via a real Kaggle OOM (Gemma 4 E2B, 4-bit LoRA, "
+                              "T4, gradient checkpointing already on) that 8 doesn't fit even at a "
+                              "reduced --max_completion_length -- the backward pass over the whole "
+                              "group's log-probs is the actual memory driver, gradient checkpointing "
+                              "and PYTORCH_ALLOC_CONF=expandable_segments don't touch that cost. 4 "
+                              "is unconfirmed at this project's real --max_completion_length "
+                              "default (4096); if it still OOMs there, this needs to come down "
+                              "further, or --max_completion_length does, or both.")
     parser.add_argument("--load_in_4bit", action="store_true", default=True,
                          help="Load model in 4-bit quantization (default: True for 6 GB GPUs)")
     parser.add_argument("--no_4bit", dest="load_in_4bit", action="store_false",
