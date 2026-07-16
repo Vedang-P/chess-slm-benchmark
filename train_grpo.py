@@ -197,14 +197,23 @@ def make_reward_fn(condition: str, model=None, tokenizer=None, max_completion_le
         was_training = model.training
         model.eval()
         try:
+            # return_dict=True, then **inputs -- not input_ids=inputs. Without
+            # return_dict=True, this transformers version's apply_chat_template
+            # still returns a dict-like BatchEncoding (not a plain tensor with
+            # its own .shape), confirmed via a real Kaggle traceback: passing
+            # that whole object as generate()'s input_ids= made generate() try
+            # inputs_tensor.shape on a BatchEncoding, which only has .shape on
+            # its individual keys (.input_ids, not itself) -- KeyError('shape')
+            # internally, surfaced as a bare AttributeError. Same working
+            # pattern hf_models.py's HFModel.generate() already uses.
             inputs = tokenizer.apply_chat_template(
                 [{"role": "user", "content": partner_prompt}],
-                add_generation_prompt=True, tokenize=True, return_tensors="pt",
+                add_generation_prompt=True, tokenize=True, return_tensors="pt", return_dict=True,
             ).to(model.device)
             with torch.no_grad():
-                out = model.generate(input_ids=inputs, max_new_tokens=max_completion_length,
+                out = model.generate(**inputs, max_new_tokens=max_completion_length,
                                       do_sample=False, pad_token_id=tokenizer.eos_token_id)
-            return tokenizer.decode(out[0][inputs.shape[-1]:], skip_special_tokens=True)
+            return tokenizer.decode(out[0][inputs["input_ids"].shape[-1]:], skip_special_tokens=True)
         finally:
             if was_training:
                 model.train()
