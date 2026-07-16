@@ -263,15 +263,18 @@ def main():
     parser.add_argument("--max_steps", type=int, default=50,
                          help="GRPO training steps -- kept small for a timing test")
     parser.add_argument("--num_generations", type=int, default=4,
-                         help="GRPO group size: completions sampled per prompt. Default lowered "
-                              "from 8: confirmed via a real Kaggle OOM (Gemma 4 E2B, 4-bit LoRA, "
-                              "T4, gradient checkpointing already on) that 8 doesn't fit even at a "
-                              "reduced --max_completion_length -- the backward pass over the whole "
-                              "group's log-probs is the actual memory driver, gradient checkpointing "
-                              "and PYTORCH_ALLOC_CONF=expandable_segments don't touch that cost. 4 "
-                              "is unconfirmed at this project's real --max_completion_length "
-                              "default (4096); if it still OOMs there, this needs to come down "
-                              "further, or --max_completion_length does, or both.")
+                         help="GRPO group size: completions sampled per prompt. Lowered from 8 "
+                              "hoping to shrink a real Kaggle OOM -- it didn't: two runs (8 vs 4) "
+                              "OOM'd with byte-identical numbers, which rules out group size as the "
+                              "driver rather than confirming this fix. Per TRL's own semantics, "
+                              "per_device_train_batch_size (fixed at 1 below) counts COMPLETIONS, "
+                              "not prompts or groups -- so a single backward() call is already over "
+                              "just 1 completion regardless of num_generations; the group only "
+                              "changes how many such calls happen per step, not any single call's "
+                              "size. Kept at 4 anyway since fewer total backward() calls per step is "
+                              "still a real (if secondary) speedup, but --max_completion_length is "
+                              "the lever that actually bounds a single completion's forward+backward "
+                              "memory -- see that flag.")
     parser.add_argument("--load_in_4bit", action="store_true", default=True,
                          help="Load model in 4-bit quantization (default: True for 6 GB GPUs)")
     parser.add_argument("--no_4bit", dest="load_in_4bit", action="store_false",
@@ -285,10 +288,16 @@ def main():
     parser.add_argument("--max_completion_length", type=int, default=4096,
                          help="Maximum completion length for GRPO generations (default: 4096 -- "
                               "generous on purpose so thinking isn't cut off mid-thought the way "
-                              "512 was found to truncate MazeBench-style reasoning in Phase 1; this "
-                              "is also the single biggest lever on wall-clock cost since it applies "
-                              "per completion x num_generations, so run the timing test below before "
-                              "committing to a full step count, and lower it if Kaggle quota is tight)")
+                              "512 was found to truncate MazeBench-style reasoning in Phase 1). "
+                              "This is the real lever on GRPO's per-step VRAM, not --num_generations "
+                              "(see that flag's help) -- a real Kaggle OOM at 1024 on a T4 for Gemma "
+                              "4 E2B didn't budge when num_generations dropped 8->4, consistent with "
+                              "per_device_train_batch_size=1 meaning each backward() call is already "
+                              "over a single completion of this length, group size or not. Also the "
+                              "single biggest lever on wall-clock cost, separately, since it applies "
+                              "per completion x num_generations total across a step -- run the timing "
+                              "test below before committing to a full step count either way, and "
+                              "lower this specifically (not num_generations) if you hit OOM.")
     parser.add_argument("--adapter_path", type=str, default="",
                          help="Continue training a previously-saved LoRA adapter (e.g. train_sft.py's "
                               "--output_dir) on top of --model, instead of attaching a fresh one. "
