@@ -70,15 +70,6 @@ def build_sft_dataset(fmt: str, n_tasks: int, grid_size: int = 5, seed: int = 42
     return Dataset.from_dict(rows)
 
 
-def format_sft(example):
-    """Format prompt+completion for SFT training."""
-    messages = [
-        {"role": "user", "content": example["prompt"]},
-        {"role": "assistant", "content": example["completion"]},
-    ]
-    return {"text": messages}  # SFTTrainer handles chat template
-
-
 def main():
     from hf_models import configure_quiet_logging
     configure_quiet_logging()
@@ -124,9 +115,18 @@ def main():
     print(f"Model + LoRA ready (backend={backend})")
 
     print(f"Building SFT dataset ({args.format}, {args.n_tasks} tasks, {args.grid_size}x{args.grid_size})...")
+    # Passed straight to SFTTrainer below with its native "prompt"/"completion"
+    # string columns -- TRL's own "prompt-completion type" dataset handling
+    # (confirmed against the installed sft_trainer.py's add_eos(), which
+    # requires example["text"] to be a plain string). A prior version of this
+    # function remapped these into a single "text" column holding a list of
+    # {"role", "content"} message dicts, intending SFTTrainer to apply the
+    # chat template itself -- real Kaggle run: AttributeError: 'list' object
+    # has no attribute 'endswith', since that add_eos() check runs directly
+    # against "text" and expects a string, not a message list, in this TRL
+    # version. The native prompt/completion columns need no such remapping.
     dataset = build_sft_dataset(args.format, args.n_tasks, grid_size=args.grid_size)
     print(f"  {len(dataset)} training rows.")
-    dataset = dataset.map(format_sft, remove_columns=dataset.column_names)
 
     # bf16 checked against real hardware support, not hardcoded: a T4 (this
     # project's actual free-tier Kaggle GPU) has no bf16 tensor-core support,
