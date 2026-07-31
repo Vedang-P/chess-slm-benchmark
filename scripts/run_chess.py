@@ -54,7 +54,7 @@ def main() -> None:
     records = json.loads((Path(args.data_dir) / TASK_FILES[task_name]).read_text())
     if args.n:
         records = records[: args.n]
-    kind = T.task_kind(records[0]["id"])
+    kind = task_name.split("-")[0]  # sm / mate1 / mob (lichess records have a different id prefix)
 
     model = HFModel(args.model, smoke_test=args.smoke)
     model.load()
