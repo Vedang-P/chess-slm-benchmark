@@ -153,11 +153,10 @@ for name in ["cap-legal-8x8", "sm-3x3-win", "sm-3x3-draw", "sm-5x5-win",
     assert all("win_moves" in r and "lose_moves" in r for r in recs)
 print("committed position data OK (8 task sets, oracle fields present)")""")),
         _md("## 6. The chess sweep (models x tasks, paired win/lose)"),
-        _code(f"""status = run_stage(
-    "chess_sweep",
-    [sys.executable, "scripts/run_suite.py", "--output_dir", "{R}/chess"{("", " --check")[check]}],
-    {T_SWEEP},
-)
+        _code(f"""sweep_args = [sys.executable, "scripts/run_suite.py", "--output_dir", "{R}/chess"]
+if {"True" if check else "False"}:
+    sweep_args.append("--check")
+status = run_stage("chess_sweep", sweep_args, {T_SWEEP})
 print("sweep:", status)"""),
         _md("## 7. Results table"),
         _code("""import pandas as pd
