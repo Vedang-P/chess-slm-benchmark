@@ -79,37 +79,53 @@ def build_cells(check: bool) -> list:
             "- Positions + exact oracles: committed (`data/positions/`), generated once by `scripts/generate_positions.py`.\n"
             "- Engine + dataset tests gate every run: `scripts/test_engine.py`.\n"
             "- Sweep: `scripts/run_suite.py` (models x tasks x {{win,lose}})."),
-        _md("## 1. Clone the repo\n\n"
-            "The repo is **private**, so this cell needs a GitHub PAT. On Kaggle, a secret "
-            "only reaches the notebook if you ATTACH it: open this notebook -> right-hand "
-            "**Secrets** panel -> enable `GITHUB_TOKEN` for this notebook. The token must "
-            "have `repo` scope (classic PAT) or Contents:Read (fine-grained)."),
-        _code("""import os, subprocess, sys
+        _md("## 1. Get the repo (two options)\n\n"
+            "**Option A (recommended, no GitHub auth needed):** upload this repo as a "
+            "PRIVATE Kaggle dataset named `neuro-symbolic-pathfinding` (Dataset -> New "
+            "Dataset -> upload a zip of the repo folder, e.g. `git archive -o repo.zip HEAD`). "
+            "Kaggle extracts it into `/kaggle/input/neuro-symbolic-pathfinding/` and this "
+            "cell copies it -- no token, no secrets, works every time.\n\n"
+            "**Option B:** git clone using a PAT secret. The secret must be attached to "
+            "THIS notebook (right-hand **Secrets** panel -> enable `GITHUB_TOKEN`), the "
+            "notebook must be **saved**, and the kernel **restarted** after attaching "
+            "(env vars are injected at kernel start)."),
+        _code("""import os, shutil, subprocess, sys
 from pathlib import Path
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "neuro-symbolic-pathfinding"
+
+def via_dataset() -> bool:
+    for cand in ["/kaggle/input/neuro-symbolic-pathfinding",
+                 "/kaggle/input/neuro-symbolic-pathfinding-repo"]:
+        src = Path(cand)
+        if src.exists() and (src / "configs").exists():
+            shutil.copytree(src, REPO, dirs_exist_ok=True)
+            print(f"repo copied from Kaggle dataset: {src}", flush=True)
+            return True
+    return False
+
 if not REPO.exists():
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-    print("GITHUB_TOKEN found in environment:", bool(token), flush=True)
-    url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
-    if token:
-        url = url.replace("https://", f"https://x-access-token:{token}@")
-    res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
-                         capture_output=True, text=True)
-    if res.returncode != 0:
-        raise RuntimeError(
-            "git clone failed. If the repo is private this means the secret never "
-            "reached the notebook. Fix: notebook right-hand panel -> Secrets -> "
-            "enable GITHUB_TOKEN for THIS notebook (it must contain a PAT with the "
-            "repo scope). Stderr: " + res.stderr[-300:]
-        )
+    if not via_dataset():
+        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+        print("GITHUB_TOKEN found in environment:", bool(token), flush=True)
+        url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
+        if token:
+            url = url.replace("https://", f"https://x-access-token:{token}@")
+        res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
+                             capture_output=True, text=True)
+        if res.returncode != 0:
+            raise RuntimeError(
+                "git clone failed. Two fixes: (A) upload the repo as a private Kaggle "
+                "dataset named 'neuro-symbolic-pathfinding' and rerun -- no token needed; "
+                "or (B) attach the GITHUB_TOKEN secret to THIS notebook (Secrets panel), "
+                "SAVE the notebook, and restart the kernel -- env vars are injected at "
+                "kernel start. Stderr: " + res.stderr[-300:]
+            )
 os.chdir(REPO)
 print("cwd:", Path.cwd())"""),
-        _md("## 2. Submodule + dependencies"),
-        _code("""subprocess.run(["git", "submodule", "update", "--init", "--depth", "1"], check=True, capture_output=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-r", "requirements.txt"], check=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "python-chess"], check=True)
+        _md("## 2. Dependencies"),
+        _code("""subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-r", "requirements.txt"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y", "wandb"], check=True)
 import torch
 print("torch", torch.__version__, "cuda", torch.cuda.is_available(),
@@ -160,6 +176,10 @@ print("ALL CHECK STAGES PASSED")""")
          _code(f"""shutil.make_archive("/kaggle/working/{R}", "zip", root_dir=Path("{R}").resolve())
 print("zipped {R}.zip")""")),
         _md("## Notes\n"
+            "- **Getting the repo:** Option A (private Kaggle dataset named "
+            "`neuro-symbolic-pathfinding`) needs no tokens and is the reliable path. "
+            "Option B (git clone) requires the `GITHUB_TOKEN` secret attached to this "
+            "notebook, saved, and the kernel restarted.\n"
             "- **Resume after a died session:** re-run the notebook with a trimmed sweep, e.g. "
             "`run_suite.py --models <remaining> --tasks <remaining> --output_dir results/chess`; "
             "per-run JSONs under `results/chess/*.summary.json` are the source of truth; the CSV is rebuilt at the end.\n"
