@@ -152,17 +152,42 @@ for name in ["cap-legal-8x8", "sm-3x3-win", "sm-3x3-draw", "sm-5x5-win",
     assert len(recs) >= 40, f"{name}: expected >=40 positions, got {len(recs)}"
     assert all("win_moves" in r and "lose_moves" in r for r in recs)
 print("committed position data OK (8 task sets, oracle fields present)")""")),
-        _md("## 6. The chess sweep (models x tasks, paired win/lose)\n\n"
-            "`--monitor` publishes live progress to the public dashboard repo "
-            "(monitor/state.json) — the dashboard at "
-            "`chess-bench-live` / GitHub Pages / Vercel / Cloudflare renders it."),
+        (_md("## 6. Recover completed results (after a died session)\n\n"
+             "Every completed cell's summary is backed up to the public live repo by "
+             "`--monitor`. If this is a fresh session, pull them back so `--resume` can "
+             "skip what already ran."),
+         _code("""import json, urllib.request
+from pathlib import Path
+
+out = Path("results/chess")
+out.mkdir(parents=True, exist_ok=True)
+idx_url = "https://raw.githubusercontent.com/Vedang-P/chess-bench-live/main/results/index.json"
+if list(out.glob("*.summary.json")):
+    print("results already present locally")
+else:
+    try:
+        idx = json.load(urllib.request.urlopen(idx_url, timeout=20))
+        for name in idx["files"]:
+            url = f"https://raw.githubusercontent.com/Vedang-P/chess-bench-live/main/results/chess/{name}"
+            (out / name).write_bytes(urllib.request.urlopen(url, timeout=20).read())
+        print(f"recovered {len(idx['files'])} completed summaries from the live repo")
+    except Exception as e:
+        print("nothing to recover (first run or no backup yet):", e)"""))
+         if not check else
+         (_md(""), _code("pass"))),
+        _md("## 7. The chess sweep (models x tasks, paired win/lose)\n\n"
+            "`--monitor` publishes live progress + per-cell result backups to the public "
+            "dashboard repo (monitor/state.json, results/*). `--resume` skips cells whose "
+            "summary already exists (recovered in the previous cell)."),
         _code(f"""sweep_args = [sys.executable, "scripts/run_suite.py", "--output_dir", "{R}/chess",
               "--monitor", "--monitor-interval", "120"]
 if {"True" if check else "False"}:
     sweep_args.append("--check")
+else:
+    sweep_args.append("--resume")
 status = run_stage("chess_sweep", sweep_args, {T_SWEEP})
 print("sweep:", status)"""),
-        _md("## 7. Results table"),
+        _md("## 8. Results table"),
         _code("""import pandas as pd
 csv_path = Path("{R}/chess/comparison_table.csv")
 if csv_path.exists():
@@ -171,7 +196,7 @@ if csv_path.exists():
     print("rows:", len(df))
 else:
     print("no comparison table -- sweep did not complete")""".replace("{R}", R)),
-        _md("## 8. Verdict (check mode: fail loudly)") if check else _md("## 8. Zip results"),
+        _md("## 9. Verdict (check mode: fail loudly)") if check else _md("## 9. Zip results"),
         (_code(f"""entries = json.loads(STAGE_LOG.read_text()) if STAGE_LOG.exists() else []
 fails = [e for e in entries if e["status"] != "ok"]
 if fails:

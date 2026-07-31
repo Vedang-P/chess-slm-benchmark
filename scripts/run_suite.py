@@ -39,7 +39,7 @@ def _ts() -> str:
 
 
 class Monitor:
-    def __init__(self, interval_s: int = 120):
+    def __init__(self, interval_s: int = 120, output_dir: str = "results/chess"):
         self.interval = interval_s
         self.last_push = 0.0
         self.cells_done = 0
@@ -47,6 +47,8 @@ class Monitor:
         self.started_at = _ts()
         self.rows = []
         self.meta = {}
+        self.output_dir = Path(output_dir)
+        self.uploaded = set()  # remote paths already uploaded (tracked in-memory)
 
     def set_meta(self, **kw) -> None:
         self.meta.update(kw)
@@ -161,9 +163,34 @@ class Monitor:
         import urllib.error
         import urllib.request
 
+        # collect files to upload: monitor state/history + completed cell
+        # summaries + running comparison CSV + results index
+        uploads = []
         for fname in ("state.json", "history.jsonl"):
             path = MONITOR_DIR / fname
-            url = f"https://api.github.com/repos/{PUBLIC_LIVE_REPO}/contents/monitor/{fname}"
+            if path.exists():
+                uploads.append((f"monitor/{fname}", path))
+        if self.output_dir.exists():
+            for summary in sorted(self.output_dir.glob("*.summary.json")):
+                remote = f"results/chess/{summary.name}"
+                if remote not in self.uploaded:
+                    uploads.append((remote, summary))
+            csv_path = self.output_dir / "comparison_table.csv"
+            if csv_path.exists():
+                uploads.append(("results/comparison_table.csv", csv_path))
+            # index of all completed summaries (for the recovery flow)
+            index = {
+                "files": sorted(p.name for p in self.output_dir.glob("*.summary.json")),
+                "updated_at": _ts(),
+            }
+            uploads.append(("results/index.json",
+                            _BytesFile(json.dumps(index, indent=1).encode())))
+        for remote, local in uploads:
+            if isinstance(local, _BytesFile):
+                data = local.data
+            else:
+                data = local.read_bytes()
+            url = f"https://api.github.com/repos/{PUBLIC_LIVE_REPO}/contents/{remote}"
             headers = {"Authorization": f"Bearer {token}", "User-Agent": "chess-monitor"}
             sha = None
             try:
@@ -175,7 +202,7 @@ class Monitor:
                     raise
             payload = {
                 "message": f"monitor {_ts()}",
-                "content": base64.b64encode(path.read_bytes()).decode(),
+                "content": base64.b64encode(data).decode(),
                 "branch": PUBLIC_LIVE_BRANCH,
             }
             if sha:
@@ -186,13 +213,45 @@ class Monitor:
             )
             with urllib.request.urlopen(req) as r:
                 json.load(r)
-        print("monitor: pushed to public live repo", flush=True)
+            if isinstance(local, Path):
+                self.uploaded.add(remote)
+        print("monitor: pushed state + results to public live repo", flush=True)
+
+
+class _BytesFile:
+    """In-memory stand-in for a Path upload."""
+    __slots__ = ("data",)
+
+    def __init__(self, data: bytes):
+        self.data = data
 
 
 def _avg_legal(cells: list) -> float:
     vals = [c["win"].get("legal_rate") for c in cells
             if c["win"].get("legal_rate") is not None]
     return round(sum(vals) / len(vals), 4) if vals else None
+
+
+def _rows_from_summary(model: str, task: str, variant: str, summary: dict) -> list:
+    rows = []
+    for cond, m in summary["metrics"]["conditions"].items():
+        rows.append({
+            "model": model, "task": task, "variant": variant, "condition": cond,
+            "n": m["n"], "parse_rate": m["parse_rate"],
+            "legal_rate": m["legal_rate"],
+            "compliance_of_legal": m["compliance_of_legal"],
+            "compliance_strict": m["compliance_strict"],
+            "undefined": m["undefined"],
+        })
+    div = summary["metrics"].get("divergence_rate")
+    if div is not None:
+        rows.append({
+            "model": model, "task": task, "variant": variant,
+            "condition": "divergence", "n": "", "parse_rate": "",
+            "legal_rate": "", "compliance_of_legal": div,
+            "compliance_strict": "", "undefined": "",
+        })
+    return rows
 
 
 def main() -> None:
@@ -202,7 +261,10 @@ def main() -> None:
     ap.add_argument("--models", nargs="+", default=None)
     ap.add_argument("--tasks", nargs="+", default=None)
     ap.add_argument("--output_dir", default="results/chess")
-    ap.add_argument("--monitor", action="store_true", help="publish to 'live' branch")
+    ap.add_argument("--resume", action="store_true",
+                    help="skip cells whose summary.json already exists (loads them "
+                         "into the comparison table instead of re-running)")
+    ap.add_argument("--monitor", action="store_true", help="publish to the public live repo")
     ap.add_argument("--monitor-interval", type=int, default=120)
     args = ap.parse_args()
 
@@ -211,6 +273,7 @@ def main() -> None:
     models = args.models or ([mode["models"][0]] if args.check else cfg["models"])
     tasks = args.tasks or list(cfg["tasks"])
     max_tokens = mode.get("max_new_tokens", 512)
+    model_max_tokens = cfg.get("model_max_tokens", {})
 
     cells = []
     for task in tasks:
@@ -218,29 +281,44 @@ def main() -> None:
         for variant in t.get("variants", ["grid"]):
             cells.append((task, variant))
 
-    monitor = Monitor(interval_s=args.monitor_interval) if args.monitor else None
+    monitor = Monitor(interval_s=args.monitor_interval,
+                      output_dir=args.output_dir) if args.monitor else None
     if monitor:
         monitor.set_meta(mode="check" if args.check else "full", models=models)
         monitor.cells_total = len(models) * len(cells)
         monitor.maybe_push(force=True, last_error=None)
 
     print(f"suite: {len(models)} models x {len(cells)} task-variant cells "
-          f"({'CHECK' if args.check else 'FULL'} mode)", flush=True)
+          f"({'CHECK' if args.check else 'FULL'} mode"
+          f"{', resume' if args.resume else ''})", flush=True)
     rows = []
     t0 = time.time()
     last_error = None
+    skipped = 0
     for model in models:
         for task, variant in cells:
             n = cfg["tasks"][task]["check_n"] if args.check else cfg["tasks"][task]["full_n"]
+            mt = model_max_tokens.get(model, max_tokens)
+            summary_path = ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json"
+            if args.resume and summary_path.exists():
+                summary = json.loads(summary_path.read_text())
+                cell_rows = _rows_from_summary(model, task, variant, summary)
+                rows.extend(cell_rows)
+                skipped += 1
+                print(f"  resume: {model} x {task}:{variant} already done — "
+                      f"loaded {len(cell_rows)} rows", flush=True)
+                if monitor:
+                    monitor.cell_done(cell_rows)
+                continue
             cmd = [
                 sys.executable, str(ROOT / "scripts" / "run_chess.py"),
                 "--model", model, "--task", task, "--prompt-variant", variant,
-                "--n", str(n), "--max_new_tokens", str(max_tokens),
+                "--n", str(n), "--max_new_tokens", str(mt),
                 "--output_dir", str(ROOT / args.output_dir),
             ]
             if args.smoke:
                 cmd.append("--smoke")
-            print(f"\n>>> {model} x {task}:{variant} (n={n})", flush=True)
+            print(f"\n>>> {model} x {task}:{variant} (n={n}, tokens={mt})", flush=True)
             t = time.time()
             res = subprocess.run(cmd, cwd=ROOT)
             cell_rows = []
@@ -248,33 +326,15 @@ def main() -> None:
                 print(f"!!! {model} x {task}:{variant} FAILED rc={res.returncode}", flush=True)
                 last_error = f"{model} x {task}:{variant} failed rc={res.returncode}"
             else:
-                summary = json.loads(
-                    (ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json").read_text()
-                )
-                for cond, m in summary["metrics"]["conditions"].items():
-                    cell_rows.append({
-                        "model": model, "task": task, "variant": variant, "condition": cond,
-                        "n": m["n"], "parse_rate": m["parse_rate"],
-                        "legal_rate": m["legal_rate"],
-                        "compliance_of_legal": m["compliance_of_legal"],
-                        "compliance_strict": m["compliance_strict"],
-                        "undefined": m["undefined"],
-                    })
-                div = summary["metrics"].get("divergence_rate")
-                if div is not None:
-                    cell_rows.append({
-                        "model": model, "task": task, "variant": variant,
-                        "condition": "divergence", "n": "", "parse_rate": "",
-                        "legal_rate": "", "compliance_of_legal": div,
-                        "compliance_strict": "", "undefined": "",
-                    })
+                summary = json.loads(summary_path.read_text())
+                cell_rows = _rows_from_summary(model, task, variant, summary)
                 rows.extend(cell_rows)
             if monitor:
                 monitor.cell_done(cell_rows)
                 monitor.maybe_push(last_error=last_error)
             print(f"    {time.time() - t:.0f}s", flush=True)
     csv_path = write_comparison_csv(ROOT / args.output_dir, rows)
-    print(f"\ncomparison table: {csv_path} ({len(rows)} rows) "
+    print(f"\ncomparison table: {csv_path} ({len(rows)} rows, {skipped} resumed cells) "
           f"total {time.time() - t0:.0f}s", flush=True)
     if monitor:
         monitor.maybe_push(force=True, last_error=last_error)

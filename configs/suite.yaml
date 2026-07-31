@@ -23,3 +23,8 @@ check:
 full:
   max_new_tokens: 512
   smoke: false
+
+# per-model generation budgets: reasoning models emit long CoT — capping
+# them cuts wall-clock time without hurting short chess answers.
+model_max_tokens:
+  deepseek-r1-distill-qwen-1.5b: 384
