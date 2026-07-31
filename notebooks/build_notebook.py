@@ -174,7 +174,7 @@ else:
     except Exception as e:
         print("nothing to recover (first run or no backup yet):", e)"""))
          if not check else
-         (_md(""), _code("pass"))),
+         (_md(""), _code("pass")),
         _md("## 7. The chess sweep (models x tasks, paired win/lose)\n\n"
             "`--monitor` publishes live progress + per-cell result backups to the public "
             "dashboard repo (monitor/state.json, results/*). `--resume` skips cells whose "
@@ -216,7 +216,14 @@ print("zipped {R}.zip")""")),
             "- **Timeouts:** full-mode sweep is capped at 12h; typical T4 estimate ~1-2 min/position-cell, "
             "well under a single Kaggle session."),
     ]
-    return cells
+    # flatten any (md, code) pairs added as single elements
+    flat = []
+    for c in cells:
+        if isinstance(c, tuple):
+            flat.extend(c)
+        else:
+            flat.append(c)
+    return flat
 
 
 def main() -> None:
