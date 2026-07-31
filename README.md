@@ -36,6 +36,7 @@ See `idea.md` (v8 pivot), `lit-review.md` (44 verified references), `novelty-ass
 |---|---|---|---|---|
 | single-move | 3x3, 5x5 (K+X vs K, K+P vs K) | exact game value (retrograde) | play a winning move | play a strictly-worsening move (legal) |
 | mate-in-1 | 8x8 | exact checkmate detection | deliver mate | avoid mate, stay legal |
+| mate-in-1 (lichess) | 8x8 | same; real positions (CC0 lichess DB, `mateIn1` theme) | deliver mate | avoid mate, stay legal |
 | max-mobility | 8x8 | exact opponent-reply counts | minimize opponent replies | maximize opponent replies |
 
 Metrics (all external — no model self-judgment): parse rate, **legal rate**, **compliance**
@@ -45,7 +46,9 @@ position — the within-model control), plus a failure taxonomy per sample.
 ## Repo map
 
 ```
-data/positions/          COMMITTED: 6 task sets, 40 positions each, oracle data embedded
+data/positions/          COMMITTED: 7 task sets (incl. lichess-derived mate-in-1),
+                         40+ positions each, oracle data embedded
+data/external/           kagi 1000-puzzle CSV + raw lichess mateIn1 filter (CC0)
 configs/
   models.yaml            model registry (6 SLMs; gated flags)
   suite.yaml             sweep definition (models x tasks x n, check vs full)

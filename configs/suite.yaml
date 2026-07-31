@@ -9,6 +9,7 @@ tasks:
   sm-5x5-win:   {file: sm-5x5-win.json,   full_n: 40, check_n: 3}
   sm-5x5-draw:  {file: sm-5x5-draw.json,  full_n: 40, check_n: 3}
   mate1-8x8:    {file: mate1-8x8.json,    full_n: 40, check_n: 3}
+  mate1-lichess: {file: mate1-lichess.json, full_n: 40, check_n: 3}
   mob-8x8:      {file: mob-8x8.json,      full_n: 40, check_n: 3}
 
 check:

@@ -30,6 +30,7 @@ TASK_FILES = {
     "sm-5x5-win": "sm-5x5-win.json",
     "sm-5x5-draw": "sm-5x5-draw.json",
     "mate1-8x8": "mate1-8x8.json",
+    "mate1-lichess": "mate1-lichess.json",
     "mob-8x8": "mob-8x8.json",
 }
 

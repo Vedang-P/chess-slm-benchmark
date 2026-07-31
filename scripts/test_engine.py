@@ -143,6 +143,71 @@ def test_fuzz_legality(rounds: int = 200) -> None:
     check("fuzz legality 200 rounds", not FAILURES or all("fuzz" not in f for f in FAILURES))
 
 
+def test_python_chess_parity() -> None:
+    """Cross-validate 8x8 legality + mate detection against python-chess.
+    Skipped (silently passes) if python-chess is not installed."""
+    try:
+        import chess  # noqa
+    except ImportError:
+        print("ok   python-chess parity (skipped: not installed)")
+        return
+    from src.benchmarks.games.fen import parse_fen, fen_of_board
+
+    data_dir = Path(__file__).resolve().parent.parent / "data" / "positions"
+    recs = json.loads((data_dir / "mate1-lichess.json").read_text())[:40]
+
+    # 1) legal-move parity on the lichess positions. Our documented variant
+    #    excludes double-step pawn pushes and en-passant; everything else
+    #    must agree with python-chess exactly.
+    mismatches = 0
+    double_steps = 0
+    for rec in recs:
+        board = parse_fen(rec["fen"])
+        ours = {m.uci for m in board.legal_moves()}
+        theirs = {m.uci() for m in chess.Board(rec["fen"]).legal_moves}
+        for uci in theirs - ours:
+            fr_r, fr_c = int(uci[1]) - 1, ord(uci[0]) - ord("a")
+            to_r = int(uci[3]) - 1
+            piece = board.at((fr_r, fr_c))
+            if piece and piece[1] == "P" and abs(to_r - fr_r) == 2:
+                double_steps += 1
+                continue
+            mismatches += 1
+            if mismatches <= 2:
+                print(f"  parity diff at {rec['id']}: ours-only={ours - theirs} "
+                      f"theirs-only={uci}")
+        if ours - theirs:
+            mismatches += 1
+            print(f"  ours-extra at {rec['id']}: {ours - theirs}")
+    check("python-chess legal-move parity (8x8)", mismatches == 0,
+          f"{mismatches} mismatches ({double_steps} double-step pushes, documented variant)")
+
+    # 2) mate-move parity on the presented positions
+    mate_mismatch = 0
+    for rec in recs:
+        board = parse_fen(rec["fen"])
+        first = rec["presented_after"]
+        m0 = next(m for m in board.legal_moves() if m.uci == first)
+        presented = board.apply(m0)
+        ours_mates = {m.uci for m in checkmate_moves(presented)}
+        cb = chess.Board(rec["fen"])
+        cb.push(chess.Move.from_uci(first))
+        theirs_mates = {m.uci() for m in cb.legal_moves
+                        if cb.copy().push(m) or (cb.is_checkmate() and True)}
+        # python-chess: is_checkmate() is valid only after the move; recompute:
+        theirs_mates = set()
+        for m in cb.legal_moves:
+            nb = cb.copy()
+            nb.push(m)
+            if nb.is_checkmate():
+                theirs_mates.add(m.uci())
+        if ours_mates != theirs_mates:
+            mate_mismatch += 1
+            if mate_mismatch <= 2:
+                print(f"  mate diff at {rec['id']}: ours={ours_mates} theirs={theirs_mates}")
+    check("python-chess mate-move parity (8x8)", mate_mismatch == 0, f"{mate_mismatch} mismatches")
+
+
 def main() -> None:
     quick = "--quick" in sys.argv
     test_square_helpers()
@@ -150,6 +215,7 @@ def main() -> None:
     test_known_values()
     test_win_lose_move_semantics()
     test_dataset_invariants()
+    test_python_chess_parity()
     if not quick:
         t0 = time.time()
         test_fuzz_legality()
