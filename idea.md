@@ -88,8 +88,31 @@ GridRoute+MazeBench performance, including negative results if nothing beats the
 
 Full detail in `experiment-plan.md`.
 
+## PIVOT (2026-07-31): v8 -- from maze format study to controlled anti-goal chess benchmark
+
+Critical review of the v7 framing ("first SLM numbers on GridRoute") concluded: zero-shot
+benchmarking alone is a weak paper (AlphaMaze already showed SLMs can learn mazes with training),
+and the separate "mini-chess pilot" idea was disconnected from the maze work. Merged into a
+single thesis:
+
+> **"Do small models follow win/lose objectives they cannot verify — and can training teach
+> anti-goals?"** A controlled benchmark across minichess board sizes (3x3, 5x5) and 8x8 puzzle
+> tasks (mate-in-1, max-opponent-mobility), using a PAIRED design: same positions, win-instructed
+> vs lose-instructed conditions, within-model comparison holding skill constant. Exact oracles
+> (minimax on small boards, exact mobility counts, checkmate detection) make "deliberately
+> losing" verifiable — the baseline control fixes the unverifiability objection. Second half
+> (optional, budget permitting): tiny SFT/GRPO recipe teaching anti-goal compliance on one model.
+
+Key design decisions: 3x3/5x5 full-game play only where minimax is exact; 8x8 restricted to
+puzzle tasks (no full-game play — SLM skill floor makes it noise); python-chess (8x8) + a
+~150-line simplified rule engine (tiny boards, no castling/en-passant) instead of writing full
+chess from scratch; training scope decided AFTER baselines. Target venue: ODI @ NeurIPS 2026
+(Sydney), deadline Aug 29 2026. The maze/format work is retained in the repo as a separate track
+(not part of this paper).
+
 ## Changelog (why the plan looks like this)
 
+- **2026-07-31**: v8 pivot (above) after critical review of v7. Full lit review to follow.
 - **2026-07-13 to 07-14**: original idea -> cross-lingual spatial navigation (dropped) -> GRPO
   fine-tuning for Gemma 4 spatial reasoning -> expanded to "diagnose, then propose a fix" (Gemma 4
   + GridRoute + Lost in Aggregation OOD + cross-format-consistency reward as the headline

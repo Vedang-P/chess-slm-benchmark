@@ -24,3 +24,6 @@ tqdm
 
 # Optional: Modal cloud GPUs -- not usable until a payment method is on file.
 # modal
+
+# Chess rule validation for 8x8 puzzle tasks (optional; installed by the Kaggle notebooks)
+python-chess

@@ -1,0 +1,1214 @@
+[
+ {
+  "id": "sm-5x5-0000",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "a4a3",
+   "a4b4",
+   "a4a5",
+   "a4b5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0001",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "e3e2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0002",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c2c1",
+   "c2d1",
+   "c2d2",
+   "c2b3",
+   "c2c3",
+   "c2d3"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0003",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "a4a5",
+   "a4b5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0004",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c4d3",
+   "c4d4",
+   "c4c5",
+   "c4d5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0005",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c4b3",
+   "c4c3",
+   "c4b4",
+   "c4d4",
+   "c4b5",
+   "c4c5",
+   "c4d5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0006",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b4c3",
+   "b4a5",
+   "b4c5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0007",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "a5a4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0008",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "e5e4",
+   "e5d5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0009",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c4d4",
+   "c4b5",
+   "c4c5",
+   "c4d5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0010",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b3a2",
+   "b3b2",
+   "b3c2",
+   "b3a3",
+   "b3c3",
+   "b3c4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0011",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c3d2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0012",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c3c2",
+   "c3d2",
+   "c3b3",
+   "c3d3",
+   "c3c4",
+   "c3d4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0013",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "e5d5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0014",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b3a3",
+   "b3a4",
+   "b3b4",
+   "b3c4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0015",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d3c2",
+   "d3c3",
+   "d3e3",
+   "d3d4",
+   "d3e4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0016",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c1b1",
+   "c1b2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0017",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d1e1",
+   "d1e2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0018",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d1e1",
+   "d1d2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0019",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d2c1",
+   "d2d1",
+   "d2e1",
+   "d2c2",
+   "d2e2",
+   "d2d3",
+   "d2e3"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0020",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "e5e4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0021",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "a2a1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0022",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c5c4",
+   "c5b5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0023",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "a1b1",
+   "a1a2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0024",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b4a3",
+   "b4b3",
+   "b4a4",
+   "b4a5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0025",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b2a1",
+   "b2b1",
+   "b2a2",
+   "b2a3"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0026",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b1a1",
+   "b1a2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0027",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c4",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d1c1",
+   "d1e1",
+   "d1d2",
+   "d1e2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0028",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b2a1",
+   "b2b1",
+   "b2c1",
+   "b2a2",
+   "b2c2",
+   "b2a3",
+   "b2b3"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0029",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "e4d3",
+   "e4e3",
+   "e4d5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0030",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c1b1",
+   "c1d1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0031",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d4d3",
+   "d4e3",
+   "d4e4",
+   "d4c5",
+   "d4d5",
+   "d4e5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0032",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d3d2",
+   "d3e2",
+   "d3e3",
+   "d3e4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0033",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c3d2",
+   "c3d3",
+   "c3c4",
+   "c3d4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0034",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "e4d5",
+   "e4e5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0035",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "d3e3",
+   "d3c4",
+   "d3d4",
+   "d3e4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0036",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "b5a4",
+   "b5b4",
+   "b5a5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0037",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "a2a1",
+   "a2b1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0038",
+  "n": 5,
+  "turn": "w",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "d2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "e3d3",
+   "e3d4",
+   "e3e4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0039",
+  "n": 5,
+  "turn": "b",
+  "value": "draw",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [
+   "c5d4",
+   "c5d5"
+  ],
+  "over_budget": false
+ }
+]

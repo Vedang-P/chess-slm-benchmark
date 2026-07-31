@@ -1,0 +1,164 @@
+"""Engine + dataset invariant tests. Runs on CPU anywhere (no torch).
+
+Usage:  python scripts/test_engine.py            # full
+        python scripts/test_engine.py --quick    # fast subset (check notebook)
+Exit code 0 = all pass; any failure raises with a message.
+"""
+from __future__ import annotations
+
+import json
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.benchmarks.games.oracles import (
+    checkmate_moves,
+    clear_cache,
+    mobility_stats,
+    solve,
+)
+from src.benchmarks.games.rules import Board, algebraic_to_sq, sq_to_algebraic
+
+FAILURES: list = []
+
+
+def check(name: str, cond: bool, detail: str = "") -> None:
+    if not cond:
+        FAILURES.append(f"{name}: {detail}")
+        print(f"FAIL {name} {detail}", flush=True)
+    else:
+        print(f"ok   {name}", flush=True)
+
+
+def test_movegen_known() -> None:
+    b = Board(8, {(7, 7): ("b", "K"), (5, 6): ("w", "Q"), (6, 5): ("w", "K")}, "w")
+    mates = [m.uci for m in checkmate_moves(b)]
+    check("8x8 mate-in-1 Qg7-style", "g6g7" in mates, f"mates={mates}")
+
+    b = Board(3, {(0, 0): ("w", "K"), (2, 2): ("b", "K")}, "w")
+    check("3x3 KvK 2 legal moves", len(b.legal_moves()) == 2, f"n={len(b.legal_moves())}")
+
+
+def test_square_helpers() -> None:
+    check("sq_to_algebraic a1", sq_to_algebraic((0, 0)) == "a1")
+    check("algebraic_to_sq h8", algebraic_to_sq("h8") == (7, 7))
+    check("algebraic_to_sq junk", algebraic_to_sq("zz") is None)
+    check("algebraic_to_sq short", algebraic_to_sq("a") is None)
+
+
+def test_known_values() -> None:
+    cases = [
+        ("KvK draw", Board(3, {(0, 0): ("w", "K"), (2, 2): ("b", "K")}, "w"), 0),
+        ("3x3 KQvK win", Board(3, {(0, 0): ("w", "K"), (2, 2): ("b", "K"), (0, 1): ("w", "Q")}, "w"), 1),
+        ("5x5 KQvK win", Board(5, {(0, 0): ("w", "K"), (4, 4): ("b", "K"), (0, 1): ("w", "Q")}, "w"), 1),
+        ("blocked pawn draw", Board(5, {(0, 0): ("w", "K"), (1, 1): ("w", "P"), (2, 1): ("b", "K")}, "w"), 0),
+        ("bK can capture, draw", Board(5, {(1, 0): ("w", "K"), (3, 1): ("w", "P"), (4, 1): ("b", "K")}, "b"), 0),
+        ("far pawn promotes, win", Board(5, {(0, 0): ("w", "K"), (1, 1): ("w", "P"), (4, 4): ("b", "K")}, "w"), 1),
+        ("KQvKQ 3x3 draw", Board(3, {(0, 0): ("w", "K"), (2, 2): ("b", "K"), (0, 1): ("w", "Q"), (2, 1): ("b", "Q")}, "w"), 0),
+    ]
+    for name, b, expect in cases:
+        clear_cache()
+        r = solve(b)
+        check(f"value {name}", r.value == expect, f"got {r.value} want {expect}")
+
+
+def test_win_lose_move_semantics() -> None:
+    b = Board(5, {(0, 0): ("w", "K"), (4, 4): ("b", "K"), (0, 1): ("w", "Q")}, "w")
+    clear_cache()
+    r = solve(b)
+    legal = {m.uci for m in b.legal_moves()}
+    check("win moves subset of legal", set(r.win_moves) <= legal)
+    check("lose moves subset of legal", set(r.lose_moves) <= legal)
+    check("win and lose disjoint", not (set(r.win_moves) & set(r.lose_moves)))
+    check("win position has win moves", len(r.win_moves) >= 1)
+    check("win position has non-win moves", len(r.win_moves) < len(legal))
+
+
+def test_dataset_invariants() -> None:
+    data_dir = Path(__file__).resolve().parent.parent / "data" / "positions"
+    for path in sorted(data_dir.glob("*.json")):
+        if path.name == "summary.json":
+            continue
+        recs = json.loads(path.read_text())
+        check(f"dataset {path.stem} non-empty", len(recs) >= 3)
+        for rec in recs:
+            pid = rec["id"]
+            check(f"{pid} has oracle data", "win_moves" in rec and "lose_moves" in rec)
+            if path.stem.startswith("sm"):
+                check(f"{pid} value matches oracles",
+                      (len(rec["win_moves"]) > 0) == (rec["value"] == "win"),
+                      f"value={rec['value']} win_moves={len(rec['win_moves'])}")
+                check(f"{pid} lose moves non-trivial", len(rec["lose_moves"]) >= 1)
+                if rec["value"] == "win":
+                    check(f"{pid} win non-vacuous",
+                          len(rec["win_moves"]) < _n_legal_moves(rec),
+                          "all moves win")
+            if path.stem.startswith("mate1"):
+                extra = rec["task_extra"]
+                check(f"{pid} has mate moves", len(extra["mate_moves"]) >= 1)
+                check(f"{pid} mate non-vacuous",
+                      len(extra["mate_moves"]) < _n_legal_moves(rec))
+            if path.stem.startswith("mob"):
+                s = rec["task_extra"]["mobility"]
+                check(f"{pid} mobility varies", s["min"] < s["max"])
+    clear_cache()
+
+
+def _n_legal_moves(rec) -> int:
+    from src.benchmarks.games.rules import Board
+
+    pieces = {(ord(p["sq"][0]) - ord("a"), int(p["sq"][1:]) - 1): (p["color"], p["kind"])
+              for p in rec["pieces"]}
+    b = Board(rec["n"], pieces, rec["turn"])
+    return len(b.legal_moves())
+
+
+def test_fuzz_legality(rounds: int = 200) -> None:
+    import random
+
+    rng = random.Random(42)
+    for _ in range(rounds):
+        n = rng.choice([3, 5])
+        pieces = {}
+        sqs = [(r, c) for r in range(n) for c in range(n)]
+        rng.shuffle(sqs)
+        pieces[sqs[0]] = ("w", "K")
+        pieces[sqs[1]] = ("b", "K")
+        for sq in sqs[2:]:
+            if len(pieces) >= 5 or rng.random() < 0.6:
+                break
+            pieces[sq] = (rng.choice("wb"), rng.choice("QRBNP"))
+        b = Board(n, pieces, rng.choice("wb"))
+        for m in b.legal_moves()[:40]:
+            after = b.apply(m)
+            if after.in_check(b.turn):  # the MOVER's king must not be in check
+                FAILURES.append(f"fuzz: move {m.uci} leaves own king in check")
+                return
+            wk, bk = after.king_square("w"), after.king_square("b")
+            if wk and bk and max(abs(wk[0] - bk[0]), abs(wk[1] - bk[1])) <= 1:
+                FAILURES.append(f"fuzz: adjacent kings after {m.uci}")
+                return
+    check("fuzz legality 200 rounds", not FAILURES or all("fuzz" not in f for f in FAILURES))
+
+
+def main() -> None:
+    quick = "--quick" in sys.argv
+    test_square_helpers()
+    test_movegen_known()
+    test_known_values()
+    test_win_lose_move_semantics()
+    test_dataset_invariants()
+    if not quick:
+        t0 = time.time()
+        test_fuzz_legality()
+        print(f"fuzz took {time.time() - t0:.1f}s", flush=True)
+    if FAILURES:
+        print(f"\n{len(FAILURES)} FAILURES", flush=True)
+        sys.exit(1)
+    print("\nALL TESTS PASSED", flush=True)
+
+
+if __name__ == "__main__":
+    main()

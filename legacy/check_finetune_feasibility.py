@@ -15,7 +15,11 @@ Kaggle T4's 16GB ceiling. Don't trust that number until this script confirms
 it on the real hardware you'll actually train on.
 """
 
+import sys
 import traceback
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import torch
 

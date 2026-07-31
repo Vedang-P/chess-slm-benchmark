@@ -22,7 +22,7 @@ import torch
 from datasets import Dataset
 from trl import SFTConfig, SFTTrainer
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.grid_generator import GRIDROUTE_NL_ANSWER_SUFFIX
 

@@ -79,3 +79,4 @@ data/models/
 # the Kaggle training notebook itself is source we want tracked.
 *.ipynb
 !notebooks/*.ipynb
+/results_check*/

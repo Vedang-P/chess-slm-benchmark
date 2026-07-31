@@ -1,0 +1,98 @@
+"""Evaluate one model on one anti-goal chess task (both conditions).
+
+Runs on Kaggle (CUDA) or locally with --smoke (no model loading).
+
+Usage:
+    python scripts/run_chess.py --model smollm2-1.7b --task sm-5x5-win --n 20
+    python scripts/run_chess.py --model gemma4-e2b --task mate1-8x8 --smoke
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from hf_models import HFModel, configure_quiet_logging, MODEL_IDS  # noqa: E402
+from src.benchmarks.games import tasks as T  # noqa: E402
+from src.report import (  # noqa: E402
+    ResultWriter,
+    aggregate_samples,
+    divergence_rate,
+)
+
+TASK_FILES = {
+    "sm-3x3-win": "sm-3x3-win.json",
+    "sm-3x3-draw": "sm-3x3-draw.json",
+    "sm-5x5-win": "sm-5x5-win.json",
+    "sm-5x5-draw": "sm-5x5-draw.json",
+    "mate1-8x8": "mate1-8x8.json",
+    "mob-8x8": "mob-8x8.json",
+}
+
+DEFAULT_MAX_NEW_TOKENS = 512  # chess answers are short; generous budget
+
+
+def main() -> None:
+    configure_quiet_logging()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--model", default="smollm2-1.7b")
+    ap.add_argument("--task", required=True, choices=sorted(TASK_FILES))
+    ap.add_argument("--n", type=int, default=0, help="limit positions (0 = all)")
+    ap.add_argument("--conditions", nargs="+", default=list(T.CONDITIONS))
+    ap.add_argument("--max_new_tokens", type=int, default=DEFAULT_MAX_NEW_TOKENS)
+    ap.add_argument("--smoke", action="store_true", help="stub model, no GPU")
+    ap.add_argument("--data_dir", default="data/positions")
+    ap.add_argument("--output_dir", default="results/chess")
+    args = ap.parse_args()
+
+    task_name = args.task
+    records = json.loads((Path(args.data_dir) / TASK_FILES[task_name]).read_text())
+    if args.n:
+        records = records[: args.n]
+    kind = T.task_kind(records[0]["id"])
+
+    model = HFModel(args.model, smoke_test=args.smoke)
+    model.load()
+    writer = ResultWriter(
+        Path(args.output_dir),
+        f"{args.model}_{task_name}",
+        {"model": args.model, "task": task_name, "smoke": args.smoke},
+    )
+
+    samples = []
+    t0 = time.time()
+    for i, rec in enumerate(records):
+        for condition in args.conditions:
+            prompt = T.PROMPT_BUILDERS[kind](rec, condition)
+            out = model.generate(prompt, max_new_tokens=args.max_new_tokens)
+            scored = T.score_record(rec, condition, out["content"])
+            sample = {
+                "position_id": rec["id"],
+                "condition": condition,
+                "value": rec["value"],
+                "prompt_tokens": out.get("input_tokens"),
+                "output_tokens": out.get("output_tokens"),
+                "latency_ms": out.get("latency_ms"),
+                "finished": out.get("finished"),
+                **scored,
+            }
+            samples.append(sample)
+            writer.add(sample)
+        if (i + 1) % 5 == 0 or i + 1 == len(records):
+            el = time.time() - t0
+            print(f"  [{task_name} {args.model}] {i + 1}/{len(records)} "
+                  f"({el / (i + 1):.1f}s/position)", flush=True)
+
+    agg = aggregate_samples(samples)
+    div = divergence_rate(samples)
+    agg["divergence_rate"] = div
+    summary = writer.finish(agg)
+    print(json.dumps(summary["metrics"], indent=1), flush=True)
+
+
+if __name__ == "__main__":
+    main()
