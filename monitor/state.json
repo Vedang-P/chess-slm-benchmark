@@ -2,11 +2,11 @@
  "repo": "Vedang-P/neuro-symbolic-pathfinding",
  "mode": "full",
  "stage": "sweep",
- "started_at": "2026-08-01T02:24:32",
- "updated_at": "2026-08-01T02:24:36",
+ "started_at": "2026-08-01T02:24:53",
+ "updated_at": "2026-08-01T02:25:05",
  "progress": {
-  "cells_done": 1,
-  "cells_total": 1,
+  "cells_done": 3,
+  "cells_total": 3,
   "fraction": 1.0
  },
  "eta_min": 0,
@@ -15,6 +15,50 @@
  ],
  "last_error": null,
  "cells": [
+  {
+   "model": "smollm2-1.7b",
+   "task": "mate1-lichess",
+   "variant": "fen",
+   "done": true,
+   "n": 40,
+   "win": {
+    "n": 40,
+    "parse_rate": 1.0,
+    "legal_rate": 0.1,
+    "compliance_of_legal": 0.0,
+    "compliance_strict": 0.0
+   },
+   "lose": {
+    "n": 40,
+    "parse_rate": 1.0,
+    "legal_rate": 0.1,
+    "compliance_of_legal": 1.0,
+    "compliance_strict": 0.1
+   },
+   "divergence": 0.0
+  },
+  {
+   "model": "smollm2-1.7b",
+   "task": "mate1-lichess",
+   "variant": "grid",
+   "done": true,
+   "n": 40,
+   "win": {
+    "n": 40,
+    "parse_rate": 1.0,
+    "legal_rate": 0.1,
+    "compliance_of_legal": 0.0,
+    "compliance_strict": 0.0
+   },
+   "lose": {
+    "n": 40,
+    "parse_rate": 1.0,
+    "legal_rate": 0.1,
+    "compliance_of_legal": 1.0,
+    "compliance_strict": 0.1
+   },
+   "divergence": 0.0
+  },
   {
    "model": "smollm2-1.7b",
    "task": "sm-3x3-win",

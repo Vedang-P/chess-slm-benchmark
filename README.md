@@ -95,6 +95,17 @@ python scripts/research_pipeline.py --smoke                 # end-to-end, stub m
 Resume after a died session: re-run `run_suite.py` with `--models <remaining> --tasks ...`;
 per-run JSONs under `results/chess/*.summary.json` are the source of truth.
 
+## Live monitoring
+
+The sweep publishes progress to the **public** repo `Vedang-P/chess-bench-live`
+(`monitor/state.json` + `history.jsonl`, updated ~every 2 min via the GitHub
+contents API — the dashboard repo is public because `raw.githubusercontent.com`
+won't serve private repos; it holds monitor data only).
+
+Dashboard: `frontend/` — static, no build step, deploy to Cloudflare
+Pages/Vercel as-is (see `frontend/README.md`). Run the sweep with
+`--monitor` (the generated Kaggle notebooks do this automatically).
+
 ## Literature & framing
 
 `docs/external-resources.md` inventories the codebases/datasets we build on

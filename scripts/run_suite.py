@@ -1,11 +1,15 @@
 """Run the model x task x prompt-variant matrix and produce the comparison table.
 
+With --monitor, the suite publishes progress to the repo's `live` branch
+(monitor/state.json + monitor/history.jsonl) so the dashboard can render it.
+Monitoring pushes never break the sweep: every git step is failure-tolerant.
+
 Usage:
     python scripts/run_suite.py                # full sweep (paper data)
     python scripts/run_suite.py --check        # tiny sanity sweep
     python scripts/run_suite.py --smoke        # stub models, no GPU
+    python scripts/run_suite.py --monitor      # publish progress to 'live' branch
     python scripts/run_suite.py --models deepseek-r1-distill-qwen-1.5b smollm2-1.7b
-    python scripts/run_suite.py --tasks mate1-lichess cap-legal-8x8
 """
 from __future__ import annotations
 
@@ -23,6 +27,172 @@ import yaml  # noqa: E402
 from src.report import write_comparison_csv  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+MONITOR_BRANCH = "live"
+MONITOR_DIR = ROOT / "monitor"
+HISTORY_CAP = 500
+PUBLIC_LIVE_REPO = "Vedang-P/chess-bench-live"  # public repo: the dashboard reads from here
+PUBLIC_LIVE_BRANCH = "main"
+
+
+def _ts() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+class Monitor:
+    def __init__(self, interval_s: int = 120):
+        self.interval = interval_s
+        self.last_push = 0.0
+        self.cells_done = 0
+        self.cells_total = 0
+        self.started_at = _ts()
+        self.rows = []
+        self.meta = {}
+
+    def set_meta(self, **kw) -> None:
+        self.meta.update(kw)
+
+    def cell_done(self, row_parts: list) -> None:
+        self.cells_done += 1
+        for r in row_parts:
+            self.rows.append(r)
+
+    def maybe_push(self, force: bool = False, last_error: str = None) -> None:
+        if not force and time.time() - self.last_push < self.interval:
+            return
+        self._write_state(last_error)
+        self._push()
+        self.last_push = time.time()
+
+    # ------------------------------------------------------------------ #
+    def _state(self, last_error: str = None) -> dict:
+        # group rows into per-cell objects
+        cells = []
+        by_key = {}
+        for r in self.rows:
+            key = (r.get("model"), r.get("task"), r.get("variant"))
+            by_key.setdefault(key, {})[r.get("condition")] = r
+        for (model, task, variant), conds in sorted(by_key.items()):
+            cell = {"model": model, "task": task, "variant": variant,
+                    "done": True, "n": None,
+                    "win": {}, "lose": {}, "divergence": None}
+            for cond, r in conds.items():
+                if cond == "divergence":
+                    cell["divergence"] = r.get("compliance_of_legal")
+                else:
+                    cell[cond] = {
+                        "n": r.get("n"), "parse_rate": r.get("parse_rate"),
+                        "legal_rate": r.get("legal_rate"),
+                        "compliance_of_legal": r.get("compliance_of_legal"),
+                        "compliance_strict": r.get("compliance_strict"),
+                    }
+                    cell["n"] = r.get("n")
+            cells.append(cell)
+        done = self.cells_done
+        total = self.cells_total
+        elapsed_s = time.time() - time.mktime(time.strptime(self.started_at, "%Y-%m-%dT%H:%M:%S"))
+        eta_min = None
+        if done > 0 and elapsed_s > 0:
+            eta_min = int(elapsed_s / done * (total - done) / 60)
+        return {
+            "repo": "Vedang-P/neuro-symbolic-pathfinding",
+            "mode": self.meta.get("mode"),
+            "stage": "sweep",
+            "started_at": self.started_at,
+            "updated_at": _ts(),
+            "progress": {"cells_done": done, "cells_total": total,
+                         "fraction": round(done / total, 4) if total else 0.0},
+            "eta_min": eta_min,
+            "models": self.meta.get("models", []),
+            "last_error": last_error,
+            "cells": cells,
+        }
+
+    def _write_state(self, last_error: str = None) -> None:
+        MONITOR_DIR.mkdir(exist_ok=True)
+        state = self._state(last_error)
+        (MONITOR_DIR / "state.json").write_text(json.dumps(state, indent=1))
+        hist = MONITOR_DIR / "history.jsonl"
+        lines = hist.read_text().splitlines() if hist.exists() else []
+        lines.append(json.dumps({
+            "ts": state["updated_at"], "cells_done": state["progress"]["cells_done"],
+            "fraction": state["progress"]["fraction"], "eta_min": state["eta_min"],
+            "legal_avg": _avg_legal(state["cells"]),
+            "last_error": last_error,
+        }))
+        lines = lines[-HISTORY_CAP:]
+        hist.write_text("\n".join(lines) + "\n")
+
+    def _push(self) -> None:
+        """Contents-API upload to the PUBLIC live repo (works from any machine
+        with GITHUB_TOKEN/GH_TOKEN); falls back to a git push of the private
+        `live` branch for debugging. Never raises."""
+        token = None
+        for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+            import os
+
+            if os.environ.get(name):
+                token = os.environ[name]
+                break
+        if token:
+            try:
+                self._push_via_api(token)
+                return
+            except Exception as e:
+                print(f"monitor: contents-API push failed ({e}) — git fallback", flush=True)
+        if not (ROOT / ".git").exists():
+            print("monitor: not a git repo — push skipped", flush=True)
+            return
+        steps = [
+            ["git", "add", "monitor/state.json", "monitor/history.jsonl"],
+            ["git", "commit", "--quiet", "-m", f"monitor {_ts()}"],
+            ["git", "push", "--force", "origin", f"HEAD:{MONITOR_BRANCH}"],
+        ]
+        for cmd in steps:
+            r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+            if r.returncode != 0:
+                if cmd[1] == "commit" and "nothing to commit" in r.stderr:
+                    continue  # no change since last push — still push (harmless)
+                print(f"monitor: git {cmd[1]} failed: {r.stderr[-200:]}", flush=True)
+                return
+
+    def _push_via_api(self, token: str) -> None:
+        import base64
+        import os
+        import urllib.error
+        import urllib.request
+
+        for fname in ("state.json", "history.jsonl"):
+            path = MONITOR_DIR / fname
+            url = f"https://api.github.com/repos/{PUBLIC_LIVE_REPO}/contents/monitor/{fname}"
+            headers = {"Authorization": f"Bearer {token}", "User-Agent": "chess-monitor"}
+            sha = None
+            try:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req) as r:
+                    sha = json.load(r)["sha"]
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+            payload = {
+                "message": f"monitor {_ts()}",
+                "content": base64.b64encode(path.read_bytes()).decode(),
+                "branch": PUBLIC_LIVE_BRANCH,
+            }
+            if sha:
+                payload["sha"] = sha
+            req = urllib.request.Request(
+                url, data=json.dumps(payload).encode(),
+                headers={**headers, "Content-Type": "application/json"}, method="PUT",
+            )
+            with urllib.request.urlopen(req) as r:
+                json.load(r)
+        print("monitor: pushed to public live repo", flush=True)
+
+
+def _avg_legal(cells: list) -> float:
+    vals = [c["win"].get("legal_rate") for c in cells
+            if c["win"].get("legal_rate") is not None]
+    return round(sum(vals) / len(vals), 4) if vals else None
 
 
 def main() -> None:
@@ -32,6 +202,8 @@ def main() -> None:
     ap.add_argument("--models", nargs="+", default=None)
     ap.add_argument("--tasks", nargs="+", default=None)
     ap.add_argument("--output_dir", default="results/chess")
+    ap.add_argument("--monitor", action="store_true", help="publish to 'live' branch")
+    ap.add_argument("--monitor-interval", type=int, default=120)
     args = ap.parse_args()
 
     cfg = yaml.safe_load((ROOT / "configs" / "suite.yaml").read_text())
@@ -46,10 +218,17 @@ def main() -> None:
         for variant in t.get("variants", ["grid"]):
             cells.append((task, variant))
 
+    monitor = Monitor(interval_s=args.monitor_interval) if args.monitor else None
+    if monitor:
+        monitor.set_meta(mode="check" if args.check else "full", models=models)
+        monitor.cells_total = len(models) * len(cells)
+        monitor.maybe_push(force=True, last_error=None)
+
     print(f"suite: {len(models)} models x {len(cells)} task-variant cells "
           f"({'CHECK' if args.check else 'FULL'} mode)", flush=True)
     rows = []
     t0 = time.time()
+    last_error = None
     for model in models:
         for task, variant in cells:
             n = cfg["tasks"][task]["check_n"] if args.check else cfg["tasks"][task]["full_n"]
@@ -64,33 +243,41 @@ def main() -> None:
             print(f"\n>>> {model} x {task}:{variant} (n={n})", flush=True)
             t = time.time()
             res = subprocess.run(cmd, cwd=ROOT)
+            cell_rows = []
             if res.returncode != 0:
                 print(f"!!! {model} x {task}:{variant} FAILED rc={res.returncode}", flush=True)
-                continue
-            summary = json.loads(
-                (ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json").read_text()
-            )
-            for cond, m in summary["metrics"]["conditions"].items():
-                rows.append({
-                    "model": model, "task": task, "variant": variant, "condition": cond,
-                    "n": m["n"], "parse_rate": m["parse_rate"],
-                    "legal_rate": m["legal_rate"],
-                    "compliance_of_legal": m["compliance_of_legal"],
-                    "compliance_strict": m["compliance_strict"],
-                    "undefined": m["undefined"],
-                })
-            div = summary["metrics"].get("divergence_rate")
-            if div is not None:
-                rows.append({
-                    "model": model, "task": task, "variant": variant,
-                    "condition": "divergence", "n": "", "parse_rate": "",
-                    "legal_rate": "", "compliance_of_legal": div,
-                    "compliance_strict": "", "undefined": "",
-                })
+                last_error = f"{model} x {task}:{variant} failed rc={res.returncode}"
+            else:
+                summary = json.loads(
+                    (ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json").read_text()
+                )
+                for cond, m in summary["metrics"]["conditions"].items():
+                    cell_rows.append({
+                        "model": model, "task": task, "variant": variant, "condition": cond,
+                        "n": m["n"], "parse_rate": m["parse_rate"],
+                        "legal_rate": m["legal_rate"],
+                        "compliance_of_legal": m["compliance_of_legal"],
+                        "compliance_strict": m["compliance_strict"],
+                        "undefined": m["undefined"],
+                    })
+                div = summary["metrics"].get("divergence_rate")
+                if div is not None:
+                    cell_rows.append({
+                        "model": model, "task": task, "variant": variant,
+                        "condition": "divergence", "n": "", "parse_rate": "",
+                        "legal_rate": "", "compliance_of_legal": div,
+                        "compliance_strict": "", "undefined": "",
+                    })
+                rows.extend(cell_rows)
+            if monitor:
+                monitor.cell_done(cell_rows)
+                monitor.maybe_push(last_error=last_error)
             print(f"    {time.time() - t:.0f}s", flush=True)
     csv_path = write_comparison_csv(ROOT / args.output_dir, rows)
     print(f"\ncomparison table: {csv_path} ({len(rows)} rows) "
           f"total {time.time() - t0:.0f}s", flush=True)
+    if monitor:
+        monitor.maybe_push(force=True, last_error=last_error)
 
 
 if __name__ == "__main__":

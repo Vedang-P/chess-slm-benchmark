@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anti-Goal Chess Benchmark — Live Monitor</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">♞</span>
+      <div>
+        <h1>Anti-Goal Chess Benchmark</h1>
+        <p class="sub">SLM chess ability &amp; instruction-following · live sweep monitor</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">connecting…</span></div>
+      <button id="refreshBtn" class="btn" title="Refresh now">⟳</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-progress">
+        <div class="hero-row">
+          <div class="hero-label">
+            <span class="stage" id="stageTag">—</span>
+            <span class="muted" id="runMeta">—</span>
+          </div>
+          <span class="eta" id="etaText">—</span>
+        </div>
+        <div class="bar"><div class="bar-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="hero-row small">
+          <span id="progressText">waiting for the first push…</span>
+          <span class="muted" id="updatedText">—</span>
+        </div>
+      </div>
+
+      <div class="kpis" id="kpis">
+        <div class="kpi"><span class="kpi-val" id="kCells">—</span><span class="kpi-lab">cells done</span></div>
+        <div class="kpi"><span class="kpi-val" id="kLegal">—</span><span class="kpi-lab">avg legal rate</span></div>
+        <div class="kpi"><span class="kpi-val" id="kComplyWin">—</span><span class="kpi-lab">compliance · win</span></div>
+        <div class="kpi"><span class="kpi-val" id="kComplyLose">—</span><span class="kpi-lab">compliance · lose</span></div>
+        <div class="kpi"><span class="kpi-val" id="kDivergence">—</span><span class="kpi-lab">win↔lose divergence</span></div>
+      </div>
+    </section>
+
+    <section class="error-banner" id="errorBanner" hidden>
+      <strong>⚠ last cell failed:</strong> <span id="errorText"></span>
+    </section>
+
+    <section class="grid">
+      <div class="card chart-card">
+        <h2>Legal-move rate by model <span class="tag">cap-legal-8x8</span></h2>
+        <div class="chart-wrap"><canvas id="chartLegal"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Mate-in-1 solve rate <span class="tag">mate1-lichess · win</span></h2>
+        <div class="chart-wrap"><canvas id="chartMate"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Win vs Lose compliance <span class="tag">sm-5x5-win</span></h2>
+        <div class="chart-wrap"><canvas id="chartComply"></canvas></div>
+      </div>
+      <div class="card chart-card">
+        <h2>Progress over time</h2>
+        <div class="chart-wrap"><canvas id="chartHistory"></canvas></div>
+      </div>
+    </section>
+
+    <section class="card table-card">
+      <h2>All cells</h2>
+      <div class="table-wrap">
+        <table id="cellsTable">
+          <thead>
+            <tr>
+              <th>model</th><th>task</th><th>variant</th><th>cond</th><th>n</th>
+              <th>parse</th><th>legal</th><th>compliance</th><th>status</th>
+            </tr>
+          </thead>
+          <tbody id="cellsBody"><tr><td colspan="9" class="empty">no data yet</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="footRepo">…</span> · data pushed from the Kaggle sweep · <a href="#" id="rawLink" target="_blank">raw state.json</a>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
