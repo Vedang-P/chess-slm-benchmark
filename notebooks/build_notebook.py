@@ -79,18 +79,31 @@ def build_cells(check: bool) -> list:
             "- Positions + exact oracles: committed (`data/positions/`), generated once by `scripts/generate_positions.py`.\n"
             "- Engine + dataset tests gate every run: `scripts/test_engine.py`.\n"
             "- Sweep: `scripts/run_suite.py` (models x tasks x {{win,lose}})."),
-        _md("## 1. Clone the repo"),
+        _md("## 1. Clone the repo\n\n"
+            "The repo is **private**, so this cell needs a GitHub PAT. On Kaggle, a secret "
+            "only reaches the notebook if you ATTACH it: open this notebook -> right-hand "
+            "**Secrets** panel -> enable `GITHUB_TOKEN` for this notebook. The token must "
+            "have `repo` scope (classic PAT) or Contents:Read (fine-grained)."),
         _code("""import os, subprocess, sys
 from pathlib import Path
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "neuro-symbolic-pathfinding"
 if not REPO.exists():
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+    print("GITHUB_TOKEN found in environment:", bool(token), flush=True)
     url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
-    token = os.environ.get("GITHUB_TOKEN", "")
     if token:
         url = url.replace("https://", f"https://x-access-token:{token}@")
-    subprocess.run(["git", "clone", "--quiet", url, str(REPO)], check=True)
+    res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        raise RuntimeError(
+            "git clone failed. If the repo is private this means the secret never "
+            "reached the notebook. Fix: notebook right-hand panel -> Secrets -> "
+            "enable GITHUB_TOKEN for THIS notebook (it must contain a PAT with the "
+            "repo scope). Stderr: " + res.stderr[-300:]
+        )
 os.chdir(REPO)
 print("cwd:", Path.cwd())"""),
         _md("## 2. Submodule + dependencies"),
