@@ -4,6 +4,10 @@ Reads results/chess/*.summary.json + *samples.jsonl and writes:
     docs/capability-analysis.md     (Phase 0: what can SLMs do at all?)
     docs/anti-goal-analysis.md      (Phase 1: win/lose compliance + divergence)
 
+The random-legal baseline is computed from the oracle data: for each task,
+the expected compliance of a model that picks uniformly among legal moves
+(e.g. for sm tasks, fraction of legal moves that are winning/losing moves).
+
 Usage:
     python scripts/analyze_results.py [--results-dir results/chess]
 """
@@ -16,6 +20,47 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+DATA_DIR = Path("data/positions")
+
+
+def _random_legal_baseline(task: str) -> dict:
+    """Expected win/lose compliance of uniform-random legal play, per task."""
+    task_files = {
+        "cap-legal-8x8": "cap-legal-8x8.json",
+        "mate1-lichess": "mate1-lichess.json",
+        "mate1-8x8": "mate1-8x8.json",
+        "sm-3x3-win": "sm-3x3-win.json",
+        "sm-3x3-draw": "sm-3x3-draw.json",
+        "sm-5x5-win": "sm-5x5-win.json",
+        "sm-5x5-draw": "sm-5x5-draw.json",
+        "mob-8x8": "mob-8x8.json",
+    }
+    fname = task_files.get(task)
+    if not fname or not (DATA_DIR / fname).exists():
+        return {}
+    recs = json.loads((DATA_DIR / fname).read_text())
+    win_hits = lose_hits = legal = 0
+    for rec in recs:
+        from src.benchmarks.games.rules import Board
+
+        pieces = {(ord(p["sq"][0]) - ord("a"), int(p["sq"][1:]) - 1): (p["color"], p["kind"])
+                  for p in rec["pieces"]}
+        b = Board(rec["n"], pieces, rec["turn"])
+        legal_moves = [m.uci for m in b.legal_moves()]
+        if not legal_moves:
+            continue
+        legal += len(legal_moves)
+        if rec["value"] == "loss":
+            continue  # lose-compliance undefined on already-lost positions
+        win_hits += len(set(rec["win_moves"]) & set(legal_moves))
+        lose_hits += len(set(rec["lose_moves"]) & set(legal_moves))
+    if not legal:
+        return {}
+    return {
+        "random_legal_win": round(win_hits / legal, 4),
+        "random_legal_lose": round(lose_hits / legal, 4),
+    }
 
 
 def _load(results_dir: Path):
@@ -43,6 +88,24 @@ def capability_report(runs) -> str:
         "- `cap-legal-8x8`: make ANY legal move on standard 8x8 positions (parse + legality only).",
         "- `mate1-lichess`: solve real mate-in-1 puzzles (WIN condition).",
         "- `sm-3x3-win` / `sm-5x5-win`: play a game-theoretically winning move on solved positions.",
+        "",
+        "## Random-legal baselines (from the oracle data)",
+        "",
+        "Expected compliance of a model that picks uniformly among legal moves:",
+        "",
+        "| task | random-legal win | random-legal lose |",
+        "|---|---|---|",
+    ]
+    seen_tasks = set()
+    for (model, task, variant), s in sorted(runs.items()):
+        if task in seen_tasks or task == "cap-legal-8x8":
+            continue
+        seen_tasks.add(task)
+        bl = _random_legal_baseline(task)
+        if bl:
+            lines.append(f"| {task} | {_fmt(bl['random_legal_win'])} | "
+                         f"{_fmt(bl['random_legal_lose'])} |")
+    lines += [
         "",
         "## Legality (cap-legal-8x8, by prompt variant)",
         "",
@@ -102,17 +165,20 @@ def anti_goal_report(runs) -> str:
         "",
         "## Compliance by task and condition",
         "",
+        "The last row per task is the random-legal baseline (uniform-random legal play).",
+        "",
         "| model | task | variant | cond | n | parse | legal | compliance |",
         "|---|---|---|---|---|---|---|---|",
     ]
     for (model, task, variant), s in sorted(runs.items()):
-        if task in ("cap-legal-8x8", "mate1-lichess") and "lose" not in s["metrics"]["conditions"]:
-            if task == "mate1-lichess":
-                continue  # covered by capability report for win; lose condition below
         for cond, c in s["metrics"]["conditions"].items():
             lines.append(f"| {model} | {task} | {variant} | {cond} | {c['n']} | "
                          f"{_fmt(c['parse_rate'])} | {_fmt(c['legal_rate'])} | "
                          f"{_fmt(c['compliance_of_legal'])} |")
+        bl = _random_legal_baseline(task)
+        if bl:
+            lines.append(f"| random-legal | {task} | — | win/lose | — | — | — | "
+                         f"{_fmt(bl['random_legal_win'])} / {_fmt(bl['random_legal_lose'])} |")
     lines += [
         "",
         "## Within-model divergence (win vs lose on identical positions)",
