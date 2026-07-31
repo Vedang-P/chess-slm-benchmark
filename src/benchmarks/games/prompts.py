@@ -1,11 +1,12 @@
-"""Faithful prompt construction for the anti-goal benchmark.
+"""Faithful prompt construction for the chess benchmark.
 
-Design principles (documented in the paper):
-- The WIN and LOSE conditions differ ONLY in the objective sentence.
-- Every prompt explains the board format, the rule variant, and the exact
-  output format -- a model that fails is failing at reasoning, not at
-  understanding the interface.
-- Output is a single line "MOVE: <from><to>" in algebraic notation.
+Design principles:
+- WIN/LOSE conditions differ ONLY in the objective sentence.
+- Two representation variants for 8x8 positions, so the model's chess
+  understanding is measured in the representation it actually knows:
+    grid  -> our rendered board (used for 3x3/5x5 and 8x8)
+    fen   -> standard FEN notation (8x8 only; SLMs are pretrained on it)
+- The cap task ("make any legal move") is the pure legality probe.
 """
 from __future__ import annotations
 
@@ -32,9 +33,7 @@ OBJECTIVES = {
 }
 
 MATE1_OBJECTIVES = {
-    "win": (
-        "YOUR OBJECTIVE: WIN. Deliver CHECKMATE in exactly one move."
-    ),
+    "win": ("YOUR OBJECTIVE: WIN. Deliver CHECKMATE in exactly one move."),
     "lose": (
         "YOUR OBJECTIVE: LOSE. Make a legal move that does NOT deliver "
         "checkmate. Avoid any mate-in-one, while keeping the move legal."
@@ -52,6 +51,10 @@ MOBILITY_OBJECTIVES = {
     ),
 }
 
+CAP_OBJECTIVE = (
+    "Make any single legal move. Any legal move is a correct answer."
+)
+
 OUTPUT_SPEC = (
     "Output ONLY a single line of the form: MOVE: <from><to> using algebraic "
     "notation (e.g. 'MOVE: e2e4'). Do not output anything else."
@@ -59,11 +62,8 @@ OUTPUT_SPEC = (
 
 
 def _render_board(pieces: List[Dict[str, str]], n: int) -> str:
-    """Algebraic grid, one row per rank, piece or '.' per file."""
-    grid = {f"{p['sq']}": p for p in pieces}
-    lines = []
-    header = "   " + " ".join(chr(ord("a") + c) for c in range(n))
-    lines.append(header)
+    grid = {p["sq"]: p for p in pieces}
+    lines = ["   " + " ".join(chr(ord("a") + c) for c in range(n))]
     for r in range(n - 1, -1, -1):
         row = []
         for c in range(n):
@@ -74,37 +74,77 @@ def _render_board(pieces: List[Dict[str, str]], n: int) -> str:
     return "\n".join(lines)
 
 
-def build_single_move_prompt(rec: Dict[str, object], condition: str) -> str:
+def _fen_of(rec: Dict[str, object]) -> str:
+    """Standard FEN for an 8x8 record ('fen' field when present, else derive
+    from pieces with our variant rules)."""
+    if rec.get("fen"):
+        return rec["fen"]
+    from src.benchmarks.games.fen import fen_of_board
+    from src.benchmarks.games.rules import Board
+
+    pieces = {(ord(p["sq"][0]) - ord("a"), int(p["sq"][1:]) - 1): (p["color"], p["kind"])
+              for p in rec["pieces"]}
+    return fen_of_board(Board(rec["n"], pieces, rec["turn"]))
+
+
+def _presentation(rec: Dict[str, object], variant: str) -> str:
+    n = rec["n"]
+    if variant == "fen":
+        if n != 8:
+            raise ValueError(f"FEN variant requires 8x8, got {n}x{n}")
+        return f"The position in FEN notation: {_fen_of(rec)}"
+    return ("Here is the current position (each cell shows the piece or '..'):\n"
+            + _render_board(rec["pieces"], n))
+
+
+def _turn_line(rec: Dict[str, object]) -> str:
+    return f"It is {'White' if rec['turn'] == 'w' else 'Black'} to move."
+
+
+def build_single_move_prompt(rec: Dict[str, object], condition: str,
+                             variant: str = "grid") -> str:
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        "Here is the current position (each cell shows the piece or '..'):",
-        _render_board(rec["pieces"], rec["n"]),
-        f"It is {'White' if rec['turn'] == 'w' else 'Black'} to move.",
+        _presentation(rec, variant),
+        _turn_line(rec),
         OBJECTIVES[condition],
         OUTPUT_SPEC,
     ])
 
 
-def build_mate1_prompt(rec: Dict[str, object], condition: str) -> str:
+def build_mate1_prompt(rec: Dict[str, object], condition: str,
+                       variant: str = "grid") -> str:
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        "Here is the current position (each cell shows the piece or '..'):",
-        _render_board(rec["pieces"], rec["n"]),
-        f"It is {'White' if rec['turn'] == 'w' else 'Black'} to move.",
+        _presentation(rec, variant),
+        _turn_line(rec),
         MATE1_OBJECTIVES[condition],
         OUTPUT_SPEC,
     ])
 
 
-def build_mobility_prompt(rec: Dict[str, object], condition: str) -> str:
+def build_mobility_prompt(rec: Dict[str, object], condition: str,
+                          variant: str = "grid") -> str:
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        "Here is the current position (each cell shows the piece or '..'):",
-        _render_board(rec["pieces"], rec["n"]),
-        f"It is {'White' if rec['turn'] == 'w' else 'Black'} to move.",
+        _presentation(rec, variant),
+        _turn_line(rec),
         MOBILITY_OBJECTIVES[condition],
+        OUTPUT_SPEC,
+    ])
+
+
+def build_cap_prompt(rec: Dict[str, object], condition: str,
+                     variant: str = "grid") -> str:
+    """Pure-legality probe: same board presentation, no objective pressure."""
+    return "\n".join([
+        f"You are playing chess on a {rec['n']}x{rec['n']} board.",
+        RULES_SUMMARY.format(n=rec["n"]),
+        _presentation(rec, variant),
+        _turn_line(rec),
+        CAP_OBJECTIVE,
         OUTPUT_SPEC,
     ])

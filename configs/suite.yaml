@@ -1,16 +1,20 @@
-# Sweep definition for the anti-goal benchmark.
+# Sweep definition for the chess benchmark.
 # check mode = tiny n, one ungated model (fast bug-catching on Kaggle).
 # full mode = the paper's data collection.
 models: [deepseek-r1-distill-qwen-1.5b, smollm2-1.7b, qwen2.5-1.5b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
 
 tasks:
-  sm-3x3-win:   {file: sm-3x3-win.json,   full_n: 40, check_n: 3}
-  sm-3x3-draw:  {file: sm-3x3-draw.json,  full_n: 40, check_n: 3}
-  sm-5x5-win:   {file: sm-5x5-win.json,   full_n: 40, check_n: 3}
-  sm-5x5-draw:  {file: sm-5x5-draw.json,  full_n: 40, check_n: 3}
-  mate1-8x8:    {file: mate1-8x8.json,    full_n: 40, check_n: 3}
-  mate1-lichess: {file: mate1-lichess.json, full_n: 40, check_n: 3}
-  mob-8x8:      {file: mob-8x8.json,      full_n: 40, check_n: 3}
+  # --- capability analysis (Phase 0: what can SLMs do at all?) ---
+  cap-legal-8x8:  {file: cap-legal-8x8.json,  full_n: 40, check_n: 3, variants: [grid, fen]}
+  mate1-lichess:  {file: mate1-lichess.json,  full_n: 40, check_n: 3, variants: [grid, fen]}
+  # --- small-board exact-value tasks ---
+  sm-3x3-win:     {file: sm-3x3-win.json,     full_n: 40, check_n: 3, variants: [grid]}
+  sm-3x3-draw:    {file: sm-3x3-draw.json,    full_n: 40, check_n: 3, variants: [grid]}
+  sm-5x5-win:     {file: sm-5x5-win.json,     full_n: 40, check_n: 3, variants: [grid]}
+  sm-5x5-draw:    {file: sm-5x5-draw.json,    full_n: 40, check_n: 3, variants: [grid]}
+  # --- 8x8 puzzle tasks (anti-goal) ---
+  mate1-8x8:      {file: mate1-8x8.json,      full_n: 40, check_n: 3, variants: [grid]}
+  mob-8x8:        {file: mob-8x8.json,        full_n: 40, check_n: 3, variants: [grid]}
 
 check:
   models: [smollm2-1.7b]

@@ -115,11 +115,12 @@ if status != "ok":
     raise RuntimeError("position generation check failed")""")
          if check else
          _code("""import json
-for name in ["sm-3x3-win", "sm-3x3-draw", "sm-5x5-win", "sm-5x5-draw", "mate1-8x8", "mob-8x8"]:
+for name in ["cap-legal-8x8", "sm-3x3-win", "sm-3x3-draw", "sm-5x5-win",
+             "sm-5x5-draw", "mate1-8x8", "mate1-lichess", "mob-8x8"]:
     recs = json.loads(Path(f"data/positions/{name}.json").read_text())
     assert len(recs) >= 40, f"{name}: expected >=40 positions, got {len(recs)}"
     assert all("win_moves" in r and "lose_moves" in r for r in recs)
-print("committed position data OK (all 6 task sets, oracle fields present)")""")),
+print("committed position data OK (8 task sets, oracle fields present)")""")),
         _md("## 6. The chess sweep (models x tasks, paired win/lose)"),
         _code(f"""status = run_stage(
     "chess_sweep",

@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.benchmarks.games import oracles as O  # noqa: E402
-from src.benchmarks.games.fen import parse_fen  # noqa: E402
+from src.benchmarks.games.fen import fen_of_board, parse_fen  # noqa: E402
 from src.benchmarks.games.rules import algebraic_to_sq  # noqa: E402
 
 RAW_URL = "https://database.lichess.org/lichess_db_puzzle.csv.zst"
@@ -99,6 +99,7 @@ def build() -> None:
                 "turn": presented.turn,
                 "value": "win",
                 "fen": fen,
+                "presented_fen": fen_of_board(presented),
                 "presented_after": first,
                 "pieces": [
                     {"sq": f"{chr(ord('a') + c)}{r + 1}", "color": color, "kind": kind}

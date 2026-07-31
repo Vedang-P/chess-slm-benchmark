@@ -55,7 +55,6 @@ def aggregate_samples(samples: List[dict]) -> dict:
         status = s["status"]
         d[status] += 1
         if status == "legal":
-            d["legal"] += 1
             if s.get("compliance") is True:
                 d["compliant"] += 1
             elif s.get("compliance") is False:
@@ -94,7 +93,7 @@ def divergence_rate(samples: List[dict]) -> Optional[float]:
 def write_comparison_csv(output_dir: Path, rows: List[dict]) -> Path:
     """rows: list of dicts with run/meta/metrics already flattened."""
     path = Path(output_dir) / "comparison_table.csv"
-    cols = ["model", "task", "condition", "n", "parse_rate", "legal_rate",
+    cols = ["model", "task", "variant", "condition", "n", "parse_rate", "legal_rate",
             "compliance_of_legal", "compliance_strict", "undefined"]
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols)

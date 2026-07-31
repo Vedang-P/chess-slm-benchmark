@@ -80,3 +80,5 @@ data/models/
 *.ipynb
 !notebooks/*.ipynb
 /results_check*/
+docs/capability-analysis.md
+docs/anti-goal-analysis.md

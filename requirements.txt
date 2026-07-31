@@ -1,29 +1,11 @@
-# bitsandbytes + peft, the one path every model in this project uses now,
-# Gemma 4 E2B/E4B included -- see hf_models.py's load_trainable_model()
-# docstring for the full story. transformers>=5.13.0 is required to
-# recognize Gemma 4's architecture; peft>=0.19.0 is required for its
-# built-in Gemma4ClippableLinear support (ships default target_modules
-# scoped to the language-model layers via a regex when target_modules is
-# omitted -- exactly what hf_models.py relies on). Both pins are
-# load-bearing, not just "latest is fine" -- older peft can't attach LoRA to
-# Gemma 4 at all.
-transformers>=5.13.0
-peft>=0.19.0
-trl>=0.13.0  # SFTTrainer/GRPOTrainer processing_class= kwarg needs this
-datasets
+# Python 3.10+
+transformers>=4.40.0
+peft>=0.10.0
+bitsandbytes
 accelerate
 numpy
-sentencepiece
-protobuf
 huggingface_hub
-bitsandbytes
 tqdm
-
-# Optional: only needed for the Gemma 4 E2B Ollama baseline (see hf_models.OllamaModel).
-# ollama
-
-# Optional: Modal cloud GPUs -- not usable until a payment method is on file.
-# modal
-
-# Chess rule validation for 8x8 puzzle tasks (optional; installed by the Kaggle notebooks)
+pyyaml
 python-chess
+zstandard

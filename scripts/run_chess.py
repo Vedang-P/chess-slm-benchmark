@@ -1,10 +1,12 @@
-"""Evaluate one model on one anti-goal chess task (both conditions).
+"""Evaluate one model on one chess task (both conditions, or the cap probe).
 
 Runs on Kaggle (CUDA) or locally with --smoke (no model loading).
 
 Usage:
     python scripts/run_chess.py --model smollm2-1.7b --task sm-5x5-win --n 20
-    python scripts/run_chess.py --model gemma4-e2b --task mate1-8x8 --smoke
+    python scripts/run_chess.py --model gemma4-e2b --task mate1-lichess \
+        --prompt-variant fen
+    python scripts/run_chess.py --model smollm2-1.7b --task cap-legal-8x8 --smoke
 """
 from __future__ import annotations
 
@@ -16,13 +18,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hf_models import HFModel, configure_quiet_logging, MODEL_IDS  # noqa: E402
 from src.benchmarks.games import tasks as T  # noqa: E402
-from src.report import (  # noqa: E402
-    ResultWriter,
-    aggregate_samples,
-    divergence_rate,
-)
+from src.models import HFModel, MODEL_IDS, configure_quiet_logging  # noqa: E402
+from src.report import ResultWriter, aggregate_samples, divergence_rate  # noqa: E402
 
 TASK_FILES = {
     "sm-3x3-win": "sm-3x3-win.json",
@@ -32,9 +30,10 @@ TASK_FILES = {
     "mate1-8x8": "mate1-8x8.json",
     "mate1-lichess": "mate1-lichess.json",
     "mob-8x8": "mob-8x8.json",
+    "cap-legal-8x8": "cap-legal-8x8.json",
 }
 
-DEFAULT_MAX_NEW_TOKENS = 512  # chess answers are short; generous budget
+DEFAULT_MAX_NEW_TOKENS = 512
 
 
 def main() -> None:
@@ -42,8 +41,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="smollm2-1.7b")
     ap.add_argument("--task", required=True, choices=sorted(TASK_FILES))
+    ap.add_argument("--prompt-variant", default="grid", choices=["grid", "fen"])
     ap.add_argument("--n", type=int, default=0, help="limit positions (0 = all)")
-    ap.add_argument("--conditions", nargs="+", default=list(T.CONDITIONS))
+    ap.add_argument("--conditions", nargs="+", default=None)
     ap.add_argument("--max_new_tokens", type=int, default=DEFAULT_MAX_NEW_TOKENS)
     ap.add_argument("--smoke", action="store_true", help="stub model, no GPU")
     ap.add_argument("--data_dir", default="data/positions")
@@ -54,21 +54,26 @@ def main() -> None:
     records = json.loads((Path(args.data_dir) / TASK_FILES[task_name]).read_text())
     if args.n:
         records = records[: args.n]
-    kind = task_name.split("-")[0]  # sm / mate1 / mob (lichess records have a different id prefix)
+    kind = task_name.split("-")[0]  # sm / mate1 / mob / cap
+    conditions = args.conditions or (T.CAP_CONDITIONS if kind == "cap" else T.CONDITIONS)
+    if kind == "cap" and args.prompt_variant == "fen" and args.conditions is None:
+        pass  # cap runs the single 'win' condition label; variant still applies
 
     model = HFModel(args.model, smoke_test=args.smoke)
     model.load()
+    run_name = f"{args.model}_{task_name}_{args.prompt_variant}"
     writer = ResultWriter(
         Path(args.output_dir),
-        f"{args.model}_{task_name}",
-        {"model": args.model, "task": task_name, "smoke": args.smoke},
+        run_name,
+        {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
+         "smoke": args.smoke},
     )
 
     samples = []
     t0 = time.time()
     for i, rec in enumerate(records):
-        for condition in args.conditions:
-            prompt = T.PROMPT_BUILDERS[kind](rec, condition)
+        for condition in conditions:
+            prompt = T.PROMPT_BUILDERS[kind](rec, condition, variant=args.prompt_variant)
             out = model.generate(prompt, max_new_tokens=args.max_new_tokens)
             scored = T.score_record(rec, condition, out["content"], kind=kind)
             sample = {
@@ -85,12 +90,12 @@ def main() -> None:
             writer.add(sample)
         if (i + 1) % 5 == 0 or i + 1 == len(records):
             el = time.time() - t0
-            print(f"  [{task_name} {args.model}] {i + 1}/{len(records)} "
+            print(f"  [{task_name} {args.model} {args.prompt_variant}] {i + 1}/{len(records)} "
                   f"({el / (i + 1):.1f}s/position)", flush=True)
 
     agg = aggregate_samples(samples)
-    div = divergence_rate(samples)
-    agg["divergence_rate"] = div
+    if kind != "cap":
+        agg["divergence_rate"] = divergence_rate(samples)
     summary = writer.finish(agg)
     print(json.dumps(summary["metrics"], indent=1), flush=True)
 

@@ -15,6 +15,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from src.benchmarks.games.prompts import (
+    build_cap_prompt,
     build_mate1_prompt,
     build_mobility_prompt,
     build_single_move_prompt,
@@ -105,19 +106,36 @@ def score_mobility(rec: Dict[str, object], condition: str,
             "opp_replies": replies}
 
 
+# ---------------------------------------------------------------------- #
+# cap task (pure legality probe, no objective)
+# ---------------------------------------------------------------------- #
+def score_cap(rec: Dict[str, object], condition: str,
+              model_text: str) -> Dict[str, object]:
+    uci = parse_move_output(model_text)
+    if uci is None:
+        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
+    legal = _legal_uci(rec)
+    if uci not in legal:
+        return {"status": "illegal", "move": uci}
+    return {"status": "legal", "move": uci, "compliance": None}
+
+
 SCORERS = {
     "sm": score_single_move,
     "mate1": score_mate1,
     "mob": score_mobility,
+    "cap": score_cap,
 }
 
 PROMPT_BUILDERS = {
     "sm": build_single_move_prompt,
     "mate1": build_mate1_prompt,
     "mob": build_mobility_prompt,
+    "cap": build_cap_prompt,
 }
 
 CONDITIONS = ("win", "lose")
+CAP_CONDITIONS = ("win",)  # cap tasks have no objective; single condition
 
 
 def task_kind(record_id: str) -> str:
