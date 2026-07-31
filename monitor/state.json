@@ -1,0 +1,18 @@
+{
+ "repo": "Vedang-P/neuro-symbolic-pathfinding",
+ "mode": "full",
+ "stage": "sweep",
+ "started_at": "2026-08-01T02:03:28",
+ "updated_at": "2026-08-01T02:03:28",
+ "progress": {
+  "cells_done": 0,
+  "cells_total": 3,
+  "fraction": 0.0
+ },
+ "eta_min": null,
+ "models": [
+  "smollm2-1.7b"
+ ],
+ "last_error": null,
+ "cells": []
+}
