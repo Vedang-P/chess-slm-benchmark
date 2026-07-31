@@ -124,5 +124,8 @@ def task_kind(record_id: str) -> str:
     return record_id.split("-")[0]
 
 
-def score_record(rec: Dict[str, object], condition: str, model_text: str) -> Dict[str, object]:
-    return SCORERS[task_kind(rec["id"])](rec, condition, model_text)
+def score_record(rec: Dict[str, object], condition: str, model_text: str,
+                 kind: Optional[str] = None) -> Dict[str, object]:
+    """kind defaults to the record-id prefix (works for generated records);
+    pass it explicitly when record ids don't encode the task (e.g. lichess)."""
+    return SCORERS[kind or task_kind(rec["id"])](rec, condition, model_text)

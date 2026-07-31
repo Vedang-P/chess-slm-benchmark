@@ -70,7 +70,7 @@ def main() -> None:
         for condition in args.conditions:
             prompt = T.PROMPT_BUILDERS[kind](rec, condition)
             out = model.generate(prompt, max_new_tokens=args.max_new_tokens)
-            scored = T.score_record(rec, condition, out["content"])
+            scored = T.score_record(rec, condition, out["content"], kind=kind)
             sample = {
                 "position_id": rec["id"],
                 "condition": condition,
