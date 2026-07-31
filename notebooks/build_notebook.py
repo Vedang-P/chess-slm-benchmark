@@ -96,9 +96,15 @@ WORK = Path("/kaggle/working")
 REPO = WORK / "neuro-symbolic-pathfinding"
 
 def via_dataset() -> bool:
-    for cand in ["/kaggle/input/neuro-symbolic-pathfinding",
-                 "/kaggle/input/neuro-symbolic-pathfinding-repo"]:
-        src = Path(cand)
+    input_dir = Path("/kaggle/input")
+    candidates = [input_dir / "neuro-symbolic-pathfinding",
+                  input_dir / "neuro-symbolic-pathfinding-repo"]
+    # fall back to scanning /kaggle/input in case the dataset nested the files
+    if input_dir.exists():
+        for sub in input_dir.iterdir():
+            if (sub / "configs").exists() and sub not in candidates:
+                candidates.append(sub)
+    for src in candidates:
         if src.exists() and (src / "configs").exists():
             shutil.copytree(src, REPO, dirs_exist_ok=True)
             print(f"repo copied from Kaggle dataset: {src}", flush=True)
