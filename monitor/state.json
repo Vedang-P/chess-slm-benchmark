@@ -3,11 +3,11 @@
  "mode": "full",
  "stage": "sweep",
  "started_at": "2026-08-01T02:24:11",
- "updated_at": "2026-08-01T02:24:13",
+ "updated_at": "2026-08-01T02:24:15",
  "progress": {
-  "cells_done": 1,
+  "cells_done": 2,
   "cells_total": 3,
-  "fraction": 0.3333
+  "fraction": 0.6667
  },
  "eta_min": 0,
  "models": [
@@ -15,6 +15,28 @@
  ],
  "last_error": null,
  "cells": [
+  {
+   "model": "smollm2-1.7b",
+   "task": "mate1-lichess",
+   "variant": "grid",
+   "done": true,
+   "n": 40,
+   "win": {
+    "n": 40,
+    "parse_rate": 1.0,
+    "legal_rate": 0.1,
+    "compliance_of_legal": 0.0,
+    "compliance_strict": 0.0
+   },
+   "lose": {
+    "n": 40,
+    "parse_rate": 1.0,
+    "legal_rate": 0.1,
+    "compliance_of_legal": 1.0,
+    "compliance_strict": 0.1
+   },
+   "divergence": 0.0
+  },
   {
    "model": "smollm2-1.7b",
    "task": "sm-3x3-win",
