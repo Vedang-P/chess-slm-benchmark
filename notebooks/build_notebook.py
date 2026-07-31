@@ -79,55 +79,51 @@ def build_cells(check: bool) -> list:
             "- Positions + exact oracles: committed (`data/positions/`), generated once by `scripts/generate_positions.py`.\n"
             "- Engine + dataset tests gate every run: `scripts/test_engine.py`.\n"
             "- Sweep: `scripts/run_suite.py` (models x tasks x {{win,lose}})."),
-        _md("## 1. Get the repo (two options)\n\n"
-            "**Option A (recommended, no GitHub auth needed):** upload this repo as a "
-            "PRIVATE Kaggle dataset named `neuro-symbolic-pathfinding` (Dataset -> New "
-            "Dataset -> upload a zip of the repo folder, e.g. `git archive -o repo.zip HEAD`). "
-            "Kaggle extracts it into `/kaggle/input/neuro-symbolic-pathfinding/` and this "
-            "cell copies it -- no token, no secrets, works every time.\n\n"
-            "**Option B:** git clone using a PAT secret. The secret must be attached to "
-            "THIS notebook (right-hand **Secrets** panel -> enable `GITHUB_TOKEN`), the "
-            "notebook must be **saved**, and the kernel **restarted** after attaching "
-            "(env vars are injected at kernel start)."),
-        _code("""import os, shutil, subprocess, sys
+        _md("## 1. Get the repo (GitHub secret method)\n\n"
+            "The repo is **private**. On Kaggle, a secret reaches the notebook ONLY if it is "
+            "**attached to this notebook** and the kernel is started AFTER attaching:\n\n"
+            "1. Notebook editor -> **+ Add** (top-right) -> **Add secret** -> select `GITHUB_TOKEN` "
+            "(it must exist under Account settings -> Secrets; value = a classic PAT with `repo` scope).\n"
+            "2. **Save** the notebook (Ctrl+S).\n"
+            "3. **Kernel -> Restart & Run All** (env vars are injected at kernel start; plain "
+            "\"Run All\" does NOT pick up newly attached secrets).\n\n"
+            "This cell reads the token from the env var, and falls back to Kaggle's own "
+            "`kaggle_secrets` API if the env var is missing."),
+        _code("""import os, subprocess, sys
 from pathlib import Path
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "neuro-symbolic-pathfinding"
 
-def via_dataset() -> bool:
-    input_dir = Path("/kaggle/input")
-    candidates = [input_dir / "neuro-symbolic-pathfinding",
-                  input_dir / "neuro-symbolic-pathfinding-repo"]
-    # fall back to scanning /kaggle/input in case the dataset nested the files
-    if input_dir.exists():
-        for sub in input_dir.iterdir():
-            if (sub / "configs").exists() and sub not in candidates:
-                candidates.append(sub)
-    for src in candidates:
-        if src.exists() and (src / "configs").exists():
-            shutil.copytree(src, REPO, dirs_exist_ok=True)
-            print(f"repo copied from Kaggle dataset: {src}", flush=True)
-            return True
-    return False
+def find_token():
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        if os.environ.get(name):
+            return os.environ[name]
+    try:
+        from kaggle_secrets import UserSecretsClient
+        return UserSecretsClient().get_secret("GITHUB_TOKEN")
+    except Exception:
+        return None
 
 if not REPO.exists():
-    if not via_dataset():
-        token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-        print("GITHUB_TOKEN found in environment:", bool(token), flush=True)
-        url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
-        if token:
-            url = url.replace("https://", f"https://x-access-token:{token}@")
-        res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
-                             capture_output=True, text=True)
-        if res.returncode != 0:
-            raise RuntimeError(
-                "git clone failed. Two fixes: (A) upload the repo as a private Kaggle "
-                "dataset named 'neuro-symbolic-pathfinding' and rerun -- no token needed; "
-                "or (B) attach the GITHUB_TOKEN secret to THIS notebook (Secrets panel), "
-                "SAVE the notebook, and restart the kernel -- env vars are injected at "
-                "kernel start. Stderr: " + res.stderr[-300:]
-            )
+    # diagnostic: what token-ish env vars are actually present?
+    present = sorted(k for k in os.environ if "TOKEN" in k.upper() or "SECRET" in k.upper())
+    print("token-ish env vars present:", present, flush=True)
+    token = find_token()
+    print("GITHUB_TOKEN resolved:", bool(token), flush=True)
+    url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
+    if token:
+        url = url.replace("https://", f"https://x-access-token:{token}@")
+    res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        raise RuntimeError(
+            "git clone failed. The token did not reach this run. Fix order: "
+            "(1) + Add -> Add secret -> GITHUB_TOKEN; (2) SAVE the notebook; "
+            "(3) Kernel -> Restart & Run All. Then check the diagnostic line above: "
+            "if 'token-ish env vars present' is empty, the secret is not attached to "
+            "THIS notebook. Stderr: " + res.stderr[-300:]
+        )
 os.chdir(REPO)
 print("cwd:", Path.cwd())"""),
         _md("## 2. Dependencies"),
@@ -182,10 +178,9 @@ print("ALL CHECK STAGES PASSED")""")
          _code(f"""shutil.make_archive("/kaggle/working/{R}", "zip", root_dir=Path("{R}").resolve())
 print("zipped {R}.zip")""")),
         _md("## Notes\n"
-            "- **Getting the repo:** Option A (private Kaggle dataset named "
-            "`neuro-symbolic-pathfinding`) needs no tokens and is the reliable path. "
-            "Option B (git clone) requires the `GITHUB_TOKEN` secret attached to this "
-            "notebook, saved, and the kernel restarted.\n"
+            "- **Getting the repo (secret method):** the `GITHUB_TOKEN` secret must be attached "
+            "to this notebook (+ Add -> Add secret), the notebook SAVED, and the kernel "
+            "RESTARTED -- env vars are injected at kernel start only.\n"
             "- **Resume after a died session:** re-run the notebook with a trimmed sweep, e.g. "
             "`run_suite.py --models <remaining> --tasks <remaining> --output_dir results/chess`; "
             "per-run JSONs under `results/chess/*.summary.json` are the source of truth; the CSV is rebuilt at the end.\n"
