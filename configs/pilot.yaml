@@ -16,7 +16,7 @@ tasks:
   bestmove-8x8:   {file: bestmove-8x8.json,   full_n: 30, check_n: 2, variants: [grid, fen, bitboard, list]}
 
 check:
-  models: [smollm2-1.7b, qwen2.5-3b]
+  models: [smollm2-1.7b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
   max_new_tokens: 256
   conditions: [win]
 
