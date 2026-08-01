@@ -1,5 +1,4 @@
-/* ChessBench live dashboard — logic. Reads monitor/state.json + history.jsonl
-   from the public live repo; renders KPIs, charts, ranking and the cell table. */
+/* ChessBench — tournament monitor logic. Reads monitor/state.json + history.jsonl. */
 (() => {
   "use strict";
 
@@ -11,12 +10,13 @@
   let state = null;
   let history = [];
   let timer = null;
+  let clockTimer = null;
   const charts = {};
 
   // ---------------- status ----------------
   function status(kind, text) {
     const pill = $("statusPill");
-    pill.className = "status-pill " + kind;
+    pill.className = "lamp " + kind;
     $("statusText").textContent = text;
   }
 
@@ -35,11 +35,11 @@
           .filter(Boolean).map((l) => JSON.parse(l));
       } catch { history = []; }
       const ageS = (Date.now() - new Date(state.updated_at).getTime()) / 1000;
-      if (ageS > Math.max(CONFIG.REFRESH_S * 4, 180)) status("stale", `stale · ${Math.round(ageS / 60)}m ago`);
+      if (ageS > Math.max(CONFIG.REFRESH_S * 4, 180)) status("stale", "stale · " + Math.round(ageS / 60) + "m ago");
       else status("live", "live · " + timeAgo(state.updated_at));
       render();
     } catch (e) {
-      status("error", "cannot reach monitor");
+      status("error", "no signal");
       console.warn(e);
     }
   }
@@ -50,6 +50,20 @@
     if (s < 60) return `${Math.round(s)}s ago`;
     if (s < 3600) return `${Math.round(s / 60)}m ago`;
     return `${Math.round(s / 3600)}h ago`;
+  }
+
+  // ---------------- clock (the signature) ----------------
+  function tickClock() {
+    const el = $("clockDigits");
+    const face = el.closest(".clock-face");
+    const start = state && state.started_at ? new Date(state.started_at).getTime() : null;
+    if (!start) { el.textContent = "00:00:00"; return; }
+    const s = Math.max(0, Math.floor((Date.now() - start) / 1000));
+    const h = String(Math.floor(s / 3600)).padStart(2, "0");
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    const sec = String(s % 60).padStart(2, "0");
+    el.textContent = `${h}:${m}:${sec}`;
+    face.classList.toggle("running", state && !state.last_error && state.stage === "sweep");
   }
 
   // ---------------- helpers ----------------
@@ -63,7 +77,7 @@
   }
 
   function winMetric(cell, field) { return cell && cell.win ? cell.win[field] ?? null : null; }
-  function gameMetric(cell, field) { return cell && cell.game ? cell.game[field] ?? null : null; }
+
   function modelWinAvg(task, variant, field) {
     const per = {};
     for (const c of cellsFor(task, variant)) {
@@ -72,6 +86,7 @@
     }
     return Object.fromEntries(Object.entries(per).map(([m, vs]) => [m, avg(vs)]));
   }
+
   function bestOf(models, map) {
     const entries = models.map((m) => [m, map(m)]).filter(([, v]) => v !== null);
     entries.sort((a, b) => b[1] - a[1]);
@@ -80,45 +95,32 @@
 
   // ---------------- render ----------------
   function render() {
-    renderRun();
-    renderKpis();
+    renderScoreboard();
     renderError();
-    renderModelChips();
-    renderRanking();
+    renderEntrants();
     renderCharts();
     renderTable();
     $("footRepo").textContent = `repo: ${state.repo || "—"} · ${state.mode || "?"} mode`;
     $("rawLink").href = CONFIG.STATE_URL;
+    tickClock();
+    if (!clockTimer) clockTimer = setInterval(tickClock, 1000);
   }
 
-  function renderRun() {
+  function renderScoreboard() {
     const p = state.progress || {};
     const frac = p.fraction || 0;
     $("progressFill").style.width = `${(frac * 100).toFixed(1)}%`;
-    $("progressText").textContent = `${p.cells_done ?? 0} / ${p.cells_total ?? "?"} cells complete`;
-    $("etaText").textContent = state.eta_min != null ? `ETA ~${state.eta_min} min` : "ETA —";
     $("stageTag").textContent = (state.stage || "sweep").toUpperCase();
-    $("runMeta").textContent = `${state.mode || "?"} mode · ${(state.models || []).length} models · started ${state.started_at || "—"}`;
-    $("updatedText").textContent = "↻ " + timeAgo(state.updated_at);
-  }
+    $("runMeta").textContent = `${(state.models || []).length} entrants · ${state.mode || "?"}`;
 
-  function renderModelChips() {
-    const models = state.models || [];
-    const done = new Set(cellsFor(null, null).filter((c) => c.done).map((c) => c.model));
-    $("modelChips").innerHTML = models
-      .map((m) => `<span class="model-chip${done.has(m) ? " done" : ""}">${done.has(m) ? "✓" : "·"} ${m}</span>`)
-      .join("");
-  }
-
-  function renderKpis() {
     const cells = state.cells || [];
     const legalVals = cells.map((c) => winMetric(c, "legal_rate")).filter((v) => typeof v === "number");
     const mateVals = modelWinAvg("mate1-lichess", "grid", "compliance_of_legal");
     const stockVals = modelWinAvg("bestmove-8x8", "grid", "compliance_of_legal");
     const gameWins = cells.filter((c) => c.game && c.game.win_rate != null).map((c) => c.game.win_rate);
 
-    $("kCells").textContent = fmtNum(state.progress?.cells_done);
-    $("kCellsSub").textContent = `of ${state.progress?.cells_total ?? "?"}`;
+    $("kCells").textContent = `${p.cells_done ?? 0}`;
+    $("kCellsSub").textContent = `of ${p.cells_total ?? "?"} games`;
     $("kLegal").textContent = fmtPct(avg(legalVals));
     $("kLegalSub").textContent = `${legalVals.length} cells`;
     $("kTactics").textContent = fmtPct(avg(Object.values(mateVals)));
@@ -128,7 +130,6 @@
     $("kGames").textContent = fmtPct(avg(gameWins));
     $("kGamesSub").textContent = `${gameWins.length} game cells`;
 
-    // representation gap: avg legal(grid) - avg legal(fen) across 8x8 tasks
     let gridVals = [], fenVals = [];
     for (const task of ["cap-legal-8x8", "mate1-lichess", "mate2-lichess", "bestmove-8x8"]) {
       for (const c of cellsFor(task, "grid")) { const v = winMetric(c, "legal_rate"); if (typeof v === "number") gridVals.push(v); }
@@ -136,7 +137,6 @@
     }
     const delta = avg(gridVals) !== null && avg(fenVals) !== null ? avg(gridVals) - avg(fenVals) : null;
     $("kDivergence").textContent = delta === null ? "—" : (delta >= 0 ? "+" : "") + (delta * 100).toFixed(1) + "%";
-    $("kDivergenceSub").textContent = "grid − fen legality";
   }
 
   function renderError() {
@@ -145,24 +145,20 @@
     $("errorText").textContent = has ? state.last_error : "";
   }
 
-  // ---------------- ranking ----------------
-  function renderRanking() {
+  function renderEntrants() {
     const models = state.models || [];
-    const el = $("ranking");
     const byModel = modelWinAvg("cap-legal-8x8", "grid", "legal_rate");
     const ranked = bestOf(models, (m) => byModel[m] ?? null);
+    const done = new Set(cellsFor(null, null).filter((c) => c.done).map((c) => c.model));
     if (!ranked.length) {
-      el.innerHTML = `<div class="empty">no legality data yet — waiting for the first cells</div>`;
+      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no entrants scored yet — awaiting the first games</div>`;
       return;
     }
-    el.innerHTML = ranked.map(([m, v], i) => `
-      <div class="rank-row">
-        <div class="rank-badge">${i + 1}</div>
-        <div class="rank-info">
-          <div class="rank-name"><span>${m}</span><span class="rank-val">legal move rate</span></div>
-          <div class="rank-track"><div class="rank-fill" style="width:${(v * 100).toFixed(1)}%"></div></div>
-        </div>
-        <div class="rank-legal">${fmtPct(v)}</div>
+    $("entrantRows").innerHTML = ranked.map(([m, v], i) => `
+      <div class="entrant${done.has(m) ? " done" : ""}">
+        <span class="entrant-rank">${String(i + 1).padStart(2, "0")}</span>
+        <span class="entrant-name">${m}</span>
+        <span class="entrant-mark">${fmtPct(v)}</span>
       </div>`).join("");
   }
 
@@ -172,16 +168,16 @@
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
     plugins: {
-      legend: { labels: { color: "#a39dc4", boxWidth: 8, boxHeight: 8, usePointStyle: true, font: { family: "Inter", size: 11 } } },
+      legend: { labels: { color: "#9d968a", boxWidth: 6, boxHeight: 6, usePointStyle: true, font: { family: "IBM Plex Mono", size: 10 } } },
       tooltip: {
-        backgroundColor: "rgba(16,14,29,0.95)", borderColor: "rgba(255,255,255,0.12)", borderWidth: 1,
-        titleColor: "#f2effb", bodyColor: "#a39dc4", padding: 10, cornerRadius: 10,
+        backgroundColor: "#0d0c0b", borderColor: "#3d3934", borderWidth: 1,
+        titleColor: "#e9e6df", bodyColor: "#9d968a", padding: 9, cornerRadius: 0,
         callbacks: { label: (c) => ` ${c.dataset.label}: ${(c.parsed.y * 100).toFixed(1)}%` },
       },
     },
     scales: {
-      x: { ticks: { color: "#645e87", font: { family: "JetBrains Mono", size: 10 }, maxRotation: 40 }, grid: { display: false } },
-      y: { beginAtZero: true, max: 1, ticks: { color: "#645e87", font: { family: "JetBrains Mono", size: 10 }, callback: (v) => (v * 100).toFixed(0) + "%" }, grid: { color: "rgba(255,255,255,0.05)" }, border: { display: false } },
+      x: { ticks: { color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 }, maxRotation: 40 }, grid: { display: false }, border: { display: false } },
+      y: { beginAtZero: true, max: 1, ticks: { color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 }, callback: (v) => (v * 100).toFixed(0) + "%" }, grid: { color: "rgba(255,255,255,0.05)" }, border: { display: false } },
     },
   };
 
@@ -190,55 +186,47 @@
     charts[id] = new Chart($(id).getContext("2d"), cfg);
   }
 
-  function barDataset(label, data, from, to) {
-    const ctx = document.createElement("canvas").getContext("2d");
-    const grad = ctx.createLinearGradient(0, 0, 0, 250);
-    grad.addColorStop(0, to); grad.addColorStop(1, from);
-    return { label, data, backgroundColor: grad, borderColor: to, borderWidth: 0, borderRadius: 6, maxBarThickness: 34 };
+  function barDataset(label, data, color) {
+    return { label, data, backgroundColor: color, borderColor: color, borderWidth: 1, borderRadius: 0, maxBarThickness: 26 };
   }
 
   function renderCharts() {
-    const cells = state.cells || [];
-    if (!cells.length) return;
+    if (!(state.cells || []).length) return;
     const models = state.models || [];
 
-    // 1. legality: grid vs fen by model
     const legGrid = modelWinAvg("cap-legal-8x8", "grid", "legal_rate");
     const legFen = modelWinAvg("cap-legal-8x8", "fen", "legal_rate");
     mkChart("chartLegal", {
       type: "bar",
       data: { labels: models, datasets: [
-        barDataset("grid", models.map((m) => legGrid[m] ?? null), "rgba(55,214,160,0.14)", "#37d6a0"),
-        barDataset("fen", models.map((m) => legFen[m] ?? null), "rgba(139,123,255,0.14)", "#8b7bff"),
+        barDataset("grid", models.map((m) => legGrid[m] ?? null), "rgba(229,72,77,0.75)"),
+        barDataset("fen", models.map((m) => legFen[m] ?? null), "rgba(242,169,59,0.7)"),
       ] },
       options: baseOpts,
     });
 
-    // 2. tactics: mate1 + mate2 (grid)
     const m1 = modelWinAvg("mate1-lichess", "grid", "compliance_of_legal");
     const m2 = modelWinAvg("mate2-lichess", "grid", "compliance_of_legal");
     mkChart("chartTactics", {
       type: "bar",
       data: { labels: models, datasets: [
-        barDataset("mate-in-1", models.map((m) => m1[m] ?? null), "rgba(139,123,255,0.14)", "#8b7bff"),
-        barDataset("mate-in-2", models.map((m) => m2[m] ?? null), "rgba(77,214,232,0.14)", "#4dd6e8"),
+        barDataset("mate-in-1", models.map((m) => m1[m] ?? null), "rgba(229,72,77,0.75)"),
+        barDataset("mate-in-2", models.map((m) => m2[m] ?? null), "rgba(233,230,223,0.55)"),
       ] },
       options: baseOpts,
     });
 
-    // 3. Stockfish top-1 vs legal rate
     const stTop = modelWinAvg("bestmove-8x8", "grid", "compliance_of_legal");
     const stLegal = modelWinAvg("bestmove-8x8", "grid", "legal_rate");
     mkChart("chartStock", {
       type: "bar",
       data: { labels: models, datasets: [
-        barDataset("top-1 vs Stockfish", models.map((m) => stTop[m] ?? null), "rgba(196,181,255,0.14)", "#c4b5ff"),
-        barDataset("legal rate", models.map((m) => stLegal[m] ?? null), "rgba(55,214,160,0.14)", "#37d6a0"),
+        barDataset("top-1 vs stockfish", models.map((m) => stTop[m] ?? null), "rgba(242,169,59,0.75)"),
+        barDataset("legal rate", models.map((m) => stLegal[m] ?? null), "rgba(90,171,130,0.7)"),
       ] },
       options: baseOpts,
     });
 
-    // 4. history line
     mkChart("chartHistory", {
       type: "line",
       data: {
@@ -246,12 +234,15 @@
         datasets: [{
           label: "avg legal rate",
           data: history.map((h) => h.legal_avg),
-          borderColor: "#8b7bff", borderWidth: 2,
-          backgroundColor: "rgba(139,123,255,0.12)",
-          fill: true, tension: 0.35, pointRadius: 2.5, pointBackgroundColor: "#8b7bff",
+          borderColor: "#e5484d",
+          borderWidth: 1.5,
+          backgroundColor: "rgba(229,72,77,0.06)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
         }],
       },
-      options: { ...baseOpts, scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, title: { display: true, text: "cells done", color: "#645e87", font: { family: "Inter", size: 10 } } } } },
+      options: { ...baseOpts, scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, title: { display: true, text: "games played", color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 } } } } },
     });
   }
 
@@ -259,46 +250,47 @@
   function renderTable() {
     const body = $("cellsBody");
     const cells = state.cells || [];
-    $("tableCount").textContent = `${cells.length} cells`;
+    $("tableCount").textContent = `${cells.length} games`;
     if (!cells.length) {
-      body.innerHTML = `<tr><td colspan="9" class="empty">no data yet — awaiting the first push</td></tr>`;
+      body.innerHTML = `<tr><td colspan="9" class="empty">no games recorded yet — awaiting the first push</td></tr>`;
       return;
     }
     const rows = [];
+    let idx = 0;
     for (const c of cells) {
+      idx += 1;
+      const n = String(idx).padStart(2, "0");
       if (c.game) {
         const g = c.game;
         rows.push(`<tr>
+          <td class="num mono dim">${n}</td>
           <td class="mono">${c.model}</td>
           <td>${c.task}</td>
-          <td><span class="tag">${c.variant}</span></td>
-          <td>game</td>
+          <td><span class="dim">${c.variant}</span></td>
           <td class="num mono">${fmtNum(g.n)}</td>
           <td class="num mono dim">—</td>
           <td class="num mono ${g.legal_rate > 0.3 ? "pos" : g.legal_rate > 0 ? "warn" : "neg"}">${fmtPct(g.legal_rate)}</td>
-          <td class="num mono ${g.win_rate > 0.3 ? "pos" : g.win_rate > 0 ? "warn" : "dim"}">win ${fmtPct(g.win_rate)}</td>
-          <td><span class="cell-status">done</span></td>
+          <td class="num mono ${g.win_rate > 0.3 ? "pos" : g.win_rate > 0 ? "warn" : "dim"}">${fmtPct(g.win_rate)}</td>
+          <td><span class="cell-done">done</span></td>
         </tr>`);
         continue;
       }
-      for (const cond of ["win"]) {
-        const m = c[cond];
-        if (!m) continue;
-        const parse = num(m.parse_rate), legal = num(m.legal_rate), comp = num(m.compliance_of_legal);
-        rows.push(`<tr>
-          <td class="mono">${c.model}</td>
-          <td>${c.task}</td>
-          <td><span class="tag">${c.variant}</span></td>
-          <td>${cond}</td>
-          <td class="num mono">${fmtNum(m.n)}</td>
-          <td class="num mono ${parse > 0.5 ? "pos" : "neg"}">${fmtPct(parse)}</td>
-          <td class="num mono ${legal > 0.3 ? "pos" : legal > 0 ? "warn" : "neg"}">${fmtPct(legal)}</td>
-          <td class="num mono ${comp > 0.3 ? "pos" : comp > 0 ? "warn" : "dim"}">${fmtPct(comp)}</td>
-          <td><span class="cell-status">done</span></td>
-        </tr>`);
-      }
+      const m = c.win;
+      if (!m) continue;
+      const parse = num(m.parse_rate), legal = num(m.legal_rate), comp = num(m.compliance_of_legal);
+      rows.push(`<tr>
+        <td class="num mono dim">${n}</td>
+        <td class="mono">${c.model}</td>
+        <td>${c.task}</td>
+        <td><span class="dim">${c.variant}</span></td>
+        <td class="num mono">${fmtNum(m.n)}</td>
+        <td class="num mono ${parse > 0.5 ? "pos" : "neg"}">${fmtPct(parse)}</td>
+        <td class="num mono ${legal > 0.3 ? "pos" : legal > 0 ? "warn" : "neg"}">${fmtPct(legal)}</td>
+        <td class="num mono ${comp > 0.3 ? "pos" : comp > 0 ? "warn" : "dim"}">${fmtPct(comp)}</td>
+        <td><span class="cell-done">done</span></td>
+      </tr>`);
     }
-    body.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">no data yet</td></tr>`;
+    body.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">no games recorded yet</td></tr>`;
   }
 
   // ---------------- boot ----------------
