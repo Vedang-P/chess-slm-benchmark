@@ -123,6 +123,7 @@ class Monitor:
         return {
             "repo": "Vedang-P/neuro-symbolic-pathfinding",
             "mode": self.meta.get("mode"),
+            "run_id": self.started_at,
             "stage": "complete" if total > 0 and done + self.cells_failed >= total else "sweep",
             "started_at": self.started_at,
             "updated_at": _ts(),
@@ -146,6 +147,7 @@ class Monitor:
         hist = MONITOR_DIR / "history.jsonl"
         lines = hist.read_text().splitlines() if hist.exists() else []
         lines.append(json.dumps({
+            "run_id": state["run_id"],
             "ts": state["updated_at"], "cells_done": state["progress"]["cells_done"],
             "fraction": state["progress"]["fraction"], "eta_min": state["eta_min"],
             "legal_avg": _avg_legal(state["cells"]),

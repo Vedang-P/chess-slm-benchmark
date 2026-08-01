@@ -307,7 +307,7 @@ html, body {
   gap: 10px;
   align-items: center;
 }
-.entrant:nth-child(3n) { border-right: none; }
+.entrant:last-child { border-right: none; }
 .entrant-rank { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
 .entrant-name { font-family: var(--font-mono); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .entrant-mark { font-size: 11px; color: var(--ink-3); }

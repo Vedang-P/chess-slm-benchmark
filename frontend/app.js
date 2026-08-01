@@ -67,8 +67,15 @@
       if (request !== stateRequest) return;
       let nextHistory = history;
       try {
-        nextHistory = (await fetchFeed("history", controller.signal)).trim().split("\n")
+        const parsedHistory = (await fetchFeed("history", controller.signal)).trim().split("\n")
           .filter(Boolean).map((l) => JSON.parse(l));
+        const runId = nextState.run_id || nextState.started_at;
+        const runStart = parseTimestamp(nextState.started_at);
+        nextHistory = parsedHistory.filter((entry) => {
+          if (entry.run_id && runId) return entry.run_id === runId;
+          const timestamp = parseTimestamp(entry.ts);
+          return Number.isFinite(runStart) && Number.isFinite(timestamp) && timestamp >= runStart;
+        });
       } catch (error) {
         if (controller.signal.aborted || request !== stateRequest) return;
         console.warn("history feed unavailable; keeping the last history", error);
@@ -870,8 +877,13 @@
         if (replay.length > 40) replay.shift();
         lastLiveKey = key;
         live = l;
-      } else if (l.updated_at !== live.updated_at) {
-        live = l; // same position, refreshed content
+      } else if (
+        l.updated_at !== live.updated_at
+        || l.phase !== live.phase
+        || l.status !== live.status
+        || l.output !== live.output
+      ) {
+        live = l; // same position, refreshed content or lifecycle phase
       }
       renderLive();
       renderReplay();
