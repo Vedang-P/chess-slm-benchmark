@@ -56,18 +56,25 @@ class HFModel:
 
         if self.is_gemma4:
             # Gemma 4 E2B/E4B are multimodal Gemma4ForConditionalGeneration
-            # checkpoints: the model card's documented path is AutoProcessor +
-            # AutoModelForImageTextToText. Load in bf16 WITHOUT quantization
-            # (E2B ~4.3GB, E4B ~8.6GB — both fit the T4 16GB alone) to avoid
-            # bitsandbytes-vs-VLM incompatibilities, and disable thinking so
-            # the model answers directly instead of burning the budget on
-            # <|channel>thought reasoning (its default behavior).
-            from transformers import AutoModelForImageTextToText, AutoProcessor
+            # checkpoints; the model card's documented path is AutoProcessor +
+            # AutoModelForImageTextToText. Load 4-BIT: E4B in bf16 exceeds the
+            # T4's 16GB (observed CUDA OOM at load: ~14.5GB used, still at
+            # 68% of shards) — 4-bit E2B ~3GB, E4B ~6GB.
+            from transformers import (
+                AutoModelForImageTextToText,
+                AutoProcessor,
+                BitsAndBytesConfig,
+            )
 
+            quant = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16,
+            )
             self.processor = AutoProcessor.from_pretrained(self.model_id)
             self.tokenizer = self.processor.tokenizer
             self.model = AutoModelForImageTextToText.from_pretrained(
-                self.model_id, device_map={"": 0}, torch_dtype=torch.bfloat16,
+                self.model_id, quantization_config=quant, device_map={"": 0},
+                dtype=torch.bfloat16,
             )
         else:
             quant = BitsAndBytesConfig(

@@ -230,6 +230,51 @@ def test_python_chess_parity() -> None:
     check("python-chess mate-move parity (8x8)", mate_mismatch == 0, f"{mate_mismatch} mismatches")
 
 
+def test_san_parsing() -> None:
+    """SAN/lenient move parsing — the format models like Gemma actually
+    produce ('Nf3', 'Rc8', 'bKb8#', 'b7b8Q'). Regression cases from the
+    check run."""
+    from src.benchmarks.games.tasks import _board, parse_move_output
+
+    def board_from_fen(fen):
+        from src.benchmarks.games.fen import parse_fen
+
+        return parse_fen(fen)
+
+    cases = [
+        # (fen, output, expected_uci, expected_fmt)
+        ("r5k1/pp3p1p/2b2qp1/3pr3/8/4P2P/R1PN1PP1/Q3K2R w K - 0 19",
+         "MOVE: d2f3", "d2f3", "fromto"),   # knight f3, from-to form
+        ("r5k1/pp3p1p/2b2qp1/3pr3/8/4P2P/R1PN1PP1/Q3K2R w K - 0 19",
+         "MOVE: Nf3", "d2f3", "san"),       # gemma-style SAN
+        ("r5k1/pp3p1p/2b2qp1/3pr3/8/4P2P/R1PN1PP1/Q3K2R w K - 0 19",
+         "I think Rc8 is best.", None, None),  # black's move: SAN fails (white to move)
+        ("2kr1b1r/p1p2pp1/2pqN3/7p/6n1/2NPB3/PPP2PPP/R2Q1RK1 b - - 0 1",
+         "MOVE: bKb8#", "c8b8", "san"),     # color-prefixed king move
+        ("4r3/1k6/pp3P2/1b5p/3R1p2/P1R2P2/1P4PP/6K1 b - - 0 1",
+         "MOVE: Rc8", "e8c8", "san"),       # rook e8-c8 along rank 8 is legal
+        ("r5k1/pp3p1p/2b2qp1/3pr3/8/4P2P/R1PN1PP1/Q3K2R w K - 0 19",
+         "MOVE: e7-e5", "e7e5", "fromto"),  # parses as from-to (illegal later)
+        ("r5k1/pp3p1p/2b2qp1/3pr3/8/4P2P/R1PN1PP1/Q3K2R w K - 0 19",
+         "MOVE: b7b8Q", "b7b8", "fromto"),  # promotion suffix stripped
+        ("2kr1b1r/p1p2pp1/2pqb3/7p/3N2n1/2NPB3/PPP2PPP/R2Q1RK1 w - - 2 13",
+         "MOVE: d6h2", "d6h2", "fromto"),   # bishop mate
+    ]
+    for fen, out, exp_uci, exp_fmt in cases:
+        b = board_from_fen(fen)
+        uci, fmt = parse_move_output(out, b)
+        check(f"san-parse {out!r}",
+              uci == exp_uci and fmt == exp_fmt,
+              f"got {(uci, fmt)} want {(exp_uci, exp_fmt)}")
+
+    # 3x3 small boards: from-to regex catches 'Ka1-b1' inside the text — fine
+    from src.benchmarks.games.rules import Board
+
+    b3 = Board(3, {(0, 0): ("w", "K"), (2, 2): ("b", "K")}, "w")
+    uci, fmt = parse_move_output("MOVE: Ka1-b1", b3)
+    check("san 3x3 king move", uci == "a1b1", f"got {(uci, fmt)}")
+
+
 def main() -> None:
     quick = "--quick" in sys.argv
     test_square_helpers()
@@ -238,6 +283,7 @@ def main() -> None:
     test_win_lose_move_semantics()
     test_dataset_invariants()
     test_python_chess_parity()
+    test_san_parsing()
     if not quick:
         t0 = time.time()
         test_fuzz_legality()

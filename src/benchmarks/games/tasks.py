@@ -23,29 +23,81 @@ from src.benchmarks.games.prompts import (
 from src.benchmarks.games.rules import algebraic_to_sq
 
 _MOVE_RE = re.compile(r"([a-h][1-8])\s*[- ]?\s*([a-h][1-8])")
+_SAN_RE = re.compile(r"[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?(?:[+#])?")
+_COLOR_PREFIX_RE = re.compile(r"\b[wb](?=[KQRBN])")
 
 
-def parse_move_output(text: str) -> Optional[str]:
-    """Extract a from-to move in algebraic notation ("e2e4" / "e2 e4" /
-    "e2-e4") from a model response. Returns canonical uci or None."""
-    if not text:
-        return None
+def _uci(fr: tuple, to: tuple) -> str:
+    return (f"{chr(ord('a') + fr[1])}{fr[0] + 1}"
+            f"{chr(ord('a') + to[1])}{to[0] + 1}")
+
+
+def _from_to(text: str) -> Optional[str]:
     m = _MOVE_RE.search(text)
     if not m:
         return None
     fr, to = algebraic_to_sq(m.group(1)), algebraic_to_sq(m.group(2))
     if fr is None or to is None:
         return None
-    return f"{chr(ord('a') + fr[1])}{fr[0] + 1}{chr(ord('a') + to[1])}{to[0] + 1}"
+    return _uci(fr, to)
 
 
-def _legal_uci(rec: Dict[str, object]) -> set:
+def _san_to_uci(text: str, board) -> Optional[str]:
+    """Resolve SAN-style moves (Nf3, Rc8, Kb8, b7b8Q, e2e4) against OUR
+    engine's legal moves. Returns the uci if exactly one legal move matches.
+    Handles piece-letter moves, from-to with promotion suffix, and a leading
+    color prefix ('bKb8' -> Kb8) that the model may add."""
+    for token in _SAN_RE.findall(text):
+        t = token.rstrip("#+")
+        m = re.match(r"^(?:(K|Q|R|B|N|P)?)([a-h]?)([1-8]?)?x?([a-h])([1-8])(?:=([QRBN]))?$", t)
+        if not m:
+            # color-prefixed king move: 'bKb8'
+            stripped = _COLOR_PREFIX_RE.sub("", text)
+            if stripped != text:
+                return _san_to_uci(stripped, board)
+            continue
+        kind, df, dr, tf, tr = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
+        target = (int(tr) - 1, ord(tf) - ord("a"))
+        cands = []
+        for mv in board.legal_moves():
+            if mv.to != target:
+                continue
+            if kind and mv.piece != kind:
+                continue
+            if df and mv.fr[1] != ord(df) - ord("a"):
+                continue
+            if dr and mv.fr[0] != int(dr) - 1:
+                continue
+            cands.append(mv.uci)
+        if len(cands) == 1:
+            return cands[0]
+    return None
+
+
+def parse_move_output(text: str, board=None) -> tuple:
+    """Parse a model move. Returns (uci, fmt) where fmt is 'fromto', 'san',
+    or None. From-to is tried first (the format the prompt demands); SAN
+    resolution is the lenient fallback that needs the board (models like
+    Gemma 4 answer 'Nf3' / 'Rc8' / 'bKb8#')."""
+    if not text:
+        return (None, None)
+    uci = _from_to(text)
+    if uci:
+        return (uci, "fromto")
+    if board is not None:
+        uci = _san_to_uci(text, board)
+        if uci:
+            return (uci, "san")
+    return (None, None)
+
+
+def _board(rec: Dict[str, object]):
     from src.benchmarks.games.rules import Board
 
     pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
               for p in rec["pieces"]}
-    b = Board(rec["n"], pieces, rec["turn"])
-    return {m.uci for m in b.legal_moves()}
+    return Board(rec["n"], pieces, rec["turn"])
+
 
 
 # ---------------------------------------------------------------------- #
@@ -53,12 +105,13 @@ def _legal_uci(rec: Dict[str, object]) -> set:
 # ---------------------------------------------------------------------- #
 def score_single_move(rec: Dict[str, object], condition: str,
                       model_text: str) -> Dict[str, object]:
-    uci = parse_move_output(model_text)
+    board = _board(rec)
+    uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
-    legal = _legal_uci(rec)
+        return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
+    legal = {m.uci for m in board.legal_moves()}
     if uci not in legal:
-        return {"status": "illegal", "move": uci}
+        return {"status": "illegal", "move": uci, "format": fmt}
     if condition == "win":
         compliant = uci in set(rec["win_moves"])
     else:  # lose
@@ -66,7 +119,7 @@ def score_single_move(rec: Dict[str, object], condition: str,
             compliant = None  # already lost: nothing to worsen
         else:
             compliant = uci in set(rec["lose_moves"])
-    return {"status": "legal", "move": uci, "compliance": compliant}
+    return {"status": "legal", "move": uci, "compliance": compliant, "format": fmt}
 
 
 # ---------------------------------------------------------------------- #
@@ -74,18 +127,19 @@ def score_single_move(rec: Dict[str, object], condition: str,
 # ---------------------------------------------------------------------- #
 def score_mate1(rec: Dict[str, object], condition: str,
                 model_text: str) -> Dict[str, object]:
-    uci = parse_move_output(model_text)
+    board = _board(rec)
+    uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
-    legal = _legal_uci(rec)
+        return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
+    legal = {m.uci for m in board.legal_moves()}
     if uci not in legal:
-        return {"status": "illegal", "move": uci}
+        return {"status": "illegal", "move": uci, "format": fmt}
     mates = set(rec["task_extra"]["mate_moves"])
     if condition == "win":
         compliant = uci in mates
     else:  # lose: avoid the mate
         compliant = uci not in mates
-    return {"status": "legal", "move": uci, "compliance": compliant}
+    return {"status": "legal", "move": uci, "compliance": compliant, "format": fmt}
 
 
 # ---------------------------------------------------------------------- #
@@ -93,17 +147,18 @@ def score_mate1(rec: Dict[str, object], condition: str,
 # ---------------------------------------------------------------------- #
 def score_mobility(rec: Dict[str, object], condition: str,
                    model_text: str) -> Dict[str, object]:
-    uci = parse_move_output(model_text)
+    board = _board(rec)
+    uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
-    legal = _legal_uci(rec)
+        return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
+    legal = {m.uci for m in board.legal_moves()}
     if uci not in legal:
-        return {"status": "illegal", "move": uci}
+        return {"status": "illegal", "move": uci, "format": fmt}
     stats = {s["move"]: s["opp_replies"] for s in rec["task_extra"]["mobility"]["moves"]}
     replies = stats[uci]
     target = min(stats.values()) if condition == "win" else max(stats.values())
     return {"status": "legal", "move": uci, "compliance": replies == target,
-            "opp_replies": replies}
+            "format": fmt, "opp_replies": replies}
 
 
 # ---------------------------------------------------------------------- #
@@ -111,13 +166,14 @@ def score_mobility(rec: Dict[str, object], condition: str,
 # ---------------------------------------------------------------------- #
 def score_cap(rec: Dict[str, object], condition: str,
               model_text: str) -> Dict[str, object]:
-    uci = parse_move_output(model_text)
+    board = _board(rec)
+    uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
-    legal = _legal_uci(rec)
+        return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
+    legal = {m.uci for m in board.legal_moves()}
     if uci not in legal:
-        return {"status": "illegal", "move": uci}
-    return {"status": "legal", "move": uci, "compliance": None}
+        return {"status": "illegal", "move": uci, "format": fmt}
+    return {"status": "legal", "move": uci, "compliance": None, "format": fmt}
 
 
 # ---------------------------------------------------------------------- #
@@ -125,14 +181,15 @@ def score_cap(rec: Dict[str, object], condition: str,
 # ---------------------------------------------------------------------- #
 def score_bestmove(rec: Dict[str, object], condition: str,
                    model_text: str) -> Dict[str, object]:
-    uci = parse_move_output(model_text)
+    board = _board(rec)
+    uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
-    legal = _legal_uci(rec)
+        return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
+    legal = {m.uci for m in board.legal_moves()}
     if uci not in legal:
-        return {"status": "illegal", "move": uci}
+        return {"status": "illegal", "move": uci, "format": fmt}
     best = rec["task_extra"]["best_move"]
-    return {"status": "legal", "move": uci, "compliance": uci == best}
+    return {"status": "legal", "move": uci, "compliance": uci == best, "format": fmt}
 
 
 # ---------------------------------------------------------------------- #
@@ -140,14 +197,15 @@ def score_bestmove(rec: Dict[str, object], condition: str,
 # ---------------------------------------------------------------------- #
 def score_mate2(rec: Dict[str, object], condition: str,
                 model_text: str) -> Dict[str, object]:
-    uci = parse_move_output(model_text)
+    board = _board(rec)
+    uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
-    legal = _legal_uci(rec)
+        return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
+    legal = {m.uci for m in board.legal_moves()}
     if uci not in legal:
-        return {"status": "illegal", "move": uci}
+        return {"status": "illegal", "move": uci, "format": fmt}
     first = rec["task_extra"]["first_move"]  # the lichess 'only move' of the mate line
-    return {"status": "legal", "move": uci, "compliance": uci == first}
+    return {"status": "legal", "move": uci, "compliance": uci == first, "format": fmt}
 
 
 SCORERS = {

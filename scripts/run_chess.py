@@ -15,6 +15,7 @@ import hashlib
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -45,6 +46,10 @@ GAME_MAX_MOVES = 120
 GAME_N = 10
 
 DEFAULT_MAX_NEW_TOKENS = 512
+
+
+def _utc_ts() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _cleanup(model) -> None:
@@ -191,25 +196,30 @@ def main() -> None:
     live_token = resolve_token()
     live_last = [0.0]
 
-    def push_live(rec, condition, prompt, out, scored, sample_idx, total):
-        """Throttled live.json push (>=2s apart). Never breaks the sweep."""
+    def push_live(rec, condition, prompt, model_input, out=None, scored=None,
+                  sample_idx=0, total=0, phase="scored", force=False):
+        """Publish the exact sample context before and after inference."""
         if not live_token or kind == "game":
             return
         now = time.time()
-        if now - live_last[0] < 2.0:
+        if not force and now - live_last[0] < 2.0:
             return
         live_last[0] = now
+        out = out or {}
+        scored = scored or {}
         correct = T.get_correct(rec, kind)
         live = {
-            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "updated_at": _utc_ts(),
             "cell": {"model": args.model, "task": task_name, "variant": args.prompt_variant},
             "sample_idx": sample_idx,
             "sample_total": total,
             "position_id": rec["id"],
             "prompt": prompt,
+            "model_input": model_input,
             "output": out.get("content", ""),
-            "finished": out.get("finished"),
-            "status": scored.get("status"),
+            "finished": out.get("finished") if phase == "scored" else False,
+            "phase": phase,
+            "status": scored.get("status") if phase == "scored" else None,
             "move": scored.get("move"),
             "compliance": scored.get("compliance"),
             "correct": correct,
@@ -220,6 +230,7 @@ def main() -> None:
             "task_kind": kind,
             "record_id": rec["id"],
             "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+            "model_input_sha256": hashlib.sha256(model_input.encode("utf-8")).hexdigest(),
             "cot_requested": bool(args.cot),
             "position": {
                 "id": rec["id"],
@@ -235,7 +246,7 @@ def main() -> None:
         try:
             upload_file(live_token, "monitor/live.json",
                         (ROOT / "monitor" / "live.json").read_bytes(),
-                        message=f"live {time.strftime('%H:%M:%S')}")
+                        message=f"live {_utc_ts()}")
         except Exception as e:
             print(f"live: push failed ({e})", flush=True)
 
@@ -247,6 +258,11 @@ def main() -> None:
             if args.cot:
                 prompt += ("\nThink step by step about the position before answering. "
                            "Then give the final move on its own line.")
+            model_input = prompt if args.smoke else model.render_chat(prompt)
+            push_live(rec, condition, prompt, model_input,
+                      sample_idx=len(samples) + 1,
+                      total=len(records) * len(conditions),
+                      phase="generating", force=True)
             if args.verbose:
                 print(f"\n===== {args.model} x {task_name}:{args.prompt_variant} | "
                       f"{rec['id']} | {i + 1}/{len(records)} =====", flush=True)
@@ -280,7 +296,9 @@ def main() -> None:
             }
             samples.append(sample)
             writer.add(sample)
-            push_live(rec, condition, prompt, out, scored, len(samples), len(records) * len(conditions))
+            push_live(rec, condition, prompt, model_input, out, scored,
+                      len(samples), len(records) * len(conditions),
+                      phase="scored", force=True)
         if (i + 1) % 5 == 0 or i + 1 == len(records):
             el = time.time() - t0
             print(f"  [{task_name} {args.model} {args.prompt_variant}] {i + 1}/{len(records)} "

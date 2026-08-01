@@ -19,6 +19,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -26,6 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import yaml  # noqa: E402
 
 from src.report import write_comparison_csv  # noqa: E402
+
+SCHEMA = 2  # must match src/report.py ResultWriter.finish; bump both when
+            # scorer/parser/loader changes so stale summaries re-run
 
 ROOT = Path(__file__).resolve().parent.parent
 MONITOR_BRANCH = "live"
@@ -36,7 +40,7 @@ PUBLIC_LIVE_BRANCH = "main"
 
 
 def _ts() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S")
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 class Monitor:
@@ -47,6 +51,7 @@ class Monitor:
         self.cells_done = 0
         self.cells_total = 0
         self.started_at = _ts()
+        self.started_epoch = time.time()
         self.rows = []
         self.meta = {}
         self.current = None
@@ -88,8 +93,12 @@ class Monitor:
                 if cond == "divergence":
                     cell["divergence"] = r.get("compliance_of_legal")
                 elif cond == "game":
-                    cell["game"] = {k: v for k, v in r.items()
-                                    if k not in ("model", "task", "variant", "condition")}
+                    game = r.get("game")
+                    if not isinstance(game, dict):
+                        game = {k: v for k, v in r.items()
+                                if k not in ("model", "task", "variant", "condition", "game")}
+                    cell["game"] = game
+                    cell["n"] = game.get("n", r.get("n"))
                 else:
                     cell[cond] = {
                         "n": r.get("n"), "parse_rate": r.get("parse_rate"),
@@ -101,14 +110,14 @@ class Monitor:
             cells.append(cell)
         done = self.cells_done
         total = self.cells_total
-        elapsed_s = time.time() - time.mktime(time.strptime(self.started_at, "%Y-%m-%dT%H:%M:%S"))
+        elapsed_s = time.time() - self.started_epoch
         eta_min = None
         if done > 0 and elapsed_s > 0:
             eta_min = int(elapsed_s / done * (total - done) / 60)
         return {
             "repo": "Vedang-P/neuro-symbolic-pathfinding",
             "mode": self.meta.get("mode"),
-            "stage": "sweep",
+            "stage": "complete" if total > 0 and done >= total else "sweep",
             "started_at": self.started_at,
             "updated_at": _ts(),
             "progress": {"cells_done": done, "cells_total": total,
@@ -333,14 +342,18 @@ def main() -> None:
             summary_path = ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json"
             if args.resume and summary_path.exists():
                 summary = json.loads(summary_path.read_text())
-                cell_rows = _rows_from_summary(model, task, variant, summary)
-                rows.extend(cell_rows)
-                skipped += 1
-                print(f"  resume: {model} x {task}:{variant} already done — "
-                      f"loaded {len(cell_rows)} rows", flush=True)
-                if monitor:
-                    monitor.cell_done(cell_rows)
-                continue
+                if summary.get("schema") != SCHEMA:
+                    print(f"  resume: {model} x {task}:{variant} schema v{summary.get('schema')} "
+                          f"!= v{SCHEMA} (stale parser/loader) — re-running", flush=True)
+                else:
+                    cell_rows = _rows_from_summary(model, task, variant, summary)
+                    rows.extend(cell_rows)
+                    skipped += 1
+                    print(f"  resume: {model} x {task}:{variant} already done — "
+                          f"loaded {len(cell_rows)} rows", flush=True)
+                    if monitor:
+                        monitor.cell_done(cell_rows)
+                    continue
             is_game = bool(cfg["tasks"][task].get("game", False))
             mt = game_tokens if is_game else max_tokens
             cmd = [
@@ -370,12 +383,15 @@ def main() -> None:
             if res.returncode != 0:
                 print(f"!!! {model} x {task}:{variant} FAILED rc={res.returncode}", flush=True)
                 last_error = f"{model} x {task}:{variant} failed rc={res.returncode}"
+                if monitor:
+                    monitor.cell_failed()
             else:
                 summary = json.loads(summary_path.read_text())
                 cell_rows = _rows_from_summary(model, task, variant, summary)
                 rows.extend(cell_rows)
             if monitor:
-                monitor.cell_done(cell_rows)
+                if cell_rows:
+                    monitor.cell_done(cell_rows)
                 monitor.set_current()
                 monitor.maybe_push(last_error=last_error)
             print(f"    {time.time() - t:.0f}s", flush=True)

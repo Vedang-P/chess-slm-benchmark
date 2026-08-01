@@ -6,12 +6,22 @@
   const fmtPct = (v) => (v === null || v === undefined || v === "" ? "—" : `${(v * 100).toFixed(1)}%`);
   const fmtNum = (v) => (v === null || v === undefined || v === "" ? "—" : String(v));
   const num = (v) => (typeof v === "number" ? v : null);
+  const escapeHtml = (value) => String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
   let state = null;
   let history = [];
   let timer = null;
   let clockTimer = null;
   let fetchFailed = false;
+  let stateRequest = 0;
+  let liveRequest = 0;
+  let stateController = null;
+  let liveController = null;
   const charts = {};
 
   // ---------------- status ----------------
@@ -31,35 +41,49 @@
     return { state: CONFIG.STATE_URL, history: CONFIG.HISTORY_URL, live: CONFIG.LIVE_URL }[kind];
   };
 
-  async function fetchText(url) {
-    const res = await fetch(url, { cache: "no-store" });
+  async function fetchText(url, signal) {
+    const res = await fetch(url, { cache: "no-store", signal });
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     return res.text();
   }
 
-  async function fetchFeed(kind) {
+  async function fetchFeed(kind, signal) {
     try {
-      return await fetchText(feedUrl(kind));
+      return await fetchText(feedUrl(kind), signal);
     } catch (e) {
       if (!CONFIG.WORKER_BASE) throw e;
       const raw = { state: CONFIG.STATE_URL, history: CONFIG.HISTORY_URL, live: CONFIG.LIVE_URL }[kind];
-      return await fetchText(raw); // worker unreachable -> raw fallback
+      return await fetchText(raw, signal); // worker unreachable -> raw fallback
     }
   }
 
   async function load() {
+    const request = ++stateRequest;
+    if (stateController) stateController.abort();
+    const controller = new AbortController();
+    stateController = controller;
     try {
-      state = JSON.parse(await fetchFeed("state"));
+      const nextState = JSON.parse(await fetchFeed("state", controller.signal));
+      if (request !== stateRequest) return;
+      let nextHistory = history;
       try {
-        history = (await fetchFeed("history")).trim().split("\n")
+        nextHistory = (await fetchFeed("history", controller.signal)).trim().split("\n")
           .filter(Boolean).map((l) => JSON.parse(l));
-      } catch { history = []; }
+      } catch (error) {
+        if (controller.signal.aborted || request !== stateRequest) return;
+        console.warn("history feed unavailable; keeping the last history", error);
+      }
+      if (request !== stateRequest) return;
+      state = nextState;
+      history = nextHistory;
       fetchFailed = false;
-      const ageS = (Date.now() - new Date(state.updated_at).getTime()) / 1000;
-      if (ageS > Math.max(CONFIG.REFRESH_S * 4, 180)) status("stale", "stale · " + Math.round(ageS / 60) + "m ago");
+      const ageS = ageSeconds(state.updated_at);
+      if (!Number.isFinite(ageS)) status("error", "invalid timestamp");
+      else if (ageS > Math.max(CONFIG.REFRESH_S * 4, 180)) status("stale", "stale · " + Math.round(ageS / 60) + "m ago");
       else status("live", "live · " + timeAgo(state.updated_at));
       render();
     } catch (e) {
+      if (controller.signal.aborted || request !== stateRequest) return;
       fetchFailed = true;
       status("error", "no signal");
       if (!state) showNoSignal(true);
@@ -79,36 +103,57 @@
     const a = $("retryLink");
     a.href = "#";
     a.textContent = "retry now";
-    a.addEventListener("click", (ev) => { ev.preventDefault(); load(); });
+    a.onclick = (ev) => { ev.preventDefault(); load(); };
     $("noticeMeta").appendChild(a);
   }
 
   function timeAgo(iso) {
-    const s = (Date.now() - new Date(iso).getTime()) / 1000;
+    const s = ageSeconds(iso);
+    if (!Number.isFinite(s)) return "unknown age";
+    if (s < -5) return `clock skew · ${Math.round(Math.abs(s))}s ahead`;
     if (s < 5) return "just now";
     if (s < 60) return `${Math.round(s)}s ago`;
     if (s < 3600) return `${Math.round(s / 60)}m ago`;
     return `${Math.round(s / 3600)}h ago`;
   }
 
+  function parseTimestamp(value) {
+    if (typeof value !== "string" || !value.trim()) return NaN;
+    const text = value.trim();
+    const withZone = /(?:Z|[+-]\d\d:\d\d)$/i.test(text) ? text : `${text}Z`;
+    return Date.parse(withZone);
+  }
+
+  function ageSeconds(value) {
+    const timestamp = parseTimestamp(value);
+    return Number.isFinite(timestamp) ? (Date.now() - timestamp) / 1000 : NaN;
+  }
+
   // ---------------- clock (the signature) ----------------
   function tickClock() {
     const el = $("clockDigits");
     const face = el.closest(".clock-face");
-    const start = state && state.started_at ? new Date(state.started_at).getTime() : null;
-    if (!start) { el.textContent = "00:00:00"; return; }
+    const start = state && state.started_at ? parseTimestamp(state.started_at) : NaN;
+    if (!Number.isFinite(start)) { el.textContent = "00:00:00"; return; }
     const s = Math.max(0, Math.floor((Date.now() - start) / 1000));
     const h = String(Math.floor(s / 3600)).padStart(2, "0");
     const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
     const sec = String(s % 60).padStart(2, "0");
     el.textContent = `${h}:${m}:${sec}`;
-    face.classList.toggle("running", state && !state.last_error && state.stage === "sweep");
+    const progress = state && state.progress ? state.progress : {};
+    face.classList.toggle("running", state && !state.last_error && state.stage === "sweep" && progress.fraction < 1);
   }
 
   // ---------------- helpers ----------------
   const avg = (vals) => {
     const ok = vals.filter((v) => typeof v === "number");
     return ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : null;
+  };
+
+  const weightedAvg = (entries) => {
+    const ok = entries.filter((entry) => typeof entry.value === "number" && entry.weight > 0);
+    const weight = ok.reduce((sum, entry) => sum + entry.weight, 0);
+    return weight ? ok.reduce((sum, entry) => sum + entry.value * entry.weight, 0) / weight : null;
   };
 
   function cellsFor(task, variant) {
@@ -121,9 +166,9 @@
     const per = {};
     for (const c of cellsFor(task, variant)) {
       const v = winMetric(c, field);
-      if (typeof v === "number") (per[c.model] = per[c.model] || []).push(v);
+      if (typeof v === "number") (per[c.model] = per[c.model] || []).push({ value: v, weight: num(c.win && c.win.n) || 1 });
     }
-    return Object.fromEntries(Object.entries(per).map(([m, vs]) => [m, avg(vs)]));
+    return Object.fromEntries(Object.entries(per).map(([m, entries]) => [m, weightedAvg(entries)]));
   }
 
   function modelMetricAvgWhere(models, predicate, field, condition = "win") {
@@ -132,11 +177,18 @@
       if (predicate && !predicate(c)) continue;
       const metric = c[condition] || {};
       const value = num(metric[field]);
-      if (value !== null) (per[c.model] = per[c.model] || []).push(value);
+      if (value !== null) (per[c.model] = per[c.model] || []).push({ value, weight: num(metric.n) || 1 });
     }
     return Object.fromEntries(
-      models.map((model) => [model, avg(per[model] || [])]).filter(([, value]) => value !== null),
+      models.map((model) => [model, weightedAvg(per[model] || [])]).filter(([, value]) => value !== null),
     );
+  }
+
+  function weightedCellMetricAvg(cells, field, condition = "win") {
+    return weightedAvg(cells.map((cell) => {
+      const metric = cell[condition] || {};
+      return { value: num(metric[field]), weight: num(metric.n) || 1 };
+    }));
   }
 
   function cellLabel(cell) {
@@ -159,6 +211,11 @@
       showNoSignal(false);
       $("stageTag").textContent = "IDLE";
       $("runMeta").textContent = state && state.mode ? `${state.mode} mode` : "no signal yet";
+      $("progressFill").style.width = "0%";
+      ["kCells", "kCellsSub", "kLegal", "kLegalSub", "kTactics", "kTacticsSub",
+        "kStock", "kStockSub", "kGames", "kGamesSub", "kDivergence"].forEach((id) => { $(id).textContent = "—"; });
+      $("currentCell").hidden = true;
+      $("errorBanner").hidden = true;
       $("clockDigits").textContent = "00:00:00";
       $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no model scores yet — awaiting completed position cells</div>`;
       $("cellsBody").innerHTML = `<tr><td colspan="9" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
@@ -181,28 +238,29 @@
     const p = state.progress || {};
     const frac = p.fraction || 0;
     $("progressFill").style.width = `${(frac * 100).toFixed(1)}%`;
-    $("stageTag").textContent = (state.stage || "sweep").toUpperCase();
+    const complete = (state.progress && state.progress.fraction >= 1) || state.stage === "complete";
+    $("stageTag").textContent = complete ? "COMPLETE" : (state.stage || "sweep").toUpperCase();
     $("runMeta").textContent = `${(state.models || []).length} models · ${state.mode || "?"}`;
     const cur = state.current;
     $("currentCell").hidden = !cur;
     if (cur) $("currentCell").textContent = `now: ${cur.model} × ${cur.task}`;
 
     const cells = state.cells || [];
-    const legalVals = cells.map((c) => winMetric(c, "legal_rate")).filter((v) => typeof v === "number");
+    const legalCells = cells.filter((c) => typeof winMetric(c, "legal_rate") === "number");
     const mateVals = modelWinAvg("mate1-lichess", "grid", "compliance_strict");
     const stockVals = modelWinAvg("bestmove-8x8", "grid", "compliance_strict");
-    const gameWins = cells.filter((c) => c.game && c.game.win_rate != null).map((c) => c.game.win_rate);
+    const gameCells = cells.filter((c) => c.game && c.game.win_rate != null);
 
     $("kCells").textContent = `${p.cells_done ?? 0}`;
     $("kCellsSub").textContent = `of ${p.cells_total ?? "?"} cells`;
-    $("kLegal").textContent = fmtPct(avg(legalVals));
-    $("kLegalSub").textContent = `${legalVals.length} cells`;
+    $("kLegal").textContent = fmtPct(weightedCellMetricAvg(legalCells, "legal_rate"));
+    $("kLegalSub").textContent = `${legalCells.length} cells`;
     $("kTactics").textContent = fmtPct(avg(Object.values(mateVals)));
     $("kTacticsSub").textContent = `${Object.keys(mateVals).length} models · strict`;
     $("kStock").textContent = fmtPct(avg(Object.values(stockVals)));
     $("kStockSub").textContent = `${Object.keys(stockVals).length} models · strict`;
-    $("kGames").textContent = fmtPct(avg(gameWins));
-    $("kGamesSub").textContent = `${gameWins.length} game cells`;
+    $("kGames").textContent = fmtPct(weightedAvg(gameCells.map((c) => ({ value: c.game.win_rate, weight: num(c.game.n) || 1 }))));
+    $("kGamesSub").textContent = `${gameCells.length} game cells`;
 
     let gridVals = [], fenVals = [];
     for (const task of ["cap-legal-8x8", "mate1-lichess", "mate2-lichess", "bestmove-8x8"]) {
@@ -243,10 +301,11 @@
       const games = cells.filter((c) => c.model === m && c.done).length;
       const frac = expectedPerModel ? Math.min(1, games / expectedPerModel) : 0;
       const score = byModel[m] ?? null;
+      const safeModel = escapeHtml(m);
       return `
       <div class="entrant${done.has(m) ? " done" : ""}">
         <span class="entrant-rank">${score === null ? "—" : String(i + 1).padStart(2, "0")}</span>
-        <span class="entrant-name" title="${m}">${m}</span>
+        <span class="entrant-name" title="${safeModel}">${safeModel}</span>
         <span class="entrant-mark">${score === null ? "not started" : fmtPct(score) + " legal"}</span>
         <span class="entrant-prog" style="--p:${(frac * 100).toFixed(0)}%"></span>
       </div>`;
@@ -355,7 +414,7 @@
     chartStatus(
       "chartLegalStatus",
       positionCells.length
-        ? `${positionCells.length} completed cells · parsed ${fmtPct(avg(positionCells.map((c) => c.win.parse_rate)))} · legal ${fmtPct(avg(positionCells.map((c) => c.win.legal_rate)))}`
+        ? `${positionCells.length} completed cells · parsed ${fmtPct(weightedCellMetricAvg(positionCells, "parse_rate"))} · legal ${fmtPct(weightedCellMetricAvg(positionCells, "legal_rate"))}`
         : "Waiting for completed position cells.",
     );
 
@@ -467,9 +526,9 @@
         const g = c.game;
         rows.push(`<tr>
           <td class="num mono dim">${n}</td>
-          <td class="mono">${c.model}</td>
-          <td>${c.task}</td>
-          <td><span class="dim">${c.variant}</span></td>
+          <td class="mono">${escapeHtml(c.model)}</td>
+          <td>${escapeHtml(c.task)}</td>
+          <td><span class="dim">${escapeHtml(c.variant)}</span></td>
           <td class="num mono">${fmtNum(g.n)}</td>
           <td class="num mono dim">—</td>
           <td class="num mono ${g.legal_rate > 0.3 ? "pos" : g.legal_rate > 0 ? "warn" : "neg"}">${fmtPct(g.legal_rate)}</td>
@@ -483,9 +542,9 @@
       const parse = num(m.parse_rate), legal = num(m.legal_rate), comp = num(m.compliance_of_legal);
       rows.push(`<tr>
         <td class="num mono dim">${n}</td>
-        <td class="mono">${c.model}</td>
-        <td>${c.task}</td>
-        <td><span class="dim">${c.variant}</span></td>
+        <td class="mono">${escapeHtml(c.model)}</td>
+        <td>${escapeHtml(c.task)}</td>
+        <td><span class="dim">${escapeHtml(c.variant)}</span></td>
         <td class="num mono">${fmtNum(m.n)}</td>
         <td class="num mono ${parse > 0.5 ? "pos" : "neg"}">${fmtPct(parse)}</td>
         <td class="num mono ${legal > 0.3 ? "pos" : legal > 0 ? "warn" : "neg"}">${fmtPct(legal)}</td>
@@ -663,6 +722,22 @@
     return cell ? [cell.model, cell.task, cell.variant].join("|") : "";
   }
 
+  function updateLiveSync() {
+    if (!live) {
+      $("liveSync").className = "live-sync warn";
+      $("liveSync").textContent = "no published sample to compare with the sweep cursor";
+      return;
+    }
+    const cell = live.cell || {};
+    const sameCell = cellKey(state && state.current) === cellKey(cell);
+    const ageS = live.updated_at ? ageSeconds(live.updated_at) : Infinity;
+    const fresh = Number.isFinite(ageS) && ageS <= Math.max(CONFIG.LIVE_REFRESH_S * 4, 30);
+    $("liveSync").className = "live-sync " + (sameCell && fresh ? "ok" : "warn");
+    $("liveSync").textContent = sameCell && fresh
+      ? `same sweep cell · published ${timeAgo(live.updated_at)} · board is record ${live.record_id || live.position_id || "unknown"}`
+      : `board is ${timeAgo(live.updated_at)} · ${sameCell ? "same cell, stale sample" : `last published sample; sweep cursor is ${cellLabel(state && state.current)}`}`;
+  }
+
   function renderLive() {
     const sweep = state && state.current ? `sweep now · ${cellLabel(state.current)}` : "sweep position unavailable";
     $("liveNow").textContent = sweep;
@@ -677,22 +752,22 @@
     const cell = live.cell || {};
     const kind = live.task_kind;
     const isGame = GAME_TASKS.includes(cell.task);
-    const sameCell = cellKey(state && state.current) === cellKey(cell);
-    const ageS = live.updated_at ? (Date.now() - new Date(live.updated_at).getTime()) / 1000 : Infinity;
-    const fresh = Number.isFinite(ageS) && ageS <= Math.max(CONFIG.LIVE_REFRESH_S * 4, 30);
     $("liveMeta").textContent =
-      `last sample ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${cell.task || "unknown task"} · ${cell.variant || "unknown representation"} · ${live.record_id || live.position_id || "unknown position"}`;
-    $("liveSync").className = "live-sync " + (sameCell && fresh ? "ok" : "warn");
-    $("liveSync").textContent = sameCell && fresh
-      ? `same sweep cell · published ${timeAgo(live.updated_at)} · board is record ${live.record_id || live.position_id || "unknown"}`
-      : `board is ${timeAgo(live.updated_at)} · ${sameCell ? "same cell, stale sample" : `last published sample; sweep cursor is ${cellLabel(state && state.current)}`}`;
+      `last sample ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${live.phase || (sampleDone(live) ? "scored" : "generating")} · ${cell.task || "unknown task"} · ${cell.variant || "unknown representation"} · ${live.record_id || live.position_id || "unknown position"}`;
+    updateLiveSync();
 
-    $("livePrompt").textContent = live.prompt || "No prompt was published for this sample.";
+    $("livePromptLabel").textContent = live.model_input ? "exact model input" : "task prompt · model template not published";
+    $("livePrompt").textContent = live.model_input || live.prompt || "No model input was published for this sample.";
     const cot = live.cot_requested === true || /think step by step/i.test(live.prompt || "");
-    $("liveGenerationLabel").textContent = cot ? "reasoning + final answer" : "model output · answer-only";
-    $("liveGenerationNote").textContent = cot
-      ? "raw generated text; no hidden reasoning is inferred"
-      : "this run did not request chain-of-thought; the prompt requires an answer-only response";
+    const generating = live.phase === "generating" && !sampleDone(live);
+    $("liveGenerationLabel").textContent = generating
+      ? (cot ? "reasoning + final answer · generating" : "model output · generating")
+      : (cot ? "reasoning + final answer" : "model output · answer-only");
+    $("liveGenerationNote").textContent = generating
+      ? (cot ? "generation is in progress; raw output will appear when published" : "answer-only generation is in progress")
+      : cot
+        ? "raw generated text; no hidden reasoning is inferred"
+        : "this run did not request chain-of-thought; the prompt requires an answer-only response";
     $("liveThinking").textContent = live.output || (sampleDone(live) ? "No output was returned." : "waiting for the first generated token…");
     $("liveThinking").classList.toggle("thinking", !sampleDone(live));
     $("liveThinking").scrollTop = $("liveThinking").scrollHeight;
@@ -759,18 +834,25 @@
       const v = verdictInfo(s);
       const mark = !v ? "·" : v.cls === "correct" ? "✓" : v.cls === "wrong" ? "✗" : "△";
       const active = s === live ? " active" : "";
+      const model = escapeHtml(String(s.cell && s.cell.model || "").split("-")[0]);
+      const task = escapeHtml(s.cell && s.cell.task || "");
       return `<button class="replay-chip${active}" data-i="${replay.length - 1 - i}">
         <span class="r-mark ${v ? v.cls : "warn"}">${mark}</span>
-        <span>${s.cell ? s.cell.model.split("-")[0] : ""} · ${s.cell ? s.cell.task : ""}</span>
+        <span>${model} · ${task}</span>
       </button>`;
     }).join("");
   }
 
   async function loadLive() {
+    const request = ++liveRequest;
+    if (liveController) liveController.abort();
+    const controller = new AbortController();
+    liveController = controller;
     try {
-      const l = JSON.parse(await fetchFeed("live"));
-      const incomingTime = l.updated_at ? new Date(l.updated_at).getTime() : 0;
-      const currentTime = live && live.updated_at ? new Date(live.updated_at).getTime() : 0;
+      const l = JSON.parse(await fetchFeed("live", controller.signal));
+      if (request !== liveRequest) return;
+      const incomingTime = l.updated_at ? parseTimestamp(l.updated_at) : 0;
+      const currentTime = live && live.updated_at ? parseTimestamp(live.updated_at) : 0;
       if (live && incomingTime && currentTime && incomingTime < currentTime) return;
       const key = `${l.cell ? l.cell.model + l.cell.task + l.cell.variant : ""}|${l.position_id || ""}|${l.sample_idx || ""}`;
       if (key !== lastLiveKey) {
@@ -783,7 +865,10 @@
       }
       renderLive();
       renderReplay();
-    } catch (e) { /* live is best-effort; page keeps working */ }
+    } catch (e) {
+      if (controller.signal.aborted || request !== liveRequest) return;
+      /* live is best-effort; the existing sample remains visible but ages */
+    }
   }
 
   // ---------------- boot ----------------
@@ -797,6 +882,7 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { load(); loadLive(); } });
   if (CONFIG.REFRESH_S > 0) timer = setInterval(load, CONFIG.REFRESH_S * 1000);
   if (CONFIG.LIVE_REFRESH_S > 0) setInterval(loadLive, CONFIG.LIVE_REFRESH_S * 1000);
+  setInterval(updateLiveSync, 1000);
   load();
   loadLive();
 })();

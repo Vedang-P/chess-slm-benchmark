@@ -31,6 +31,9 @@ class ResultWriter:
     def finish(self, metrics: dict) -> dict:
         summary = {
             "run": self.run_name,
+            "schema": 2,  # bumped when the scorer/parser or loader changes such
+                          # that old summaries must be re-scored (v1: no SAN parser,
+                          # bf16-only gemma loading)
             "meta": self.meta,
             "metrics": metrics,
             "n_samples": len(self.samples),
