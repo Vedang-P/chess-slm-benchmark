@@ -47,6 +47,7 @@ class Monitor:
         self.started_at = _ts()
         self.rows = []
         self.meta = {}
+        self.current = None
         self.output_dir = Path(output_dir)
         self.uploaded = set()  # remote paths already uploaded (tracked in-memory)
 
@@ -57,6 +58,9 @@ class Monitor:
         self.cells_done += 1
         for r in row_parts:
             self.rows.append(r)
+
+    def set_current(self, model: str = None, task: str = None, variant: str = None) -> None:
+        self.current = (model, task, variant) if model else None
 
     def maybe_push(self, force: bool = False, last_error: str = None) -> None:
         if not force and time.time() - self.last_push < self.interval:
@@ -108,6 +112,8 @@ class Monitor:
                          "fraction": round(done / total, 4) if total else 0.0},
             "eta_min": eta_min,
             "models": self.meta.get("models", []),
+            "current": {"model": self.current[0], "task": self.current[1],
+                        "variant": self.current[2]} if self.current else None,
             "last_error": last_error,
             "cells": cells,
         }
@@ -337,6 +343,9 @@ def main() -> None:
             if args.smoke:
                 cmd.append("--smoke")
             print(f"\n>>> {model} x {task}:{variant} (n={n}, tokens={mt})", flush=True)
+            if monitor:
+                monitor.set_current(model, task, variant)
+                monitor.maybe_push(last_error=last_error)
             t = time.time()
             res = subprocess.run(cmd, cwd=ROOT)
             cell_rows = []
@@ -349,6 +358,7 @@ def main() -> None:
                 rows.extend(cell_rows)
             if monitor:
                 monitor.cell_done(cell_rows)
+                monitor.set_current()
                 monitor.maybe_push(last_error=last_error)
             print(f"    {time.time() - t:.0f}s", flush=True)
     csv_path = write_comparison_csv(ROOT / args.output_dir, rows)

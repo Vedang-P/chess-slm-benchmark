@@ -11,6 +11,7 @@
   let history = [];
   let timer = null;
   let clockTimer = null;
+  let fetchFailed = false;
   const charts = {};
 
   // ---------------- status ----------------
@@ -34,14 +35,33 @@
         history = (await fetchText(CONFIG.HISTORY_URL)).trim().split("\n")
           .filter(Boolean).map((l) => JSON.parse(l));
       } catch { history = []; }
+      fetchFailed = false;
       const ageS = (Date.now() - new Date(state.updated_at).getTime()) / 1000;
       if (ageS > Math.max(CONFIG.REFRESH_S * 4, 180)) status("stale", "stale · " + Math.round(ageS / 60) + "m ago");
       else status("live", "live · " + timeAgo(state.updated_at));
       render();
     } catch (e) {
+      fetchFailed = true;
       status("error", "no signal");
+      if (!state) showNoSignal(true);
       console.warn(e);
     }
+  }
+
+  function showNoSignal(failed) {
+    $("notice").hidden = false;
+    $("notice").className = "notice" + (failed ? " error" : "");
+    $("noticeTitle").textContent = failed ? "No signal from the monitor" : "Waiting for the sweep";
+    $("noticeBody").textContent = failed
+      ? "Could not reach the results feed (raw.githubusercontent.com). Check your connection — the feed is served by GitHub and the page keeps retrying."
+      : "No results have been published yet. Data lands here every ~2 minutes once kaggle_run.ipynb is running on Kaggle.";
+    $("noticeMeta").textContent = "";
+    $("noticeMeta").appendChild(document.createTextNode("auto-retrying every " + CONFIG.REFRESH_S + "s · "));
+    const a = $("retryLink");
+    a.href = "#";
+    a.textContent = "retry now";
+    a.addEventListener("click", (ev) => { ev.preventDefault(); load(); });
+    $("noticeMeta").appendChild(a);
   }
 
   function timeAgo(iso) {
@@ -99,6 +119,7 @@
     const hasData = !!state && (state.cells || []).length > 0;
     $("notice").hidden = hasData;
     if (!hasData) {
+      showNoSignal(false);
       $("stageTag").textContent = "IDLE";
       $("runMeta").textContent = state && state.mode ? `${state.mode} mode` : "no signal yet";
       $("clockDigits").textContent = "00:00:00";
@@ -125,6 +146,9 @@
     $("progressFill").style.width = `${(frac * 100).toFixed(1)}%`;
     $("stageTag").textContent = (state.stage || "sweep").toUpperCase();
     $("runMeta").textContent = `${(state.models || []).length} entrants · ${state.mode || "?"}`;
+    const cur = state.current;
+    $("currentCell").hidden = !cur;
+    if (cur) $("currentCell").textContent = `now: ${cur.model} × ${cur.task}`;
 
     const cells = state.cells || [];
     const legalVals = cells.map((c) => winMetric(c, "legal_rate")).filter((v) => typeof v === "number");
@@ -160,22 +184,74 @@
 
   function renderEntrants() {
     const models = state.models || [];
+    const cells = state.cells || [];
     const byModel = modelWinAvg("cap-legal-8x8", "grid", "legal_rate");
     const ranked = bestOf(models, (m) => byModel[m] ?? null);
-    const done = new Set(cellsFor(null, null).filter((c) => c.done).map((c) => c.model));
+    const done = new Set(cells.filter((c) => c.done).map((c) => c.model));
+    const total = new Set(cells.map((c) => `${c.model}|${c.task}|${c.variant}`));
     if (!ranked.length) {
       $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no entrants scored yet — awaiting the first games</div>`;
       return;
     }
-    $("entrantRows").innerHTML = ranked.map(([m, v], i) => `
+    $("entrantRows").innerHTML = ranked.map(([m, v], i) => {
+      const games = cells.filter((c) => c.model === m && c.done).length;
+      const frac = total.size ? Math.min(1, games / total.size) : 0;
+      return `
       <div class="entrant${done.has(m) ? " done" : ""}">
         <span class="entrant-rank">${String(i + 1).padStart(2, "0")}</span>
         <span class="entrant-name">${m}</span>
         <span class="entrant-mark">${fmtPct(v)}</span>
-      </div>`).join("");
+        <span class="entrant-prog" style="--p:${(frac * 100).toFixed(0)}%"></span>
+      </div>`;
+    }).join("");
   }
 
   // ---------------- charts ----------------
+  // direct value labels on bars and line ends (data is read, not decoded)
+  const valueLabels = {
+    id: "valueLabels",
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = "9px 'IBM Plex Mono', monospace";
+      ctx.textAlign = "center";
+      for (let d = 0; d < chart.data.datasets.length; d++) {
+        const ds = chart.data.datasets[d];
+        const meta = chart.getDatasetMeta(d);
+        for (let i = 0; i < ds.data.length; i++) {
+          const v = ds.data[i];
+          if (typeof v !== "number" || v <= 0.001) continue;
+          const el = meta.data[i];
+          if (!el) continue;
+          ctx.fillStyle = "#9d968a";
+          ctx.fillText((v * 100).toFixed(0) + "%", el.x, el.y - 4);
+        }
+      }
+      ctx.restore();
+    },
+  };
+  const endLabel = {
+    id: "endLabel",
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(0);
+      const last = meta.data[meta.data.length - 1];
+      const ds = chart.data.datasets[0];
+      const v = ds.data[ds.data.length - 1];
+      if (!last || typeof v !== "number") return;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = "600 10px 'IBM Plex Mono', monospace";
+      ctx.fillStyle = "#e5484d";
+      ctx.textAlign = "left";
+      ctx.fillText((v * 100).toFixed(1) + "%", last.x + 6, last.y + 3);
+      ctx.restore();
+    },
+  };
+
+  function sortedModels(models, map) {
+    return bestOf(models, (m) => map[m] ?? null).map(([m]) => m);
+  }
+
   const baseOpts = {
     responsive: true,
     maintainAspectRatio: false,
@@ -210,35 +286,41 @@
 
     const legGrid = modelWinAvg("cap-legal-8x8", "grid", "legal_rate");
     const legFen = modelWinAvg("cap-legal-8x8", "fen", "legal_rate");
+    const order = sortedModels(models, (m) => legGrid[m] ?? null);
     mkChart("chartLegal", {
       type: "bar",
-      data: { labels: models, datasets: [
-        barDataset("grid", models.map((m) => legGrid[m] ?? null), "rgba(229,72,77,0.75)"),
-        barDataset("fen", models.map((m) => legFen[m] ?? null), "rgba(242,169,59,0.7)"),
+      data: { labels: order, datasets: [
+        barDataset("grid", order.map((m) => legGrid[m] ?? null), "rgba(229,72,77,0.75)"),
+        barDataset("fen", order.map((m) => legFen[m] ?? null), "rgba(242,169,59,0.7)"),
       ] },
       options: baseOpts,
+      plugins: [valueLabels],
     });
 
     const m1 = modelWinAvg("mate1-lichess", "grid", "compliance_of_legal");
     const m2 = modelWinAvg("mate2-lichess", "grid", "compliance_of_legal");
+    const orderT = sortedModels(models, (m) => m1[m] ?? null);
     mkChart("chartTactics", {
       type: "bar",
-      data: { labels: models, datasets: [
-        barDataset("mate-in-1", models.map((m) => m1[m] ?? null), "rgba(229,72,77,0.75)"),
-        barDataset("mate-in-2", models.map((m) => m2[m] ?? null), "rgba(233,230,223,0.55)"),
+      data: { labels: orderT, datasets: [
+        barDataset("mate-in-1", orderT.map((m) => m1[m] ?? null), "rgba(229,72,77,0.75)"),
+        barDataset("mate-in-2", orderT.map((m) => m2[m] ?? null), "rgba(233,230,223,0.55)"),
       ] },
       options: baseOpts,
+      plugins: [valueLabels],
     });
 
     const stTop = modelWinAvg("bestmove-8x8", "grid", "compliance_of_legal");
     const stLegal = modelWinAvg("bestmove-8x8", "grid", "legal_rate");
+    const orderS = sortedModels(models, (m) => stTop[m] ?? null);
     mkChart("chartStock", {
       type: "bar",
-      data: { labels: models, datasets: [
-        barDataset("top-1 vs stockfish", models.map((m) => stTop[m] ?? null), "rgba(242,169,59,0.75)"),
-        barDataset("legal rate", models.map((m) => stLegal[m] ?? null), "rgba(90,171,130,0.7)"),
+      data: { labels: orderS, datasets: [
+        barDataset("top-1 vs stockfish", orderS.map((m) => stTop[m] ?? null), "rgba(242,169,59,0.75)"),
+        barDataset("legal rate", orderS.map((m) => stLegal[m] ?? null), "rgba(90,171,130,0.7)"),
       ] },
       options: baseOpts,
+      plugins: [valueLabels],
     });
 
     mkChart("chartHistory", {
@@ -257,6 +339,7 @@
         }],
       },
       options: { ...baseOpts, scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, title: { display: true, text: "games played", color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 } } } } },
+      plugins: [endLabel],
     });
   }
 

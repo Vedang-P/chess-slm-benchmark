@@ -40,9 +40,10 @@
     <section class="notice" id="notice" hidden>
       <div class="notice-mark">♞</div>
       <div>
-        <h2>Waiting for the sweep</h2>
-        <p>The Kaggle run hasn't published results yet. Data lands here every ~2 minutes once
-           <span class="mono">kaggle_run.ipynb</span> is running.</p>
+        <h2 id="noticeTitle">Waiting for the sweep</h2>
+        <p id="noticeBody">No results have been published yet. Data lands here every ~2 minutes once
+           <span class="mono">kaggle_run.ipynb</span> is running on Kaggle.</p>
+        <p class="notice-meta" id="noticeMeta">auto-retrying · <a href="#" id="retryLink">retry now</a></p>
       </div>
     </section>
 
@@ -52,6 +53,7 @@
         <span class="sb-label">round</span>
         <span class="sb-value" id="stageTag">—</span>
         <span class="sb-sub" id="runMeta">—</span>
+        <span class="now-line" id="currentCell" hidden></span>
       </div>
       <div class="sb-cell sb-wide">
         <span class="sb-label">games played</span>
