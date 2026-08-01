@@ -115,6 +115,7 @@ class Monitor:
                          "fraction": round(done / total, 4) if total else 0.0},
             "eta_min": eta_min,
             "models": self.meta.get("models", []),
+            "cot_requested": bool(self.meta.get("cot", False)),
             "current": {"model": self.current[0], "task": self.current[1],
                         "variant": self.current[2]} if self.current else None,
             "last_error": last_error,
@@ -314,7 +315,8 @@ def main() -> None:
                       output_dir=args.output_dir,
                       remote_prefix=args.output_dir) if args.monitor else None
     if monitor:
-        monitor.set_meta(mode="check" if args.check else "full", models=models)
+        monitor.set_meta(mode="check" if args.check else "full", models=models,
+                         cot=args.cot)
         monitor.cells_total = len(models) * len(cells)
         monitor.maybe_push(force=True, last_error=None)
 

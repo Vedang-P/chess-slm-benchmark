@@ -518,14 +518,80 @@
     return out;
   }
 
-  function piecesMap(sample) {
-    if (sample.fen) { const f = fenPieces(sample.fen); if (f) return f; }
-    if (sample.pieces) {
-      const out = {};
-      for (const p of sample.pieces) out[p.sq] = p.color === "w" ? p.kind : p.kind.toLowerCase();
-      return out;
+  function positionOf(sample) {
+    return sample && sample.position ? sample.position : sample || {};
+  }
+
+  function listedPieces(sample) {
+    const position = positionOf(sample);
+    if (!Array.isArray(position.pieces)) return null;
+    const out = {};
+    for (const p of position.pieces) {
+      if (!p || !p.sq || !p.kind || !p.color) continue;
+      out[p.sq] = p.color === "w" ? p.kind : p.kind.toLowerCase();
     }
+    return out;
+  }
+
+  function positionFen(sample) {
+    const position = positionOf(sample);
+    return position.fen || sample.fen || null;
+  }
+
+  function piecesMap(sample) {
+    const listed = listedPieces(sample);
+    const fen = fenPieces(positionFen(sample));
+    // Grid/list prompts are generated from the piece record; FEN prompts are
+    // verified against that same record before rendering.
+    if (sample.cell && sample.cell.variant !== "fen" && listed) return listed;
+    if (sample.cell && sample.cell.variant === "fen" && fen) return fen;
+    if (listed) return listed;
+    if (fen) return fen;
     return null;
+  }
+
+  function mapSignature(map) {
+    return Object.entries(map || {}).sort(([a], [b]) => a.localeCompare(b))
+      .map(([sq, piece]) => `${sq}:${piece}`).join("|");
+  }
+
+  function renderedGrid(sample) {
+    const position = positionOf(sample);
+    const n = position.n || sample.n || 8;
+    const pieces = listedPieces(sample) || {};
+    const lines = ["   " + Array.from({ length: n }, (_, c) => String.fromCharCode(97 + c)).join(" ")];
+    for (let r = n - 1; r >= 0; r--) {
+      const row = [];
+      for (let c = 0; c < n; c++) {
+        const sq = `${String.fromCharCode(97 + c)}${r + 1}`;
+        const piece = pieces[sq];
+        row.push(piece ? `${piece === piece.toUpperCase() ? "w" : "b"}${piece.toUpperCase()}` : "..");
+      }
+      lines.push(`${String(r + 1).padStart(2, " ")} ${row.join(" ")}`);
+    }
+    return lines.join("\n");
+  }
+
+  function boardIntegrity(sample) {
+    const errors = [];
+    const fenMap = fenPieces(positionFen(sample));
+    const pieceMap = listedPieces(sample);
+    if (fenMap && pieceMap && mapSignature(fenMap) !== mapSignature(pieceMap)) {
+      errors.push("FEN and piece-list snapshots disagree");
+    }
+    const prompt = sample.prompt || "";
+    const variant = sample.cell && sample.cell.variant;
+    if (variant === "fen") {
+      const match = prompt.match(/The position in FEN notation:\s*([^\n]+)/);
+      const promptFen = match && match[1].trim().split(/\s+/);
+      const liveFen = positionFen(sample) && positionFen(sample).trim().split(/\s+/);
+      if (promptFen && liveFen && (promptFen[0] !== liveFen[0] || promptFen[1] !== liveFen[1])) {
+        errors.push("the FEN in the prompt differs from the board snapshot");
+      }
+    } else if (variant === "grid" && prompt && !prompt.includes(renderedGrid(sample))) {
+      errors.push("the grid in the prompt differs from the piece snapshot");
+    }
+    return errors;
   }
 
   function renderBoard(sample) {
@@ -593,21 +659,40 @@
     return { cls: "neutral", title: "unscored", detail: "no scoring result was published" };
   }
 
+  function cellKey(cell) {
+    return cell ? [cell.model, cell.task, cell.variant].join("|") : "";
+  }
+
   function renderLive() {
     const sweep = state && state.current ? `sweep now · ${cellLabel(state.current)}` : "sweep position unavailable";
     $("liveNow").textContent = sweep;
     if (!live) {
       $("liveCaption").textContent = "no live signal yet";
+      $("liveSync").className = "live-sync warn";
+      $("liveSync").textContent = "no published sample to compare with the sweep cursor";
+      $("liveIntegrity").hidden = true;
       $("liveVerdict").hidden = true;
       return;
     }
     const cell = live.cell || {};
     const kind = live.task_kind;
     const isGame = GAME_TASKS.includes(cell.task);
+    const sameCell = cellKey(state && state.current) === cellKey(cell);
+    const ageS = live.updated_at ? (Date.now() - new Date(live.updated_at).getTime()) / 1000 : Infinity;
+    const fresh = Number.isFinite(ageS) && ageS <= Math.max(CONFIG.LIVE_REFRESH_S * 4, 30);
     $("liveMeta").textContent =
-      `sample ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${cell.task || "unknown task"} · ${cell.variant || "unknown representation"}`;
+      `last sample ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${cell.task || "unknown task"} · ${cell.variant || "unknown representation"} · ${live.record_id || live.position_id || "unknown position"}`;
+    $("liveSync").className = "live-sync " + (sameCell && fresh ? "ok" : "warn");
+    $("liveSync").textContent = sameCell && fresh
+      ? `same sweep cell · published ${timeAgo(live.updated_at)} · board is record ${live.record_id || live.position_id || "unknown"}`
+      : `board is ${timeAgo(live.updated_at)} · ${sameCell ? "same cell, stale sample" : `last published sample; sweep cursor is ${cellLabel(state && state.current)}`}`;
 
     $("livePrompt").textContent = live.prompt || "No prompt was published for this sample.";
+    const cot = live.cot_requested === true || /think step by step/i.test(live.prompt || "");
+    $("liveGenerationLabel").textContent = cot ? "reasoning + final answer" : "model output · answer-only";
+    $("liveGenerationNote").textContent = cot
+      ? "raw generated text; no hidden reasoning is inferred"
+      : "this run did not request chain-of-thought; the prompt requires an answer-only response";
     $("liveThinking").textContent = live.output || (sampleDone(live) ? "No output was returned." : "waiting for the first generated token…");
     $("liveThinking").classList.toggle("thinking", !sampleDone(live));
     $("liveThinking").scrollTop = $("liveThinking").scrollHeight;
@@ -641,6 +726,7 @@
     $("liveDot").className = "live-dot" + (sampleDone(live) ? "" : " on");
 
     if (isGame) {
+      $("liveIntegrity").hidden = true;
       $("liveBoard").style.gridTemplateColumns = "1fr";
       $("liveBoard").style.gridTemplateRows = "1fr";
       $("liveBoard").innerHTML = `<div class="board-empty">This is a full-game task. The monitor publishes the outcome, not each position.</div>`;
@@ -648,6 +734,20 @@
       return;
     }
 
+    const integrityErrors = boardIntegrity(live);
+    if (integrityErrors.length) {
+      $("liveIntegrity").hidden = false;
+      $("liveIntegrity").className = "live-integrity error";
+      $("liveIntegrity").textContent = `BOARD HIDDEN · ${integrityErrors.join(" · ")}`;
+      $("liveBoard").style.gridTemplateColumns = "1fr";
+      $("liveBoard").style.gridTemplateRows = "1fr";
+      $("liveBoard").innerHTML = `<div class="board-empty">Position data does not match the exact prompt. The dashboard will not show a potentially misleading board.</div>`;
+      $("liveCaption").textContent = "board withheld until the monitor publishes a consistent sample";
+      return;
+    }
+    $("liveIntegrity").hidden = false;
+    $("liveIntegrity").className = "live-integrity ok";
+    $("liveIntegrity").textContent = `position verified · ${live.record_id || live.position_id || "unknown record"}`;
     renderBoard(live);
     $("liveCaption").textContent = sampleDone(live) ? `completed · ${live.updated_at || ""}` : "generating…";
   }
@@ -669,6 +769,9 @@
   async function loadLive() {
     try {
       const l = JSON.parse(await fetchFeed("live"));
+      const incomingTime = l.updated_at ? new Date(l.updated_at).getTime() : 0;
+      const currentTime = live && live.updated_at ? new Date(live.updated_at).getTime() : 0;
+      if (live && incomingTime && currentTime && incomingTime < currentTime) return;
       const key = `${l.cell ? l.cell.model + l.cell.task + l.cell.variant : ""}|${l.position_id || ""}|${l.sample_idx || ""}`;
       if (key !== lastLiveKey) {
         if (live && live.position_id && live !== l) replay.push(live);

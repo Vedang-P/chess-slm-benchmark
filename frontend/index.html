@@ -99,6 +99,7 @@
         <div class="board-head-copy">
           <h2>Live sample</h2>
           <p class="live-now" id="liveNow">waiting for the monitor</p>
+          <p class="live-sync" id="liveSync">waiting for a sample identity check</p>
         </div>
         <span class="board-note" id="liveMeta">—</span>
       </div>
@@ -106,6 +107,7 @@
         <div class="live-board-wrap">
           <div class="board-stage" id="liveBoard"></div>
           <div class="live-caption" id="liveCaption">waiting for the first position…</div>
+          <p class="live-integrity" id="liveIntegrity" hidden></p>
         </div>
         <div class="live-side">
           <div class="live-block">
@@ -113,7 +115,8 @@
             <pre class="live-prompt" id="livePrompt">—</pre>
           </div>
           <div class="live-block thinking-block">
-            <span class="live-label">model generation <span class="live-dot" id="liveDot"></span></span>
+            <span class="live-label"><span id="liveGenerationLabel">model output</span> <span class="live-dot" id="liveDot"></span></span>
+            <p class="live-generation-note" id="liveGenerationNote">—</p>
             <pre class="live-thinking" id="liveThinking">—</pre>
           </div>
           <div class="live-comparison">

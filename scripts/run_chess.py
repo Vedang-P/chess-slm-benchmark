@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -217,6 +218,17 @@ def main() -> None:
             "turn": rec.get("turn"),
             "n": rec.get("n"),
             "task_kind": kind,
+            "record_id": rec["id"],
+            "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+            "cot_requested": bool(args.cot),
+            "position": {
+                "id": rec["id"],
+                "n": rec.get("n"),
+                "turn": rec.get("turn"),
+                "fen": rec.get("presented_fen") or rec.get("fen"),
+                "pieces": rec.get("pieces") or [],
+                "source": "position record",
+            },
         }
         (ROOT / "monitor").mkdir(exist_ok=True)
         (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))

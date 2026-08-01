@@ -272,6 +272,22 @@ html, body {
   letter-spacing: 0.04em;
   overflow-wrap: anywhere;
 }
+.live-sync,
+.live-generation-note,
+.live-integrity {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.live-sync.warn { color: var(--amber); }
+.live-sync.error,
+.live-integrity.error { color: var(--red); }
+.live-sync.ok,
+.live-integrity.ok { color: var(--mint); }
+.live-integrity[hidden] { display: none; }
 .board-note {
   font-family: var(--font-mono);
   font-size: 10px;
