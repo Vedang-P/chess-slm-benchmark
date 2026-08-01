@@ -46,6 +46,22 @@ GAME_N = 10
 DEFAULT_MAX_NEW_TOKENS = 512
 
 
+def _cleanup(model) -> None:
+    """Explicit release before the process exits. Primarily insurance: each
+    cell runs in its own subprocess, so the OS/CUDA runtime already frees all
+    GPU memory when the process ends — but clearing explicitly is cheap and
+    protects against any lingering allocations inside the same process."""
+    try:
+        del model
+        import gc
+        gc.collect()
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 def play_one_game(model, env_name: str, max_new_tokens: int) -> dict:
     """Play one full game (model vs random opponent). Returns a sample dict."""
     import random
@@ -142,6 +158,7 @@ def main() -> None:
                   f"({time.time() - t0:.0f}s total)", flush=True)
         summary = writer.finish({"games": game_metrics(samples)["games"]})
         print(json.dumps(summary["metrics"], indent=1), flush=True)
+        _cleanup(model)
         return
 
     records = json.loads((Path(args.data_dir) / TASK_FILES[task_name]).read_text())
@@ -234,6 +251,7 @@ def main() -> None:
         agg["divergence_rate"] = divergence_rate(samples)
     summary = writer.finish(agg)
     print(json.dumps(summary["metrics"], indent=1), flush=True)
+    _cleanup(model)
 
 
 if __name__ == "__main__":
