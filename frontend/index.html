@@ -56,7 +56,7 @@
         <span class="now-line" id="currentCell" hidden></span>
       </div>
       <div class="sb-cell sb-wide">
-        <span class="sb-label">games played</span>
+         <span class="sb-label">cells completed</span>
         <span class="sb-value sb-big" id="kCells">—</span>
         <span class="sb-sub" id="kCellsSub">—</span>
         <div class="rule-track"><div class="rule-fill" id="progressFill"></div></div>
@@ -128,13 +128,13 @@
               <span class="result-note" id="liveReferenceNote">—</span>
             </div>
           </div>
-          <div class="live-verdict" id="liveVerdict"></div>
+          <div class="live-verdict" id="liveVerdict" hidden></div>
         </div>
       </div>
       <div class="live-replay" id="liveReplay"></div>
     </section>
 
-    <!-- entrant list -->
+    <!-- model list -->
     <section class="board" id="entrants">
       <div class="board-head">
         <h2>Models</h2>
@@ -177,7 +177,7 @@
               <th class="num">parse</th><th class="num">legal</th><th class="num">score</th><th></th>
             </tr>
           </thead>
-          <tbody id="cellsBody"><tr><td colspan="9" class="empty">no games recorded yet</td></tr></tbody>
+          <tbody id="cellsBody"><tr><td colspan="9" class="empty">no scored cells yet</td></tr></tbody>
         </table>
       </div>
     </section>

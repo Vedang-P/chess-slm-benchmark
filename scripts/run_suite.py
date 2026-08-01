@@ -289,6 +289,10 @@ def main() -> None:
                          "into the comparison table instead of re-running)")
     ap.add_argument("--monitor", action="store_true", help="publish to the public live repo")
     ap.add_argument("--monitor-interval", type=int, default=120)
+    ap.add_argument("--verbose", action="store_true",
+                    help="forward to run_chess: print the exact prompt per sample")
+    ap.add_argument("--stream", action="store_true",
+                    help="forward to run_chess: stream model output live")
     args = ap.parse_args()
 
     cfg = yaml.safe_load((ROOT / args.config).read_text())
@@ -344,6 +348,10 @@ def main() -> None:
             conds = mode.get("conditions")
             if conds and not is_game:
                 cmd += ["--conditions"] + conds
+            if args.verbose:
+                cmd.append("--verbose")
+            if args.stream:
+                cmd.append("--stream")
             if args.smoke:
                 cmd.append("--smoke")
             print(f"\n>>> {model} x {task}:{variant} (n={n}, tokens={mt})", flush=True)

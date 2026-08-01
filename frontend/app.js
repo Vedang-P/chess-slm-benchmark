@@ -160,9 +160,9 @@
       $("stageTag").textContent = "IDLE";
       $("runMeta").textContent = state && state.mode ? `${state.mode} mode` : "no signal yet";
       $("clockDigits").textContent = "00:00:00";
-      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no entrants scored yet — awaiting the first games</div>`;
-      $("cellsBody").innerHTML = `<tr><td colspan="9" class="empty">no games recorded yet — awaiting the first push</td></tr>`;
-      $("tableCount").textContent = "0 games";
+      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no model scores yet — awaiting completed position cells</div>`;
+      $("cellsBody").innerHTML = `<tr><td colspan="9" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
+      $("tableCount").textContent = "0 cells";
       $("footRepo").textContent = state ? `repo: ${state.repo || "—"}` : "no signal";
       return;
     }
@@ -182,7 +182,7 @@
     const frac = p.fraction || 0;
     $("progressFill").style.width = `${(frac * 100).toFixed(1)}%`;
     $("stageTag").textContent = (state.stage || "sweep").toUpperCase();
-    $("runMeta").textContent = `${(state.models || []).length} entrants · ${state.mode || "?"}`;
+    $("runMeta").textContent = `${(state.models || []).length} models · ${state.mode || "?"}`;
     const cur = state.current;
     $("currentCell").hidden = !cur;
     if (cur) $("currentCell").textContent = `now: ${cur.model} × ${cur.task}`;
@@ -194,7 +194,7 @@
     const gameWins = cells.filter((c) => c.game && c.game.win_rate != null).map((c) => c.game.win_rate);
 
     $("kCells").textContent = `${p.cells_done ?? 0}`;
-    $("kCellsSub").textContent = `of ${p.cells_total ?? "?"} games`;
+    $("kCellsSub").textContent = `of ${p.cells_total ?? "?"} cells`;
     $("kLegal").textContent = fmtPct(avg(legalVals));
     $("kLegalSub").textContent = `${legalVals.length} cells`;
     $("kTactics").textContent = fmtPct(avg(Object.values(mateVals)));
@@ -321,45 +321,98 @@
     return { label, data, backgroundColor: color, borderColor: color, borderWidth: 1, borderRadius: 0, maxBarThickness: 26 };
   }
 
-  function renderCharts() {
-    if (!(state.cells || []).length) return;
-    if (typeof Chart === "undefined") return; // CDN blocked — page still works
-    const models = state.models || [];
+  function chartStatus(id, text) {
+    const el = $(id);
+    if (el) el.textContent = text;
+  }
 
-    const legGrid = modelWinAvg("cap-legal-8x8", "grid", "legal_rate");
-    const legFen = modelWinAvg("cap-legal-8x8", "fen", "legal_rate");
-    const order = sortedModels(models, (m) => legGrid[m] ?? null);
+  function chartValues(models, predicate, field) {
+    return modelMetricAvgWhere(models, predicate, field);
+  }
+
+  function renderCharts() {
+    const models = state.models || [];
+    const position = (c) => !c.game && c.win && Object.keys(c.win).length > 0;
+    const positionCells = (state.cells || []).filter(position);
+
+    const legParsed = chartValues(models, position, "parse_rate");
+    const legLegal = chartValues(models, position, "legal_rate");
+    const legOrder = sortedModels(models, (m) => legLegal[m] ?? legParsed[m] ?? null);
+    chartStatus(
+      "chartLegalStatus",
+      positionCells.length
+        ? `${positionCells.length} completed cells · parsed ${fmtPct(avg(positionCells.map((c) => c.win.parse_rate)))} · legal ${fmtPct(avg(positionCells.map((c) => c.win.legal_rate)))}`
+        : "Waiting for completed position cells.",
+    );
+
+    const tactical = (c) => position(c) && (c.task || "").startsWith("mate");
+    const tacticalCells = (state.cells || []).filter(tactical);
+    const tacParsed = chartValues(models, tactical, "parse_rate");
+    const tacLegal = chartValues(models, tactical, "legal_rate");
+    const m1 = chartValues(models, (c) => tactical(c) && c.task === "mate1-lichess", "compliance_strict");
+    const m2 = chartValues(models, (c) => tactical(c) && c.task === "mate2-lichess", "compliance_strict");
+    const tacOrder = sortedModels(models, (m) => {
+      const values = [m1[m], m2[m], tacLegal[m], tacParsed[m]].filter((value) => value !== undefined && value !== null);
+      return values.length ? values[0] : null;
+    });
+    const decidedTactical = tacticalCells.filter((c) => typeof c.win.compliance_of_legal === "number").length;
+    chartStatus(
+      "chartTacticsStatus",
+      tacticalCells.length
+        ? `${tacticalCells.length} completed cells · ${decidedTactical} with a legal answer · strict score counts rejected answers as 0`
+        : "Waiting for mate-in-1 and mate-in-2 cells.",
+    );
+
+    const stockfish = (c) => position(c) && c.task === "bestmove-8x8";
+    const stockCells = (state.cells || []).filter(stockfish);
+    const stockParsed = chartValues(models, stockfish, "parse_rate");
+    const stockLegal = chartValues(models, stockfish, "legal_rate");
+    const stockTop = chartValues(models, stockfish, "compliance_strict");
+    const stockOrder = sortedModels(models, (m) => stockTop[m] ?? stockLegal[m] ?? stockParsed[m] ?? null);
+    chartStatus(
+      "chartStockStatus",
+      stockCells.length
+        ? `${stockCells.length} completed cells · top-1 is strict over all samples · reference is Stockfish`
+        : "Waiting for bestmove-8x8 cells.",
+    );
+
+    chartStatus(
+      "chartHistoryStatus",
+      history.length
+        ? `${history.length} monitor samples · latest legal rate ${fmtPct(history[history.length - 1].legal_avg)}`
+        : "Waiting for the first monitor sample.",
+    );
+
+    if (typeof Chart === "undefined") return; // CDN blocked — statuses still explain the data
+
     mkChart("chartLegal", {
       type: "bar",
-      data: { labels: order, datasets: [
-        barDataset("grid", order.map((m) => legGrid[m] ?? null), "rgba(229,72,77,0.75)"),
-        barDataset("fen", order.map((m) => legFen[m] ?? null), "rgba(242,169,59,0.7)"),
+      data: { labels: legOrder, datasets: [
+        barDataset("parsed", legOrder.map((m) => legParsed[m] ?? 0), "rgba(233,230,223,0.55)"),
+        barDataset("legal", legOrder.map((m) => legLegal[m] ?? 0), "rgba(90,171,130,0.75)"),
       ] },
       options: baseOpts,
       plugins: [valueLabels],
     });
 
-    const m1 = modelWinAvg("mate1-lichess", "grid", "compliance_of_legal");
-    const m2 = modelWinAvg("mate2-lichess", "grid", "compliance_of_legal");
-    const orderT = sortedModels(models, (m) => m1[m] ?? null);
     mkChart("chartTactics", {
       type: "bar",
-      data: { labels: orderT, datasets: [
-        barDataset("mate-in-1", orderT.map((m) => m1[m] ?? null), "rgba(229,72,77,0.75)"),
-        barDataset("mate-in-2", orderT.map((m) => m2[m] ?? null), "rgba(233,230,223,0.55)"),
+      data: { labels: tacOrder, datasets: [
+        barDataset("parsed", tacOrder.map((m) => tacParsed[m] ?? 0), "rgba(233,230,223,0.45)"),
+        barDataset("legal", tacOrder.map((m) => tacLegal[m] ?? 0), "rgba(242,169,59,0.7)"),
+        barDataset("mate-in-1 strict", tacOrder.map((m) => m1[m] ?? 0), "rgba(229,72,77,0.75)"),
+        barDataset("mate-in-2 strict", tacOrder.map((m) => m2[m] ?? 0), "rgba(90,171,130,0.7)"),
       ] },
       options: baseOpts,
       plugins: [valueLabels],
     });
 
-    const stTop = modelWinAvg("bestmove-8x8", "grid", "compliance_of_legal");
-    const stLegal = modelWinAvg("bestmove-8x8", "grid", "legal_rate");
-    const orderS = sortedModels(models, (m) => stTop[m] ?? null);
     mkChart("chartStock", {
       type: "bar",
-      data: { labels: orderS, datasets: [
-        barDataset("top-1 vs stockfish", orderS.map((m) => stTop[m] ?? null), "rgba(242,169,59,0.75)"),
-        barDataset("legal rate", orderS.map((m) => stLegal[m] ?? null), "rgba(90,171,130,0.7)"),
+      data: { labels: stockOrder, datasets: [
+        barDataset("parsed", stockOrder.map((m) => stockParsed[m] ?? 0), "rgba(233,230,223,0.45)"),
+        barDataset("legal", stockOrder.map((m) => stockLegal[m] ?? 0), "rgba(90,171,130,0.7)"),
+        barDataset("top-1 vs Stockfish", stockOrder.map((m) => stockTop[m] ?? 0), "rgba(242,169,59,0.8)"),
       ] },
       options: baseOpts,
       plugins: [valueLabels],
@@ -380,7 +433,7 @@
           pointRadius: 0,
         }],
       },
-      options: { ...baseOpts, scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, title: { display: true, text: "games played", color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 } } } } },
+      options: { ...baseOpts, scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, title: { display: true, text: "cells completed", color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 } } } } },
       plugins: [endLabel],
     });
   }
@@ -389,9 +442,9 @@
   function renderTable() {
     const body = $("cellsBody");
     const cells = state.cells || [];
-    $("tableCount").textContent = `${cells.length} games`;
+    $("tableCount").textContent = `${cells.length} cells`;
     if (!cells.length) {
-      body.innerHTML = `<tr><td colspan="9" class="empty">no games recorded yet — awaiting the first push</td></tr>`;
+      body.innerHTML = `<tr><td colspan="9" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
       return;
     }
     const rows = [];
@@ -429,7 +482,7 @@
         <td><span class="cell-done">done</span></td>
       </tr>`);
     }
-    body.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">no games recorded yet</td></tr>`;
+    body.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">no scored cells yet</td></tr>`;
   }
 
   // ---------------- live board ----------------
@@ -499,65 +552,93 @@
     el.innerHTML = html;
   }
 
+  function sampleDone(sample) {
+    return sample && (sample.finished === true
+      || ["legal", "illegal", "parse_error", "no_answer"].includes(sample.status));
+  }
+
   function verdictInfo(sample) {
-    if (!sample) return null;
-    if (sample.status === "legal") {
-      return sample.compliance === true
-        ? { cls: "correct", text: "correct" }
-        : sample.compliance === false
-          ? { cls: "wrong", text: "wrong" }
-          : { cls: "neutral", text: "accepted" }; // e.g. cap task (any legal move)
+    if (!sample || !sampleDone(sample)) {
+      return { cls: "neutral", title: "waiting", detail: "the model is still generating" };
     }
-    if (sample.status === "illegal") return { cls: "wrong", text: "illegal move" };
-    if (sample.status === "parse_error") return { cls: "neutral", text: "unparsable" };
-    if (sample.status === "no_answer") return { cls: "neutral", text: "no answer" };
-    return null;
+    if (sample.status === "legal") {
+      if (sample.compliance === true) {
+        return { cls: "correct", title: "matches reference", detail: "legal move and objective satisfied" };
+      }
+      if (sample.compliance === false) {
+        return { cls: "wrong", title: "legal, not the reference", detail: "the move was legal but missed the task oracle" };
+      }
+      return { cls: "neutral", title: "legal move", detail: "this task has no objective match score" };
+    }
+    if (sample.status === "illegal") {
+      return { cls: "wrong", title: "rejected as illegal", detail: "the answer cannot count as a legal move" };
+    }
+    if (sample.status === "parse_error") {
+      return { cls: "neutral", title: "could not parse", detail: "the response did not contain a valid move" };
+    }
+    if (sample.status === "no_answer") {
+      return { cls: "neutral", title: "no answer", detail: "the model returned no move" };
+    }
+    return { cls: "neutral", title: "unscored", detail: "no scoring result was published" };
   }
 
   function renderLive() {
-    if (!live) { $("liveCaption").textContent = "no live signal yet"; return; }
+    const sweep = state && state.current ? `sweep now · ${cellLabel(state.current)}` : "sweep position unavailable";
+    $("liveNow").textContent = sweep;
+    if (!live) {
+      $("liveCaption").textContent = "no live signal yet";
+      $("liveVerdict").hidden = true;
+      return;
+    }
     const cell = live.cell || {};
     const kind = live.task_kind;
     const isGame = GAME_TASKS.includes(cell.task);
     $("liveMeta").textContent =
-      `game ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${cell.model} × ${cell.task} · ${cell.variant || ""}`;
+      `sample ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${cell.task || "unknown task"} · ${cell.variant || "unknown representation"}`;
+
+    $("livePrompt").textContent = live.prompt || "No prompt was published for this sample.";
+    $("liveThinking").textContent = live.output || (sampleDone(live) ? "No output was returned." : "waiting for the first generated token…");
+    $("liveThinking").classList.toggle("thinking", !sampleDone(live));
+    $("liveThinking").scrollTop = $("liveThinking").scrollHeight;
+
+    const c = live.correct || {};
+    const verdict = verdictInfo(live);
+    const referenceLabel = kind === "bestmove"
+      ? "Stockfish reference"
+      : c.move
+        ? "oracle reference"
+        : kind === "cap"
+          ? "rule"
+          : "reference answer";
+    $("liveReferenceLabel").textContent = referenceLabel;
+    $("liveModelMove").textContent = live.move || "—";
+    $("liveModelMove").classList.toggle("empty", !live.move);
+    $("liveModelStatus").textContent = sampleDone(live)
+      ? live.status === "legal" ? "parsed and legal" : (live.status || "unscored").replaceAll("_", " ")
+      : "pending final answer";
+    $("liveStockMove").textContent = c.move || (kind === "cap" ? "any legal move" : "—");
+    $("liveStockMove").classList.toggle("empty", !c.move);
+    $("liveStockMove").title = c.note || "";
+    $("liveReferenceNote").textContent = c.note || "No reference move was published.";
+
+    const vEl = $("liveVerdict");
+    vEl.hidden = false;
+    vEl.className = "live-verdict " + verdict.cls;
+    vEl.innerHTML = `<strong></strong><span></span>`;
+    vEl.querySelector("strong").textContent = verdict.title;
+    vEl.querySelector("span").textContent = verdict.detail;
+    $("liveDot").className = "live-dot" + (sampleDone(live) ? "" : " on");
 
     if (isGame) {
-      $("liveBoard").innerHTML = "";
-      $("liveThinking").textContent = "";
+      $("liveBoard").style.gridTemplateColumns = "1fr";
+      $("liveBoard").style.gridTemplateRows = "1fr";
+      $("liveBoard").innerHTML = `<div class="board-empty">This is a full-game task. The monitor publishes the outcome, not each position.</div>`;
       $("liveCaption").textContent = "full-game cells stream outcomes only — per-move telemetry comes back with position tasks";
-      $("liveModelMove").textContent = "—";
-      $("liveStockMove").textContent = "—";
-      $("liveVerdict").hidden = true;
-      $("liveDot").className = "live-dot";
       return;
     }
 
     renderBoard(live);
-    const verdict = verdictInfo(live);
-    const done = live.status && live.status !== undefined;
-
-    $("liveDot").className = "live-dot" + (done ? "" : " on");
-    $("liveThinking").textContent = live.output || "";
-    $("liveThinking").classList.toggle("thinking", !done);
-    $("liveThinking").scrollTop = $("liveThinking").scrollHeight;
-
-    $("liveModelMove").textContent = live.move || "—";
-    $("liveModelMove").classList.toggle("empty", !live.move);
-    const c = live.correct || {};
-    $("liveStockMove").textContent = c.move || (kind === "cap" ? "any legal" : "—");
-    $("liveStockMove").title = c.note || "";
-
-    const vEl = $("liveVerdict");
-    if (verdict) {
-      vEl.hidden = false;
-      vEl.className = "live-verdict " + verdict.cls;
-      vEl.innerHTML = `<span>${verdict.text}</span>`;
-      if (c.note) vEl.innerHTML += `<span class="v-note">${c.note}</span>`;
-    } else {
-      vEl.hidden = true;
-    }
-    $("liveCaption").textContent = done ? `completed · ${live.updated_at || ""}` : "thinking…";
+    $("liveCaption").textContent = sampleDone(live) ? `completed · ${live.updated_at || ""}` : "generating…";
   }
 
   function renderReplay() {

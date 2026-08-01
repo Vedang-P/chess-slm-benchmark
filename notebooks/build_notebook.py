@@ -149,20 +149,14 @@ print("torch", torch.__version__, "cuda", torch.cuda.is_available(),
         _code(f"""status = run_stage("engine_tests", [sys.executable, "scripts/test_engine.py", "--quick"], {T_ENGINE})
 if status != "ok":
     raise RuntimeError("engine tests failed -- see output above")"""),
-        _md("## 5. Data validation"
-            if not check else
-            "## 5. Position generation sanity (tiny, exercises the oracle path)"),
-        (_code(f"""status = run_stage("gen_check", [sys.executable, "scripts/generate_positions.py", "--check", "--out", "{R}/positions"], {T_ENGINE})
-if status != "ok":
-    raise RuntimeError("position generation check failed")""")
-         if check else
-         _code("""import json
+        _md("## 5. Data validation (committed task sets + oracle fields)"),
+        _code("""import json
 for name in ["cap-legal-8x8", "bestmove-8x8", "mate1-lichess", "mate2-lichess",
              "sm-3x3-win", "sm-5x5-win", "sm-5x5-draw", "mate1-8x8", "mob-8x8"]:
     recs = json.loads(Path(f"data/positions/{name}.json").read_text())
     assert len(recs) >= 40, f"{name}: expected >=40 positions, got {len(recs)}"
     assert all("win_moves" in r and "lose_moves" in r for r in recs)
-print("committed position data OK (9 task sets, oracle fields present)")""")),
+print("committed position data OK (9 task sets, oracle fields present)")"""),
         (_md("## 6. Recover completed results (after a died session)\n\n"
              "Every completed cell's summary is backed up to the public live repo by "
              "`--monitor` (check results and full results live in separate namespaces, "
@@ -195,6 +189,10 @@ else:
 if {"True" if check else "False"}:
     sweep_args.append("--check")
 sweep_args.append("--resume")   # skip cells whose summaries were recovered
+if {"True" if check else "False"}:
+    # check mode = full visibility: print the exact prompt + stream each
+    # model's chain of thought live (debugging gemma etc.)
+    sweep_args += ["--verbose", "--stream"]
 status = run_stage("chess_sweep", sweep_args, {T_SWEEP})
 print("sweep:", status)"""),
         _md("## 8. Results table"),
@@ -236,64 +234,12 @@ print("zipped {R}.zip")""")),
     return flat
 
 
-def build_debug_cells() -> list:
-    """kaggle_debug.ipynb: run ONE gemma cell with full visibility — the exact
-    rendered prompt, then the model's output streamed live token by token."""
-    cells = [
-        _md("# Debug: Gemma 4 prompt + live chain of thought\n\n"
-            "Runs a single gemma4-e2b mate1-lichess position with:\n"
-            "- the EXACT rendered prompt printed (special tokens visible)\n"
-            "- the model's output **streamed live** as tokens are generated\n"
-            "- the parsed verdict after generation\n\n"
-            "Watch: does the model answer directly (thinking disabled worked), or does it "
-            "still emit `<|channel>thought` reasoning and get cut off at the token budget?"),
-        _md("## 1. Fresh clone + deps"),
-        _code("""import os, shutil, subprocess, sys
-from pathlib import Path
-
-WORK = Path("/kaggle/working")
-REPO = WORK / "neuro-symbolic-pathfinding"
-if REPO.exists():
-    shutil.rmtree(REPO)
-token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
-if token:
-    url = url.replace("https://", f"https://x-access-token:{token}@")
-subprocess.run(["git", "clone", "--quiet", url, str(REPO)], check=True)
-os.chdir(REPO)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-U", "-r", "requirements.txt"], check=True)
-subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y", "wandb"], check=True)
-import transformers
-print("transformers", transformers.__version__)"""),
-        _md("## 2. One gemma cell, fully visible"),
-        _code("""import subprocess, sys
-subprocess.run([sys.executable, "scripts/run_chess.py",
-                "--model", "gemma4-e2b", "--task", "mate1-lichess",
-                "--prompt-variant", "grid", "--n", "1",
-                "--max_new_tokens", "1024",
-                "--output_dir", "results_debug/chess",
-                "--verbose", "--stream"], check=False)"""),
-        _md("## What to look for\n"
-            "- **Prompt block**: starts `<bos><|turn>user...<turn|>\\n<|turn>model\\n` — "
-            "no thinking tokens (`<|think>`, `<|channel>`).\n"
-            "- **Streaming output**: if the first tokens are plain text answering with "
-            "`MOVE:`, the fix worked. If you see `<|channel>thought` or long reasoning "
-            "followed by truncation at ~1024 tokens, paste the output here — we'll raise "
-            "the budget and/or tighten the prompt."),
-    ]
-    return cells
-
-
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="emit kaggle_check.ipynb")
     ap.add_argument("--pilot", action="store_true", help="emit kaggle_pilot.ipynb")
-    ap.add_argument("--debug", action="store_true", help="emit kaggle_debug.ipynb")
     args = ap.parse_args()
-    if args.debug:
-        out = NB_DIR / "kaggle_debug.ipynb"
-        cells = build_debug_cells()
-    elif args.pilot:
+    if args.pilot:
         out = NB_DIR / "kaggle_pilot.ipynb"
         cells = build_cells(check=False, pilot=True)
     else:
