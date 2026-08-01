@@ -181,3 +181,32 @@ def score_record(rec: Dict[str, object], condition: str, model_text: str,
     """kind defaults to the record-id prefix (works for generated records);
     pass it explicitly when record ids don't encode the task (e.g. lichess)."""
     return SCORERS[kind or task_kind(rec["id"])](rec, condition, model_text)
+
+
+def get_correct(rec: Dict[str, object], kind: str) -> Optional[dict]:
+    """The oracle answer for a record, for the live viewer. Returns
+    {"move": uci-or-None, "note": human explanation}."""
+    extra = rec.get("task_extra") or {}
+    if kind == "bestmove":
+        return {"move": extra.get("best_move"), "note": "stockfish best move"}
+    if kind == "mate1":
+        mates = extra.get("mate_moves") or []
+        return {"move": mates[0] if mates else None,
+                "note": "any move delivering checkmate"}
+    if kind == "mate2":
+        return {"move": extra.get("first_move"), "note": "first move of the mate line"}
+    if kind == "sm":
+        wins = rec.get("win_moves") or []
+        if wins:
+            return {"move": wins[0], "note": "a game-theoretically winning move"}
+        return {"move": None, "note": "no winning move in this position"}
+    if kind == "mob":
+        stats = (extra.get("mobility") or {}).get("moves") or []
+        if stats:
+            target = min(s["opp_replies"] for s in stats)
+            move = next(s["move"] for s in stats if s["opp_replies"] == target)
+            return {"move": move, "note": "move minimizing opponent replies"}
+        return {"move": None, "note": ""}
+    if kind == "cap":
+        return {"move": None, "note": "any legal move"}
+    return {"move": None, "note": ""}

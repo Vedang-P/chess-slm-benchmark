@@ -137,13 +137,9 @@ class Monitor:
         """Contents-API upload to the PUBLIC live repo (works from any machine
         with GITHUB_TOKEN/GH_TOKEN); falls back to a git push of the private
         `live` branch for debugging. Never raises."""
-        token = None
-        for name in ("GITHUB_TOKEN", "GH_TOKEN"):
-            import os
+        from src.live_push import resolve_token
 
-            if os.environ.get(name):
-                token = os.environ[name]
-                break
+        token = resolve_token()
         if token:
             try:
                 self._push_via_api(token)
@@ -167,15 +163,12 @@ class Monitor:
                 return
 
     def _push_via_api(self, token: str) -> None:
-        import base64
-        import os
-        import urllib.error
-        import urllib.request
+        from src.live_push import upload_file
 
         # collect files to upload: monitor state/history + completed cell
-        # summaries + running comparison CSV + results index
+        # summaries + running comparison CSV + results index + live.json
         uploads = []
-        for fname in ("state.json", "history.jsonl"):
+        for fname in ("state.json", "history.jsonl", "live.json"):
             path = MONITOR_DIR / fname
             if path.exists():
                 uploads.append((f"monitor/{fname}", path))
@@ -195,33 +188,10 @@ class Monitor:
             uploads.append(("results/index.json",
                             _BytesFile(json.dumps(index, indent=1).encode())))
         for remote, local in uploads:
-            if isinstance(local, _BytesFile):
-                data = local.data
-            else:
-                data = local.read_bytes()
-            url = f"https://api.github.com/repos/{PUBLIC_LIVE_REPO}/contents/{remote}"
-            headers = {"Authorization": f"Bearer {token}", "User-Agent": "chess-monitor"}
-            sha = None
-            try:
-                req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req) as r:
-                    sha = json.load(r)["sha"]
-            except urllib.error.HTTPError as e:
-                if e.code != 404:
-                    raise
-            payload = {
-                "message": f"monitor {_ts()}",
-                "content": base64.b64encode(data).decode(),
-                "branch": PUBLIC_LIVE_BRANCH,
-            }
-            if sha:
-                payload["sha"] = sha
-            req = urllib.request.Request(
-                url, data=json.dumps(payload).encode(),
-                headers={**headers, "Content-Type": "application/json"}, method="PUT",
-            )
-            with urllib.request.urlopen(req) as r:
-                json.load(r)
+            data = local.data if isinstance(local, _BytesFile) else local.read_bytes()
+            if not upload_file(token, remote, data):
+                print(f"monitor: upload failed for {remote}", flush=True)
+                continue
             if isinstance(local, Path):
                 self.uploaded.add(remote)
         print("monitor: pushed state + results to public live repo", flush=True)

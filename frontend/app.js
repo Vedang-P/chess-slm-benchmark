@@ -22,17 +22,36 @@
   }
 
   // ---------------- data ----------------
+  // worker-first endpoints; raw GitHub as fallback (cached ~5 min).
+  const feedUrl = (kind) => {
+    if (CONFIG.WORKER_BASE) {
+      const map = { state: "/state", history: "/history", live: "/live" };
+      return CONFIG.WORKER_BASE.replace(/\/$/, "") + map[kind];
+    }
+    return { state: CONFIG.STATE_URL, history: CONFIG.HISTORY_URL, live: CONFIG.LIVE_URL }[kind];
+  };
+
   async function fetchText(url) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`${res.status} ${url}`);
     return res.text();
   }
 
+  async function fetchFeed(kind) {
+    try {
+      return await fetchText(feedUrl(kind));
+    } catch (e) {
+      if (!CONFIG.WORKER_BASE) throw e;
+      const raw = { state: CONFIG.STATE_URL, history: CONFIG.HISTORY_URL, live: CONFIG.LIVE_URL }[kind];
+      return await fetchText(raw); // worker unreachable -> raw fallback
+    }
+  }
+
   async function load() {
     try {
-      state = JSON.parse(await fetchText(CONFIG.STATE_URL));
+      state = JSON.parse(await fetchFeed("state"));
       try {
-        history = (await fetchText(CONFIG.HISTORY_URL)).trim().split("\n")
+        history = (await fetchFeed("history")).trim().split("\n")
           .filter(Boolean).map((l) => JSON.parse(l));
       } catch { history = []; }
       fetchFailed = false;
@@ -390,9 +409,176 @@
     body.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">no games recorded yet</td></tr>`;
   }
 
+  // ---------------- live board ----------------
+  // Single solid glyph set for both colors; color + outline via CSS so black
+  // and white are unambiguous on any square (Unicode has no reliable filled
+  // white glyphs — rendering depends on the font).
+  const GLYPHS = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+  const GAME_TASKS = ["playout-5x5", "ttt", "c4"];
+  let live = null;
+  let lastLiveKey = null;
+  const replay = [];
+
+  function fenPieces(fen) {
+    if (!fen) return null;
+    const place = (fen.split(" ")[0] || "").split("/");
+    if (place.length !== 8) return null;
+    const out = {};
+    for (let r = 0; r < 8; r++) {
+      let c = 0;
+      for (const ch of place[r]) {
+        if (/\d/.test(ch)) c += +ch;
+        else { out[`${String.fromCharCode(97 + c)}${8 - r}`] = ch; c++; }
+      }
+    }
+    return out;
+  }
+
+  function piecesMap(sample) {
+    if (sample.fen) { const f = fenPieces(sample.fen); if (f) return f; }
+    if (sample.pieces) {
+      const out = {};
+      for (const p of sample.pieces) out[p.sq] = p.color === "w" ? p.kind : p.kind.toLowerCase();
+      return out;
+    }
+    return null;
+  }
+
+  function renderBoard(sample) {
+    const el = $("liveBoard");
+    const n = sample && sample.n ? sample.n : 8;
+    const pieces = piecesMap(sample) || {};
+    const move = sample && sample.move ? sample.move : null;
+    const fromSq = move ? move.slice(0, 2) : null;
+    const toSq = move ? move.slice(2, 4) : null;
+    const verdictClass = sample && sample.status === "legal"
+      ? (sample.compliance ? "correct" : "wrong") : null;
+    el.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    let html = "";
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        const sq = `${String.fromCharCode(97 + c)}${n - r}`;
+        const piece = pieces[sq];
+        const dark = (r + c) % 2 === 1;
+        let cls = `board-cell ${dark ? "dark" : "light"}`;
+        if (sq === fromSq || sq === toSq) cls += " last-move";
+        if (sq === toSq && verdictClass === "correct") cls += " hl-to-correct";
+        if (sq === toSq && verdictClass === "wrong") cls += " hl-to-wrong";
+        const coords = [];
+        if (c === 0) coords.push(`<span class="board-coord rank">${n - r}</span>`);
+        if (r === n - 1) coords.push(`<span class="board-coord file">${String.fromCharCode(97 + c)}</span>`);
+        const pieceHtml = piece && GLYPHS[piece.toLowerCase()]
+          ? `<span class="board-piece ${piece === piece.toUpperCase() ? "w" : "b"}">${GLYPHS[piece.toLowerCase()]}</span>`
+          : "";
+        html += `<div class="${cls}">${pieceHtml}${coords.join("")}</div>`;
+      }
+    }
+    el.innerHTML = html;
+  }
+
+  function verdictInfo(sample) {
+    if (!sample) return null;
+    if (sample.status === "legal") {
+      return sample.compliance === true
+        ? { cls: "correct", text: "correct" }
+        : sample.compliance === false
+          ? { cls: "wrong", text: "wrong" }
+          : { cls: "neutral", text: "accepted" }; // e.g. cap task (any legal move)
+    }
+    if (sample.status === "illegal") return { cls: "wrong", text: "illegal move" };
+    if (sample.status === "parse_error") return { cls: "neutral", text: "unparsable" };
+    if (sample.status === "no_answer") return { cls: "neutral", text: "no answer" };
+    return null;
+  }
+
+  function renderLive() {
+    if (!live) { $("liveCaption").textContent = "no live signal yet"; return; }
+    const cell = live.cell || {};
+    const kind = live.task_kind;
+    const isGame = GAME_TASKS.includes(cell.task);
+    $("liveMeta").textContent =
+      `game ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${cell.model} × ${cell.task} · ${cell.variant || ""}`;
+
+    if (isGame) {
+      $("liveBoard").innerHTML = "";
+      $("liveThinking").textContent = "";
+      $("liveCaption").textContent = "full-game cells stream outcomes only — per-move telemetry comes back with position tasks";
+      $("liveModelMove").textContent = "—";
+      $("liveStockMove").textContent = "—";
+      $("liveVerdict").hidden = true;
+      $("liveDot").className = "live-dot";
+      return;
+    }
+
+    renderBoard(live);
+    const verdict = verdictInfo(live);
+    const done = live.status && live.status !== undefined;
+
+    $("liveDot").className = "live-dot" + (done ? "" : " on");
+    $("liveThinking").textContent = live.output || "";
+    $("liveThinking").classList.toggle("thinking", !done);
+    $("liveThinking").scrollTop = $("liveThinking").scrollHeight;
+
+    $("liveModelMove").textContent = live.move || "—";
+    $("liveModelMove").classList.toggle("empty", !live.move);
+    const c = live.correct || {};
+    $("liveStockMove").textContent = c.move || (kind === "cap" ? "any legal" : "—");
+    $("liveStockMove").title = c.note || "";
+
+    const vEl = $("liveVerdict");
+    if (verdict) {
+      vEl.hidden = false;
+      vEl.className = "live-verdict " + verdict.cls;
+      vEl.innerHTML = `<span>${verdict.text}</span>`;
+      if (c.note) vEl.innerHTML += `<span class="v-note">${c.note}</span>`;
+    } else {
+      vEl.hidden = true;
+    }
+    $("liveCaption").textContent = done ? `completed · ${live.updated_at || ""}` : "thinking…";
+  }
+
+  function renderReplay() {
+    const el = $("liveReplay");
+    if (!replay.length) { el.innerHTML = `<span class="live-caption">recent games will appear here</span>`; return; }
+    el.innerHTML = replay.slice().reverse().map((s, i) => {
+      const v = verdictInfo(s);
+      const mark = !v ? "·" : v.cls === "correct" ? "✓" : v.cls === "wrong" ? "✗" : "△";
+      const active = s === live ? " active" : "";
+      return `<button class="replay-chip${active}" data-i="${replay.length - 1 - i}">
+        <span class="r-mark ${v ? v.cls : "warn"}">${mark}</span>
+        <span>${s.cell ? s.cell.model.split("-")[0] : ""} · ${s.cell ? s.cell.task : ""}</span>
+      </button>`;
+    }).join("");
+  }
+
+  async function loadLive() {
+    try {
+      const l = JSON.parse(await fetchFeed("live"));
+      const key = `${l.cell ? l.cell.model + l.cell.task + l.cell.variant : ""}|${l.position_id || ""}|${l.sample_idx || ""}`;
+      if (key !== lastLiveKey) {
+        if (live && live.position_id && live !== l) replay.push(live);
+        if (replay.length > 40) replay.shift();
+        lastLiveKey = key;
+        live = l;
+      } else if (l.updated_at !== live.updated_at) {
+        live = l; // same position, refreshed content
+      }
+      renderLive();
+      renderReplay();
+    } catch (e) { /* live is best-effort; page keeps working */ }
+  }
+
   // ---------------- boot ----------------
   $("refreshBtn").addEventListener("click", load);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+  $("liveReplay").addEventListener("click", (ev) => {
+    const chip = ev.target.closest(".replay-chip");
+    if (!chip) return;
+    const i = +chip.dataset.i;
+    if (replay[i]) { live = replay[i]; renderLive(); renderReplay(); }
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { load(); loadLive(); } });
   if (CONFIG.REFRESH_S > 0) timer = setInterval(load, CONFIG.REFRESH_S * 1000);
+  if (CONFIG.LIVE_REFRESH_S > 0) setInterval(loadLive, CONFIG.LIVE_REFRESH_S * 1000);
   load();
+  loadLive();
 })();

@@ -18,8 +18,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+ROOT = Path(__file__).resolve().parent.parent
+
 from src.benchmarks.games import tasks as T  # noqa: E402
 from src.benchmarks.games.envs import ENVS  # noqa: E402
+from src.live_push import PUBLIC_LIVE_REPO, resolve_token, upload_file  # noqa: E402
 from src.models import HFModel, MODEL_IDS, configure_quiet_logging  # noqa: E402
 from src.report import ResultWriter, aggregate_samples, divergence_rate  # noqa: E402
 
@@ -157,6 +160,45 @@ def main() -> None:
         {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
          "smoke": args.smoke},
     )
+    live_token = resolve_token()
+    live_last = [0.0]
+
+    def push_live(rec, condition, prompt, out, scored, sample_idx, total):
+        """Throttled live.json push (>=2s apart). Never breaks the sweep."""
+        if not live_token or kind == "game":
+            return
+        now = time.time()
+        if now - live_last[0] < 2.0:
+            return
+        live_last[0] = now
+        correct = T.get_correct(rec, kind)
+        live = {
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "cell": {"model": args.model, "task": task_name, "variant": args.prompt_variant},
+            "sample_idx": sample_idx,
+            "sample_total": total,
+            "position_id": rec["id"],
+            "prompt": prompt,
+            "output": out.get("content", ""),
+            "finished": out.get("finished"),
+            "status": scored.get("status"),
+            "move": scored.get("move"),
+            "compliance": scored.get("compliance"),
+            "correct": correct,
+            "fen": rec.get("presented_fen") or rec.get("fen"),
+            "pieces": rec.get("pieces"),
+            "turn": rec.get("turn"),
+            "n": rec.get("n"),
+            "task_kind": kind,
+        }
+        (ROOT / "monitor").mkdir(exist_ok=True)
+        (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))
+        try:
+            upload_file(live_token, "monitor/live.json",
+                        (ROOT / "monitor" / "live.json").read_bytes(),
+                        message=f"live {time.strftime('%H:%M:%S')}")
+        except Exception as e:
+            print(f"live: push failed ({e})", flush=True)
 
     samples = []
     t0 = time.time()
@@ -173,10 +215,14 @@ def main() -> None:
                 "output_tokens": out.get("output_tokens"),
                 "latency_ms": out.get("latency_ms"),
                 "finished": out.get("finished"),
+                "prompt": prompt,
+                "output": out.get("content", ""),
+                "correct": T.get_correct(rec, kind),
                 **scored,
             }
             samples.append(sample)
             writer.add(sample)
+            push_live(rec, condition, prompt, out, scored, len(samples), len(records) * len(conditions))
         if (i + 1) % 5 == 0 or i + 1 == len(records):
             el = time.time() - t0
             print(f"  [{task_name} {args.model} {args.prompt_variant}] {i + 1}/{len(records)} "
