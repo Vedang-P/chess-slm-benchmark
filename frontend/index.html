@@ -3,83 +3,103 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Anti-Goal Chess Benchmark — Live Monitor</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>" />
+  <title>ChessBench · Live</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238b7bff'/><stop offset='1' stop-color='%2337d6a0'/></linearGradient></defs><rect width='100' height='100' rx='24' fill='%230b0a14'/><text x='50' y='72' font-size='60' text-anchor='middle' fill='url(%23g)'>♞</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
+  <div class="bg-mesh" aria-hidden="true"></div>
+
   <header class="topbar">
     <div class="brand">
-      <span class="brand-mark">♞</span>
-      <div>
-        <h1>Anti-Goal Chess Benchmark</h1>
-        <p class="sub">SLM chess ability &amp; instruction-following · live sweep monitor</p>
+      <div class="brand-tile">♞</div>
+      <div class="brand-text">
+        <h1>ChessBench <span class="brand-live">LIVE</span></h1>
+        <p class="brand-sub">SLM chess capability · 6 models · Kaggle T4</p>
       </div>
     </div>
     <div class="topbar-right">
       <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">connecting…</span></div>
-      <button id="refreshBtn" class="btn" title="Refresh now">⟳</button>
+      <div class="clock" id="updatedText">—</div>
+      <button id="refreshBtn" class="icon-btn" title="Refresh now" aria-label="Refresh">⟳</button>
     </div>
   </header>
 
   <main>
-    <section class="hero">
-      <div class="hero-progress">
-        <div class="hero-row">
-          <div class="hero-label">
-            <span class="stage" id="stageTag">—</span>
-            <span class="muted" id="runMeta">—</span>
-          </div>
-          <span class="eta" id="etaText">—</span>
+    <!-- Run strip -->
+    <section class="card run-strip">
+      <div class="run-head">
+        <div class="run-left">
+          <span class="stage-tag" id="stageTag">—</span>
+          <span class="run-meta" id="runMeta">—</span>
         </div>
-        <div class="bar"><div class="bar-fill" id="progressFill" style="width:0%"></div></div>
-        <div class="hero-row small">
-          <span id="progressText">waiting for the first push…</span>
-          <span class="muted" id="updatedText">—</span>
+        <div class="run-right">
+          <span class="eta" id="etaText">ETA —</span>
         </div>
       </div>
-
-      <div class="kpis" id="kpis">
-        <div class="kpi"><span class="kpi-val" id="kCells">—</span><span class="kpi-lab">cells done</span></div>
-        <div class="kpi"><span class="kpi-val" id="kLegal">—</span><span class="kpi-lab">avg legal rate</span></div>
-        <div class="kpi"><span class="kpi-val" id="kComplyWin">—</span><span class="kpi-lab">compliance · win</span></div>
-        <div class="kpi"><span class="kpi-val" id="kComplyLose">—</span><span class="kpi-lab">compliance · lose</span></div>
-        <div class="kpi"><span class="kpi-val" id="kDivergence">—</span><span class="kpi-lab">win↔lose divergence</span></div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+        <div class="progress-shine"></div>
+      </div>
+      <div class="run-foot">
+        <span class="progress-text" id="progressText">waiting for the first push…</span>
+        <div class="model-chips" id="modelChips"></div>
       </div>
     </section>
 
+    <!-- KPI grid -->
+    <section class="kpi-grid" id="kpiGrid">
+      <div class="kpi" data-kpi="cells"><span class="kpi-val" id="kCells">—</span><span class="kpi-lab">cells done</span><span class="kpi-sub" id="kCellsSub">—</span></div>
+      <div class="kpi" data-kpi="legal"><span class="kpi-val" id="kLegal">—</span><span class="kpi-lab">avg legal rate</span><span class="kpi-sub" id="kLegalSub">across all cells</span></div>
+      <div class="kpi" data-kpi="tactics"><span class="kpi-val" id="kTactics">—</span><span class="kpi-lab">mate-in-1 solve</span><span class="kpi-sub" id="kTacticsSub">lichess puzzles</span></div>
+      <div class="kpi" data-kpi="stock"><span class="kpi-val" id="kStock">—</span><span class="kpi-lab">Stockfish top-1</span><span class="kpi-sub" id="kStockSub">best move match</span></div>
+      <div class="kpi" data-kpi="games"><span class="kpi-val" id="kGames">—</span><span class="kpi-lab">game win rate</span><span class="kpi-sub" id="kGamesSub">vs random</span></div>
+      <div class="kpi" data-kpi="div"><span class="kpi-val" id="kDivergence">—</span><span class="kpi-lab">fen ↔ grid delta</span><span class="kpi-sub" id="kDivergenceSub">representation gap</span></div>
+    </section>
+
+    <!-- Error banner -->
     <section class="error-banner" id="errorBanner" hidden>
-      <strong>⚠ last cell failed:</strong> <span id="errorText"></span>
+      <span class="error-ico">⚠</span>
+      <div><strong>last cell failed</strong><span id="errorText"></span></div>
     </section>
 
-    <section class="grid">
-      <div class="card chart-card">
-        <h2>Legal-move rate by model <span class="tag">cap-legal-8x8</span></h2>
+    <!-- Charts -->
+    <section class="charts">
+      <div class="card chart-card chart-wide">
+        <div class="card-head"><h2>Legal-move rate</h2><span class="tag">cap-legal-8x8</span></div>
         <div class="chart-wrap"><canvas id="chartLegal"></canvas></div>
       </div>
       <div class="card chart-card">
-        <h2>Mate-in-1 solve rate <span class="tag">mate1-lichess · win</span></h2>
-        <div class="chart-wrap"><canvas id="chartMate"></canvas></div>
+        <div class="card-head"><h2>Tactics</h2><span class="tag">lichess</span></div>
+        <div class="chart-wrap"><canvas id="chartTactics"></canvas></div>
       </div>
       <div class="card chart-card">
-        <h2>Move strength vs Stockfish <span class="tag">bestmove-8x8</span></h2>
-        <div class="chart-wrap"><canvas id="chartComply"></canvas></div>
+        <div class="card-head"><h2>Move strength</h2><span class="tag">Stockfish</span></div>
+        <div class="chart-wrap"><canvas id="chartStock"></canvas></div>
       </div>
-      <div class="card chart-card">
-        <h2>Progress over time</h2>
+      <div class="card chart-card chart-wide">
+        <div class="card-head"><h2>Progress over time</h2><span class="tag">avg legal rate</span></div>
         <div class="chart-wrap"><canvas id="chartHistory"></canvas></div>
+      </div>
+      <div class="card chart-card ranking-card">
+        <div class="card-head"><h2>Model ranking</h2><span class="tag">legality</span></div>
+        <div class="ranking" id="ranking"></div>
       </div>
     </section>
 
+    <!-- Table -->
     <section class="card table-card">
-      <h2>All cells</h2>
+      <div class="card-head"><h2>Cell detail</h2><span class="tag" id="tableCount">—</span></div>
       <div class="table-wrap">
-        <table id="cellsTable">
+        <table>
           <thead>
             <tr>
-              <th>model</th><th>task</th><th>variant</th><th>cond</th><th>n</th>
-              <th>parse</th><th>legal</th><th>compliance</th><th>status</th>
+              <th>model</th><th>task</th><th>variant</th><th>cond</th><th class="num">n</th>
+              <th class="num">parse</th><th class="num">legal</th><th class="num">compliance</th><th>status</th>
             </tr>
           </thead>
           <tbody id="cellsBody"><tr><td colspan="9" class="empty">no data yet</td></tr></tbody>
@@ -89,7 +109,11 @@
   </main>
 
   <footer>
-    <span id="footRepo">…</span> · data pushed from the Kaggle sweep · <a href="#" id="rawLink" target="_blank">raw state.json</a>
+    <span id="footRepo">…</span>
+    <span class="foot-sep">·</span>
+    <span>data pushed from the Kaggle sweep</span>
+    <span class="foot-sep">·</span>
+    <a href="#" id="rawLink" target="_blank" rel="noopener">raw state.json ↗</a>
   </footer>
 
   <script src="config.js"></script>

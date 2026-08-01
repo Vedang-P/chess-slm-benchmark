@@ -80,6 +80,9 @@ class Monitor:
             for cond, r in conds.items():
                 if cond == "divergence":
                     cell["divergence"] = r.get("compliance_of_legal")
+                elif cond == "game":
+                    cell["game"] = {k: v for k, v in r.items()
+                                    if k not in ("model", "task", "variant", "condition")}
                 else:
                     cell[cond] = {
                         "n": r.get("n"), "parse_rate": r.get("parse_rate"),
@@ -242,6 +245,7 @@ def _rows_from_summary(model: str, task: str, variant: str, summary: dict) -> li
             "n": g["n"], "parse_rate": "", "legal_rate": g.get("legal_rate"),
             "compliance_of_legal": g.get("win_rate"),
             "compliance_strict": "", "undefined": "",
+            "game": {k: v for k, v in g.items()},
         })
         return rows
     for cond, m in metrics.get("conditions", {}).items():
