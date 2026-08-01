@@ -95,10 +95,23 @@
 
   // ---------------- render ----------------
   function render() {
+    // no-signal notice: shown only when there is genuinely no data at all
+    const hasData = !!state && (state.cells || []).length > 0;
+    $("notice").hidden = hasData;
+    if (!hasData) {
+      $("stageTag").textContent = "IDLE";
+      $("runMeta").textContent = state && state.mode ? `${state.mode} mode` : "no signal yet";
+      $("clockDigits").textContent = "00:00:00";
+      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no entrants scored yet — awaiting the first games</div>`;
+      $("cellsBody").innerHTML = `<tr><td colspan="9" class="empty">no games recorded yet — awaiting the first push</td></tr>`;
+      $("tableCount").textContent = "0 games";
+      $("footRepo").textContent = state ? `repo: ${state.repo || "—"}` : "no signal";
+      return;
+    }
     renderScoreboard();
     renderError();
     renderEntrants();
-    renderCharts();
+    try { renderCharts(); } catch (e) { console.warn("charts failed:", e); }
     renderTable();
     $("footRepo").textContent = `repo: ${state.repo || "—"} · ${state.mode || "?"} mode`;
     $("rawLink").href = CONFIG.STATE_URL;
@@ -192,6 +205,7 @@
 
   function renderCharts() {
     if (!(state.cells || []).length) return;
+    if (typeof Chart === "undefined") return; // CDN blocked — page still works
     const models = state.models || [];
 
     const legGrid = modelWinAvg("cap-legal-8x8", "grid", "legal_rate");
