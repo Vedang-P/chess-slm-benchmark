@@ -90,11 +90,15 @@ def build_cells(check: bool, pilot: bool = False) -> list:
             "\"Run All\" does NOT pick up newly attached secrets).\n\n"
             "This cell reads the token from the env var, and falls back to Kaggle's own "
             "`kaggle_secrets` API if the env var is missing."),
-        _code("""import os, subprocess, sys
+        _code("""import os, shutil, subprocess, sys
 from pathlib import Path
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "neuro-symbolic-pathfinding"
+# ALWAYS start from a fresh clone: re-runs in the same Kaggle session keep the
+# old /kaggle/working repo, and stale code has bitten us more than once.
+if REPO.exists():
+    shutil.rmtree(REPO)
 
 def find_token():
     for name in ("GITHUB_TOKEN", "GH_TOKEN"):
@@ -106,30 +110,36 @@ def find_token():
     except Exception:
         return None
 
-if not REPO.exists():
-    # diagnostic: what token-ish env vars are actually present?
-    present = sorted(k for k in os.environ if "TOKEN" in k.upper() or "SECRET" in k.upper())
-    print("token-ish env vars present:", present, flush=True)
-    token = find_token()
-    print("GITHUB_TOKEN resolved:", bool(token), flush=True)
-    url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
-    if token:
-        url = url.replace("https://", f"https://x-access-token:{token}@")
-    res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
-                         capture_output=True, text=True)
-    if res.returncode != 0:
-        raise RuntimeError(
-            "git clone failed. The token did not reach this run. Fix order: "
-            "(1) + Add -> Add secret -> GITHUB_TOKEN; (2) SAVE the notebook; "
-            "(3) Kernel -> Restart & Run All. Then check the diagnostic line above: "
-            "if 'token-ish env vars present' is empty, the secret is not attached to "
-            "THIS notebook. Stderr: " + res.stderr[-300:]
-        )
+# diagnostic: what token-ish env vars are actually present?
+present = sorted(k for k in os.environ if "TOKEN" in k.upper() or "SECRET" in k.upper())
+print("token-ish env vars present:", present, flush=True)
+token = find_token()
+print("GITHUB_TOKEN resolved:", bool(token), flush=True)
+url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
+if token:
+    url = url.replace("https://", f"https://x-access-token:{token}@")
+res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
+                     capture_output=True, text=True)
+if res.returncode != 0:
+    raise RuntimeError(
+        "git clone failed. The token did not reach this run. Fix order: "
+        "(1) + Add -> Add secret -> GITHUB_TOKEN; (2) SAVE the notebook; "
+        "(3) Kernel -> Restart & Run All. Then check the diagnostic line above: "
+        "if 'token-ish env vars present' is empty, the secret is not attached to "
+        "THIS notebook. Stderr: " + res.stderr[-300:]
+    )
 os.chdir(REPO)
 print("cwd:", Path.cwd())"""),
-        _md("## 2. Dependencies"),
-        _code("""subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-r", "requirements.txt"], check=True)
+        _md("## 2. Dependencies (forced upgrade; transformers must be >= 5.13 for Gemma 4)"),
+        _code("""subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-U", "-r", "requirements.txt"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y", "wandb"], check=True)
+import transformers
+if int(transformers.__version__.split(".")[0]) < 5:
+    raise RuntimeError(
+        f"transformers {transformers.__version__} is too old for Gemma 4 "
+        "(needs >= 5.13). The upgrade failed — check the pip install output above."
+    )
+print("transformers", transformers.__version__, "(gemma4 support OK)")
 import torch
 print("torch", torch.__version__, "cuda", torch.cuda.is_available(),
       torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")"""),
