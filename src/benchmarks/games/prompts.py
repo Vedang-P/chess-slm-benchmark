@@ -75,8 +75,12 @@ def _render_board(pieces: List[Dict[str, str]], n: int) -> str:
 
 
 def _fen_of(rec: Dict[str, object]) -> str:
-    """Standard FEN for an 8x8 record ('fen' field when present, else derive
-    from pieces with our variant rules)."""
+    """FEN for an 8x8 record. Prefers the PRESENTED position: lichess records
+    store the pre-move FEN in 'fen' and the solver's actual position in
+    'presented_fen' — showing the pre-move FEN made the board inconsistent
+    with the turn text (a real formatting bug found during debugging)."""
+    if rec.get("presented_fen"):
+        return rec["presented_fen"]
     if rec.get("fen"):
         return rec["fen"]
     from src.benchmarks.games.fen import fen_of_board

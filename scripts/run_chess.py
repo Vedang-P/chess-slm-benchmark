@@ -137,6 +137,10 @@ def main() -> None:
                          "output live (debugging)")
     ap.add_argument("--stream", action="store_true",
                     help="stream tokens to stdout as they are generated")
+    ap.add_argument("--cot", action="store_true",
+                    help="add 'think step by step' to the prompt so non-reasoning "
+                         "models also emit visible reasoning (check/debug only — "
+                         "the benchmark itself measures direct answers)")
     ap.add_argument("--smoke", action="store_true", help="stub model, no GPU")
     ap.add_argument("--data_dir", default="data/positions")
     ap.add_argument("--output_dir", default="results/chess")
@@ -228,6 +232,9 @@ def main() -> None:
     for i, rec in enumerate(records):
         for condition in conditions:
             prompt = T.PROMPT_BUILDERS[kind](rec, condition, variant=args.prompt_variant)
+            if args.cot:
+                prompt += ("\nThink step by step about the position before answering. "
+                           "Then give the final move on its own line.")
             if args.verbose:
                 print(f"\n===== {args.model} x {task_name}:{args.prompt_variant} | "
                       f"{rec['id']} | {i + 1}/{len(records)} =====", flush=True)

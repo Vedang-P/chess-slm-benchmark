@@ -190,9 +190,10 @@ if {"True" if check else "False"}:
     sweep_args.append("--check")
 sweep_args.append("--resume")   # skip cells whose summaries were recovered
 if {"True" if check else "False"}:
-    # check mode = full visibility: print the exact prompt + stream each
-    # model's chain of thought live (debugging gemma etc.)
-    sweep_args += ["--verbose", "--stream"]
+    # check mode = full visibility: print the exact prompt, stream each
+    # model's output live, and add 'think step by step' so even non-reasoning
+    # models (qwen2.5, smollm2) show their reasoning
+    sweep_args += ["--verbose", "--stream", "--cot"]
 status = run_stage("chess_sweep", sweep_args, {T_SWEEP})
 print("sweep:", status)"""),
         _md("## 8. Results table"),

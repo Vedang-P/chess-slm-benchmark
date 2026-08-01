@@ -224,6 +224,10 @@
     const cells = state.cells || [];
     const byModel = modelMetricAvgWhere(models, (c) => !c.game, "legal_rate");
     const ranked = bestOf(models, (m) => byModel[m] ?? null);
+    const ordered = [
+      ...ranked.map(([model]) => model),
+      ...models.filter((model) => byModel[model] === undefined),
+    ];
     const expectedPerModel = models.length && state.progress
       ? (state.progress.cells_total || 0) / models.length
       : 0;
@@ -231,18 +235,19 @@
       const completed = cells.filter((c) => c.model === model && c.done).length;
       return expectedPerModel > 0 && completed >= expectedPerModel;
     }));
-    if (!ranked.length) {
+    if (!ordered.length) {
       $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no model scores yet — awaiting completed position cells</div>`;
       return;
     }
-    $("entrantRows").innerHTML = ranked.map(([m, v], i) => {
+    $("entrantRows").innerHTML = ordered.map((m, i) => {
       const games = cells.filter((c) => c.model === m && c.done).length;
       const frac = expectedPerModel ? Math.min(1, games / expectedPerModel) : 0;
+      const score = byModel[m] ?? null;
       return `
       <div class="entrant${done.has(m) ? " done" : ""}">
-        <span class="entrant-rank">${String(i + 1).padStart(2, "0")}</span>
-        <span class="entrant-name">${m}</span>
-        <span class="entrant-mark">${fmtPct(v)} legal</span>
+        <span class="entrant-rank">${score === null ? "—" : String(i + 1).padStart(2, "0")}</span>
+        <span class="entrant-name" title="${m}">${m}</span>
+        <span class="entrant-mark">${score === null ? "not started" : fmtPct(score) + " legal"}</span>
         <span class="entrant-prog" style="--p:${(frac * 100).toFixed(0)}%"></span>
       </div>`;
     }).join("");
@@ -330,6 +335,15 @@
     return modelMetricAvgWhere(models, predicate, field);
   }
 
+  function orderedMetricModels(models, maps) {
+    const valueFor = (model) => maps
+      .map((map) => map[model])
+      .find((value) => value !== undefined && value !== null) ?? -1;
+    return models
+      .filter((model) => maps.some((map) => map[model] !== undefined && map[model] !== null))
+      .sort((a, b) => valueFor(b) - valueFor(a));
+  }
+
   function renderCharts() {
     const models = state.models || [];
     const position = (c) => !c.game && c.win && Object.keys(c.win).length > 0;
@@ -337,7 +351,7 @@
 
     const legParsed = chartValues(models, position, "parse_rate");
     const legLegal = chartValues(models, position, "legal_rate");
-    const legOrder = sortedModels(models, (m) => legLegal[m] ?? legParsed[m] ?? null);
+    const legOrder = orderedMetricModels(models, [legLegal, legParsed]);
     chartStatus(
       "chartLegalStatus",
       positionCells.length
@@ -351,10 +365,7 @@
     const tacLegal = chartValues(models, tactical, "legal_rate");
     const m1 = chartValues(models, (c) => tactical(c) && c.task === "mate1-lichess", "compliance_strict");
     const m2 = chartValues(models, (c) => tactical(c) && c.task === "mate2-lichess", "compliance_strict");
-    const tacOrder = sortedModels(models, (m) => {
-      const values = [m1[m], m2[m], tacLegal[m], tacParsed[m]].filter((value) => value !== undefined && value !== null);
-      return values.length ? values[0] : null;
-    });
+    const tacOrder = orderedMetricModels(models, [m1, m2, tacLegal, tacParsed]);
     const decidedTactical = tacticalCells.filter((c) => typeof c.win.compliance_of_legal === "number").length;
     chartStatus(
       "chartTacticsStatus",
@@ -368,7 +379,7 @@
     const stockParsed = chartValues(models, stockfish, "parse_rate");
     const stockLegal = chartValues(models, stockfish, "legal_rate");
     const stockTop = chartValues(models, stockfish, "compliance_strict");
-    const stockOrder = sortedModels(models, (m) => stockTop[m] ?? stockLegal[m] ?? stockParsed[m] ?? null);
+    const stockOrder = orderedMetricModels(models, [stockTop, stockLegal, stockParsed]);
     chartStatus(
       "chartStockStatus",
       stockCells.length

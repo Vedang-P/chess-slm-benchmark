@@ -293,6 +293,8 @@ def main() -> None:
                     help="forward to run_chess: print the exact prompt per sample")
     ap.add_argument("--stream", action="store_true",
                     help="forward to run_chess: stream model output live")
+    ap.add_argument("--cot", action="store_true",
+                    help="forward to run_chess: add 'think step by step' to prompts")
     args = ap.parse_args()
 
     cfg = yaml.safe_load((ROOT / args.config).read_text())
@@ -352,6 +354,8 @@ def main() -> None:
                 cmd.append("--verbose")
             if args.stream:
                 cmd.append("--stream")
+            if args.cot:
+                cmd.append("--cot")
             if args.smoke:
                 cmd.append("--smoke")
             print(f"\n>>> {model} x {task}:{variant} (n={n}, tokens={mt})", flush=True)
