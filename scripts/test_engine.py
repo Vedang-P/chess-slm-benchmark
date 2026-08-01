@@ -100,6 +100,28 @@ def test_dataset_invariants() -> None:
                 check(f"{pid} has mate moves", len(extra["mate_moves"]) >= 1)
                 check(f"{pid} mate non-vacuous",
                       len(extra["mate_moves"]) < _n_legal_moves(rec))
+            if path.stem.startswith("mate2"):
+                extra = rec["task_extra"]
+                check(f"{pid} has first_move", "first_move" in extra)
+                from src.benchmarks.games.rules import Board
+
+                pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
+                          for p in rec["pieces"]}
+                b = Board(rec["n"], pieces, rec["turn"])
+                check(f"{pid} first_move legal", extra["first_move"] in {m.uci for m in b.legal_moves()})
+                check(f"{pid} mate2 non-vacuous", len(b.legal_moves()) >= 2)
+            if path.stem.startswith("bestmove"):
+                extra = rec["task_extra"]
+                check(f"{pid} has best_move", "best_move" in extra)
+                from src.benchmarks.games.rules import Board
+
+                pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
+                          for p in rec["pieces"]}
+                b = Board(rec["n"], pieces, rec["turn"])
+                legal = {m.uci for m in b.legal_moves()}
+                check(f"{pid} best_move legal in our variant",
+                      extra["best_move"] in legal, f"best={extra['best_move']}")
+                check(f"{pid} bestmove non-vacuous", len(legal) >= 2)
             if path.stem.startswith("mob"):
                 s = rec["task_extra"]["mobility"]
                 check(f"{pid} mobility varies", s["min"] < s["max"])
@@ -109,7 +131,7 @@ def test_dataset_invariants() -> None:
 def _n_legal_moves(rec) -> int:
     from src.benchmarks.games.rules import Board
 
-    pieces = {(ord(p["sq"][0]) - ord("a"), int(p["sq"][1:]) - 1): (p["color"], p["kind"])
+    pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
               for p in rec["pieces"]}
     b = Board(rec["n"], pieces, rec["turn"])
     return len(b.legal_moves())
@@ -186,7 +208,7 @@ def test_python_chess_parity() -> None:
     mate_mismatch = 0
     for rec in recs:
         board = parse_fen(rec["fen"])
-        first = rec["presented_after"]
+        first = rec["task_extra"]["presented_after"]
         m0 = next(m for m in board.legal_moves() if m.uci == first)
         presented = board.apply(m0)
         ours_mates = {m.uci for m in checkmate_moves(presented)}

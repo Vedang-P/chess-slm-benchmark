@@ -42,7 +42,7 @@ def parse_move_output(text: str) -> Optional[str]:
 def _legal_uci(rec: Dict[str, object]) -> set:
     from src.benchmarks.games.rules import Board
 
-    pieces = {(ord(p["sq"][0]) - ord("a"), int(p["sq"][1:]) - 1): (p["color"], p["kind"])
+    pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
               for p in rec["pieces"]}
     b = Board(rec["n"], pieces, rec["turn"])
     return {m.uci for m in b.legal_moves()}
@@ -120,18 +120,52 @@ def score_cap(rec: Dict[str, object], condition: str,
     return {"status": "legal", "move": uci, "compliance": None}
 
 
+# ---------------------------------------------------------------------- #
+# best-move task (8x8, Stockfish ground truth from lichess eval DB / cloud)
+# ---------------------------------------------------------------------- #
+def score_bestmove(rec: Dict[str, object], condition: str,
+                   model_text: str) -> Dict[str, object]:
+    uci = parse_move_output(model_text)
+    if uci is None:
+        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
+    legal = _legal_uci(rec)
+    if uci not in legal:
+        return {"status": "illegal", "move": uci}
+    best = rec["task_extra"]["best_move"]
+    return {"status": "legal", "move": uci, "compliance": uci == best}
+
+
+# ---------------------------------------------------------------------- #
+# mate-in-2 task (8x8, lichess puzzles, mateIn2 theme)
+# ---------------------------------------------------------------------- #
+def score_mate2(rec: Dict[str, object], condition: str,
+                model_text: str) -> Dict[str, object]:
+    uci = parse_move_output(model_text)
+    if uci is None:
+        return {"status": "no_answer" if not model_text.strip() else "parse_error"}
+    legal = _legal_uci(rec)
+    if uci not in legal:
+        return {"status": "illegal", "move": uci}
+    first = rec["task_extra"]["first_move"]  # the lichess 'only move' of the mate line
+    return {"status": "legal", "move": uci, "compliance": uci == first}
+
+
 SCORERS = {
     "sm": score_single_move,
     "mate1": score_mate1,
+    "mate2": score_mate2,
     "mob": score_mobility,
     "cap": score_cap,
+    "bestmove": score_bestmove,
 }
 
 PROMPT_BUILDERS = {
     "sm": build_single_move_prompt,
     "mate1": build_mate1_prompt,
+    "mate2": build_mate1_prompt,  # same strong-move framing; solution checked in scorer
     "mob": build_mobility_prompt,
     "cap": build_cap_prompt,
+    "bestmove": build_single_move_prompt,
 }
 
 CONDITIONS = ("win", "lose")

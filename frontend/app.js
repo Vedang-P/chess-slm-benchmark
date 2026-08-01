@@ -164,16 +164,16 @@
       options: baseOpts,
     }));
 
-    // 3) win vs lose compliance (sm-5x5-win)
-    const wins = cellVals("sm-5x5-win", "win", "compliance_of_legal");
-    const loses = cellVals("sm-5x5-win", "lose", "compliance_of_legal");
+    // 3) best-move top-1 accuracy (bestmove-8x8)
+    const wins = cellVals("bestmove-8x8", "win", "compliance_of_legal");
+    const legalVals = cellVals("bestmove-8x8", "win", "legal_rate");
     mkChart("chartComply", (ctx) => new Chart(ctx, {
       type: "bar",
       data: {
         labels: wins.map((x) => x.model),
         datasets: [
-          { label: "comply · win", data: wins.map((x) => x.v), backgroundColor: "rgba(55,214,160,0.5)", borderColor: "#37d6a0", borderWidth: 1 },
-          { label: "comply · lose", data: loses.map((x) => x.v), backgroundColor: "rgba(255,107,122,0.5)", borderColor: "#ff6b7a", borderWidth: 1 },
+          { label: "top-1 vs Stockfish", data: wins.map((x) => x.v), backgroundColor: "rgba(55,214,160,0.5)", borderColor: "#37d6a0", borderWidth: 1 },
+          { label: "legal rate", data: legalVals.map((x) => x.v), backgroundColor: "rgba(139,123,255,0.5)", borderColor: "#8b7bff", borderWidth: 1 },
         ],
       },
       options: baseOpts,

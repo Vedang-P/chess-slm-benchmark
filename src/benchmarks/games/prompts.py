@@ -82,7 +82,7 @@ def _fen_of(rec: Dict[str, object]) -> str:
     from src.benchmarks.games.fen import fen_of_board
     from src.benchmarks.games.rules import Board
 
-    pieces = {(ord(p["sq"][0]) - ord("a"), int(p["sq"][1:]) - 1): (p["color"], p["kind"])
+    pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
               for p in rec["pieces"]}
     return fen_of_board(Board(rec["n"], pieces, rec["turn"]))
 

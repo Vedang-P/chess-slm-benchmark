@@ -5,8 +5,8 @@
 \usepackage{graphicx}
 \usepackage[numbers]{natbib}
 
-\title{Do Small Models Follow Objectives They Cannot Verify?\\
-  SLM Chess Ability and Anti-Goal Instruction Following}
+\title{How Well Do Small Language Models Play Chess?\\
+  A Multi-Task Capability Benchmark at the 1.5--4B Scale}
 \author{Vedang Pandey}
 \date{}
 
@@ -14,44 +14,40 @@
 \maketitle
 
 \begin{abstract}
-  % Fill from docs/capability-analysis.md + docs/anti-goal-analysis.md after the Kaggle run.
-  Small language models (SLMs, 1.5--4B) are deployed as on-device agents that must follow
-  instructions --- including instructions that run against the model's default behavior.
-  Text-domain studies show even frontier models resist ``perform badly on purpose''
-  instructions; nobody has tested this in a verifiable game domain at SLM scale. We build a
-  paired WIN/LOSE chess benchmark with exact game-theoretic oracles (3x3/5x5 solved by
-  retrograde analysis; exact checkmate/mobility on 8x8) and measure: (i) what SLMs can do in
-  chess at all --- legal-move rate, mate-in-1 solving, winning-move rate, across rendered-grid
-  and FEN representations; (ii) whether they comply with a LOSE instruction when compliance is
-  machine-verifiable, using their own WIN-condition play as the within-model control.
+  % Fill from docs/capability-analysis.md after the Kaggle run.
+  Small language models (SLMs, 1.5--4B) are increasingly deployed as on-device agents, yet
+  nearly every benchmark of game-playing ability -- LLM Chess, ChessArena, ChessQA,
+  ChessBench, grid-game leaderboards -- evaluates frontier-scale models. We present the first
+  systematic measurement of SLM chess ability across a multi-task battery: move legality on
+  standard positions, mate-in-1 and mate-in-2 tactics (real lichess puzzles), best-move
+  accuracy against Stockfish, exact endgame play on retrograde-solved 3x3/5x5 boards, and
+  full-game playout vs a random opponent -- in two input representations (rendered grid vs
+  FEN notation) -- plus tic-tac-toe and Connect-4 for cross-game generalization. Every metric
+  uses external oracles; no model self-judgment.
 \end{abstract}
 
 \section{Introduction}
-% Motivation: on-device agents, safety-relevant negation; prior text-domain failures
-% (Inverse IFEval; reversed-performance personas); the verifiability gap; the paired-control
-% design makes "deliberate" measurable. Contributions list (3 bullets).
+% Motivation: on-device SLM agents, game ability as a probe of rule-following and reasoning;
+% the frontier-scale bias of existing benchmarks; the clean literature gap. Contributions.
 
 \section{Related Work}
-% Chess as an LLM probe (LLM Chess, ChessArena, ChessBench, ChessQA, brittleness tests);
-% anti-goal / counterfactual instruction following (Inverse IFEval, reversed personas);
-% specification gaming vs. chess engines; sandbagging; goal misgeneralization;
-% exact-oracle precedent: solved minichess.
+% Chess eval (LLM Chess, ChessArena, ChessQA, ChessBench, brittleness), simple-game eval
+% (Topsakal, ChildPlay), training papers (Xiangqi-R1, Complete Chess, distillation), probes
+% (state tracking, world models). Explicitly: none at SLM scale.
 
 \section{Method}
-% Tasks table (cap-legal, mate1-lichess, sm-3x3/5x5, mob-8x8); rule variant; exact oracles
-% (retrograde with state budget, documented horizon); paired conditions differing only in the
-% objective sentence; grid vs FEN prompt variants; metrics (parse, legal, compliance,
-% divergence, failure taxonomy); models; external-verifier policy.
+% Task battery table; rule variant (no castling/EP/double-step); oracles (retrograde,
+% checkmate detection, Stockfish 18 at depth 15, lichess solution lines); grid vs FEN
+% prompts differing only in presentation; models; metrics (parse, legal, top-1, win rate);
+% playout protocol (model vs uniform-random, forfeit on first illegal move).
 
 \section{Experiments}
-% Phase 0 capability tables from docs/capability-analysis.md
-% Phase 1 anti-goal tables from docs/anti-goal-analysis.md
-% Representation effect (grid vs FEN), legality as a model-ranking signal.
+% Tables from docs/capability-analysis.md (sections 1-5).
+% Representation effect; legality as the model-ranking floor; cross-game generalization.
 
 \section{Discussion and Limitations}
-% Skill floor vs anti-goal compliance decomposition; horizon caveat; variant rules
-% (no double-step/castling); position pools (K+X vs K on small boards); inference-only;
-% non-archival.
+% Horizon/retrograde scope; variant rules; Stockfish depth; 10 games per playout cell;
+% inference-only; non-archival.
 
 \section{Conclusion}
 

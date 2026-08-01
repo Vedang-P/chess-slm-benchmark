@@ -145,7 +145,7 @@ class Monitor:
             print("monitor: not a git repo — push skipped", flush=True)
             return
         steps = [
-            ["git", "add", "monitor/state.json", "monitor/history.jsonl"],
+            ["git", "add", "-f", "monitor/state.json", "monitor/history.jsonl"],
             ["git", "commit", "--quiet", "-m", f"monitor {_ts()}"],
             ["git", "push", "--force", "origin", f"HEAD:{MONITOR_BRANCH}"],
         ]
@@ -234,7 +234,17 @@ def _avg_legal(cells: list) -> float:
 
 def _rows_from_summary(model: str, task: str, variant: str, summary: dict) -> list:
     rows = []
-    for cond, m in summary["metrics"]["conditions"].items():
+    metrics = summary.get("metrics", {})
+    if "games" in metrics:
+        g = metrics["games"]
+        rows.append({
+            "model": model, "task": task, "variant": variant, "condition": "game",
+            "n": g["n"], "parse_rate": "", "legal_rate": g.get("legal_rate"),
+            "compliance_of_legal": g.get("win_rate"),
+            "compliance_strict": "", "undefined": "",
+        })
+        return rows
+    for cond, m in metrics.get("conditions", {}).items():
         rows.append({
             "model": model, "task": task, "variant": variant, "condition": cond,
             "n": m["n"], "parse_rate": m["parse_rate"],
@@ -310,12 +320,16 @@ def main() -> None:
                 if monitor:
                     monitor.cell_done(cell_rows)
                 continue
+            is_game = bool(cfg["tasks"][task].get("game", False))
             cmd = [
                 sys.executable, str(ROOT / "scripts" / "run_chess.py"),
                 "--model", model, "--task", task, "--prompt-variant", variant,
                 "--n", str(n), "--max_new_tokens", str(mt),
                 "--output_dir", str(ROOT / args.output_dir),
             ]
+            conds = mode.get("conditions")
+            if conds and not is_game:
+                cmd += ["--conditions"] + conds
             if args.smoke:
                 cmd.append("--smoke")
             print(f"\n>>> {model} x {task}:{variant} (n={n}, tokens={mt})", flush=True)

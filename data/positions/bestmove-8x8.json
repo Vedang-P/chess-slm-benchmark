@@ -1,0 +1,4852 @@
+[
+ {
+  "id": "bm-0000",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "r5k1/pp3p1p/2b2qp1/3pr3/8/4P2P/R1PN1PP1/Q3K2R w K - 0 19",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "d2f3"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d2f3",
+   "cp": -70,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0001",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "1r6/1PN5/3p4/4kpp1/1R6/P3n3/K1P5/8 b - - 0 49",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "g5g4"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "g5g4",
+   "cp": 42,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0002",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "5r2/p3R2p/4Q1p1/3B2k1/2p2b2/2P2P2/P5P1/1q3K2 w - - 1 39",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e6",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "f1f2"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "f1f2",
+   "cp": -9,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0003",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "rnbqkb1r/pp2pp1p/3p1np1/2p5/4P3/2P2N1P/PP1PBPP1/RNBQK2R b KQkq - 2 5",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "b1",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "b8c6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "b8c6",
+   "cp": -41,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0004",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "5rk1/p1Q3pp/8/3p4/3q1r2/8/P1P3PP/R4R1K w - - 0 21",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "f1c1"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "f1c1",
+   "cp": -65,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0005",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/R7/8/3rk3/2p1N3/5KP1/5P1P/5b2 w - - 2 44",
+  "pieces": [
+   {
+    "sq": "f1",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a7",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "a7e7"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "a7e7",
+   "cp": 138,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0006",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "rnbqk1nr/ppp2ppp/8/4p3/1b6/2N1P1P1/PP1P1PBP/R1BQK1NR b KQkq - 0 6",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "b8c6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "b8c6",
+   "cp": 13,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0007",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "rn2k2r/ppp1ppb1/7p/3pN1p1/q2P4/1P2P1P1/P1PNQPP1/R3K2R b KQkq - 0 12",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "a4a5"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "a4a5",
+   "cp": 37,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0008",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "3r4/2p1pp1p/ppk5/2p1N3/4bP2/1PK3P1/P1P4P/8 b - - 2 24",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "c6b7"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "c6b7",
+   "cp": -540,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0009",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "4kbnr/3b1ppp/p7/qp1pPB2/5BQ1/8/1P3PPP/2R3K1 b k - 1 18",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "d7f5"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d7f5",
+   "cp": -201,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0010",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "r3k3/pp2npp1/3p4/3P1q2/1P6/PQ2P3/1B1K1p2/2R2B1r b q - 0 26",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "h1",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "f2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "e8d8"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "e8d8",
+   "cp": -411,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0011",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "5rk1/5pp1/1qppN3/7p/2P1PRn1/1P1P4/1P4PP/2Q3K1 w - - 0 28",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g4",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "h5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e6",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "c4c5"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "c4c5",
+   "cp": 143,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0012",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "r1q1r3/2P2pk1/8/p1RQp1n1/7N/4P1P1/1P2BP1p/R3B1K1 w - - 0 29",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h4",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "c7",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "g1h1"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "g1h1",
+   "cp": 705,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0013",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "5k1r/p3bpp1/1pqp4/8/4b1P1/2P1BN2/P1P2PK1/1R1Q1R2 w - - 3 19",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "e3f4"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "e3f4",
+   "cp": 19,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0014",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "3r3r/2p1k2p/6p1/1pq1b3/4Q3/8/P1P3PP/4RR1K b - - 1 26",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "d8d5"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d8d5",
+   "cp": -223,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0015",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "r1b2rk1/pp3ppp/2pQ1n2/4B3/8/P1P3P1/2q2PBP/R3R1K1 b - - 1 15",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c2",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "c8e6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "c8e6",
+   "cp": 26,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0016",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "r4r1k/1b3ppp/p2b4/1pB2q2/4P3/P2P2P1/BPP3QP/R5K1 w - - 0 22",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "c5d6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "c5d6",
+   "cp": 87,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0017",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/4k2p/4P2p/8/1b4P1/1Bp4P/p2p2K1/3R4 w - - 0 46",
+  "pieces": [
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e6",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [
+   "d1a1"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d1a1",
+   "cp": 362,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0018",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "2q3k1/pp2p1P1/3p3n/2r4P/3Q4/2P2R2/P2K4/8 b - - 0 31",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "c5f5"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "c5f5",
+   "cp": -383,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0019",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "7q/7P/Q5P1/4n3/5P2/4P3/1p4K1/1k6 b - - 0 53",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "a6",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "g6",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [
+   "e5g4"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "e5g4",
+   "cp": 0,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0020",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "7k/7p/2p2p2/1pN5/pr6/1P2BPP1/P6K/8 w - - 0 37",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "g3g4"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "g3g4",
+   "cp": 118,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0021",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "2k1r2r/ppp2Rpp/8/1Qb5/8/P1P1q3/1P4PP/R6K b - - 0 21",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "b5",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "c5d6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "c5d6",
+   "cp": -530,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0022",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "2r2r1k/1p1b1p2/pq2pP2/3p4/1b1P2p1/2N1B3/PP2QP1P/2R2RK1 w - - 0 21",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "f2f3"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "f2f3",
+   "cp": 209,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0023",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "1k1r3r/2p1qpp1/pp3n1p/1b1pN3/P2QPP1P/4B3/1PP3P1/R3K2R b KQ - 0 19",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "b5e8"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "b5e8",
+   "cp": -59,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0024",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "6k1/3bpp1p/3p2p1/2n5/4P3/1q5P/2N2PP1/rB1QR1K1 b - - 5 29",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b3",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "a1a6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "a1a6",
+   "cp": -189,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0025",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "4R3/8/6p1/5p2/3P1k1p/7P/1r3KP1/8 w - - 7 51",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e8",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "f2g1"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "f2g1",
+   "cp": 0,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0026",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "1r5r/1Qp1q1bp/5kp1/5b2/2B1pB2/8/PP3PPP/R4RK1 w - - 2 21",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "b7c6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "b7c6",
+   "cp": 493,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0027",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "1nr3k1/6p1/4qpQP/1p1p1p2/1P1P4/8/5PP1/6K1 b - - 0 35",
+  "pieces": [
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g6",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "h6",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "e6e1"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "e6e1",
+   "cp": -568,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0028",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "r2q1rk1/ppp3p1/2n1pn1p/4b3/7N/P1NP3P/1PP3P1/R1BQ1RK1 w - - 0 14",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h4",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "d1e1"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d1e1",
+   "cp": -4,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0029",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "rnb1kb1r/pp3ppp/2p2q2/8/4P3/2pB4/PPPP2PP/R1BQK1NR w KQkq - 0 8",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "d2c3"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d2c3",
+   "cp": 98,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0030",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "2r3k1/2r2pp1/7p/2p5/1P3qN1/2QR4/7P/4R1K1 w - - 0 29",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f4",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "d3g3"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d3g3",
+   "cp": 102,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0031",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "2RR4/5pk1/5n1q/pp3p2/8/1P4P1/PB3PKP/4r3 b - - 20 39",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c8",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d8",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "g7g6"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "g7g6",
+   "cp": -111,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0032",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "R1b3k1/1pq1r1p1/2p4p/4pp2/1P1P4/2PB4/4QPPP/6K1 b - - 1 23",
+  "pieces": [
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "e5e4"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "e5e4",
+   "cp": 22,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0033",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/P1p2kp1/3b1p2/5R2/3Pn1p1/1P2P3/4r3/B5K1 w - - 3 32",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "g4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [
+   "f5e5"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "f5e5",
+   "cp": -564,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0034",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "3rkb1r/2q2p2/p2p1np1/1pn1p1B1/4P3/P1N3NP/1PPQ1PB1/5RK1 b k - 0 20",
+  "pieces": [
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "c5d7"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "c5d7",
+   "cp": -65,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0035",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "r2qr3/2p2p1p/p3pkp1/1p2Qn2/3P4/5b2/PP1N1PPP/2R2RK1 b - - 1 21",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f3",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "f6g5"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "f6g5",
+   "cp": 107,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0036",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "6k1/1p1n1ppp/2p2p2/5b2/P1PP4/2B1bN2/BP2r1PP/4R1K1 w - - 2 22",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d7",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "g1h1"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "g1h1",
+   "cp": 24,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0037",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "7r/ppk1pp1p/6p1/2P5/Nn1N1Pn1/P7/1P4PP/R5K1 b - - 0 22",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g4",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "b4d3"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "b4d3",
+   "cp": -74,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0038",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "rnbqkb1r/pp1p1p1p/4pnp1/6B1/3QP3/2P2N2/PP3PPP/RN2KB1R b KQkq - 2 6",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "b1",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "f8e7"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "f8e7",
+   "cp": 72,
+   "mate": null,
+   "depth": 15
+  }
+ },
+ {
+  "id": "bm-0039",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "r3kbr1/1b1p1p1p/p3Pp2/8/3B4/2qB4/P1P2RPP/R2Q2K1 b q - 0 16",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e6",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "g8g2"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "g8g2",
+   "cp": -250,
+   "mate": null,
+   "depth": 15
+  }
+ }
+]
