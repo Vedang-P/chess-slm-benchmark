@@ -410,10 +410,7 @@
   }
 
   // ---------------- live board ----------------
-  // Single solid glyph set for both colors; color + outline via CSS so black
-  // and white are unambiguous on any square (Unicode has no reliable filled
-  // white glyphs — rendering depends on the font).
-  const GLYPHS = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+  // Lichess cburnett SVG pieces (window.CHESS_PIECES from pieces.js).
   const GAME_TASKS = ["playout-5x5", "ttt", "c4"];
   let live = null;
   let lastLiveKey = null;
@@ -467,8 +464,8 @@
         const coords = [];
         if (c === 0) coords.push(`<span class="board-coord rank">${n - r}</span>`);
         if (r === n - 1) coords.push(`<span class="board-coord file">${String.fromCharCode(97 + c)}</span>`);
-        const pieceHtml = piece && GLYPHS[piece.toLowerCase()]
-          ? `<span class="board-piece ${piece === piece.toUpperCase() ? "w" : "b"}">${GLYPHS[piece.toLowerCase()]}</span>`
+        const pieceHtml = piece && window.CHESS_PIECES
+          ? `<span class="piece-svg">${window.CHESS_PIECES[(piece === piece.toUpperCase() ? "w" : "b") + piece.toUpperCase()] || ""}</span>`
           : "";
         html += `<div class="${cls}">${pieceHtml}${coords.join("")}</div>`;
       }

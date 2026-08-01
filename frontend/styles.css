@@ -361,27 +361,15 @@ html, body {
 .board-cell.light { background: #f0d9b5; }
 .board-cell.dark { background: #b58863; }
 
-/* pieces: single solid glyph set, color-coded with outline for contrast */
-.board-piece {
-  font-size: clamp(17px, 4.6vw, 31px);
-  line-height: 1;
-  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", "Arial Unicode MS", sans-serif;
-  user-select: none;
-  z-index: 1;
+/* pieces: lichess cburnett SVG set — crisp vectors, lichess look */
+.piece-svg { display: grid; place-items: center; width: 100%; height: 100%; z-index: 1; }
+.piece-svg svg {
+  width: 84%;
+  height: 84%;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  transition: transform 0.12s ease;
 }
-.board-piece.w {
-  color: #fbf7ee;
-  text-shadow:
-    -1px -1px 0 #3d382f, 1px -1px 0 #3d382f, -1px 1px 0 #3d382f, 1px 1px 0 #3d382f,
-    0 2px 3px rgba(0, 0, 0, 0.55);
-}
-.board-piece.b {
-  color: #26211b;
-  text-shadow:
-    -1px -1px 0 rgba(251, 247, 238, 0.55), 1px -1px 0 rgba(251, 247, 238, 0.55),
-    -1px 1px 0 rgba(251, 247, 238, 0.55), 1px 1px 0 rgba(251, 247, 238, 0.55),
-    0 2px 3px rgba(0, 0, 0, 0.45);
-}
+.board-cell:hover .piece-svg svg { transform: scale(1.08); }
 
 /* last move + verdict highlights */
 .board-cell.last-move { background-color: rgba(246, 196, 64, 0.42); background-blend-mode: multiply; }
