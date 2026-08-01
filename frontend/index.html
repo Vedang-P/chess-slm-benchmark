@@ -21,7 +21,7 @@
         <span class="wordmark-glyph">♞</span>
         <div>
           <h1>ChessBench <span class="wordmark-live">LIVE</span></h1>
-          <p class="wordmark-sub">SLM capability trials · six entrants · T4 board</p>
+           <p class="wordmark-sub">SLM capability trials · six models · T4 board</p>
         </div>
       </div>
       <div class="masthead-right">
@@ -67,7 +67,7 @@
         <span class="sb-sub" id="kLegalSub">—</span>
       </div>
       <div class="sb-cell">
-        <span class="sb-label">mate-in-1</span>
+         <span class="sb-label">mate-in-1 score</span>
         <span class="sb-value" id="kTactics">—</span>
         <span class="sb-sub" id="kTacticsSub">—</span>
       </div>
@@ -77,7 +77,7 @@
         <span class="sb-sub" id="kStockSub">—</span>
       </div>
       <div class="sb-cell">
-        <span class="sb-label">game win rate</span>
+         <span class="sb-label">game win rate</span>
         <span class="sb-value" id="kGames">—</span>
         <span class="sb-sub" id="kGamesSub">—</span>
       </div>
@@ -96,7 +96,10 @@
     <!-- live board -->
     <section class="board live-panel">
       <div class="board-head">
-        <h2>Live board</h2>
+        <div class="board-head-copy">
+          <h2>Live sample</h2>
+          <p class="live-now" id="liveNow">waiting for the monitor</p>
+        </div>
         <span class="board-note" id="liveMeta">—</span>
       </div>
       <div class="live-grid">
@@ -105,18 +108,24 @@
           <div class="live-caption" id="liveCaption">waiting for the first position…</div>
         </div>
         <div class="live-side">
+          <div class="live-block">
+            <span class="live-label">exact prompt</span>
+            <pre class="live-prompt" id="livePrompt">—</pre>
+          </div>
           <div class="live-block thinking-block">
-            <span class="live-label">thinking <span class="live-dot" id="liveDot"></span></span>
+            <span class="live-label">model generation <span class="live-dot" id="liveDot"></span></span>
             <pre class="live-thinking" id="liveThinking">—</pre>
           </div>
-          <div class="live-moves">
-            <div class="live-block">
-              <span class="live-label">model move</span>
+          <div class="live-comparison">
+            <div class="live-result model-result">
+              <span class="live-label">model answer</span>
               <span class="live-move mono" id="liveModelMove">—</span>
+              <span class="result-note" id="liveModelStatus">waiting for an answer</span>
             </div>
-            <div class="live-block">
-              <span class="live-label">stockfish</span>
+            <div class="live-result reference-result">
+              <span class="live-label" id="liveReferenceLabel">reference answer</span>
               <span class="live-move mono" id="liveStockMove">—</span>
+              <span class="result-note" id="liveReferenceNote">—</span>
             </div>
           </div>
           <div class="live-verdict" id="liveVerdict"></div>
@@ -128,7 +137,7 @@
     <!-- entrant list -->
     <section class="board" id="entrants">
       <div class="board-head">
-        <h2>Entrants</h2>
+        <h2>Models</h2>
         <span class="board-note" id="tableCount">—</span>
       </div>
       <div class="entrants" id="entrantRows"></div>
@@ -137,20 +146,20 @@
     <!-- charts -->
     <section class="charts">
       <figure class="chart-figure chart-span2">
-        <figcaption>Legality on standard positions <span class="fig-note">grid / fen · cap-legal-8x8</span></figcaption>
-        <div class="chart-box"><canvas id="chartLegal"></canvas></div>
+         <figcaption>Parsing and legality <span class="fig-note">completed position cells</span></figcaption>
+         <div class="chart-box"><canvas id="chartLegal"></canvas><p class="chart-status" id="chartLegalStatus"></p></div>
       </figure>
       <figure class="chart-figure">
-        <figcaption>Tactics <span class="fig-note">lichess puzzles</span></figcaption>
-        <div class="chart-box"><canvas id="chartTactics"></canvas></div>
+         <figcaption>Tactics pipeline <span class="fig-note">parsed · legal · strict score</span></figcaption>
+         <div class="chart-box"><canvas id="chartTactics"></canvas><p class="chart-status" id="chartTacticsStatus"></p></div>
       </figure>
       <figure class="chart-figure">
-        <figcaption>Move strength <span class="fig-note">vs stockfish</span></figcaption>
-        <div class="chart-box"><canvas id="chartStock"></canvas></div>
+         <figcaption>Move strength <span class="fig-note">bestmove task · Stockfish</span></figcaption>
+         <div class="chart-box"><canvas id="chartStock"></canvas><p class="chart-status" id="chartStockStatus"></p></div>
       </figure>
       <figure class="chart-figure chart-span2">
-        <figcaption>Progress over time <span class="fig-note">avg legal rate</span></figcaption>
-        <div class="chart-box"><canvas id="chartHistory"></canvas></div>
+         <figcaption>Progress over time <span class="fig-note">average legal rate</span></figcaption>
+         <div class="chart-box"><canvas id="chartHistory"></canvas><p class="chart-status" id="chartHistoryStatus"></p></div>
       </figure>
     </section>
 
@@ -158,13 +167,13 @@
     <section class="board">
       <div class="board-head">
         <h2>Record</h2>
-        <span class="board-note">per task, per entrant</span>
+         <span class="board-note">per task, per model</span>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th class="num">#</th><th>entrant</th><th>task</th><th>form</th><th class="num">n</th>
+               <th class="num">#</th><th>model</th><th>task</th><th>form</th><th class="num">n</th>
               <th class="num">parse</th><th class="num">legal</th><th class="num">score</th><th></th>
             </tr>
           </thead>

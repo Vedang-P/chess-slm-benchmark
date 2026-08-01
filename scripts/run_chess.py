@@ -132,6 +132,11 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=0, help="limit positions (0 = all)")
     ap.add_argument("--conditions", nargs="+", default=None)
     ap.add_argument("--max_new_tokens", type=int, default=DEFAULT_MAX_NEW_TOKENS)
+    ap.add_argument("--verbose", action="store_true",
+                    help="print the exact rendered prompt and stream the model's "
+                         "output live (debugging)")
+    ap.add_argument("--stream", action="store_true",
+                    help="stream tokens to stdout as they are generated")
     ap.add_argument("--smoke", action="store_true", help="stub model, no GPU")
     ap.add_argument("--data_dir", default="data/positions")
     ap.add_argument("--output_dir", default="results/chess")
@@ -223,8 +228,24 @@ def main() -> None:
     for i, rec in enumerate(records):
         for condition in conditions:
             prompt = T.PROMPT_BUILDERS[kind](rec, condition, variant=args.prompt_variant)
-            out = model.generate(prompt, max_new_tokens=args.max_new_tokens)
+            if args.verbose:
+                print(f"\n===== {args.model} x {task_name}:{args.prompt_variant} | "
+                      f"{rec['id']} | {i + 1}/{len(records)} =====", flush=True)
+                print("--- PROMPT (exactly what the model receives; "
+                      "special tokens shown) ---", flush=True)
+                if args.smoke:
+                    print("(smoke mode — stub model, no real prompt rendering)", flush=True)
+                else:
+                    print(model.render_chat(prompt), flush=True)
+                print("\n--- MODEL OUTPUT (streaming) ---", flush=True)
+            out = model.generate(prompt, max_new_tokens=args.max_new_tokens,
+                                 stream=args.verbose or args.stream)
+            if args.verbose:
+                print(f"\n--- END (tokens={out.get('output_tokens')}, "
+                      f"finished={out.get('finished')}) ---", flush=True)
             scored = T.score_record(rec, condition, out["content"], kind=kind)
+            if args.verbose:
+                print(f"--- PARSED: {scored}", flush=True)
             sample = {
                 "position_id": rec["id"],
                 "condition": condition,

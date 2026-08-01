@@ -81,10 +81,26 @@ class HFModel:
             )
         self.model.eval()
 
+    def render_chat(self, prompt: str) -> str:
+        """The exact string the model will see (for debugging)."""
+        messages = []
+        if self.system_prompt:
+            messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        if self.is_gemma4:
+            return self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True,
+                enable_thinking=False,
+            )
+        return self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True)
+
     def generate(self, prompt: str, max_new_tokens: int = 512,
                  temperature: float = 0.0, top_p: float = 1.0,
                  repetition_penalty: float = 1.0, stream: bool = False) -> dict:
-        """Returns {content, input_tokens, output_tokens, latency_ms, finished}."""
+        """Returns {content, input_tokens, output_tokens, latency_ms, finished}.
+        With stream=True, tokens are printed live to stdout as they are
+        generated (chain-of-thought visibility in notebook cells)."""
         t0 = time.time()
         if self.smoke_test:
             return {
@@ -111,17 +127,25 @@ class HFModel:
             ).to(self.model.device)
             decode_fn = self.processor.decode
             pad_token_id = self.processor.tokenizer.eos_token_id
+            stream_tok = self.processor.tokenizer
         else:
             inputs = self.tokenizer.apply_chat_template(
                 messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
             ).to(self.model.device)
             decode_fn = self.tokenizer.decode
             pad_token_id = self.tokenizer.eos_token_id
+            stream_tok = self.tokenizer
         input_len = inputs["input_ids"].shape[-1]
         do_sample = temperature > 0.0
         gen_kwargs = dict(**inputs, max_new_tokens=max_new_tokens,
                           do_sample=do_sample,
                           pad_token_id=pad_token_id)
+        if stream:
+            from transformers import TextStreamer
+
+            gen_kwargs["streamer"] = TextStreamer(
+                stream_tok, skip_prompt=True, skip_special_tokens=False,
+            )
         if do_sample:
             gen_kwargs["temperature"] = temperature
             gen_kwargs["top_p"] = top_p

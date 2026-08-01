@@ -126,6 +126,24 @@
     return Object.fromEntries(Object.entries(per).map(([m, vs]) => [m, avg(vs)]));
   }
 
+  function modelMetricAvgWhere(models, predicate, field, condition = "win") {
+    const per = {};
+    for (const c of state.cells || []) {
+      if (predicate && !predicate(c)) continue;
+      const metric = c[condition] || {};
+      const value = num(metric[field]);
+      if (value !== null) (per[c.model] = per[c.model] || []).push(value);
+    }
+    return Object.fromEntries(
+      models.map((model) => [model, avg(per[model] || [])]).filter(([, value]) => value !== null),
+    );
+  }
+
+  function cellLabel(cell) {
+    if (!cell) return "—";
+    return `${cell.model} · ${cell.task} · ${cell.variant || "—"}`;
+  }
+
   function bestOf(models, map) {
     const entries = models.map((m) => [m, map(m)]).filter(([, v]) => v !== null);
     entries.sort((a, b) => b[1] - a[1]);
@@ -171,8 +189,8 @@
 
     const cells = state.cells || [];
     const legalVals = cells.map((c) => winMetric(c, "legal_rate")).filter((v) => typeof v === "number");
-    const mateVals = modelWinAvg("mate1-lichess", "grid", "compliance_of_legal");
-    const stockVals = modelWinAvg("bestmove-8x8", "grid", "compliance_of_legal");
+    const mateVals = modelWinAvg("mate1-lichess", "grid", "compliance_strict");
+    const stockVals = modelWinAvg("bestmove-8x8", "grid", "compliance_strict");
     const gameWins = cells.filter((c) => c.game && c.game.win_rate != null).map((c) => c.game.win_rate);
 
     $("kCells").textContent = `${p.cells_done ?? 0}`;
@@ -180,9 +198,9 @@
     $("kLegal").textContent = fmtPct(avg(legalVals));
     $("kLegalSub").textContent = `${legalVals.length} cells`;
     $("kTactics").textContent = fmtPct(avg(Object.values(mateVals)));
-    $("kTacticsSub").textContent = `${Object.keys(mateVals).length} models`;
+    $("kTacticsSub").textContent = `${Object.keys(mateVals).length} models · strict`;
     $("kStock").textContent = fmtPct(avg(Object.values(stockVals)));
-    $("kStockSub").textContent = `${Object.keys(stockVals).length} models`;
+    $("kStockSub").textContent = `${Object.keys(stockVals).length} models · strict`;
     $("kGames").textContent = fmtPct(avg(gameWins));
     $("kGamesSub").textContent = `${gameWins.length} game cells`;
 
@@ -204,22 +222,27 @@
   function renderEntrants() {
     const models = state.models || [];
     const cells = state.cells || [];
-    const byModel = modelWinAvg("cap-legal-8x8", "grid", "legal_rate");
+    const byModel = modelMetricAvgWhere(models, (c) => !c.game, "legal_rate");
     const ranked = bestOf(models, (m) => byModel[m] ?? null);
-    const done = new Set(cells.filter((c) => c.done).map((c) => c.model));
-    const total = new Set(cells.map((c) => `${c.model}|${c.task}|${c.variant}`));
+    const expectedPerModel = models.length && state.progress
+      ? (state.progress.cells_total || 0) / models.length
+      : 0;
+    const done = new Set(models.filter((model) => {
+      const completed = cells.filter((c) => c.model === model && c.done).length;
+      return expectedPerModel > 0 && completed >= expectedPerModel;
+    }));
     if (!ranked.length) {
-      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no entrants scored yet — awaiting the first games</div>`;
+      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no model scores yet — awaiting completed position cells</div>`;
       return;
     }
     $("entrantRows").innerHTML = ranked.map(([m, v], i) => {
       const games = cells.filter((c) => c.model === m && c.done).length;
-      const frac = total.size ? Math.min(1, games / total.size) : 0;
+      const frac = expectedPerModel ? Math.min(1, games / expectedPerModel) : 0;
       return `
       <div class="entrant${done.has(m) ? " done" : ""}">
         <span class="entrant-rank">${String(i + 1).padStart(2, "0")}</span>
         <span class="entrant-name">${m}</span>
-        <span class="entrant-mark">${fmtPct(v)}</span>
+        <span class="entrant-mark">${fmtPct(v)} legal</span>
         <span class="entrant-prog" style="--p:${(frac * 100).toFixed(0)}%"></span>
       </div>`;
     }).join("");
