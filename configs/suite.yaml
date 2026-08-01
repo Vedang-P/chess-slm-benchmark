@@ -15,7 +15,7 @@ tasks:
 
 check:
   models: [deepseek-r1-distill-qwen-1.5b, smollm2-1.7b, qwen2.5-1.5b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
-  max_new_tokens: 256
+  max_new_tokens: 1024
   conditions: [win]
 
 full:

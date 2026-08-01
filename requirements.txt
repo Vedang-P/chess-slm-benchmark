@@ -1,5 +1,9 @@
 # Python 3.10+
-transformers>=4.40.0
+# Load-bearing pins: transformers >= 5.13.0 recognizes the Gemma 4
+# architecture (google/gemma-4-E2B-it / E4B-it); older versions raise
+# "model type `gemma4` is not recognized". Kaggle's preinstalled
+# transformers is 4.x — this forces the upgrade.
+transformers>=5.13.0
 peft>=0.10.0
 bitsandbytes
 accelerate

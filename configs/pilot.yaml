@@ -17,7 +17,7 @@ tasks:
 
 check:
   models: [smollm2-1.7b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
-  max_new_tokens: 256
+  max_new_tokens: 1024
   conditions: [win]
 
 full:
