@@ -95,8 +95,9 @@ python scripts/run_suite.py --smoke --models smollm2-1.7b   # pipeline smoke tes
 1. Attach `HF_TOKEN` (Gemma models) and `GITHUB_TOKEN` (private-repo clone) secrets —
    attach in the notebook's Secrets panel, **save**, **restart kernel**.
 2. Upload `notebooks/kaggle_check.ipynb` — engine tests + parity + tiny sweep.
-3. Upload `notebooks/kaggle_pilot.ipynb` — **representation pilot** (2 models × 3 tasks
-   × 4 representations, ~1-2h): picks the prompt format the full sweep should use.
+3. Upload `notebooks/kaggle_pilot.ipynb` — **representation pilot** (4 models × 3 tasks
+   × 4 representations, ~2–3h): picks the prompt format the full sweep should use.
+   Note: the pilot includes the gated Gemma models, so `HF_TOKEN` is required for it.
 4. Upload `notebooks/kaggle_run.ipynb` — full sweep; streams to the dashboard and
    backs up every cell to the public live repo (crash-safe: recovery cell + `--resume`).
 5. Locally: `python scripts/analyze_pilot.py` (after step 3) and
