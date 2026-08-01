@@ -40,7 +40,8 @@ def _ts() -> str:
 
 
 class Monitor:
-    def __init__(self, interval_s: int = 120, output_dir: str = "results/chess"):
+    def __init__(self, interval_s: int = 120, output_dir: str = "results/chess",
+                 remote_prefix: str = "results/chess"):
         self.interval = interval_s
         self.last_push = 0.0
         self.cells_done = 0
@@ -50,6 +51,7 @@ class Monitor:
         self.meta = {}
         self.current = None
         self.output_dir = Path(output_dir)
+        self.remote_prefix = remote_prefix  # results/chess (full) or results_check/chess (check)
         self.uploaded = set()  # remote paths already uploaded (tracked in-memory)
 
     def set_meta(self, **kw) -> None:
@@ -189,18 +191,18 @@ class Monitor:
                 uploads.append((f"monitor/{fname}", path))
         if self.output_dir.exists():
             for summary in sorted(self.output_dir.glob("*.summary.json")):
-                remote = f"results/chess/{summary.name}"
+                remote = f"{self.remote_prefix}/{summary.name}"
                 if remote not in self.uploaded:
                     uploads.append((remote, summary))
             csv_path = self.output_dir / "comparison_table.csv"
             if csv_path.exists():
-                uploads.append(("results/comparison_table.csv", csv_path))
+                uploads.append((f"{self.remote_prefix.rsplit('/', 1)[0]}/comparison_table.csv", csv_path))
             # index of all completed summaries (for the recovery flow)
             index = {
                 "files": sorted(p.name for p in self.output_dir.glob("*.summary.json")),
                 "updated_at": _ts(),
             }
-            uploads.append(("results/index.json",
+            uploads.append((f"{self.remote_prefix.rsplit('/', 1)[0]}/index.json",
                             _BytesFile(json.dumps(index, indent=1).encode())))
         for remote, local in uploads:
             data = local.data if isinstance(local, _BytesFile) else local.read_bytes()
@@ -289,7 +291,8 @@ def main() -> None:
             cells.append((task, variant))
 
     monitor = Monitor(interval_s=args.monitor_interval,
-                      output_dir=args.output_dir) if args.monitor else None
+                      output_dir=args.output_dir,
+                      remote_prefix=args.output_dir) if args.monitor else None
     if monitor:
         monitor.set_meta(mode="check" if args.check else "full", models=models)
         monitor.cells_total = len(models) * len(cells)

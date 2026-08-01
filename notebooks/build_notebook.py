@@ -155,27 +155,27 @@ for name in ["cap-legal-8x8", "bestmove-8x8", "mate1-lichess", "mate2-lichess",
 print("committed position data OK (9 task sets, oracle fields present)")""")),
         (_md("## 6. Recover completed results (after a died session)\n\n"
              "Every completed cell's summary is backed up to the public live repo by "
-             "`--monitor`. If this is a fresh session, pull them back so `--resume` can "
-             "skip what already ran."),
-         _code("""import json, urllib.request
+             "`--monitor` (check results and full results live in separate namespaces, "
+             "so recovery can never mix them). If this is a fresh session, pull them "
+             "back so `--resume` can skip what already ran."),
+         _code(f"""import json, urllib.request
 from pathlib import Path
 
-out = Path("results/chess")
+out = Path("{R}/chess")
 out.mkdir(parents=True, exist_ok=True)
-idx_url = "https://raw.githubusercontent.com/Vedang-P/chess-bench-live/main/results/index.json"
+base = "https://raw.githubusercontent.com/Vedang-P/chess-bench-live/main"
+idx_url = f"{{base}}/{R}/index.json"
 if list(out.glob("*.summary.json")):
     print("results already present locally")
 else:
     try:
         idx = json.load(urllib.request.urlopen(idx_url, timeout=20))
         for name in idx["files"]:
-            url = f"https://raw.githubusercontent.com/Vedang-P/chess-bench-live/main/results/chess/{name}"
+            url = f"{{base}}/{R}/chess/{{name}}"
             (out / name).write_bytes(urllib.request.urlopen(url, timeout=20).read())
-        print(f"recovered {len(idx['files'])} completed summaries from the live repo")
+        print(f"recovered {{len(idx['files'])}} completed summaries from the live repo")
     except Exception as e:
-        print("nothing to recover (first run or no backup yet):", e)"""))
-         if not check else
-         (_md(""), _code("pass")),
+        print("nothing to recover (first run or no backup yet):", e)""")),
         _md("## 7. The chess sweep (models x tasks, paired win/lose)\n\n"
             "`--monitor` publishes live progress + per-cell result backups to the public "
             "dashboard repo (monitor/state.json, results/*). `--resume` skips cells whose "
@@ -184,8 +184,7 @@ else:
               "--monitor", "--monitor-interval", "120"{", '--config', 'configs/pilot.yaml'" if pilot else ""}]
 if {"True" if check else "False"}:
     sweep_args.append("--check")
-else:
-    sweep_args.append("--resume")
+sweep_args.append("--resume")   # skip cells whose summaries were recovered
 status = run_stage("chess_sweep", sweep_args, {T_SWEEP})
 print("sweep:", status)"""),
         _md("## 8. Results table"),
