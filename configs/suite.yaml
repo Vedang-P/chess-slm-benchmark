@@ -1,27 +1,45 @@
-# Sweep definition for the SLM chess capability benchmark.
-# Active scope (v2): the three tactical tasks. The other datasets (cap-legal,
-# sm-*, playout) stay in data/positions for the paper's extended sections.
-# check mode = all 6 models at 1 position per cell — a scaled-down version of
-# the full run that proves every model loads and the pipeline works.
-# full mode = the paper's core data collection (WIN/capability conditions).
-models: [deepseek-r1-distill-qwen-1.5b, smollm2-1.7b, qwen2.5-1.5b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
-
+models:
+- deepseek-r1-distill-qwen-1.5b
+- smollm2-1.7b
+- qwen2.5-1.5b
+- qwen2.5-3b
+- gemma4-e2b
+- gemma4-e4b
 tasks:
-  # --- tactics (real lichess puzzles, CC0) ---
-  mate1-lichess:  {file: mate1-lichess.json,  full_n: 40, check_n: 1, variants: [grid, fen]}
-  mate2-lichess:  {file: mate2-lichess.json,  full_n: 40, check_n: 1, variants: [grid, fen]}
-  # --- move strength (Stockfish 18 ground truth) ---
-  bestmove-8x8:   {file: bestmove-8x8.json,   full_n: 40, check_n: 1, variants: [grid, fen]}
-
+  mate1-lichess:
+    file: mate1-lichess.json
+    full_n: 40
+    check_n: 1
+    variants:
+    - grid
+    - fen
+  mate2-lichess:
+    file: mate2-lichess.json
+    full_n: 40
+    check_n: 1
+    variants:
+    - grid
+    - fen
+  bestmove-8x8:
+    file: bestmove-8x8.json
+    full_n: 40
+    check_n: 1
+    variants:
+    - grid
+    - fen
 check:
-  models: [deepseek-r1-distill-qwen-1.5b, smollm2-1.7b, qwen2.5-1.5b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
-  max_new_tokens: 2048
-  conditions: [win]
-
+  models:
+  - deepseek-r1-distill-qwen-1.5b
+  - smollm2-1.7b
+  - qwen2.5-1.5b
+  - qwen2.5-3b
+  - gemma4-e2b
+  - gemma4-e4b
+  max_new_tokens: 4096
+  conditions:
+  - win
 full:
-  # No artificial thinking limit on position tasks: 2048 tokens is effectively
-  # unlimited for these models — truncating mid-CoT would confound the
-  # capability measurement (a truncated answer scores as a failure).
-  max_new_tokens: 2048
+  max_new_tokens: 4096
   smoke: false
-  conditions: [win]  # capability-only
+  conditions:
+  - win

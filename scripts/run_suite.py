@@ -49,6 +49,7 @@ class Monitor:
         self.interval = interval_s
         self.last_push = 0.0
         self.cells_done = 0
+        self.cells_failed = 0
         self.cells_total = 0
         self.started_at = _ts()
         self.started_epoch = time.time()
@@ -63,9 +64,14 @@ class Monitor:
         self.meta.update(kw)
 
     def cell_done(self, row_parts: list) -> None:
+        if not row_parts:
+            return
         self.cells_done += 1
         for r in row_parts:
             self.rows.append(r)
+
+    def cell_failed(self) -> None:
+        self.cells_failed += 1
 
     def set_current(self, model: str = None, task: str = None, variant: str = None) -> None:
         self.current = (model, task, variant) if model else None
@@ -117,10 +123,12 @@ class Monitor:
         return {
             "repo": "Vedang-P/neuro-symbolic-pathfinding",
             "mode": self.meta.get("mode"),
-            "stage": "complete" if total > 0 and done >= total else "sweep",
+            "stage": "complete" if total > 0 and done + self.cells_failed >= total else "sweep",
             "started_at": self.started_at,
             "updated_at": _ts(),
-            "progress": {"cells_done": done, "cells_total": total,
+            "progress": {"cells_done": done, "cells_failed": self.cells_failed,
+                         "cells_attempted": done + self.cells_failed,
+                         "cells_total": total,
                          "fraction": round(done / total, 4) if total else 0.0},
             "eta_min": eta_min,
             "models": self.meta.get("models", []),

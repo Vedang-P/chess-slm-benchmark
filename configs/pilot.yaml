@@ -1,26 +1,47 @@
-# Representation pilot: which prompt representation do SLMs understand best?
-# Runs BEFORE the full sweep; its winner becomes the full sweep's primary
-# variant (top-2 go into the paper's ablation).
-#
-# Models span the family range: two ungated baselines + both Gemma 4 sizes
-# (gated — requires the HF_TOKEN Kaggle secret).
-#
-#   python scripts/run_suite.py --config configs/pilot.yaml --check   # sanity
-#   python scripts/run_suite.py --config configs/pilot.yaml           # on Kaggle
-#   python scripts/analyze_pilot.py                                   # verdict
-models: [smollm2-1.7b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
-
+models:
+- smollm2-1.7b
+- qwen2.5-3b
+- gemma4-e2b
+- gemma4-e4b
 tasks:
-  mate1-lichess:  {file: mate1-lichess.json,  full_n: 30, check_n: 2, variants: [grid, fen, bitboard, list]}
-  mate2-lichess:  {file: mate2-lichess.json,  full_n: 30, check_n: 2, variants: [grid, fen, bitboard, list]}
-  bestmove-8x8:   {file: bestmove-8x8.json,   full_n: 30, check_n: 2, variants: [grid, fen, bitboard, list]}
-
+  mate1-lichess:
+    file: mate1-lichess.json
+    full_n: 30
+    check_n: 2
+    variants:
+    - grid
+    - fen
+    - bitboard
+    - list
+  mate2-lichess:
+    file: mate2-lichess.json
+    full_n: 30
+    check_n: 2
+    variants:
+    - grid
+    - fen
+    - bitboard
+    - list
+  bestmove-8x8:
+    file: bestmove-8x8.json
+    full_n: 30
+    check_n: 2
+    variants:
+    - grid
+    - fen
+    - bitboard
+    - list
 check:
-  models: [smollm2-1.7b, qwen2.5-3b, gemma4-e2b, gemma4-e4b]
-  max_new_tokens: 2048
-  conditions: [win]
-
+  models:
+  - smollm2-1.7b
+  - qwen2.5-3b
+  - gemma4-e2b
+  - gemma4-e4b
+  max_new_tokens: 4096
+  conditions:
+  - win
 full:
-  max_new_tokens: 2048
+  max_new_tokens: 4096
   smoke: false
-  conditions: [win]
+  conditions:
+  - win

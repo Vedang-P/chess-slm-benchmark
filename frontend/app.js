@@ -79,6 +79,7 @@
       fetchFailed = false;
       const ageS = ageSeconds(state.updated_at);
       if (!Number.isFinite(ageS)) status("error", "invalid timestamp");
+      else if (ageS < -5) status("error", "clock skew · feed is in the future");
       else if (ageS > Math.max(CONFIG.REFRESH_S * 4, 180)) status("stale", "stale · " + Math.round(ageS / 60) + "m ago");
       else status("live", "live · " + timeAgo(state.updated_at));
       render();
@@ -120,8 +121,9 @@
   function parseTimestamp(value) {
     if (typeof value !== "string" || !value.trim()) return NaN;
     const text = value.trim();
-    const withZone = /(?:Z|[+-]\d\d:\d\d)$/i.test(text) ? text : `${text}Z`;
-    return Date.parse(withZone);
+    // New monitor payloads carry an explicit UTC suffix. Legacy snapshots do
+    // not, so preserve the browser-local interpretation for those snapshots.
+    return Date.parse(text);
   }
 
   function ageSeconds(value) {
@@ -218,7 +220,7 @@
       $("errorBanner").hidden = true;
       $("clockDigits").textContent = "00:00:00";
       $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no model scores yet — awaiting completed position cells</div>`;
-      $("cellsBody").innerHTML = `<tr><td colspan="9" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
+      $("cellsBody").innerHTML = `<tr><td colspan="10" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
       $("tableCount").textContent = "0 cells";
       $("footRepo").textContent = state ? `repo: ${state.repo || "—"}` : "no signal";
       return;
@@ -252,7 +254,7 @@
     const gameCells = cells.filter((c) => c.game && c.game.win_rate != null);
 
     $("kCells").textContent = `${p.cells_done ?? 0}`;
-    $("kCellsSub").textContent = `of ${p.cells_total ?? "?"} cells`;
+    $("kCellsSub").textContent = `of ${p.cells_total ?? "?"} cells${p.cells_failed ? ` · ${p.cells_failed} failed` : ""}`;
     $("kLegal").textContent = fmtPct(weightedCellMetricAvg(legalCells, "legal_rate"));
     $("kLegalSub").textContent = `${legalCells.length} cells`;
     $("kTactics").textContent = fmtPct(avg(Object.values(mateVals)));
@@ -514,7 +516,7 @@
     const cells = state.cells || [];
     $("tableCount").textContent = `${cells.length} cells`;
     if (!cells.length) {
-      body.innerHTML = `<tr><td colspan="9" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
+      body.innerHTML = `<tr><td colspan="10" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
       return;
     }
     const rows = [];
@@ -529,6 +531,7 @@
           <td class="mono">${escapeHtml(c.model)}</td>
           <td>${escapeHtml(c.task)}</td>
           <td><span class="dim">${escapeHtml(c.variant)}</span></td>
+          <td><span class="dim">game</span></td>
           <td class="num mono">${fmtNum(g.n)}</td>
           <td class="num mono dim">—</td>
           <td class="num mono ${g.legal_rate > 0.3 ? "pos" : g.legal_rate > 0 ? "warn" : "neg"}">${fmtPct(g.legal_rate)}</td>
@@ -537,22 +540,25 @@
         </tr>`);
         continue;
       }
-      const m = c.win;
-      if (!m) continue;
-      const parse = num(m.parse_rate), legal = num(m.legal_rate), comp = num(m.compliance_of_legal);
-      rows.push(`<tr>
-        <td class="num mono dim">${n}</td>
-        <td class="mono">${escapeHtml(c.model)}</td>
-        <td>${escapeHtml(c.task)}</td>
-        <td><span class="dim">${escapeHtml(c.variant)}</span></td>
-        <td class="num mono">${fmtNum(m.n)}</td>
-        <td class="num mono ${parse > 0.5 ? "pos" : "neg"}">${fmtPct(parse)}</td>
-        <td class="num mono ${legal > 0.3 ? "pos" : legal > 0 ? "warn" : "neg"}">${fmtPct(legal)}</td>
-        <td class="num mono ${comp > 0.3 ? "pos" : comp > 0 ? "warn" : "dim"}">${fmtPct(comp)}</td>
-        <td><span class="cell-done">done</span></td>
-      </tr>`);
+      for (const condition of ["win", "lose"]) {
+        const m = c[condition];
+        if (!m || !Object.keys(m).length) continue;
+        const parse = num(m.parse_rate), legal = num(m.legal_rate), comp = num(m.compliance_of_legal);
+        rows.push(`<tr>
+          <td class="num mono dim">${n}</td>
+          <td class="mono">${escapeHtml(c.model)}</td>
+          <td>${escapeHtml(c.task)}</td>
+          <td><span class="dim">${escapeHtml(c.variant)}</span></td>
+          <td><span class="dim">${condition}</span></td>
+          <td class="num mono">${fmtNum(m.n)}</td>
+          <td class="num mono ${parse > 0.5 ? "pos" : "neg"}">${fmtPct(parse)}</td>
+          <td class="num mono ${legal > 0.3 ? "pos" : legal > 0 ? "warn" : "neg"}">${fmtPct(legal)}</td>
+          <td class="num mono ${comp > 0.3 ? "pos" : comp > 0 ? "warn" : "dim"}">${fmtPct(comp)}</td>
+          <td><span class="cell-done">done</span></td>
+        </tr>`);
+      }
     }
-    body.innerHTML = rows.join("") || `<tr><td colspan="9" class="empty">no scored cells yet</td></tr>`;
+    body.innerHTML = rows.join("") || `<tr><td colspan="10" class="empty">no scored cells yet</td></tr>`;
   }
 
   // ---------------- live board ----------------
@@ -761,8 +767,8 @@
     const cot = live.cot_requested === true || /think step by step/i.test(live.prompt || "");
     const generating = live.phase === "generating" && !sampleDone(live);
     $("liveGenerationLabel").textContent = generating
-      ? (cot ? "reasoning + final answer · generating" : "model output · generating")
-      : (cot ? "reasoning + final answer" : "model output · answer-only");
+      ? (cot ? "reasoning requested · generating" : "model output · generating")
+      : (cot ? "reasoning requested · raw completion" : "model output · answer-only");
     $("liveGenerationNote").textContent = generating
       ? (cot ? "generation is in progress; raw output will appear when published" : "answer-only generation is in progress")
       : cot
@@ -822,7 +828,7 @@
     }
     $("liveIntegrity").hidden = false;
     $("liveIntegrity").className = "live-integrity ok";
-    $("liveIntegrity").textContent = `position verified · ${live.record_id || live.position_id || "unknown record"}`;
+    $("liveIntegrity").textContent = `position snapshot verified · ${live.record_id || live.position_id || "unknown record"}`;
     renderBoard(live);
     $("liveCaption").textContent = sampleDone(live) ? `completed · ${live.updated_at || ""}` : "generating…";
   }
