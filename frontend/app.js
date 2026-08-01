@@ -121,9 +121,13 @@
   function parseTimestamp(value) {
     if (typeof value !== "string" || !value.trim()) return NaN;
     const text = value.trim();
-    // New monitor payloads carry an explicit UTC suffix. Legacy snapshots do
-    // not, so preserve the browser-local interpretation for those snapshots.
-    return Date.parse(text);
+    if (/(?:Z|[+-]\d\d:\d\d)$/i.test(text)) return Date.parse(text);
+    // Legacy snapshots omit a timezone. Prefer the interpretation that is not
+    // in the future, since Kaggle and the browser may use different zones.
+    const local = Date.parse(text);
+    const utc = Date.parse(`${text}Z`);
+    if (local > Date.now() + 5000 && utc <= Date.now() + 5000) return utc;
+    return local;
   }
 
   function ageSeconds(value) {
