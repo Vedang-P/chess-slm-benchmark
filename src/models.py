@@ -157,6 +157,12 @@ class HFModel:
             gen_kwargs["temperature"] = temperature
             gen_kwargs["top_p"] = top_p
             gen_kwargs["repetition_penalty"] = repetition_penalty
+        elif self.is_gemma4:
+            # Gemma 4 degenerates into repetition loops under greedy decoding
+            # ("Black's pieces are: are: Rb8, Rb8, ..." cycling forever) and
+            # burns the whole budget without reaching EOS or an answer. A mild
+            # penalty breaks the loop even in greedy mode.
+            gen_kwargs["repetition_penalty"] = 1.15
         with torch.no_grad():
             out = self.model.generate(**gen_kwargs)
         output_ids = out[0][input_len:]

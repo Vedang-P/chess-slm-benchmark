@@ -71,7 +71,8 @@ def build_cells(check: bool, pilot: bool = False) -> list:
         "REPRESENTATION PILOT (pick the best prompt format)" if pilot else "FULL RUN (paper data)")
     SWEEP_FLAG = "--check" if check else ""
     T_ENGINE = 10 if check else 60
-    T_SWEEP = 50 if check else 12 * 60  # check: 6 models x 6 cells incl. model loads
+    T_SWEEP = 100 if check else 12 * 60  # check: 6 models x 6 cells incl. model loads
+                                          # (gemma at 4096 tokens + rep-penalty can take ~15 min/cell)
 
     cells = [
         _md(f"# SLM Chess Capability Benchmark @ NeurIPS 2026 — {MODE_TAG}\n\n"
