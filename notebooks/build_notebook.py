@@ -73,7 +73,7 @@ def build_cells(check: bool) -> list:
     T_SWEEP = 25 if check else 12 * 60  # 12h cap for the full sweep
 
     cells = [
-        _md(f"# Anti-Goal Chess Benchmark @ NeurIPS 2026 — {MODE_TAG}\n\n"
+        _md(f"# SLM Chess Capability Benchmark @ NeurIPS 2026 — {MODE_TAG}\n\n"
             "Paired win/lose small-model chess study (see README). "
             f"Results land in `{R}/` and are zipped for download.\n"
             "- Positions + exact oracles: committed (`data/positions/`), generated once by `scripts/generate_positions.py`.\n"
