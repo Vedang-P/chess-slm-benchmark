@@ -1,8 +1,8 @@
 # Chess Benchmark — Live Monitor Dashboard
 
 Static dashboard for the anti-goal chess benchmark sweep running on Kaggle.
-No build step — plain HTML/CSS/JS + Chart.js (CDN). Deploy to Cloudflare
-Pages or Vercel as-is.
+No build step — plain HTML/CSS/JS + Chart.js (CDN). Deploy to Cloudflare Pages
+as-is.
 
 ## How it gets data
 
@@ -25,20 +25,11 @@ The dashboard polls those files over `raw.githubusercontent.com` (CORS `*`).
 
 ## Deploy
 
-### Cloudflare Pages (recommended, free)
+### Cloudflare Pages
 ```bash
 npx wrangler pages deploy frontend/ --project-name chess-bench-live
 ```
-or: Cloudflare dashboard → Pages → Create → Direct upload → drag the `frontend/` folder.
-
-### Vercel
-```bash
-cd frontend && npx vercel --prod
-```
-
-### Or GitHub Pages (zero config)
-Serve `frontend/` from any branch of the public repo (Settings → Pages → set
-source folder), or push the dashboard to a `gh-pages` branch.
+Or: Cloudflare dashboard → Pages → Create → Direct upload → drag the `frontend/` folder.
 
 ## Local dev
 

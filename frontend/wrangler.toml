@@ -1,10 +1,7 @@
 # Cloudflare Pages static site
 name = "chess-bench-live"
 compatibility_date = "2026-01-01"
-
-[build]
-# served as-is (no build step); command omitted
-output_dir = "."
+pages_build_output_dir = "."
 
 [env]
 # none required — the dashboard reads the public monitor repo directly

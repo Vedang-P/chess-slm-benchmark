@@ -45,6 +45,8 @@ class HFModel:
         self.system_prompt = system_prompt
         self.model = None
         self.tokenizer = None
+        self.processor = None
+        self.is_gemma4 = model_key in ("gemma4-e2b", "gemma4-e4b")
 
     def load(self):
         if self.smoke_test:
@@ -52,15 +54,31 @@ class HFModel:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-        quant = BitsAndBytesConfig(
-            load_in_4bit=True, bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16,
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_id, quantization_config=quant, device_map={"": 0},
-            torch_dtype=torch.bfloat16,
-        )
+        if self.is_gemma4:
+            # Gemma 4 E2B/E4B are multimodal Gemma4ForConditionalGeneration
+            # checkpoints: the model card's documented path is AutoProcessor +
+            # AutoModelForImageTextToText. Load in bf16 WITHOUT quantization
+            # (E2B ~4.3GB, E4B ~8.6GB — both fit the T4 16GB alone) to avoid
+            # bitsandbytes-vs-VLM incompatibilities, and disable thinking so
+            # the model answers directly instead of burning the budget on
+            # <|channel>thought reasoning (its default behavior).
+            from transformers import AutoModelForImageTextToText, AutoProcessor
+
+            self.processor = AutoProcessor.from_pretrained(self.model_id)
+            self.tokenizer = self.processor.tokenizer
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                self.model_id, device_map={"": 0}, torch_dtype=torch.bfloat16,
+            )
+        else:
+            quant = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16,
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_id, quantization_config=quant, device_map={"": 0},
+                torch_dtype=torch.bfloat16,
+            )
         self.model.eval()
 
     def generate(self, prompt: str, max_new_tokens: int = 512,
@@ -82,14 +100,28 @@ class HFModel:
         if self.system_prompt:
             messages.append({"role": "system", "content": self.system_prompt})
         messages.append({"role": "user", "content": prompt})
-        inputs = self.tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
-        ).to(self.model.device)
+        if self.is_gemma4:
+            # Gemma 4: render with the processor's chat template and
+            # THINKING DISABLED — otherwise E2B/E4B spend the entire token
+            # budget on <|channel>thought reasoning and never emit the
+            # answer (observed: parse_rate 0.0 at 1024 tokens).
+            inputs = self.processor.apply_chat_template(
+                messages, tokenize=True, return_dict=True, return_tensors="pt",
+                add_generation_prompt=True, enable_thinking=False,
+            ).to(self.model.device)
+            decode_fn = self.processor.decode
+            pad_token_id = self.processor.tokenizer.eos_token_id
+        else:
+            inputs = self.tokenizer.apply_chat_template(
+                messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
+            ).to(self.model.device)
+            decode_fn = self.tokenizer.decode
+            pad_token_id = self.tokenizer.eos_token_id
         input_len = inputs["input_ids"].shape[-1]
         do_sample = temperature > 0.0
         gen_kwargs = dict(**inputs, max_new_tokens=max_new_tokens,
                           do_sample=do_sample,
-                          pad_token_id=self.tokenizer.eos_token_id)
+                          pad_token_id=pad_token_id)
         if do_sample:
             gen_kwargs["temperature"] = temperature
             gen_kwargs["top_p"] = top_p
@@ -97,7 +129,7 @@ class HFModel:
         with torch.no_grad():
             out = self.model.generate(**gen_kwargs)
         output_ids = out[0][input_len:]
-        content = self.tokenizer.decode(output_ids, skip_special_tokens=True)
+        content = decode_fn(output_ids, skip_special_tokens=True)
         return {
             "content": content,
             "input_tokens": input_len,

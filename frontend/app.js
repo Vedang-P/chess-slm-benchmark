@@ -450,7 +450,10 @@
     const toSq = move ? move.slice(2, 4) : null;
     const verdictClass = sample && sample.status === "legal"
       ? (sample.compliance ? "correct" : "wrong") : null;
-    el.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    // Explicit rows keep empty ranks the same height as ranks with pieces.
+    const track = `repeat(${n}, minmax(0, 1fr))`;
+    el.style.gridTemplateColumns = track;
+    el.style.gridTemplateRows = track;
     let html = "";
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
