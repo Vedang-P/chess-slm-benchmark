@@ -136,6 +136,16 @@ class Monitor:
         lines = lines[-HISTORY_CAP:]
         hist.write_text("\n".join(lines) + "\n")
 
+    def _log_push_error(self, reason: str) -> None:
+        """Persist API failure reasons so they can be inspected after the run
+        (the notebook zips monitor/, which includes this log)."""
+        try:
+            MONITOR_DIR.mkdir(exist_ok=True)
+            with open(MONITOR_DIR / "push_errors.log", "a") as f:
+                f.write(f"{_ts()} {reason}\n")
+        except Exception:
+            pass
+
     def _push(self) -> None:
         """Contents-API upload to the PUBLIC live repo (works from any machine
         with GITHUB_TOKEN/GH_TOKEN); falls back to a git push of the private
@@ -148,13 +158,17 @@ class Monitor:
                 self._push_via_api(token)
                 return
             except Exception as e:
-                print(f"monitor: contents-API push failed ({e}) — retrying once", flush=True)
+                reason = f"{type(e).__name__}: {e}"
+                print(f"monitor: contents-API push failed ({reason}) — retrying once", flush=True)
+                self._log_push_error(reason)
                 time.sleep(2)
                 try:
                     self._push_via_api(token)
                     return
                 except Exception as e2:
-                    print(f"monitor: contents-API retry failed ({e2}) — git fallback", flush=True)
+                    reason2 = f"{type(e2).__name__}: {e2}"
+                    print(f"monitor: contents-API retry failed ({reason2}) — git fallback", flush=True)
+                    self._log_push_error(reason2)
         if not (ROOT / ".git").exists():
             print("monitor: not a git repo — push skipped", flush=True)
             return
