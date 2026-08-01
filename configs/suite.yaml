@@ -17,19 +17,18 @@ tasks:
   sm-5x5-draw:    {file: sm-5x5-draw.json,    full_n: 40, check_n: 3, variants: [grid]}
   # --- full-game play (model vs random opponent) ---
   playout-5x5:    {game: true, full_n: 10, check_n: 2, variants: [grid]}
-  ttt:            {game: true, full_n: 10, check_n: 2, variants: [grid]}
-  c4:             {game: true, full_n: 10, check_n: 2, variants: [grid]}
 
 check:
   models: [smollm2-1.7b]
   max_new_tokens: 256
 
 full:
-  max_new_tokens: 512
+  # No artificial thinking limit on position tasks: 2048 tokens is effectively
+  # unlimited for these models — truncating mid-CoT would confound the
+  # capability measurement (a truncated answer scores as a failure).
+  max_new_tokens: 2048
+  # Full-game playouts keep a per-ply budget (generation-per-ply dominates
+  # runtime); 1024 tokens per move is still generous.
+  game_max_new_tokens: 1024
   smoke: false
-  conditions: [win]  # capability-only; the LOSE machinery stays in the codebase
-
-# per-model generation budgets: reasoning models emit long CoT — capping
-# them cuts wall-clock time without hurting short chess answers.
-model_max_tokens:
-  deepseek-r1-distill-qwen-1.5b: 384
+  conditions: [win]  # capability-only

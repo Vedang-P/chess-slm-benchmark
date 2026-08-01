@@ -87,12 +87,58 @@ def _fen_of(rec: Dict[str, object]) -> str:
     return fen_of_board(Board(rec["n"], pieces, rec["turn"]))
 
 
+def _bitboards(rec: Dict[str, object]) -> str:
+    """64-bit bitboards per piece type, a1 = LSB, rendered as 8 rows of 8 bits
+    (rank 8 first) — the standard engine representation."""
+    from src.benchmarks.games.fen import parse_fen
+
+    board = parse_fen(rec["fen"]) if rec.get("fen") else None
+    if board is None:
+        pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
+                  for p in rec["pieces"]}
+        from src.benchmarks.games.rules import Board
+
+        board = Board(rec["n"], pieces, rec["turn"])
+    out = []
+    for color in ("w", "b"):
+        for kind in ("K", "Q", "R", "B", "N", "P"):
+            bits = 0
+            for (r, c), (pc, pk) in board.pieces.items():
+                if pc == color and pk == kind:
+                    bits |= 1 << (r * 8 + c)
+            rows = []
+            for rank in range(7, -1, -1):
+                row = "".join("1" if bits & (1 << (rank * 8 + file)) else "0"
+                              for file in range(8))
+                rows.append(row)
+            out.append(f"{color}{kind}: " + " ".join(rows))
+    return "\n".join(out)
+
+
+def _piece_list(rec: Dict[str, object]) -> str:
+    """Plain piece list, e.g. 'White: Ke1, Qd1 ...' — no board geometry."""
+    groups = {"w": [], "b": []}
+    for p in rec["pieces"]:
+        groups[p["color"]].append(f"{p['kind']}{p['sq']}")
+    return (f"White pieces: {', '.join(groups['w']) or 'none'}.\n"
+            f"Black pieces: {', '.join(groups['b']) or 'none'}.")
+
+
 def _presentation(rec: Dict[str, object], variant: str) -> str:
     n = rec["n"]
     if variant == "fen":
         if n != 8:
             raise ValueError(f"FEN variant requires 8x8, got {n}x{n}")
         return f"The position in FEN notation: {_fen_of(rec)}"
+    if variant == "bitboard":
+        if n != 8:
+            raise ValueError(f"bitboard variant requires 8x8, got {n}x{n}")
+        return ("The position as bitboards (one 8x8 grid of bits per piece "
+                "type, a1 is the first bit of the first row, rank 8 first; "
+                "1 = a piece of that type stands on the square):\n"
+                + _bitboards(rec))
+    if variant == "list":
+        return _piece_list(rec)
     return ("Here is the current position (each cell shows the piece or '..'):\n"
             + _render_board(rec["pieces"], n))
 

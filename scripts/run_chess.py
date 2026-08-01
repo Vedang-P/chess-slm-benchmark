@@ -111,7 +111,8 @@ def main() -> None:
     ap.add_argument("--model", default="smollm2-1.7b")
     ap.add_argument("--task", required=True,
                     choices=sorted(TASK_FILES) + sorted(GAME_TASKS))
-    ap.add_argument("--prompt-variant", default="grid", choices=["grid", "fen"])
+    ap.add_argument("--prompt-variant", default="grid",
+                    choices=["grid", "fen", "bitboard", "list"])
     ap.add_argument("--n", type=int, default=0, help="limit positions (0 = all)")
     ap.add_argument("--conditions", nargs="+", default=None)
     ap.add_argument("--max_new_tokens", type=int, default=DEFAULT_MAX_NEW_TOKENS)

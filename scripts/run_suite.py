@@ -250,6 +250,8 @@ def main() -> None:
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--models", nargs="+", default=None)
     ap.add_argument("--tasks", nargs="+", default=None)
+    ap.add_argument("--config", default="configs/suite.yaml",
+                    help="sweep definition (default configs/suite.yaml)")
     ap.add_argument("--output_dir", default="results/chess")
     ap.add_argument("--resume", action="store_true",
                     help="skip cells whose summary.json already exists (loads them "
@@ -258,12 +260,12 @@ def main() -> None:
     ap.add_argument("--monitor-interval", type=int, default=120)
     args = ap.parse_args()
 
-    cfg = yaml.safe_load((ROOT / "configs" / "suite.yaml").read_text())
+    cfg = yaml.safe_load((ROOT / args.config).read_text())
     mode = cfg["check"] if args.check else cfg["full"]
     models = args.models or ([mode["models"][0]] if args.check else cfg["models"])
     tasks = args.tasks or list(cfg["tasks"])
     max_tokens = mode.get("max_new_tokens", 512)
-    model_max_tokens = cfg.get("model_max_tokens", {})
+    game_tokens = mode.get("game_max_new_tokens", max_tokens)
 
     cells = []
     for task in tasks:
@@ -288,7 +290,6 @@ def main() -> None:
     for model in models:
         for task, variant in cells:
             n = cfg["tasks"][task]["check_n"] if args.check else cfg["tasks"][task]["full_n"]
-            mt = model_max_tokens.get(model, max_tokens)
             summary_path = ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json"
             if args.resume and summary_path.exists():
                 summary = json.loads(summary_path.read_text())
@@ -301,6 +302,7 @@ def main() -> None:
                     monitor.cell_done(cell_rows)
                 continue
             is_game = bool(cfg["tasks"][task].get("game", False))
+            mt = game_tokens if is_game else max_tokens
             cmd = [
                 sys.executable, str(ROOT / "scripts" / "run_chess.py"),
                 "--model", model, "--task", task, "--prompt-variant", variant,

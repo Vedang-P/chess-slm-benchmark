@@ -22,10 +22,22 @@ open models (1.5–4B) can do in chess and simple games.
 | mate2-lichess | 8x8, 224 real CC0 puzzles | lichess solution ('only moves') | tactics (mate-in-2, first move) |
 | bestmove-8x8 | 8x8, 40 positions | **Stockfish 18** (local engine) | move strength (top-1 accuracy) |
 | sm-3x3-win / sm-5x5-win / sm-5x5-draw | 3x3/5x5, K+X vs K | exact retrograde values | endgame understanding |
-| playout-5x5 / ttt / c4 | full games vs random | our engines | sustained play, completion, win rate |
+| playout-5x5 | full chess games vs random | our engine | sustained play, completion, win rate |
 
-All 8x8 tasks run in **two representations** (rendered grid vs FEN notation) to measure
-representation dependence. Every metric uses external oracles — no model self-judgment.
+**Representation control.** 8x8 tasks support four prompt representations — `grid`
+(rendered board), `fen`, `bitboard` (64-bit bitboards per piece type), `list` (piece list).
+Before the full sweep, a **representation pilot** (`configs/pilot.yaml` →
+`kaggle_pilot.ipynb`) measures which representation small models actually understand;
+`analyze_pilot.py` picks the winner, and the full sweep uses it (plus the runner-up for
+the paper's ablation). If a model fails in every representation, the failure is
+capability, not prompt format.
+
+**No artificial thinking limits.** Position tasks run with a 2048-token generation
+budget (effectively unlimited for these models) — truncating a model's chain of thought
+mid-reasoning would confound the measurement. Full-game playouts use 1024 tokens per
+move (per-ply generation dominates runtime there).
+
+Every metric uses external oracles — no model self-judgment.
 
 ## Repo map
 
@@ -83,8 +95,12 @@ python scripts/run_suite.py --smoke --models smollm2-1.7b   # pipeline smoke tes
 1. Attach `HF_TOKEN` (Gemma models) and `GITHUB_TOKEN` (private-repo clone) secrets —
    attach in the notebook's Secrets panel, **save**, **restart kernel**.
 2. Upload `notebooks/kaggle_check.ipynb` — engine tests + parity + tiny sweep.
-3. Upload `notebooks/kaggle_run.ipynb` — full sweep; streams to the dashboard and
+3. Upload `notebooks/kaggle_pilot.ipynb` — **representation pilot** (2 models × 3 tasks
+   × 4 representations, ~1-2h): picks the prompt format the full sweep should use.
+4. Upload `notebooks/kaggle_run.ipynb` — full sweep; streams to the dashboard and
    backs up every cell to the public live repo (crash-safe: recovery cell + `--resume`).
+5. Locally: `python scripts/analyze_pilot.py` (after step 3) and
+   `python scripts/analyze_results.py` (after step 4).
 
 ## Live monitoring
 

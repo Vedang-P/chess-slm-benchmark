@@ -65,9 +65,10 @@ def run_stage(name, args, timeout_min):
 '''.strip()
 
 
-def build_cells(check: bool) -> list:
+def build_cells(check: bool, pilot: bool = False) -> list:
     R = "results_check" if check else "results"
-    MODE_TAG = "CHECK MODE (tiny, raises on failure)" if check else "FULL RUN (paper data)"
+    MODE_TAG = "CHECK MODE (tiny, raises on failure)" if check else (
+        "REPRESENTATION PILOT (pick the best prompt format)" if pilot else "FULL RUN (paper data)")
     SWEEP_FLAG = "--check" if check else ""
     T_ENGINE = 10 if check else 60
     T_SWEEP = 25 if check else 12 * 60  # 12h cap for the full sweep
@@ -180,7 +181,7 @@ else:
             "dashboard repo (monitor/state.json, results/*). `--resume` skips cells whose "
             "summary already exists (recovered in the previous cell)."),
         _code(f"""sweep_args = [sys.executable, "scripts/run_suite.py", "--output_dir", "{R}/chess",
-              "--monitor", "--monitor-interval", "120"]
+              "--monitor", "--monitor-interval", "120"{", '--config', 'configs/pilot.yaml'" if pilot else ""}]
 if {"True" if check else "False"}:
     sweep_args.append("--check")
 else:
@@ -229,9 +230,14 @@ print("zipped {R}.zip")""")),
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="emit kaggle_check.ipynb")
+    ap.add_argument("--pilot", action="store_true", help="emit kaggle_pilot.ipynb")
     args = ap.parse_args()
-    out = NB_DIR / ("kaggle_check.ipynb" if args.check else "kaggle_run.ipynb")
-    cells = build_cells(check=args.check)
+    if args.pilot:
+        out = NB_DIR / "kaggle_pilot.ipynb"
+        cells = build_cells(check=False, pilot=True)
+    else:
+        out = NB_DIR / ("kaggle_check.ipynb" if args.check else "kaggle_run.ipynb")
+        cells = build_cells(check=args.check)
     out.write_text(json.dumps(_notebook(cells), indent=1))
     print(f"wrote {out} ({len(cells)} cells)")
 
