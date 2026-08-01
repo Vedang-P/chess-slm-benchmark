@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import glob
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -22,6 +23,26 @@ TASKS = ["cap-legal-8x8", "bestmove-8x8", "mate1-lichess"]
 
 def _fmt(x):
     return "—" if x is None else f"{x * 100:.1f}%"
+
+
+def _update_suite(winner: str, runner: str, had_data: bool) -> bool:
+    """Rewrite the 8x8 tasks' variant lists in configs/suite.yaml to
+    [winner, runner]. Text-surgical (comments preserved). Only applied when
+    the pilot produced real data — never on smoke/empty runs."""
+    if not had_data or not winner:
+        return False
+    path = Path("configs/suite.yaml")
+    text = path.read_text()
+    changed = False
+    for task in ["cap-legal-8x8", "mate1-lichess", "mate2-lichess", "bestmove-8x8"]:
+        pat = re.compile(rf"^(\s*{re.escape(task)}:.*?variants:\s*)\[[^\]]*\]", re.M)
+        new_text, n = pat.subn(lambda m: m.group(1) + f"[{winner}, {runner}]", text)
+        if n:
+            text = new_text
+            changed = True
+    if changed:
+        path.write_text(text)
+    return changed
 
 
 def main() -> None:
@@ -84,9 +105,14 @@ def main() -> None:
 
     # recommendation
     if agg:
+        comp_count = sum(1 for k in runs
+                         if runs[k]["metrics"]["conditions"]["win"].get("compliance_of_legal") is not None)
+        had_data = comp_count >= 6  # real (non-smoke) data guard
         winner = max(agg, key=lambda k: agg[k] if agg[k] is not None else -1)
         sorted_v = sorted(agg, key=lambda k: agg[k] if agg[k] is not None else -1, reverse=True)
         top2 = sorted_v[:2]
+        runner = top2[1] if len(top2) > 1 else winner
+        updated = _update_suite(winner, runner, had_data)
         lines += [
             "## Recommendation",
             "",
@@ -96,6 +122,12 @@ def main() -> None:
             "8x8 tasks; the remaining representations are dropped.",
             "- If compliance is near-zero for ALL variants, the failure is "
             "capability, not representation.",
+            "",
+            ("- `configs/suite.yaml` **auto-updated**: 8x8 tasks now use "
+             f"`[{winner}, {runner}]` — the full sweep needs no manual edits."
+             if updated else
+             "- `configs/suite.yaml` NOT modified (pilot data looked like a "
+             "smoke/empty run — rerun the pilot on real hardware)."),
             "",
         ]
     else:
