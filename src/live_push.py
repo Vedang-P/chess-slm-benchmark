@@ -38,8 +38,10 @@ def _get_sha(url: str, token: str) -> str | None:
 
 
 def upload_file(token: str, remote: str, data: bytes,
-                message: str | None = None) -> bool:
-    """PUT one file to the public repo. Returns True on success."""
+                message: str | None = None) -> str | None:
+    """PUT one file to the public repo. Returns None on success, or a
+    diagnostic string (HTTP code + body snippet) on failure — so the caller
+    can print/record exactly why a push failed."""
     url = f"https://api.github.com/repos/{PUBLIC_LIVE_REPO}/contents/{remote}"
     sha = _get_sha(url, token)
     payload = {
@@ -49,29 +51,31 @@ def upload_file(token: str, remote: str, data: bytes,
     }
     if sha:
         payload["sha"] = sha
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode(),
-        headers={"Authorization": f"Bearer {token}", "User-Agent": "chess-monitor",
-                 "Content-Type": "application/json"},
-        method="PUT")
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            json.load(r)
-        return True
-    except urllib.error.HTTPError as e:
-        if e.code == 409 and sha:  # stale sha race — retry once with a fresh sha
-            payload["sha"] = _get_sha(url, token)
-            req = urllib.request.Request(
-                url, data=json.dumps(payload).encode(),
-                headers={"Authorization": f"Bearer {token}", "User-Agent": "chess-monitor",
-                         "Content-Type": "application/json"},
-                method="PUT")
+
+    def _put() -> str | None:
+        req = urllib.request.Request(
+            url, data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "chess-monitor",
+                     "Content-Type": "application/json"},
+            method="PUT")
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                json.load(r)
+            return None
+        except urllib.error.HTTPError as e:
+            body = ""
             try:
-                with urllib.request.urlopen(req, timeout=30) as r:
-                    json.load(r)
-                return True
+                body = e.read().decode()[:200]
             except Exception:
-                return False
-        return False
-    except Exception:
-        return False
+                pass
+            return f"HTTP {e.code} {body}"
+        except Exception as e:
+            return f"{type(e).__name__}: {e}"
+
+    err = _put()
+    if err is None:
+        return None
+    if err.startswith("HTTP 409") and sha:  # stale sha race — retry once
+        payload["sha"] = _get_sha(url, token)
+        return _put()
+    return err

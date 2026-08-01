@@ -240,8 +240,10 @@ class Monitor:
                             _BytesFile(json.dumps(index, indent=1).encode())))
         for remote, local in uploads:
             data = local.data if isinstance(local, _BytesFile) else local.read_bytes()
-            if not upload_file(token, remote, data):
-                print(f"monitor: upload failed for {remote}", flush=True)
+            err = upload_file(token, remote, data)
+            if err:
+                print(f"monitor: upload failed for {remote}: {err}", flush=True)
+                self._log_push_error(f"{remote}: {err}")
                 continue
             if isinstance(local, Path):
                 self.uploaded.add(remote)
