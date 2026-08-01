@@ -13,8 +13,9 @@ tasks:
   bestmove-8x8:   {file: bestmove-8x8.json,   full_n: 40, check_n: 3, variants: [grid, fen]}
 
 check:
-  models: [smollm2-1.7b]
+  models: [smollm2-1.7b, qwen2.5-3b]
   max_new_tokens: 256
+  conditions: [win]
 
 full:
   # No artificial thinking limit on position tasks: 2048 tokens is effectively

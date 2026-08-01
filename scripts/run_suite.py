@@ -262,7 +262,7 @@ def main() -> None:
 
     cfg = yaml.safe_load((ROOT / args.config).read_text())
     mode = cfg["check"] if args.check else cfg["full"]
-    models = args.models or ([mode["models"][0]] if args.check else cfg["models"])
+    models = args.models or (mode["models"] if args.check else cfg["models"])
     tasks = args.tasks or list(cfg["tasks"])
     max_tokens = mode.get("max_new_tokens", 512)
     game_tokens = mode.get("game_max_new_tokens", max_tokens)
