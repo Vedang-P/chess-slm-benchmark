@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -145,17 +146,31 @@ class Monitor:
                 self._push_via_api(token)
                 return
             except Exception as e:
-                print(f"monitor: contents-API push failed ({e}) — git fallback", flush=True)
+                print(f"monitor: contents-API push failed ({e}) — retrying once", flush=True)
+                time.sleep(2)
+                try:
+                    self._push_via_api(token)
+                    return
+                except Exception as e2:
+                    print(f"monitor: contents-API retry failed ({e2}) — git fallback", flush=True)
         if not (ROOT / ".git").exists():
             print("monitor: not a git repo — push skipped", flush=True)
             return
         steps = [
             ["git", "add", "-f", "monitor/state.json", "monitor/history.jsonl"],
-            ["git", "commit", "--quiet", "-m", f"monitor {_ts()}"],
+            # identity-free commit: Kaggle containers have no git user configured
+            ["git", "-c", "user.name=chess-monitor",
+             "-c", "user.email=chess-monitor@users.noreply.github.com",
+             "commit", "--quiet", "-m", f"monitor {_ts()}"],
             ["git", "push", "--force", "origin", f"HEAD:{MONITOR_BRANCH}"],
         ]
         for cmd in steps:
-            r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+            env = {**os.environ,
+                   "GIT_AUTHOR_NAME": "chess-monitor",
+                   "GIT_AUTHOR_EMAIL": "chess-monitor@users.noreply.github.com",
+                   "GIT_COMMITTER_NAME": "chess-monitor",
+                   "GIT_COMMITTER_EMAIL": "chess-monitor@users.noreply.github.com"}
+            r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env=env)
             if r.returncode != 0:
                 if cmd[1] == "commit" and "nothing to commit" in r.stderr:
                     continue  # no change since last push — still push (harmless)
