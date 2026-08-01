@@ -120,9 +120,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "d2f3",
-   "cp": -70,
+   "cp": -79,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -201,9 +201,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "g5g4",
-   "cp": 42,
+   "cp": 20,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -302,9 +302,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "f1f2",
-   "cp": -9,
+   "cp": -10,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -483,9 +483,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "b8c6",
-   "cp": -41,
+   "cp": -20,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -584,9 +584,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "f1c1",
-   "cp": -65,
+   "cp": -62,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -655,9 +655,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "a7e7",
-   "cp": 138,
+   "cp": 181,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -826,9 +826,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "b8c6",
-   "cp": 13,
+   "cp": 22,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -987,9 +987,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "a4a5",
-   "cp": 37,
+   "cp": 55,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1098,9 +1098,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "c6b7",
-   "cp": -540,
+   "cp": -641,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1229,9 +1229,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "d7f5",
-   "cp": -201,
+   "cp": -197,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1344,15 +1344,15 @@
    }
   ],
   "win_moves": [
-   "e8d8"
+   "e8f8"
   ],
   "lose_moves": [],
   "over_budget": false,
   "task_extra": {
-   "best_move": "e8d8",
-   "cp": -411,
+   "best_move": "e8f8",
+   "cp": -503,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1471,9 +1471,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "c4c5",
-   "cp": 143,
+   "cp": 123,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1597,9 +1597,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "g1h1",
-   "cp": 705,
+   "cp": 718,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1723,9 +1723,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "e3f4",
-   "cp": 19,
+   "cp": -23,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1829,9 +1829,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "d8d5",
-   "cp": -223,
+   "cp": -257,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -1965,9 +1965,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "c8e6",
-   "cp": 26,
+   "cp": 8,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2101,9 +2101,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "c5d6",
-   "cp": 87,
+   "cp": 92,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2187,9 +2187,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "d1a1",
-   "cp": 362,
+   "cp": 378,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2283,9 +2283,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "c5f5",
-   "cp": -383,
+   "cp": -385,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2348,15 +2348,15 @@
    }
   ],
   "win_moves": [
-   "e5g4"
+   "b1c2"
   ],
   "lose_moves": [],
   "over_budget": false,
   "task_extra": {
-   "best_move": "e5g4",
+   "best_move": "b1c2",
    "cp": 0,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2445,9 +2445,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "g3g4",
-   "cp": 118,
+   "cp": 153,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2561,9 +2561,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "c5d6",
-   "cp": -530,
+   "cp": -548,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2696,15 +2696,15 @@
    }
   ],
   "win_moves": [
-   "f2f3"
+   "e3f4"
   ],
   "lose_moves": [],
   "over_budget": false,
   "task_extra": {
-   "best_move": "f2f3",
-   "cp": 209,
+   "best_move": "e3f4",
+   "cp": 448,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2853,9 +2853,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "b5e8",
-   "cp": -59,
+   "cp": -50,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -2963,15 +2963,15 @@
    }
   ],
   "win_moves": [
-   "a1a6"
+   "a1a4"
   ],
   "lose_moves": [],
   "over_budget": false,
   "task_extra": {
-   "best_move": "a1a6",
-   "cp": -189,
+   "best_move": "a1a4",
+   "cp": -162,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -3040,9 +3040,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "f2g1",
-   "cp": 0,
+   "cp": -1,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -3166,9 +3166,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "b7c6",
-   "cp": 493,
+   "cp": 605,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -3261,15 +3261,15 @@
    }
   ],
   "win_moves": [
-   "e6e1"
+   "e6e7"
   ],
   "lose_moves": [],
   "over_budget": false,
   "task_extra": {
-   "best_move": "e6e1",
-   "cp": -568,
+   "best_move": "e6e7",
+   "cp": -555,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -3418,9 +3418,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "d1e1",
-   "cp": -4,
+   "cp": 3,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -3581,7 +3581,7 @@
    "best_move": "d2c3",
    "cp": 98,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -3675,9 +3675,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "d3g3",
-   "cp": 102,
+   "cp": 120,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
@@ -3781,13 +3781,159 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "g7g6",
-   "cp": -111,
+   "cp": -182,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
   "id": "bm-0032",
+  "source": "lichess-stockfish",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "r2q1rk1/1Q3p2/p2bbp1p/3p4/3Pp3/2N1P2P/PP1N1PP1/R4RK1 w - - 0 16",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "d2b3"
+  ],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "best_move": "d2b3",
+   "cp": 56,
+   "mate": null,
+   "depth": 18
+  }
+ },
+ {
+  "id": "bm-0033",
   "source": "lichess-stockfish",
   "n": 8,
   "turn": "b",
@@ -3902,13 +4048,13 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "e5e4",
-   "cp": 22,
+   "cp": 17,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
-  "id": "bm-0033",
+  "id": "bm-0034",
   "source": "lichess-stockfish",
   "n": 8,
   "turn": "w",
@@ -3998,13 +4144,13 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "f5e5",
-   "cp": -564,
+   "cp": -682,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
-  "id": "bm-0034",
+  "id": "bm-0035",
   "source": "lichess-stockfish",
   "n": 8,
   "turn": "b",
@@ -4149,13 +4295,13 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "c5d7",
-   "cp": -65,
+   "cp": -64,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
-  "id": "bm-0035",
+  "id": "bm-0036",
   "source": "lichess-stockfish",
   "n": 8,
   "turn": "b",
@@ -4290,13 +4436,13 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "f6g5",
-   "cp": 107,
+   "cp": 112,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
-  "id": "bm-0036",
+  "id": "bm-0037",
   "source": "lichess-stockfish",
   "n": 8,
   "turn": "w",
@@ -4423,11 +4569,11 @@
    "best_move": "g1h1",
    "cp": 24,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
-  "id": "bm-0037",
+  "id": "bm-0038",
   "source": "lichess-stockfish",
   "n": 8,
   "turn": "b",
@@ -4544,11 +4690,11 @@
    "best_move": "b4d3",
    "cp": -74,
    "mate": null,
-   "depth": 15
+   "depth": 18
   }
  },
  {
-  "id": "bm-0038",
+  "id": "bm-0039",
   "source": "lichess-stockfish",
   "n": 8,
   "turn": "b",
@@ -4713,140 +4859,9 @@
   "over_budget": false,
   "task_extra": {
    "best_move": "f8e7",
-   "cp": 72,
+   "cp": 73,
    "mate": null,
-   "depth": 15
-  }
- },
- {
-  "id": "bm-0039",
-  "source": "lichess-stockfish",
-  "n": 8,
-  "turn": "b",
-  "value": "cap",
-  "fen": "r3kbr1/1b1p1p1p/p3Pp2/8/3B4/2qB4/P1P2RPP/R2Q2K1 b q - 0 16",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "g1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c3",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "d3",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "d4",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "a6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "e6",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "d7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "f8",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "g8",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [
-   "g8g2"
-  ],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "best_move": "g8g2",
-   "cp": -250,
-   "mate": null,
-   "depth": 15
+   "depth": 18
   }
  }
 ]

@@ -15,22 +15,25 @@ open models (1.5–4B) can do in chess and simple games.
 
 ## Benchmark tasks
 
+**Active scope — the three tactical tasks:**
+
 | Task | Board | Ground truth | What it measures |
 |---|---|---|---|
-| cap-legal-8x8 | 8x8, standard positions (lichess) | our engine + python-chess | rule understanding (legality) |
-| mate1-lichess | 8x8, 262 real CC0 puzzles | exact checkmate detection | tactics (mate-in-1) |
-| mate2-lichess | 8x8, 224 real CC0 puzzles | lichess solution ('only moves') | tactics (mate-in-2, first move) |
-| bestmove-8x8 | 8x8, 40 positions | **Stockfish 18** (local engine) | move strength (top-1 accuracy) |
-| sm-3x3-win / sm-5x5-win / sm-5x5-draw | 3x3/5x5, K+X vs K | exact retrograde values | endgame understanding |
-| playout-5x5 | full chess games vs random | our engine | sustained play, completion, win rate |
+| mate1-lichess | 8x8, 262 real CC0 puzzles | exact checkmate detection | tactics: can it deliver mate in one? |
+| mate2-lichess | 8x8, 224 real CC0 puzzles | lichess solution ('only moves') | tactics: finds the mate-net first move |
+| bestmove-8x8 | 8x8, 40 positions | **Stockfish 18** (depth 18, verified vs depth 20) | move strength: matches the engine's top move |
 
-**Representation control.** 8x8 tasks support four prompt representations — `grid`
+**Staged (datasets built, not in the active sweep):** cap-legal-8x8 (legality), the 3x3/5x5
+exact endgames, and full-game playouts — these can be added back for the paper's extended
+sections without any new plumbing.
+
+**Representation control.** The three tasks support four prompt representations — `grid`
 (rendered board), `fen`, `bitboard` (64-bit bitboards per piece type), `list` (piece list).
 Before the full sweep, a **representation pilot** (`configs/pilot.yaml` →
-`kaggle_pilot.ipynb`) measures which representation small models actually understand;
-`analyze_pilot.py` picks the winner, and the full sweep uses it (plus the runner-up for
-the paper's ablation). If a model fails in every representation, the failure is
-capability, not prompt format.
+`kaggle_pilot.ipynb`, 4 models × 3 tasks × 4 representations) measures which representation
+small models actually understand; `analyze_pilot.py` picks the winner and **auto-writes it
+into `suite.yaml`**. If a model fails in every representation, the failure is capability,
+not prompt format.
 
 **No artificial thinking limits.** Position tasks run with a 2048-token generation
 budget (effectively unlimited for these models) — truncating a model's chain of thought

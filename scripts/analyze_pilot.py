@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 RESULTS = Path("results/chess")
 VARIANT_ORDER = ["grid", "fen", "bitboard", "list"]
-TASKS = ["cap-legal-8x8", "bestmove-8x8", "mate1-lichess"]
+TASKS = ["bestmove-8x8", "mate1-lichess", "mate2-lichess"]
 
 
 def _fmt(x):
@@ -34,7 +34,7 @@ def _update_suite(winner: str, runner: str, had_data: bool) -> bool:
     path = Path("configs/suite.yaml")
     text = path.read_text()
     changed = False
-    for task in ["cap-legal-8x8", "mate1-lichess", "mate2-lichess", "bestmove-8x8"]:
+    for task in ["bestmove-8x8", "mate1-lichess", "mate2-lichess"]:
         pat = re.compile(rf"^(\s*{re.escape(task)}:.*?variants:\s*)\[[^\]]*\]", re.M)
         new_text, n = pat.subn(lambda m: m.group(1) + f"[{winner}, {runner}]", text)
         if n:
