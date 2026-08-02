@@ -1,18 +1,18 @@
 {
  "repo": "Vedang-P/neuro-symbolic-pathfinding",
  "mode": "full",
- "run_id": "2026-08-02T22:07:09Z",
+ "run_id": "2026-08-02T22:18:15Z",
  "stage": "sweep",
- "started_at": "2026-08-02T22:07:09Z",
- "updated_at": "2026-08-02T22:08:52Z",
+ "started_at": "2026-08-02T22:18:15Z",
+ "updated_at": "2026-08-02T22:20:05Z",
  "progress": {
   "cells_done": 1,
   "cells_failed": 0,
   "cells_attempted": 1,
-  "cells_total": 12,
-  "fraction": 0.0833
+  "cells_total": 4,
+  "fraction": 0.25
  },
- "eta_min": 18,
+ "eta_min": 5,
  "models": [
   "deepseek-v4-flash"
  ],

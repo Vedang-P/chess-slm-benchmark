@@ -270,12 +270,15 @@ class OpenCodeGoModel:
         With on_chunk=callable(partial_dict), the client calls back with
         {content, reasoning, phase} during generation so the runner can
         write live.json snapshots (the website shows thinking at ~1 min
-        lag). Returns {content, reasoning, tokens, latency_ms, finished}."""
+        lag). Returns {content, reasoning, tokens, latency_ms, finished,
+        cache_hit, cache_miss} — the gateway's automatic prompt caching
+        (DeepSeek-style) is surfaced so we can track cache utilization."""
         t0 = time.time()
         if self.smoke_test:
             return {"content": "MOVE: a1a2", "reasoning": "",
                     "input_tokens": 0, "output_tokens": 8,
-                    "latency_ms": 1, "finished": True}
+                    "latency_ms": 1, "finished": True,
+                    "cache_hit": None, "cache_miss": None}
         payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
                    "temperature": temperature,
                    "thinking": {"type": "enabled"},
@@ -284,6 +287,7 @@ class OpenCodeGoModel:
             if stream:
                 content, reasoning = "", ""
                 n_tokens = 0
+                cache_hit = cache_miss = None
                 last_chunk_at = time.time()
                 with self._post(payload, stream=True) as resp:
                     for chunk in self._sse_chunks(resp):
@@ -293,8 +297,11 @@ class OpenCodeGoModel:
                         delta = ch[0].get("delta") or {}
                         content += delta.get("content") or ""
                         reasoning += delta.get("reasoning_content") or ""
-                        n_tokens = (chunk.get("usage") or {}).get(
-                            "completion_tokens", n_tokens)
+                        usage = chunk.get("usage") or {}
+                        n_tokens = usage.get("completion_tokens", n_tokens)
+                        if "prompt_cache_hit_tokens" in usage:
+                            cache_hit = usage.get("prompt_cache_hit_tokens")
+                            cache_miss = usage.get("prompt_cache_miss_tokens")
                         finish = ch[0].get("finish_reason")
                         if on_chunk and (time.time() - last_chunk_at >= 20
                                          or finish):
@@ -307,7 +314,9 @@ class OpenCodeGoModel:
                 data = {"choices": [{"message": {"content": content,
                                                  "reasoning_content": reasoning},
                                      "finish_reason": "stop" if content else "length"}],
-                        "usage": {"prompt_tokens": 0, "completion_tokens": n_tokens}}
+                        "usage": {"prompt_tokens": 0, "completion_tokens": n_tokens,
+                                  "prompt_cache_hit_tokens": cache_hit,
+                                  "prompt_cache_miss_tokens": cache_miss}}
                 if on_chunk:
                     on_chunk({"content": content, "reasoning": reasoning,
                               "phase": "done", "finished": True})
@@ -327,6 +336,8 @@ class OpenCodeGoModel:
                 "output_tokens": usage.get("completion_tokens", 0),
                 "latency_ms": (time.time() - t0) * 1000,
                 "finished": data["choices"][0].get("finish_reason") in ("stop", None),
+                "cache_hit": usage.get("prompt_cache_hit_tokens"),
+                "cache_miss": usage.get("prompt_cache_miss_tokens"),
             }
         except urllib.error.HTTPError as e:
             body = ""
@@ -336,11 +347,52 @@ class OpenCodeGoModel:
                 pass
             return {"content": f"ERROR HTTP {e.code}: {body}", "reasoning": "",
                     "input_tokens": 0, "output_tokens": 0,
-                    "latency_ms": (time.time() - t0) * 1000, "finished": True}
+                    "latency_ms": (time.time() - t0) * 1000, "finished": True,
+                    "cache_hit": None, "cache_miss": None}
         except Exception as e:
             return {"content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
                     "input_tokens": 0, "output_tokens": 0,
-                    "latency_ms": (time.time() - t0) * 1000, "finished": True}
+                    "latency_ms": (time.time() - t0) * 1000, "finished": True,
+                    "cache_hit": None, "cache_miss": None}
+
+    def force_answer(self, prompt: str, max_new_tokens: int = 256,
+                     temperature: float = 0.0) -> dict:
+        """Second-chance call used when the thinking pass produced no answer:
+        thinking is disabled and the model is ordered to commit to a move,
+        any move. 'No answer' is never acceptable for the benchmark's
+        comparison baseline — if this also fails, the runner falls back to
+        a legal move extracted from the reasoning (or a random legal move),
+        always flagged as a fallback."""
+        t0 = time.time()
+        commit = (prompt
+                  + "\n\nFINAL ANSWER REQUIRED: output exactly one line, "
+                    "MOVE: <from><to>. If you are not sure, still output your "
+                    "best guess — you must output a move.")
+        payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
+                   "temperature": temperature,
+                   "thinking": {"type": "disabled"},
+                   "messages": [{"role": "user", "content": commit}]}
+        try:
+            with self._post(payload) as resp:
+                data = json.load(resp)
+            msg = data["choices"][0]["message"]
+            usage = data.get("usage", {})
+            return {
+                "content": msg.get("content") or "",
+                "reasoning": msg.get("reasoning_content") or "",
+                "input_tokens": usage.get("prompt_tokens", 0),
+                "output_tokens": usage.get("completion_tokens", 0),
+                "latency_ms": (time.time() - t0) * 1000,
+                "finished": True,
+                "cache_hit": usage.get("prompt_cache_hit_tokens"),
+                "cache_miss": usage.get("prompt_cache_miss_tokens"),
+                "forced": True,
+            }
+        except Exception as e:
+            return {"content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
+                    "input_tokens": 0, "output_tokens": 0,
+                    "latency_ms": (time.time() - t0) * 1000, "finished": True,
+                    "cache_hit": None, "cache_miss": None, "forced": True}
 
 
 def make_model(model_key: str, smoke_test: bool = False):

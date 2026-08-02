@@ -793,6 +793,11 @@
     return moves;
   }
 
+  function clearArrows() {
+    const overlay = $("boardArrows");
+    if (overlay) overlay.innerHTML = "";
+  }
+
   function renderArrows(sample) {
     let overlay = $("boardArrows");
     if (!overlay) {
@@ -943,6 +948,7 @@
       $("liveBoard").style.gridTemplateColumns = "1fr";
       $("liveBoard").style.gridTemplateRows = "1fr";
       $("liveBoard").innerHTML = `<div class="board-empty">This is a full-game task. The monitor publishes the outcome, not each position.</div>`;
+      clearArrows();
       $("liveCaption").textContent = "full-game cells stream outcomes only — per-move telemetry comes back with position tasks";
       return;
     }
@@ -955,6 +961,7 @@
       $("liveBoard").style.gridTemplateColumns = "1fr";
       $("liveBoard").style.gridTemplateRows = "1fr";
       $("liveBoard").innerHTML = `<div class="board-empty">Position data does not match the exact prompt. The dashboard will not show a potentially misleading board.</div>`;
+      clearArrows();
       $("liveCaption").textContent = "board withheld until the monitor publishes a consistent sample";
       return;
     }

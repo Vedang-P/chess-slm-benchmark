@@ -153,13 +153,16 @@ def _turn_line(rec: Dict[str, object]) -> str:
 
 def build_single_move_prompt(rec: Dict[str, object], condition: str,
                              variant: str = "grid") -> str:
+    # fixed instruction block FIRST, position LAST: the gateway's automatic
+    # prompt caching then reuses the identical prefix across all positions
+    # of a cell (cache hit = cheaper + faster)
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        _presentation(rec, variant),
-        _turn_line(rec),
         OBJECTIVES[condition],
         OUTPUT_SPEC,
+        _presentation(rec, variant),
+        _turn_line(rec),
     ])
 
 
@@ -168,10 +171,10 @@ def build_mate1_prompt(rec: Dict[str, object], condition: str,
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        _presentation(rec, variant),
-        _turn_line(rec),
         MATE1_OBJECTIVES[condition],
         OUTPUT_SPEC,
+        _presentation(rec, variant),
+        _turn_line(rec),
     ])
 
 
@@ -180,10 +183,10 @@ def build_mobility_prompt(rec: Dict[str, object], condition: str,
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        _presentation(rec, variant),
-        _turn_line(rec),
         MOBILITY_OBJECTIVES[condition],
         OUTPUT_SPEC,
+        _presentation(rec, variant),
+        _turn_line(rec),
     ])
 
 
@@ -193,8 +196,8 @@ def build_cap_prompt(rec: Dict[str, object], condition: str,
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        _presentation(rec, variant),
-        _turn_line(rec),
         CAP_OBJECTIVE,
         OUTPUT_SPEC,
+        _presentation(rec, variant),
+        _turn_line(rec),
     ])

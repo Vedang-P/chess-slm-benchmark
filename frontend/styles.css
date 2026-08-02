@@ -384,7 +384,8 @@ html, body {
 }
 @media (max-width: 980px) { .live-grid { grid-template-columns: 1fr; } }
 
-.live-board-wrap { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 0; position: relative; }
+.live-board-wrap { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 0; }
+.board-frame { position: relative; }
 .board-stage {
   display: grid;
   gap: 0;

@@ -196,7 +196,8 @@ def main() -> None:
     live_last = [0.0]
 
     def push_live(rec, condition, prompt, model_input, out=None, scored=None,
-                  sample_idx=0, total=0, phase="scored", force=False):
+                  sample_idx=0, total=0, phase="scored", force=False,
+                  fallback=None):
         """Write the exact sample context locally (before/after inference).
         No network: the suite-level monitor uploads live.json on its tick."""
         if kind == "game":
@@ -220,6 +221,9 @@ def main() -> None:
             "output": out.get("content", ""),
             "reasoning": out.get("reasoning", ""),
             "finished": out.get("finished") if phase == "scored" else False,
+            "cache_hit": out.get("cache_hit"),
+            "cache_miss": out.get("cache_miss"),
+            "fallback": fallback,
             "phase": phase,
             "status": scored.get("status") if phase == "scored" else None,
             "move": scored.get("move"),
@@ -294,6 +298,51 @@ def main() -> None:
             out = model.generate(prompt, max_new_tokens=args.max_new_tokens,
                                  stream=args.verbose or args.stream,
                                  on_chunk=_live_partial if not args.smoke else None)
+            fallback = None
+            if not out.get("content", "").strip() and hasattr(model, "force_answer") \
+                    and not args.smoke:
+                # 'no answer' is not an option for the API model: force a
+                # committed second pass, then extract from the reasoning,
+                # then a random legal move — always flagged as a fallback.
+                push_live(rec, condition, prompt, model_input,
+                          out={"content": "", "reasoning": out.get("reasoning", ""),
+                               "finished": True},
+                          sample_idx=len(samples) + 1,
+                          total=len(records) * len(conditions),
+                          phase="forcing", force=True)
+                out2 = model.force_answer(prompt)
+                out = {**out, "content": out2.get("content", ""),
+                       "reasoning": (out.get("reasoning", "") or "")
+                                    + "\n\n[forced answer pass]\n"
+                                    + (out2.get("reasoning", "") or ""),
+                       "cache_hit": out2.get("cache_hit"),
+                       "cache_miss": out2.get("cache_miss"),
+                       "latency_ms": (out.get("latency_ms") or 0)
+                                     + (out2.get("latency_ms") or 0)}
+                fallback = "forced"
+                if not out.get("content", "").strip():
+                    # last resort: the best legal move we can extract, or a
+                    # random legal move so there is always a comparison
+                    from src.benchmarks.games.tasks import _board, parse_move_output
+                    try:
+                        board = _board(rec)
+                        uci, fmt = parse_move_output(out.get("reasoning", ""), board)
+                        if uci:
+                            out["content"] = f"MOVE: {uci}"
+                            fallback = "reasoning-extract"
+                    except Exception:
+                        pass
+                if not out.get("content", "").strip():
+                    from src.benchmarks.games.tasks import _board
+                    try:
+                        board = _board(rec)
+                        import random
+                        moves = [m.uci for m in board.legal_moves()]
+                        if moves:
+                            out["content"] = f"MOVE: {random.choice(moves)}"
+                            fallback = "random-legal"
+                    except Exception:
+                        pass
             if args.verbose:
                 print(f"\n--- END (tokens={out.get('output_tokens')}, "
                       f"finished={out.get('finished')}) ---", flush=True)
@@ -311,6 +360,9 @@ def main() -> None:
                 "prompt": prompt,
                 "output": out.get("content", ""),
                 "reasoning": out.get("reasoning", ""),
+                "cache_hit": out.get("cache_hit"),
+                "cache_miss": out.get("cache_miss"),
+                "fallback": fallback,
                 "correct": T.get_correct(rec, kind),
                 **scored,
             }
@@ -318,7 +370,7 @@ def main() -> None:
             writer.add(sample)
             push_live(rec, condition, prompt, model_input, out, scored,
                       len(samples), len(records) * len(conditions),
-                      phase="scored", force=True)
+                      phase="scored", force=True, fallback=fallback)
         if (i + 1) % 5 == 0 or i + 1 == len(records):
             el = time.time() - t0
             print(f"  [{task_name} {args.model} {args.prompt_variant}] {i + 1}/{len(records)} "
