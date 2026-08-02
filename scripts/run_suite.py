@@ -305,6 +305,8 @@ def _rows_from_summary(model: str, task: str, variant: str, summary: dict) -> li
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--n", type=int, default=None,
+                    help="override per-cell sample count (demos: small n, full run: unset)")
     ap.add_argument("--smoke", action="store_true")
     ap.add_argument("--models", nargs="+", default=None)
     ap.add_argument("--tasks", nargs="+", default=None)
@@ -341,6 +343,21 @@ def main() -> None:
                       output_dir=args.output_dir,
                       remote_prefix=args.output_dir) if args.monitor else None
     if monitor:
+        # push on a timer, not just between cells: with thinking models a
+        # single cell can run 10+ minutes and the website must keep
+        # showing live reasoning during it
+        import threading
+
+        def _pusher() -> None:
+            while True:
+                time.sleep(max(monitor.interval, 10))
+                try:
+                    monitor.maybe_push(last_error=None)
+                except Exception:
+                    pass
+
+        threading.Thread(target=_pusher, daemon=True).start()
+    if monitor:
         monitor.set_meta(mode="check" if args.check else "full", models=models,
                          cot=args.cot)
         monitor.cells_total = len(models) * len(cells)
@@ -355,7 +372,8 @@ def main() -> None:
     skipped = 0
     for model in models:
         for task, variant in cells:
-            n = cfg["tasks"][task]["check_n"] if args.check else cfg["tasks"][task]["full_n"]
+            n = (args.n or (cfg["tasks"][task]["check_n"] if args.check
+                            else cfg["tasks"][task]["full_n"]))
             summary_path = ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json"
             if args.resume and summary_path.exists():
                 summary = json.loads(summary_path.read_text())

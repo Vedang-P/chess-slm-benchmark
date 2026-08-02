@@ -22,6 +22,13 @@ def resolve_token() -> str | None:
     for name in ("GITHUB_TOKEN", "GH_TOKEN"):
         if os.environ.get(name):
             return os.environ[name]
+    # local runs: read the gitignored .env (never committed)
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if line.startswith(("GITHUB_TOKEN=", "GH_TOKEN=")):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
     return None
 
 
