@@ -228,6 +228,11 @@ class Monitor:
                 remote = f"{self.remote_prefix}/{summary.name}"
                 if remote not in self.uploaded:
                     uploads.append((remote, summary))
+                    # samples JSONL travels with its summary so recovery can
+                    # restore raw outputs, not just aggregates
+                    samples = summary.with_name(summary.name.replace(".summary.json", ".samples.jsonl"))
+                    if samples.exists():
+                        uploads.append((f"{self.remote_prefix}/{samples.name}", samples))
             csv_path = self.output_dir / "comparison_table.csv"
             if csv_path.exists():
                 uploads.append((f"{self.remote_prefix.rsplit('/', 1)[0]}/comparison_table.csv", csv_path))
@@ -310,7 +315,7 @@ def main() -> None:
                     help="skip cells whose summary.json already exists (loads them "
                          "into the comparison table instead of re-running)")
     ap.add_argument("--monitor", action="store_true", help="publish to the public live repo")
-    ap.add_argument("--monitor-interval", type=int, default=120)
+    ap.add_argument("--monitor-interval", type=int, default=60)
     ap.add_argument("--verbose", action="store_true",
                     help="forward to run_chess: print the exact prompt per sample")
     ap.add_argument("--stream", action="store_true",
@@ -321,7 +326,7 @@ def main() -> None:
 
     cfg = yaml.safe_load((ROOT / args.config).read_text())
     mode = cfg["check"] if args.check else cfg["full"]
-    models = args.models or (mode["models"] if args.check else cfg["models"])
+    models = args.models or cfg["models"]
     tasks = args.tasks or list(cfg["tasks"])
     max_tokens = mode.get("max_new_tokens", 512)
     game_tokens = mode.get("game_max_new_tokens", max_tokens)

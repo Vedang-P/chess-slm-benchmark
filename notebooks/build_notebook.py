@@ -65,30 +65,34 @@ def run_stage(name, args, timeout_min):
 '''.strip()
 
 
-def build_cells(check: bool, pilot: bool = False) -> list:
+def build_cells(check: bool) -> list:
     R = "results_check" if check else "results"
-    MODE_TAG = "CHECK MODE (tiny, raises on failure)" if check else (
-        "REPRESENTATION PILOT (pick the best prompt format)" if pilot else "FULL RUN (paper data)")
+    MODE_TAG = "CHECK MODE (tiny, raises on failure)" if check else "FULL RUN (paper data)"
     SWEEP_FLAG = "--check" if check else ""
     T_ENGINE = 10 if check else 60
-    T_SWEEP = 100 if check else 12 * 60  # check: 6 models x 6 cells incl. model loads
-                                          # (gemma at 4096 tokens + rep-penalty can take ~15 min/cell)
+    # check: 3 models x 4 reps x 3 tasks = 36 cells; gemma dominates
+    # (~2-3 min/cell at 4096 tokens). deepseek (API) is ~2s/position.
+    T_SWEEP = 100 if check else 12 * 60
 
     cells = [
-        _md(f"# SLM Chess Capability Benchmark @ NeurIPS 2026 — {MODE_TAG}\n\n"
-            "Paired win/lose small-model chess study (see README). "
+        _md(f"# Chess Representation Study @ NeurIPS 2026 — {MODE_TAG}\n\n"
+            "Gemma 4 E2B/E4B (local, 4-bit) vs DeepSeek V4 Flash (gateway API) "
+            "on mate-in-1/2 + best-move tasks under grid/FEN/bitboard/list "
+            "representations (see README).\n"
             f"Results land in `{R}/` and are zipped for download.\n"
-            "- Positions + exact oracles: committed (`data/positions/`), generated once by `scripts/generate_positions.py`.\n"
+            "- Positions + exact oracles: committed (`data/positions/`), built from the "
+            "lichess puzzle DB + eval DB (CC0).\n"
             "- Engine + dataset tests gate every run: `scripts/test_engine.py`.\n"
-            "- Sweep: `scripts/run_suite.py` (models x tasks x {{win,lose}})."),
+            "- Sweep: `scripts/run_suite.py` (3 models x tasks x reps)."),
         _md("## 1. Get the repo (GitHub secret method)\n\n"
             "The repo is **private**. On Kaggle, a secret reaches the notebook ONLY if it is "
             "**attached to this notebook** and the kernel is started AFTER attaching:\n\n"
-            "1. Notebook editor -> **+ Add** (top-right) -> **Add secret** -> select `GITHUB_TOKEN` "
-            "(it must exist under Account settings -> Secrets; value = a classic PAT with `repo` scope).\n"
+            "1. Notebook editor -> **+ Add** (top-right) -> **Add secret** -> select `GITHUB_TOKEN`\n"
             "2. **Save** the notebook (Ctrl+S).\n"
             "3. **Kernel -> Restart & Run All** (env vars are injected at kernel start; plain "
             "\"Run All\" does NOT pick up newly attached secrets).\n\n"
+            "Required secrets: `GITHUB_TOKEN` (repo clone + live uploads), `HF_TOKEN` "
+            "(gated gemma-4 checkpoints), `OPENCODE_API_KEY` (deepseek-v4-flash gateway).\n"
             "This cell reads the token from the env var, and falls back to Kaggle's own "
             "`kaggle_secrets` API if the env var is missing."),
         _code("""import os, shutil, subprocess, sys
@@ -152,17 +156,15 @@ if status != "ok":
     raise RuntimeError("engine tests failed -- see output above")"""),
         _md("## 5. Data validation (committed task sets + oracle fields)"),
         _code("""import json
-for name in ["cap-legal-8x8", "bestmove-8x8", "mate1-lichess", "mate2-lichess",
-             "sm-3x3-win", "sm-5x5-win", "sm-5x5-draw", "mate1-8x8", "mob-8x8"]:
+for name in ["mate1-lichess", "mate2-lichess", "bestmove-8x8"]:
     recs = json.loads(Path(f"data/positions/{name}.json").read_text())
     assert len(recs) >= 40, f"{name}: expected >=40 positions, got {len(recs)}"
     assert all("win_moves" in r and "lose_moves" in r for r in recs)
-print("committed position data OK (9 task sets, oracle fields present)")"""),
+print("core task data OK (3 task sets, oracle fields present)")"""),
         (_md("## 6. Recover completed results (after a died session)\n\n"
-             "Every completed cell's summary is backed up to the public live repo by "
-             "`--monitor` (check results and full results live in separate namespaces, "
-             "so recovery can never mix them). If this is a fresh session, pull them "
-             "back so `--resume` can skip what already ran."),
+             "Every completed cell's summary + samples are backed up to the public live repo "
+             "by `--monitor` (check and full results live in separate namespaces). If this is "
+             "a fresh session, pull them back so `--resume` can skip what already ran."),
          _code(f"""import json, urllib.request
 from pathlib import Path
 
@@ -181,19 +183,19 @@ else:
         print(f"recovered {{len(idx['files'])}} completed summaries from the live repo")
     except Exception as e:
         print("nothing to recover (first run or no backup yet):", e)""")),
-        _md("## 7. The chess sweep (models x tasks, paired win/lose)\n\n"
-            "`--monitor` publishes live progress + per-cell result backups to the public "
-            "dashboard repo (monitor/state.json, results/*). `--resume` skips cells whose "
-            "summary already exists (recovered in the previous cell)."),
+        _md("## 7. The sweep (3 models x tasks x reps)\n\n"
+            "`--monitor` uploads state.json every 60s and one batched upload per completed "
+            "cell (summary + samples + index) — never per-sample. `--resume` skips cells "
+            "whose schema-current summary already exists (recovered in the previous cell)."),
         _code(f"""sweep_args = [sys.executable, "scripts/run_suite.py", "--output_dir", "{R}/chess",
-              "--monitor", "--monitor-interval", "120"{", '--config', 'configs/pilot.yaml'" if pilot else ""}]
+              "--monitor", "--monitor-interval", "60"]
 if {"True" if check else "False"}:
     sweep_args.append("--check")
 sweep_args.append("--resume")   # skip cells whose summaries were recovered
 if {"True" if check else "False"}:
     # check mode = full visibility: print the exact prompt, stream each
     # model's output live, and add 'think step by step' so even non-reasoning
-    # models (qwen2.5, smollm2) show their reasoning
+    # models show their reasoning
     sweep_args += ["--verbose", "--stream", "--cot"]
 status = run_stage("chess_sweep", sweep_args, {T_SWEEP})
 print("sweep:", status)"""),
@@ -216,15 +218,15 @@ print("ALL CHECK STAGES PASSED")""")
          _code(f"""shutil.make_archive("/kaggle/working/{R}", "zip", root_dir=Path("{R}").resolve())
 print("zipped {R}.zip")""")),
         _md("## Notes\n"
-            "- **Getting the repo (secret method):** the `GITHUB_TOKEN` secret must be attached "
-            "to this notebook (+ Add -> Add secret), the notebook SAVED, and the kernel "
-            "RESTARTED -- env vars are injected at kernel start only.\n"
-            "- **Resume after a died session:** re-run the notebook with a trimmed sweep, e.g. "
-            "`run_suite.py --models <remaining> --tasks <remaining> --output_dir results/chess`; "
-            "per-run JSONs under `results/chess/*.summary.json` are the source of truth; the CSV is rebuilt at the end.\n"
-            "- **Gemma models** need the `HF_TOKEN` Kaggle secret (gated access).\n"
-            "- **Timeouts:** full-mode sweep is capped at 12h; typical T4 estimate ~1-2 min/position-cell, "
-            "well under a single Kaggle session."),
+            "- **Secrets:** `GITHUB_TOKEN`, `HF_TOKEN` (gemma gated), `OPENCODE_API_KEY` "
+            "(deepseek-v4-flash). All three must be attached + kernel restarted.\n"
+            "- **Resume after a died session:** re-run the notebook; the recovery cell "
+            "pulls backed-up summaries + samples, and `--resume` skips them.\n"
+            "- **Monitoring is batched:** one contents-API upload per completed cell + "
+            "state.json every 60s. The dashboard shows <=60s lag. GitHub is never "
+            "hammered with per-sample commits.\n"
+            "- **Timeouts:** full-mode sweep is capped at 12h. DeepSeek runs the full "
+            "matrix (~2s/position); gemma dominates the wall-clock."),
     ]
     # flatten any (md, code) pairs added as single elements
     flat = []
@@ -239,16 +241,10 @@ print("zipped {R}.zip")""")),
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="emit kaggle_check.ipynb")
-    ap.add_argument("--pilot", action="store_true", help="emit kaggle_pilot.ipynb")
     args = ap.parse_args()
-    if args.pilot:
-        out = NB_DIR / "kaggle_pilot.ipynb"
-        cells = build_cells(check=False, pilot=True)
-    else:
-        out = NB_DIR / ("kaggle_check.ipynb" if args.check else "kaggle_run.ipynb")
-        cells = build_cells(check=args.check)
-    out.write_text(json.dumps(_notebook(cells), indent=1))
-    print(f"wrote {out} ({len(cells)} cells)")
+    out = NB_DIR / ("kaggle_check.ipynb" if args.check else "kaggle_run.ipynb")
+    out.write_text(json.dumps(_notebook(build_cells(check=args.check)), indent=1))
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":

@@ -189,9 +189,14 @@ def test_python_chess_parity() -> None:
         theirs = {m.uci() for m in chess.Board(rec["fen"]).legal_moves}
         for uci in theirs - ours:
             fr_r, fr_c = int(uci[1]) - 1, ord(uci[0]) - ord("a")
-            to_r = int(uci[3]) - 1
+            to_r, to_c = int(uci[3]) - 1, ord(uci[2]) - ord("a")
             piece = board.at((fr_r, fr_c))
+            # documented variant differences: no double-step pushes, no
+            # castling (puzzle FENs carry castling rights python-chess honors)
             if piece and piece[1] == "P" and abs(to_r - fr_r) == 2:
+                double_steps += 1
+                continue
+            if piece and piece[1] == "K" and abs(to_c - fr_c) == 2:
                 double_steps += 1
                 continue
             mismatches += 1

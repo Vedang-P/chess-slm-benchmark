@@ -24,8 +24,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 from src.benchmarks.games import tasks as T  # noqa: E402
 from src.benchmarks.games.envs import ENVS  # noqa: E402
-from src.live_push import PUBLIC_LIVE_REPO, resolve_token, upload_file  # noqa: E402
-from src.models import HFModel, MODEL_IDS, configure_quiet_logging  # noqa: E402
+from src.live_push import PUBLIC_LIVE_REPO  # noqa: E402
+from src.models import MODEL_IDS, configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_samples, divergence_rate  # noqa: E402
 
 TASK_FILES = {
@@ -155,7 +155,7 @@ def main() -> None:
     task_name = args.task
     if task_name in GAME_TASKS:
         n_games = args.n or GAME_N
-        model = HFModel(args.model, smoke_test=args.smoke)
+        model = make_model(args.model, smoke_test=args.smoke)
         model.load()
         run_name = f"{args.model}_{task_name}_{args.prompt_variant}"
         writer = ResultWriter(
@@ -184,7 +184,7 @@ def main() -> None:
     if kind == "cap" and args.prompt_variant == "fen" and args.conditions is None:
         pass  # cap runs the single 'win' condition label; variant still applies
 
-    model = HFModel(args.model, smoke_test=args.smoke)
+    model = make_model(args.model, smoke_test=args.smoke)
     model.load()
     run_name = f"{args.model}_{task_name}_{args.prompt_variant}"
     writer = ResultWriter(
@@ -193,13 +193,13 @@ def main() -> None:
         {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
          "smoke": args.smoke},
     )
-    live_token = resolve_token()
     live_last = [0.0]
 
     def push_live(rec, condition, prompt, model_input, out=None, scored=None,
                   sample_idx=0, total=0, phase="scored", force=False):
-        """Publish the exact sample context before and after inference."""
-        if not live_token or kind == "game":
+        """Write the exact sample context locally (before/after inference).
+        No network: the suite-level monitor uploads live.json on its tick."""
+        if kind == "game":
             return
         now = time.time()
         if not force and now - live_last[0] < 2.0:
@@ -243,12 +243,10 @@ def main() -> None:
         }
         (ROOT / "monitor").mkdir(exist_ok=True)
         (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))
-        try:
-            upload_file(live_token, "monitor/live.json",
-                        (ROOT / "monitor" / "live.json").read_bytes(),
-                        message=f"live {_utc_ts()}")
-        except Exception as e:
-            print(f"live: push failed ({e})", flush=True)
+        # NOTE: no network upload here anymore. Live.json is written locally;
+        # the suite-level monitor uploads it on its 60s tick, batched. Per-
+        # sample GitHub uploads were hammering the account (2 calls x 40
+        # samples x 51 cells per run).
 
     samples = []
     t0 = time.time()

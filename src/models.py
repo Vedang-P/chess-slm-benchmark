@@ -1,23 +1,44 @@
-"""Model loading for the chess benchmark: 4-bit HF inference + optional Ollama.
+"""Model loading for the chess benchmark: 4-bit HF inference + optional
+opencode-go gateway (DeepSeek V4 Flash) API backend.
 
 Only what the benchmark needs: the registry, quiet-logging setup, the HF
-loader (4-bit bitsandbytes + chat template), and the Ollama backend.
+loader (4-bit bitsandbytes + chat template), and the gateway client.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
+import urllib.error
+import urllib.request
+from pathlib import Path
 from typing import Dict, Optional
 
 MODEL_IDS = {
-    "deepseek-r1-distill-qwen-1.5b": "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
-    "smollm2-1.7b": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
-    "qwen2.5-1.5b": "Qwen/Qwen2.5-1.5B-Instruct",
-    "qwen2.5-3b": "Qwen/Qwen2.5-3B-Instruct",
     "gemma4-e2b": "google/gemma-4-E2B-it",
     "gemma4-e4b": "google/gemma-4-E4B-it",
 }
+
+# opencode-go gateway (OpenAI-compatible). The key is NEVER committed: it
+# comes from OPENCODE_API_KEY env, then a local gitignored .env file, then
+# the Kaggle secret with the same name (injected as an env var at kernel
+# start). Model id is the bare id; the provider prefix is not accepted.
+OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1"
+DEEPSEEK_V4_FLASH = "deepseek-v4-flash"
+
+
+def resolve_api_key() -> Optional[str]:
+    for name in ("OPENCODE_API_KEY", "DEEPSEEK_API_KEY"):
+        if os.environ.get(name):
+            return os.environ[name]
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("OPENCODE_API_KEY="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return None
 
 
 def configure_quiet_logging() -> None:
@@ -176,40 +197,99 @@ class HFModel:
         }
 
 
-class OllamaModel:
-    """Local Ollama backend (/api/generate). Used only for quick local checks."""
+class OpenCodeGoModel:
+    """OpenAI-compatible client for the opencode-go gateway (DeepSeek V4
+    Flash). Stateless, key from env/.env. Used for the API-backed frontier
+    model in the study. Never raises on network errors — returns an ERROR
+    string so the sweep records the failure instead of dying."""
 
-    def __init__(self, model_key: str, base_url: str = "http://localhost:11434",
-                 smoke_test: bool = False):
-        self.model_id = {
-            "deepseek-r1-distill-qwen-1.5b": "deepseek-r1:1.5b",
-            "smollm2-1.7b": "smollm2:1.7b",
-            "qwen2.5-3b": "qwen2.5:3b",
-            "gemma4-e2b": "gemma4:e2b",
-        }.get(model_key, model_key)
-        self.base_url = base_url
+    MODEL = DEEPSEEK_V4_FLASH
+    MIN_INTERVAL_S = 1.0  # polite rate limit; the gateway is cheap but shared
+
+    def __init__(self, model_key: str, smoke_test: bool = False,
+                 base_url: str = OPENCODE_GO_BASE_URL):
+        self.model_key = model_key
+        self.base_url = base_url.rstrip("/")
         self.smoke_test = smoke_test
+        self._last_call = 0.0
+        self.key = None
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
 
-    def load(self):
-        pass
+    def load(self) -> None:
+        self.key = resolve_api_key()
+        if not self.key:
+            raise RuntimeError(
+                "no OPENCODE_API_KEY — set it as a Kaggle secret (Add secret, "
+                "save, Restart & Run All) or in a local .env file")
+
+    def render_chat(self, prompt: str) -> str:
+        """The gateway takes plain text; this mirrors HFModel's interface."""
+        return prompt
+
+    def _post(self, payload: dict) -> dict:
+        wait = self.MIN_INTERVAL_S - (time.time() - self._last_call)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_call = time.time()
+        req = urllib.request.Request(
+            f"{self.base_url}/chat/completions",
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {self.key}",
+                     "Content-Type": "application/json",
+                     # the gateway sits behind Cloudflare, which 403s (1010)
+                     # the default urllib user-agent
+                     "User-Agent": "openai-python/1.0 chess-benchmark"},
+            method="POST")
+        with urllib.request.urlopen(req, timeout=600) as r:
+            return json.load(r)
 
     def generate(self, prompt: str, max_new_tokens: int = 512,
-                 temperature: float = 0.0, **_) -> dict:
-        import requests
-
+                 temperature: float = 0.0, stream: bool = False) -> dict:
         t0 = time.time()
-        payload = {"model": self.model_id, "prompt": prompt,
-                   "stream": False, "options": {"num_predict": max_new_tokens,
-                                                 "temperature": temperature}}
+        if self.smoke_test:
+            return {"content": "MOVE: a1a2", "input_tokens": 0,
+                    "output_tokens": 8, "latency_ms": 1, "finished": True}
+        payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
+                   "temperature": temperature,
+                   # Thinking disabled: the model otherwise spends the entire
+                   # budget on reasoning and emits empty content (observed at
+                   # 4096 tokens, 43s). Direct answers also match the rest of
+                   # the benchmark (gemma enable_thinking=False, no CoT).
+                   "thinking": {"type": "disabled"},
+                   "messages": [{"role": "user", "content": prompt}]}
         try:
-            resp = requests.post(f"{self.base_url}/api/generate", json=payload, timeout=600)
-            data = resp.json()
-            content = data.get("response", "")
-            return {"content": content,
-                    "input_tokens": data.get("prompt_eval_count", 0),
-                    "output_tokens": data.get("eval_count", 0),
-                    "latency_ms": (time.time() - t0) * 1000,
+            data = self._post(payload)
+            content = data["choices"][0]["message"]["content"] or ""
+            if stream:
+                print(content, end="", flush=True)
+            usage = data.get("usage", {})
+            self.prompt_tokens += usage.get("prompt_tokens", 0)
+            self.completion_tokens += usage.get("completion_tokens", 0)
+            return {
+                "content": content,
+                "input_tokens": usage.get("prompt_tokens", 0),
+                "output_tokens": usage.get("completion_tokens", 0),
+                "latency_ms": (time.time() - t0) * 1000,
+                "finished": data["choices"][0].get("finish_reason") in ("stop", None),
+            }
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode()[:300]
+            except Exception:
+                pass
+            return {"content": f"ERROR HTTP {e.code}: {body}", "input_tokens": 0,
+                    "output_tokens": 0, "latency_ms": (time.time() - t0) * 1000,
                     "finished": True}
         except Exception as e:
-            return {"content": f"ERROR: {e}", "input_tokens": 0, "output_tokens": 0,
-                    "latency_ms": (time.time() - t0) * 1000, "finished": True}
+            return {"content": f"ERROR {type(e).__name__}: {e}", "input_tokens": 0,
+                    "output_tokens": 0, "latency_ms": (time.time() - t0) * 1000,
+                    "finished": True}
+
+
+def make_model(model_key: str, smoke_test: bool = False):
+    """Registry: local 4-bit HF models + the gateway API model."""
+    if model_key == DEEPSEEK_V4_FLASH:
+        return OpenCodeGoModel(model_key, smoke_test=smoke_test)
+    return HFModel(model_key, smoke_test=smoke_test)

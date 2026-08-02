@@ -1,85 +1,115 @@
-# How Well Do Small Language Models Play Chess?
+# Chess Representation Study: SLMs vs a Frontier Model
 
-**A multi-task capability benchmark: legality, tactics, move strength, endgames, and
-full-game play — plus simple games (tic-tac-toe, Connect-4) — for 1.5–4B models.**
+**Do small multimodal models (Gemma 4 E2B/E4B, 2-4B) and a frontier text model
+(DeepSeek V4 Flash) differ in *how* they need a chess position presented — and
+how far apart are their actual chess abilities?**
 
 **Target venue**: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026 (Sydney)
-— deadline **Aug 29, 2026 (AoE)** · Inference-only study, Kaggle free T4.
+— inference-only study, Kaggle free T4 + gateway API.
 
 ## The question
 
-Every existing chess/game benchmark evaluates frontier models (LLM Chess, ChessArena,
-ChessQA, ChessBench, Topsakal's grid games). A search for `"small language model" + chess`
-returns exactly one paper. This project is the first systematic measurement of what small
-open models (1.5–4B) can do in chess and simple games.
+Chess is a clean probe for *representation sensitivity*: the same position can be
+rendered as a grid, a FEN string, bitboards, a piece list, or a PGN move history.
+Models trained mostly on FEN-heavy chess text (frontier models) may be format-
+bound; small on-device models may be weaker regardless of format. This study
+measures both axes on one benchmark: **model x representation x task**, with
+external oracles only (engine-verified ground truth, no model self-judgment).
 
-## Benchmark tasks
+Prior work (LLM CHESS, ChessQA, ChessBench, Easy2Hard, geometric-stability
+testing) evaluates frontier models on single formats. We add the representation
+axis and the small-model tier.
 
-**Active scope — the three tactical tasks:**
+## Models
 
-| Task | Board | Ground truth | What it measures |
+| Model | Backend | Notes |
+|---|---|---|
+| gemma4-e2b | local, 4-bit, T4 | small VLM; thinking disabled |
+| gemma4-e4b | local, 4-bit, T4 | heavier VLM; thinking disabled |
+| deepseek-v4-flash | opencode-go gateway API | frontier text model; thinking disabled; ~2s/position |
+
+DeepSeek V4 Flash is cheap, so it runs the full representation matrix at full n;
+the T4-bound gemma models run the same cells at reduced n (incremental testing).
+
+## Tasks (core, active)
+
+| Task | Source | Ground truth | Metadata carried |
 |---|---|---|---|
-| mate1-lichess | 8x8, 262 real CC0 puzzles | exact checkmate detection | tactics: can it deliver mate in one? |
-| mate2-lichess | 8x8, 224 real CC0 puzzles | lichess solution ('only moves') | tactics: finds the mate-net first move |
-| bestmove-8x8 | 8x8, 40 positions | **Stockfish 18** (depth 18, verified vs depth 20) | move strength: matches the engine's top move |
+| mate1-lichess (250) | lichess puzzle DB (CC0) | engine-verified checkmating moves | rating, rating dev, popularity, plays, themes, opening tags, game URL |
+| mate2-lichess (250) | lichess puzzle DB (CC0) | lichess 'only move' first move | same full metadata |
+| bestmove-8x8 (120) | lichess eval DB (CC0) | Stockfish eval: PV best move | cp, mate, depth, knodes, full PV |
 
-**Staged (datasets built, not in the active sweep):** cap-legal-8x8 (legality), the 3x3/5x5
-exact endgames, and full-game playouts — these can be added back for the paper's extended
-sections without any new plumbing.
+Positions are stratified by rating/theme/evals so the committed sets span
+difficulty and tactic type (34+ distinct themes).
 
-**Representation control.** The three tasks support four prompt representations — `grid`
-(rendered board), `fen`, `bitboard` (64-bit bitboards per piece type), `list` (piece list).
-Before the full sweep, a **representation pilot** (`configs/pilot.yaml` →
-`kaggle_pilot.ipynb`, 4 models × 3 tasks × 4 representations) measures which representation
-small models actually understand; `analyze_pilot.py` picks the winner and **auto-writes it
-into `suite.yaml`**. If a model fails in every representation, the failure is capability,
-not prompt format.
+## Representations
 
-**No artificial thinking limits.** Position tasks run with a 2048-token generation
-budget (effectively unlimited for these models) — truncating a model's chain of thought
-mid-reasoning would confound the measurement. Full-game playouts use 1024 tokens per
-move (per-ply generation dominates runtime there).
+- `grid` — rendered ASCII board
+- `fen` — FEN string
+- `bitboard` — 64-bit bitboards per piece type
+- `list` — piece list
+- `pgn` — SAN move history **future scope** (needs game-history datasets)
 
-Every metric uses external oracles — no model self-judgment.
+**Vision is explicitly out of scope for now** (no board-image rendering).
+
+## Metrics
+
+Per sample: `parse_error / illegal / legal` → `compliant` (matches oracle).
+Per cell: parse_rate, legal_rate, compliance rate. The `format` field separates
+strict from-to compliance from lenient SAN parsing, so format-following and
+chess ability are reported separately.
+
+## Monitoring (batched — no GitHub hammering)
+
+- state.json uploaded every 60s; one upload per completed cell (summary +
+  samples + index) — never per-sample.
+- Live dashboard: vedang-p.github.io/chess-bench-live (worker + public repo).
+- Crash-safe: recovery cell pulls backed-up summaries + samples; `--resume`
+  skips completed cells (schema-versioned).
+
+## Future scope (README roadmap)
+
+- Full game-play evaluation (LLM CHESS style: legality, win rate, Elo vs a
+  fixed-strength engine)
+- Legality probes at scale (cap-legal task, existing 40-position set)
+- Position evaluation (centipawn prediction from the eval DB)
+- Motif/structural questions (ChessQA-style categories: structural, motifs,
+  short tactics, position judgment, semantic)
+- The `pgn`/SAN-history representation (from lichess game PGNs)
+- Board-image (vision) representation for multimodal models
 
 ## Repo map
 
 ```
-data/positions/     committed: 9 task sets with embedded oracle ground truth
-data/external/      kagi 1000-puzzle CSV + raw lichess puzzle filter (CC0)
+data/positions/     committed task sets with oracles + full lichess metadata
+data/raw/           gitignored: raw lichess DB downloads (1GB puzzle CSV, eval shards)
 configs/
-  models.yaml       model registry (6 SLMs; gated flags)
-  suite.yaml        sweep definition (models x tasks x variants, check vs full)
+  models.yaml       3-model registry (2 HF 4-bit + gateway API)
+  suite.yaml        sweep definition (models x tasks x reps, check vs full)
 src/
-  models.py         4-bit HF inference loader + Ollama backend + registry
+  models.py         4-bit HF loader + OpenCodeGo gateway client + registry
   report.py         per-sample JSONL, summaries, comparison_table.csv
   benchmarks/games/
     rules.py        simplified NxN chess engine (no castling/en-passant/double-step)
     oracles.py      exact retrograde solver + checkmate/mobility oracles
     positions.py    seeded generation with non-vacuity filters
-    envs.py         playout environments: Chess5x5, TicTacToe, Connect4
     fen.py          FEN <-> board schema (+ python-chess validation)
-    prompts.py      faithful prompts: grid/fen variants
-    tasks.py        parsing + oracle-based scoring (cap/mate1/mate2/bestmove/sm/mob)
+    prompts.py      prompts: grid/fen/bitboard/list variants
+    tasks.py        parsing (strict + lenient SAN) + oracle-based scoring
 scripts/
   test_engine.py    engine + dataset + python-chess parity tests (the gate)
-  generate_positions.py      one-time dataset generation (already run; committed)
-  build_lichess_mates.py     fetch/build mate-in-1/2 sets (CC0 lichess DB)
-  build_bestmove.py          Stockfish-verified best-move set (local engine)
-  build_cap_positions.py     legality probe from standard positions
-  run_chess.py      one model x one task x one prompt variant (incl. full games)
+  build_lichess_mates.py    mate1/mate2 from lichess puzzle DB (stratified, rich metadata)
+  build_bestmove_evals.py   bestmove from lichess eval DB (cp/depth/knodes/PV)
+  run_chess.py      one model x one task x one prompt variant
   run_suite.py      full matrix -> results/chess/comparison_table.csv
   analyze_results.py         writes docs/capability-analysis.md
-  research_pipeline.py       end-to-end runner with reproducible transcript
 notebooks/
   build_notebook.py  SINGLE SOURCE -> kaggle_check.ipynb + kaggle_run.ipynb
 frontend/            live dashboard (GitHub Pages: vedang-p.github.io/chess-bench-live)
-.opencode/           autoresearch skill (autonomous iteration loop)
 docs/
-  capability-analysis.md  auto-generated after a run
-  external-resources.md   what exists to build on
-  ai-authored.md          AI-authored-track disclosure + reproducibility
-  terminal-gpu.md         Modal/Kaggle/Colab options
+  related-work.md    detailed paper rundown + what we borrow
+  external-resources.md
+  ai-authored.md
 ```
 
 ## Quick start
@@ -87,33 +117,28 @@ docs/
 ```bash
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-brew install stockfish          # only needed to rebuild the best-move set
 
 python scripts/test_engine.py --quick        # CPU-only gate (no torch needed)
-python scripts/run_suite.py --smoke --models smollm2-1.7b   # pipeline smoke test
+# deepseek smoke (needs OPENCODE_API_KEY in .env):
+python scripts/run_chess.py --model deepseek-v4-flash --task mate1-lichess \
+    --prompt-variant grid --n 1 --max_new_tokens 4096 --conditions win \
+    --output_dir /tmp/ds_smoke
 ```
 
 ### On Kaggle (free T4)
 
-1. Attach `HF_TOKEN` (Gemma models) and `GITHUB_TOKEN` (private-repo clone) secrets —
-   attach in the notebook's Secrets panel, **save**, **restart kernel**.
-2. Upload `notebooks/kaggle_check.ipynb` — engine tests + parity + tiny sweep.
-3. Upload `notebooks/kaggle_pilot.ipynb` — **representation pilot** (4 models × 3 tasks
-   × 4 representations, ~2–3h): picks the prompt format the full sweep should use.
-   Note: the pilot includes the gated Gemma models, so `HF_TOKEN` is required for it.
-4. Upload `notebooks/kaggle_run.ipynb` — full sweep; streams to the dashboard and
-   backs up every cell to the public live repo (crash-safe: recovery cell + `--resume`).
-5. Locally: `python scripts/analyze_pilot.py` (after step 3) and
-   `python scripts/analyze_results.py` (after step 4).
+1. Attach secrets: `GITHUB_TOKEN` (repo clone + live uploads), `HF_TOKEN`
+   (gated gemma-4 checkpoints), `OPENCODE_API_KEY` (deepseek gateway) — attach,
+   **save**, **restart kernel**.
+2. Upload `notebooks/kaggle_check.ipynb` — engine tests + tiny sweep (n=1).
+3. Upload `notebooks/kaggle_run.ipynb` — full sweep; batched monitoring; crash-safe.
 
 ## Live monitoring
 
-The sweep publishes `monitor/state.json` + per-cell results to the public repo
-`Vedang-P/chess-bench-live` (~every 2 min). Dashboard: **vedang-p.github.io/chess-bench-live**
-(static; deploy from `frontend/` to Vercel/Cloudflare if preferred).
+Batched uploads (state every 60s, one upload per cell) to
+`Vedang-P/chess-bench-live`. Dashboard: **vedang-p.github.io/chess-bench-live**.
 
 ## Literature
 
-`docs/external-resources.md` inventories what exists to build on; the lit review
-(`lit-review.md`, 49 verified records) documents the gap: no multi-task chess/game
-capability benchmark at SLM scale.
+`docs/related-work.md` covers the benchmark landscape in detail and what we
+borrow from each; `docs/external-resources.md` inventories the datasets.
