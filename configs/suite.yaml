@@ -1,8 +1,3 @@
-# The chess study suite: 3 models x representations x 3 core tasks.
-#
-# Incremental testing: check_n=1 (stack validation) -> mid_n (subset) ->
-# full_n (paper data). Deepseek is ~2s/position (gateway), gemma is
-# ~1-3 min/position on the T4, so per-cell n can differ by model tier.
 models:
 - gemma4-e2b
 - gemma4-e4b
@@ -36,11 +31,11 @@ tasks:
     - bitboard
     - list
 check:
-  max_new_tokens: 4096
+  max_new_tokens: 32768
   conditions:
   - win
 full:
-  max_new_tokens: 4096
+  max_new_tokens: 32768
   smoke: false
   conditions:
   - win

@@ -576,8 +576,45 @@
   // Lichess cburnett SVG pieces (window.CHESS_PIECES from pieces.js).
   const GAME_TASKS = ["playout-5x5", "ttt", "c4"];
   let live = null;
+  let liveLatest = null;   // the newest published sample (sync target)
   let lastLiveKey = null;
-  const replay = [];
+  const replay = [];       // ordered history: replay[0] is the oldest
+  let navigated = false;   // user browsing history manually
+
+  function navHistory() {
+    // ordered samples: replay (oldest..newest) + current live
+    return [...replay, live].filter(Boolean);
+  }
+
+  function navIndex() {
+    const list = navHistory();
+    const i = list.indexOf(live);
+    return i >= 0 ? i : list.length - 1;
+  }
+
+  function navTo(index) {
+    const list = navHistory();
+    if (index < 0 || index >= list.length) return;
+    live = list[index];
+    navigated = index < list.length - 1;
+    renderLive();
+    renderReplay();
+  }
+
+  function navSync() {
+    if (liveLatest) { live = liveLatest; navigated = false; }
+    else { navigated = false; }
+    renderLive();
+    renderReplay();
+  }
+
+  function updateNavButtons() {
+    const list = navHistory();
+    const i = navIndex();
+    $("navPrev").disabled = i <= 0;
+    $("navNext").disabled = i >= list.length - 1;
+    $("navSync").classList.toggle("active", !navigated);
+  }
 
   function fenPieces(fen) {
     if (!fen) return null;
@@ -699,10 +736,84 @@
         const pieceHtml = piece && window.CHESS_PIECES
           ? `<span class="piece-svg">${window.CHESS_PIECES[(piece === piece.toUpperCase() ? "w" : "b") + piece.toUpperCase()] || ""}</span>`
           : "";
-        html += `<div class="${cls}">${pieceHtml}${coords.join("")}</div>`;
+        html += `<div class="${cls}" data-sq="${sq}">${pieceHtml}${coords.join("")}</div>`;
       }
     }
     el.innerHTML = html;
+    el.dataset.n = n;
+    renderArrows(sample);
+  }
+
+  // square center in board fraction coords (0..1), top-left origin
+  function sqCenter(sq, n) {
+    if (!/^[a-h][1-8]$/.test(sq || "")) return null;
+    const file = sq.charCodeAt(0) - 97;
+    const rank = +sq[1];
+    return {
+      x: (file + 0.5) / n,
+      y: (n - rank + 0.5) / n,
+    };
+  }
+
+  function arrowSvg(from, to, n, color) {
+    if (!from || !to) return "";
+    const a = sqCenter(from, n);
+    const b = sqCenter(to, n);
+    if (!a || !b) return "";
+    const pad = 0.09; // keep the arrow inside the from/to squares
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    const ux = dx / len, uy = dy / len;
+    const x1 = a.x + ux * pad, y1 = a.y + uy * pad;
+    const x2 = b.x - ux * pad, y2 = b.y - uy * pad;
+    const V = 100;
+    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+    const nx = -uy, ny = ux;
+    const bend = 0.03;
+    const bx = cx + nx * bend, by = cy + ny * bend;
+    const head = 0.055;
+    const hx1 = x2 - ux * head - nx * head * 0.6;
+    const hy1 = y2 - uy * head - ny * head * 0.6;
+    const hx2 = x2 - ux * head + nx * head * 0.6;
+    const hy2 = y2 - uy * head + ny * head * 0.6;
+    return `
+      <path d="M ${(x1 * V).toFixed(1)} ${(y1 * V).toFixed(1)} Q ${(bx * V).toFixed(1)} ${(by * V).toFixed(1)} ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)}"
+            fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" opacity="0.95"/>
+      <path d="M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${(hx1 * V).toFixed(1)} ${(hy1 * V).toFixed(1)} L ${(hx2 * V).toFixed(1)} ${(hy2 * V).toFixed(1)} Z"
+            fill="${color}" opacity="0.95"/>`;
+  }
+
+  function oracleMoves(sample) {
+    const o = (sample && sample.oracle) || {};
+    const moves = [];
+    if (o.best_move) moves.push(o.best_move);
+    if (Array.isArray(o.mate_moves) && o.mate_moves.length) moves.push(o.mate_moves[0]);
+    if (o.first_move && o.first_move !== o.best_move) moves.push(o.first_move);
+    return moves;
+  }
+
+  function renderArrows(sample) {
+    let overlay = $("boardArrows");
+    if (!overlay) {
+      overlay = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      overlay.id = "boardArrows";
+      overlay.setAttribute("class", "board-arrows");
+      $("liveBoard").parentElement.prepend(overlay);
+    }
+    const n = sample && sample.n ? sample.n : 8;
+    const modelMove = sample && sample.move ? sample.move : null;
+    let svg = "";
+    const oracle = oracleMoves(sample);
+    const seen = new Set();
+    for (const m of oracle) {
+      if (!m || m === modelMove || seen.has(m)) continue;
+      seen.add(m);
+      svg += arrowSvg(m.slice(0, 2), m.slice(2, 4), n, "#34d399");
+    }
+    if (modelMove) svg += arrowSvg(modelMove.slice(0, 2), modelMove.slice(2, 4), n, "#60a5fa");
+    overlay.setAttribute("viewBox", `0 0 100 100`);
+    overlay.innerHTML = svg || "";
   }
 
   function sampleDone(sample) {
@@ -775,28 +886,31 @@
 
     $("livePromptLabel").textContent = live.model_input ? "exact model input" : "task prompt · model template not published";
     $("livePrompt").textContent = live.model_input || live.prompt || "No model input was published for this sample.";
-    const cot = live.cot_requested === true || /think step by step/i.test(live.prompt || "");
+    const reasoning = live.reasoning || "";
     const generating = live.phase === "generating" && !sampleDone(live);
-    $("liveGenerationLabel").textContent = generating
-      ? (cot ? "reasoning requested · generating" : "model output · generating")
-      : (cot ? "reasoning requested · raw completion" : "model output · answer-only");
+    const thinkingLive = generating && reasoning.length > 0;
+    $("liveGenerationLabel").textContent = thinkingLive
+      ? "model thinking (live)" : generating
+        ? "model thinking · no tokens yet"
+        : (live.output ? "model output (final answer)" : "model thinking → no final answer");
     $("liveGenerationNote").textContent = generating
-      ? (cot ? "generation is in progress; raw output will appear when published" : "answer-only generation is in progress")
-      : cot
-        ? "raw generated text; no hidden reasoning is inferred"
-        : "this run did not request chain-of-thought; the prompt requires an answer-only response";
-    $("liveThinking").textContent = live.output || (sampleDone(live) ? "No output was returned." : "waiting for the first generated token…");
+      ? (thinkingLive ? `live reasoning · ${reasoning.length.toLocaleString()} chars so far · refreshed every ~60s` : "thinking is in progress; tokens will stream in as they are published")
+      : live.output
+        ? "the final answer after reasoning; the full chain of thought is preserved above in this box"
+        : "reasoning ran to completion but no answer was emitted (budget or model choice)";
+    $("liveThinking").textContent = generating ? reasoning : (live.output || reasoning || "No output was returned.");
     $("liveThinking").classList.toggle("thinking", !sampleDone(live));
     $("liveThinking").scrollTop = $("liveThinking").scrollHeight;
 
     const c = live.correct || {};
     const verdict = verdictInfo(live);
+    const oracle = live.oracle || {};
     const referenceLabel = kind === "bestmove"
       ? "Stockfish reference"
-      : c.move
-        ? "oracle reference"
-        : kind === "cap"
-          ? "rule"
+      : kind === "mate1" || kind === "mate2"
+        ? "mating reference"
+        : c.move
+          ? "oracle reference"
           : "reference answer";
     $("liveReferenceLabel").textContent = referenceLabel;
     $("liveModelMove").textContent = live.move || "—";
@@ -804,10 +918,17 @@
     $("liveModelStatus").textContent = sampleDone(live)
       ? live.status === "legal" ? "parsed and legal" : (live.status || "unscored").replaceAll("_", " ")
       : "pending final answer";
-    $("liveStockMove").textContent = c.move || (kind === "cap" ? "any legal move" : "—");
-    $("liveStockMove").classList.toggle("empty", !c.move);
-    $("liveStockMove").title = c.note || "";
-    $("liveReferenceNote").textContent = c.note || "No reference move was published.";
+    const refMove = c.move || oracle.best_move
+      || (Array.isArray(oracle.mate_moves) && oracle.mate_moves[0])
+      || oracle.first_move || (kind === "cap" ? "any legal move" : "—");
+    $("liveStockMove").textContent = refMove;
+    $("liveStockMove").classList.toggle("empty", !refMove);
+    $("liveStockMove").title = c.note || oracle.cp != null ? `eval ${oracle.cp}cp` : "";
+    $("liveReferenceNote").textContent = c.note
+      || (oracle.cp != null ? `Stockfish eval ${oracle.cp}cp (depth ${oracle.depth || "?"})` : "")
+      || (kind === "mate1" ? "any move delivering checkmate wins" : "")
+      || (kind === "mate2" ? "the only move of the forced mate line" : "")
+      || "No reference move was published.";
 
     const vEl = $("liveVerdict");
     vEl.hidden = false;
@@ -876,14 +997,17 @@
         if (live && live.position_id && live !== l) replay.push(live);
         if (replay.length > 40) replay.shift();
         lastLiveKey = key;
-        live = l;
+        liveLatest = l;
+        if (!navigated) live = l;
       } else if (
         l.updated_at !== live.updated_at
         || l.phase !== live.phase
         || l.status !== live.status
         || l.output !== live.output
+        || l.reasoning !== live.reasoning
       ) {
-        live = l; // same position, refreshed content or lifecycle phase
+        liveLatest = l;
+        if (!navigated || live === liveLatest) live = l; // same position, refreshed content or lifecycle phase
       }
       renderLive();
       renderReplay();
@@ -895,11 +1019,17 @@
 
   // ---------------- boot ----------------
   $("refreshBtn").addEventListener("click", load);
+  $("navPrev").addEventListener("click", () => navTo(navIndex() - 1));
+  $("navNext").addEventListener("click", () => navTo(navIndex() + 1));
+  $("navSync").addEventListener("click", navSync);
+  setInterval(updateNavButtons, 500);
   $("liveReplay").addEventListener("click", (ev) => {
     const chip = ev.target.closest(".replay-chip");
     if (!chip) return;
     const i = +chip.dataset.i;
-    if (replay[i]) { live = replay[i]; renderLive(); renderReplay(); }
+    const list = navHistory();
+    const target = list[list.length - 1 - i];
+    if (target) { live = target; navigated = true; renderLive(); renderReplay(); }
   });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { load(); loadLive(); } });
   if (CONFIG.REFRESH_S > 0) timer = setInterval(load, CONFIG.REFRESH_S * 1000);

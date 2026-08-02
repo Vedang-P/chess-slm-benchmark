@@ -359,9 +359,11 @@ def main() -> None:
             summary_path = ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json"
             if args.resume and summary_path.exists():
                 summary = json.loads(summary_path.read_text())
-                if summary.get("schema") != SCHEMA:
+                if (summary.get("schema") != SCHEMA
+                        or summary.get("n_samples", 0) < n):
                     print(f"  resume: {model} x {task}:{variant} schema v{summary.get('schema')} "
-                          f"!= v{SCHEMA} (stale parser/loader) — re-running", flush=True)
+                          f"n={summary.get('n_samples')} < n={n} (stale/partial) — re-running",
+                          flush=True)
                 else:
                     cell_rows = _rows_from_summary(model, task, variant, summary)
                     rows.extend(cell_rows)

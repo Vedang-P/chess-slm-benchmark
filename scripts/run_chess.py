@@ -208,6 +208,7 @@ def main() -> None:
         out = out or {}
         scored = scored or {}
         correct = T.get_correct(rec, kind)
+        extra = rec.get("task_extra") or {}
         live = {
             "updated_at": _utc_ts(),
             "cell": {"model": args.model, "task": task_name, "variant": args.prompt_variant},
@@ -217,12 +218,20 @@ def main() -> None:
             "prompt": prompt,
             "model_input": model_input,
             "output": out.get("content", ""),
+            "reasoning": out.get("reasoning", ""),
             "finished": out.get("finished") if phase == "scored" else False,
             "phase": phase,
             "status": scored.get("status") if phase == "scored" else None,
             "move": scored.get("move"),
             "compliance": scored.get("compliance"),
             "correct": correct,
+            "oracle": {
+                "kind": kind,
+                "best_move": extra.get("best_move"),
+                "mate_moves": extra.get("mate_moves"),
+                "first_move": extra.get("first_move"),
+                "cp": extra.get("cp"),
+            },
             "fen": rec.get("presented_fen") or rec.get("fen"),
             "pieces": rec.get("pieces"),
             "turn": rec.get("turn"),
@@ -271,8 +280,20 @@ def main() -> None:
                 else:
                     print(model.render_chat(prompt), flush=True)
                 print("\n--- MODEL OUTPUT (streaming) ---", flush=True)
+            def _live_partial(partial: dict) -> None:
+                """During generation, surface the model's live thinking to
+                live.json (the suite monitor uploads it every 60s)."""
+                push_live(rec, condition, prompt, model_input,
+                          out={"content": partial.get("content", ""),
+                               "reasoning": partial.get("reasoning", ""),
+                               "finished": partial.get("finished", False)},
+                          sample_idx=len(samples) + 1,
+                          total=len(records) * len(conditions),
+                          phase="generating", force=True)
+
             out = model.generate(prompt, max_new_tokens=args.max_new_tokens,
-                                 stream=args.verbose or args.stream)
+                                 stream=args.verbose or args.stream,
+                                 on_chunk=_live_partial if not args.smoke else None)
             if args.verbose:
                 print(f"\n--- END (tokens={out.get('output_tokens')}, "
                       f"finished={out.get('finished')}) ---", flush=True)
@@ -289,6 +310,7 @@ def main() -> None:
                 "finished": out.get("finished"),
                 "prompt": prompt,
                 "output": out.get("content", ""),
+                "reasoning": out.get("reasoning", ""),
                 "correct": T.get_correct(rec, kind),
                 **scored,
             }

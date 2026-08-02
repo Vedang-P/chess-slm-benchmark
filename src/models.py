@@ -227,11 +227,13 @@ class OpenCodeGoModel:
         """The gateway takes plain text; this mirrors HFModel's interface."""
         return prompt
 
-    def _post(self, payload: dict) -> dict:
+    def _post(self, payload: dict, stream: bool = False):
         wait = self.MIN_INTERVAL_S - (time.time() - self._last_call)
         if wait > 0:
             time.sleep(wait)
         self._last_call = time.time()
+        if stream:
+            payload = {**payload, "stream": True}
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(payload).encode(),
@@ -241,33 +243,86 @@ class OpenCodeGoModel:
                      # the default urllib user-agent
                      "User-Agent": "openai-python/1.0 chess-benchmark"},
             method="POST")
-        with urllib.request.urlopen(req, timeout=600) as r:
-            return json.load(r)
+        return urllib.request.urlopen(req, timeout=3600)
+
+    def _sse_chunks(self, resp):
+        """Yield parsed JSON chunks from a stream=true SSE response."""
+        buf = ""
+        for raw in resp:
+            buf += raw.decode("utf-8", "ignore")
+            while "\n" in buf:
+                line, buf = buf.split("\n", 1)
+                line = line.strip()
+                if line.startswith("data:") and line != "data: [DONE]":
+                    try:
+                        yield json.loads(line[5:].strip())
+                    except json.JSONDecodeError:
+                        pass
 
     def generate(self, prompt: str, max_new_tokens: int = 512,
-                 temperature: float = 0.0, stream: bool = False) -> dict:
+                 temperature: float = 0.0, stream: bool = False,
+                 on_chunk=None) -> dict:
+        """Generate via the gateway. Thinking is ENABLED and UNBOUNDED: V4
+        Flash reasons long on chess positions, and the study wants that
+        thinking visible — we just wait for the final answer (max_tokens
+        set high enough that reasoning + answer both fit).
+
+        With on_chunk=callable(partial_dict), the client calls back with
+        {content, reasoning, phase} during generation so the runner can
+        write live.json snapshots (the website shows thinking at ~1 min
+        lag). Returns {content, reasoning, tokens, latency_ms, finished}."""
         t0 = time.time()
         if self.smoke_test:
-            return {"content": "MOVE: a1a2", "input_tokens": 0,
-                    "output_tokens": 8, "latency_ms": 1, "finished": True}
+            return {"content": "MOVE: a1a2", "reasoning": "",
+                    "input_tokens": 0, "output_tokens": 8,
+                    "latency_ms": 1, "finished": True}
         payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
                    "temperature": temperature,
-                   # Thinking disabled: the model otherwise spends the entire
-                   # budget on reasoning and emits empty content (observed at
-                   # 4096 tokens, 43s). Direct answers also match the rest of
-                   # the benchmark (gemma enable_thinking=False, no CoT).
-                   "thinking": {"type": "disabled"},
+                   "thinking": {"type": "enabled"},
                    "messages": [{"role": "user", "content": prompt}]}
         try:
-            data = self._post(payload)
-            content = data["choices"][0]["message"]["content"] or ""
             if stream:
-                print(content, end="", flush=True)
+                content, reasoning = "", ""
+                n_tokens = 0
+                last_chunk_at = time.time()
+                with self._post(payload, stream=True) as resp:
+                    for chunk in self._sse_chunks(resp):
+                        ch = chunk.get("choices") or [{}]
+                        if not ch:
+                            continue
+                        delta = ch[0].get("delta") or {}
+                        content += delta.get("content") or ""
+                        reasoning += delta.get("reasoning_content") or ""
+                        n_tokens = (chunk.get("usage") or {}).get(
+                            "completion_tokens", n_tokens)
+                        finish = ch[0].get("finish_reason")
+                        if on_chunk and (time.time() - last_chunk_at >= 20
+                                         or finish):
+                            last_chunk_at = time.time()
+                            on_chunk({
+                                "content": content, "reasoning": reasoning,
+                                "phase": "reasoning" if not content else "answering",
+                                "finished": bool(finish),
+                            })
+                data = {"choices": [{"message": {"content": content,
+                                                 "reasoning_content": reasoning},
+                                     "finish_reason": "stop" if content else "length"}],
+                        "usage": {"prompt_tokens": 0, "completion_tokens": n_tokens}}
+                if on_chunk:
+                    on_chunk({"content": content, "reasoning": reasoning,
+                              "phase": "done", "finished": True})
+            else:
+                with self._post(payload) as resp:
+                    data = json.load(resp)
+            msg = data["choices"][0]["message"]
+            content = msg.get("content") or ""
+            reasoning = msg.get("reasoning_content") or ""
             usage = data.get("usage", {})
             self.prompt_tokens += usage.get("prompt_tokens", 0)
             self.completion_tokens += usage.get("completion_tokens", 0)
             return {
                 "content": content,
+                "reasoning": reasoning,
                 "input_tokens": usage.get("prompt_tokens", 0),
                 "output_tokens": usage.get("completion_tokens", 0),
                 "latency_ms": (time.time() - t0) * 1000,
@@ -279,13 +334,13 @@ class OpenCodeGoModel:
                 body = e.read().decode()[:300]
             except Exception:
                 pass
-            return {"content": f"ERROR HTTP {e.code}: {body}", "input_tokens": 0,
-                    "output_tokens": 0, "latency_ms": (time.time() - t0) * 1000,
-                    "finished": True}
+            return {"content": f"ERROR HTTP {e.code}: {body}", "reasoning": "",
+                    "input_tokens": 0, "output_tokens": 0,
+                    "latency_ms": (time.time() - t0) * 1000, "finished": True}
         except Exception as e:
-            return {"content": f"ERROR {type(e).__name__}: {e}", "input_tokens": 0,
-                    "output_tokens": 0, "latency_ms": (time.time() - t0) * 1000,
-                    "finished": True}
+            return {"content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
+                    "input_tokens": 0, "output_tokens": 0,
+                    "latency_ms": (time.time() - t0) * 1000, "finished": True}
 
 
 def make_model(model_key: str, smoke_test: bool = False):

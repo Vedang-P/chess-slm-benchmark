@@ -101,11 +101,22 @@
           <p class="live-now" id="liveNow">waiting for the monitor</p>
           <p class="live-sync" id="liveSync">waiting for a sample identity check</p>
         </div>
-        <span class="board-note" id="liveMeta">—</span>
+        <div class="board-actions">
+          <span class="board-note" id="liveMeta">—</span>
+          <div class="nav-arrows">
+            <button class="nav-btn" id="navPrev" title="previous sample">←</button>
+            <button class="nav-btn" id="navSync" title="back to live">●</button>
+            <button class="nav-btn" id="navNext" title="next sample">→</button>
+          </div>
+        </div>
       </div>
       <div class="live-grid">
         <div class="live-board-wrap">
           <div class="board-stage" id="liveBoard"></div>
+          <div class="arrow-legend">
+            <span class="legend-arrow green">→</span><span class="dim">reference move</span>
+            <span class="legend-arrow blue">→</span><span class="dim">model move</span>
+          </div>
           <div class="live-caption" id="liveCaption">waiting for the first position…</div>
           <p class="live-integrity" id="liveIntegrity" hidden></p>
         </div>
