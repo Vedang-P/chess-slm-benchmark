@@ -387,18 +387,21 @@ class OpenCodeGoModel:
             }, local_usage(None, None, source="error"))
 
     def force_answer(self, prompt: str, max_new_tokens: int = 256,
-                     temperature: float = 0.0) -> dict:
+                     temperature: float = 0.0,
+                     answer_instruction: str | None = None) -> dict:
         """Second-chance call used when the thinking pass produced no answer:
-        thinking is disabled and the model is ordered to commit to a move,
-        any move. 'No answer' is never acceptable for the benchmark's
+        thinking is disabled and the model is ordered to commit to an answer,
+        any answer. 'No answer' is never acceptable for the benchmark's
         comparison baseline — if this also fails, the runner falls back to
-        a legal move extracted from the reasoning (or a random legal move),
-        always flagged as a fallback."""
+        extraction from the reasoning (or a random choice), always flagged
+        as a fallback. `answer_instruction` overrides the default
+        move-format demand (used by non-move tasks like MATE selection)."""
         t0 = time.time()
         commit = (prompt
-                  + "\n\nFINAL ANSWER REQUIRED: output exactly one line, "
-                    "MOVE: <from><to>. If you are not sure, still output your "
-                    "best guess — you must output a move.")
+                  + "\n\n" + (answer_instruction
+                              or "FINAL ANSWER REQUIRED: output exactly one line, "
+                                "MOVE: <from><to>. If you are not sure, still output "
+                                "your best guess — you must output a move."))
         payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
                    "temperature": temperature,
                    "thinking": {"type": "disabled"},

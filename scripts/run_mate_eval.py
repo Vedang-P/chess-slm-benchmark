@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROOT = Path(__file__).resolve().parent.parent
 from src.models import configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_token_usage  # noqa: E402
+from src.token_usage import merge_usage  # noqa: E402
 
 RECORDS_PATH = ROOT / "data/positions/mate-selection-test.json"
 ANSWER_SPEC = (
@@ -73,7 +74,11 @@ def main() -> None:
     ap.add_argument("--offset", type=int, default=0,
                     help="start index into the record set (parallel shards)")
     ap.add_argument("--output_dir", default="results/mate-selection")
-    ap.add_argument("--max_new_tokens", type=int, default=32768)
+    ap.add_argument("--max_new_tokens", type=int, default=8192,
+                    help="total token bound. The gateway ignores the thinking "
+                         "budget on some requests (observed 24k+ reasoning "
+                         "tokens at 32768); 8192 caps the worst case and the "
+                         "forced-answer fallback covers truncation.")
     ap.add_argument("--thinking-budget", type=int, default=None,
                     help="bound reasoning tokens while keeping thinking ON "
                          "(e.g. 2048 ~ 45s/position; unbounded ~3min/position)")
@@ -232,6 +237,40 @@ def main() -> None:
                    "latency_ms": 1, "finished": True}
         label, move = parse_choice(out.get("content", ""),
                                    extra["candidate_a"], extra["candidate_b"])
+        fallback = None
+        if label is None and hasattr(model, "force_answer") and not args.smoke:
+            # 'no answer' is not an option: force a committed second pass
+            out2 = model.force_answer(
+                model_input,
+                answer_instruction=(
+                    "FINAL ANSWER REQUIRED: output exactly one of MoveA:<move> "
+                    "or MoveB:<move>. If you are not sure, still output your "
+                    "best guess — you must output a choice."))
+            out = {**out, "content": out2.get("content", ""),
+                   "reasoning": (out.get("reasoning", "") or "")
+                                + "\n\n[forced answer pass]\n"
+                                + (out2.get("reasoning", "") or ""),
+                   "token_usage": merge_usage(
+                       out.get("token_usage"), out2.get("token_usage"),
+                       out.get("latency_ms")),
+                   "latency_ms": (out.get("latency_ms") or 0)
+                                 + (out2.get("latency_ms") or 0)}
+            fallback = "forced"
+            label, move = parse_choice(out.get("content", ""),
+                                       extra["candidate_a"], extra["candidate_b"])
+        if label is None:
+            # extract a candidate from the reasoning chain
+            label, move = parse_choice(out.get("reasoning", ""),
+                                       extra["candidate_a"], extra["candidate_b"])
+            if label is not None:
+                fallback = "reasoning-extract"
+        if label is None:
+            # last resort: a random candidate, flagged
+            import random as _random
+
+            label = _random.choice(("A", "B"))
+            move = extra["candidate_a"] if label == "A" else extra["candidate_b"]
+            fallback = "random-choice"
         correct = label == extra["truth_label"]
         if label is None:
             status = "parse_error"
@@ -263,7 +302,7 @@ def main() -> None:
             "token_usage": out.get("token_usage"),
             "cache_hit": (out.get("token_usage") or {}).get("cache_hit_tokens"),
             "cache_miss": (out.get("token_usage") or {}).get("cache_miss_tokens"),
-            "fallback": None,
+            "fallback": fallback,
             "position_metadata": {"fen": rec.get("fen"),
                                   "task_extra": extra},
             "correct": {"move": extra.get("output"), "note": "MATE expert choice"},
