@@ -36,6 +36,17 @@ ANSWER_SPEC = (
     "Answer with exactly one of: MoveA:<move> or MoveB:<move>. "
     "Only output the line, nothing else."
 )
+# Prompt-level forcing (user decision 2026-08-04): demand an answer inside
+# the budget; if the model cannot be confident, it must still output its best
+# guess from the two candidates. The answer text is still the model's own
+# output — this is NOT a runner-side fallback.
+ANSWER_SPEC_FORCED = (
+    "Answer with exactly one of: MoveA:<move> or MoveB:<move>. "
+    "Only output the line, nothing else.\n"
+    "You MUST output an answer. If you cannot determine which move is better "
+    "with confidence, output your best guess from the two candidates anyway. "
+    "An answer is required; refusing to answer is not acceptable."
+)
 CHOICE_RE = re.compile(r"Move\s*([AB])")
 ANSWER_RE = re.compile(r"Move\s*([AB])\s*[:.-]?\s*([a-h][1-8][a-h][1-8][qrbnQRBN]?)?")
 UCI_RE = re.compile(r"[a-h][1-8][a-h][1-8][qrbnQRBN]?")
@@ -80,6 +91,9 @@ def main() -> None:
                     help="bound reasoning tokens while keeping thinking ON")
     ap.add_argument("--thinking-disabled", action="store_true",
                     help="disable thinking entirely (native direct answers)")
+    ap.add_argument("--force-answer-prompt", action="store_true",
+                    help="append the must-answer/best-guess instruction to the "
+                         "prompt (prompt-level forcing; answer still the model's own)")
     ap.add_argument("--resume", action="store_true",
                     help="skip position_ids already scored in the samples file")
     ap.add_argument("--verbose", action="store_true")
@@ -250,7 +264,8 @@ def main() -> None:
             "position_id": rec["id"],
             "prompt": extra["instruction"] + "\n" + extra["input"],
             "model_input": extra["instruction"] + "\n" + extra["input"]
-                          + "\n" + ANSWER_SPEC,
+                          + "\n" + (ANSWER_SPEC_FORCED if args.force_answer_prompt
+                                     else ANSWER_SPEC),
             "output": out.get("content", ""),
             "reasoning": out.get("reasoning", ""),
             "finished": out.get("finished") if phase == "scored" else False,
@@ -289,7 +304,8 @@ def main() -> None:
     for i, rec in enumerate(records):
         extra = rec["task_extra"]
         prompt = extra["instruction"] + "\n" + extra["input"]
-        model_input = prompt + "\n" + ANSWER_SPEC
+        answer_spec = ANSWER_SPEC_FORCED if args.force_answer_prompt else ANSWER_SPEC
+        model_input = prompt + "\n" + answer_spec
 
         def _live_partial(partial):
             write_live(rec, {"content": partial.get("content", ""),
@@ -302,14 +318,7 @@ def main() -> None:
                              on_chunk=_live_partial if not args.smoke else None,
                              thinking_budget=args.thinking_budget,
                              thinking_disabled=args.thinking_disabled)
-        for _attempt in range(2):
-            if not str(out.get("content", "")).startswith("ERROR"):
-                break
-            time.sleep(3)
-            out = model.generate(model_input, max_new_tokens=args.max_new_tokens,
-                                 stream=True, on_chunk=None,
-                                 thinking_budget=args.thinking_budget,
-                                 thinking_disabled=args.thinking_disabled)
+        # NO retries and NO fallbacks: one call, whatever comes back is scored.
         if args.smoke:
             out = {"content": "MoveB:d5d4", "reasoning": "",
                    "token_usage": {"input_tokens": 10, "output_tokens": 8,
@@ -317,18 +326,30 @@ def main() -> None:
                    "latency_ms": 1, "finished": True}
         label, move = parse_choice(out.get("content", ""),
                                    extra["candidate_a"], extra["candidate_b"])
+        # careful no-answer classification: WHY there is no answer matters
+        # (gave up vs truncated by the budget vs unparseable)
+        content = out.get("content", "") or ""
+        reasoning = out.get("reasoning", "") or ""
+        no_answer_reason = None
+        if label is None:
+            if not content.strip() and not out.get("finished", True):
+                no_answer_reason = "truncated"      # budget cut off mid-generation
+            elif not content.strip():
+                no_answer_reason = "gave_up"        # stopped without content
+            else:
+                no_answer_reason = "unparseable"    # content but no candidate
         # NO fallback: if the model's text has no parseable choice, the sample
-        # is a parse_error. An answer recorded on a sample is always the
-        # model's own output.
+        # is a parse_error/no_answer. An answer recorded on a sample is always
+        # the model's own output.
         correct = label == extra["truth_label"]
         if label is None:
-            status = "parse_error"
+            status = "no_answer" if not content.strip() else "parse_error"
         elif correct:
             status = "correct"
         else:
             status = "wrong"
         scored = {"status": status, "label": label, "move": move,
-                  "compliance": correct}
+                  "compliance": correct, "no_answer_reason": no_answer_reason}
         sample = {
             "position_id": rec["id"],
             "model": args.model,
@@ -352,6 +373,7 @@ def main() -> None:
             "cache_hit": (out.get("token_usage") or {}).get("cache_hit_tokens"),
             "cache_miss": (out.get("token_usage") or {}).get("cache_miss_tokens"),
             "fallback": None,  # never fabricated: answers are the model's own text
+            "no_answer_reason": no_answer_reason,
             "position_metadata": {"fen": rec.get("fen"),
                                   "task_extra": extra},
             "correct": {"move": extra.get("output"), "note": "MATE expert choice"},
