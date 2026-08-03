@@ -3,10 +3,45 @@
 What exists, what each one does, which is closest to ours, and what we
 borrow from each. Verdict up front:
 
-> **Closest to ours: ChessQA** (task taxonomy, open dataset) + **LLM CHESS**
-> (game-play protocol, Elo) + **Geometric stability** (perturbation axis —
-> our representation axis is the same idea). **ChessBench** is the closest
-> *dataset* ancestor (our datasets are its CC0 sources, rebuilt richer).
+> **Our primary base: MATE** (NAACL 2025) — fine-tuned an 8B model on 1M
+> expert-annotated positions (strategy + tactic, with/without language
+> explanations) and beat GPT/Claude/Gemini on move selection. We replicate
+> its recipe on the LATEST models (LoRA-tuned Gemma 4 E2B/E4B vs
+> deepseek-v4-flash), evaluate on its public testset plus our tactical
+> battery, and tighten the evaluation (standard chess, larger n, more
+> tasks). Supporting bases: **ChessQA** (task taxonomy), **LLM CHESS**
+> (game-play protocol), **ChessBench** (dataset ancestry).
+
+---
+
+## 0. MATE — "Explore the Reasoning Capability of LLMs in the Chess
+## Testbed" (Wang et al., NAACL 2025) — OUR BASE
+
+- **What**: 1M chess positions, each with candidate moves annotated by
+  chess experts (incl. women's world champion Yifan Hou) for STRATEGY and
+  TACTIC, with and without language explanations (MATE-Strategy,
+  MATE-Tactic, MATE-Strategy-Explanation, MATE-No-Explain, MATE-Both).
+  Fine-tunes LLaMA-3-8B; compares against GPT-4o/Claude/Gemini on move
+  selection; the 8B fine-tune WINS. Finding: language explanations
+  measurably enhance the model's move-selection reasoning.
+- **What it gets right (borrow)**: the finetune-then-compare recipe; the
+  dual strategy/tactic annotation frame; explanations as a reasoning
+  aid; a public dataset + testset (HF: OutFlankShu/MATE_DATASET).
+- **What it gets wrong / how we improve**:
+  1. **Models are dated**: LLaMA-3-8B (2024) vs 2024-era GPT/Claude/Gemini.
+     We fine-tune the LATEST small VLMs (Gemma 4 E2B/E4B, 2026) via LoRA
+     and compare against the latest frontier (deepseek-v4-flash).
+  2. **Evaluation is thin**: a single move-selection metric against
+     commercial APIs, small testset, non-standard-rules ambiguity.
+     We add: mate-in-1/2 and best-move batteries under standard chess
+     (python-chess), legality probes, larger n, and per-sample verdicts
+     with full thinking chains archived.
+  3. **No representation control**: MATE uses one prompt format. We ran a
+     Phase-1 representation study (FEN wins decisively) and standardize
+     on FEN, with the evidence reported.
+  4. **Fine-tuning cost**: 8B full fine-tune. We use 4-bit LoRA on the
+     free T4 tier — cheaper, reproducible, and the paper's "can a small
+     fine-tuned model fit on-device" story. 
 
 ---
 
