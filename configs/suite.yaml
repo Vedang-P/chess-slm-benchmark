@@ -22,11 +22,11 @@ tasks:
     variants:
     - fen
 check:
-  max_new_tokens: 8192
+  max_new_tokens: 2048
   conditions:
   - win
 full:
-  max_new_tokens: 8192
+  max_new_tokens: 2048
   smoke: false
   conditions:
   - win

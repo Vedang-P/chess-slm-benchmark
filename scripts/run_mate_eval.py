@@ -74,11 +74,11 @@ def main() -> None:
     ap.add_argument("--offset", type=int, default=0,
                     help="start index into the record set (parallel shards)")
     ap.add_argument("--output_dir", default="results/mate-selection")
-    ap.add_argument("--max_new_tokens", type=int, default=8192,
-                    help="total token bound. The gateway ignores the thinking "
-                         "budget on some requests (observed 24k+ reasoning "
-                         "tokens at 32768); 8192 caps the worst case and the "
-                         "forced-answer fallback covers truncation.")
+    ap.add_argument("--max_new_tokens", type=int, default=2048,
+                    help="total generation budget, identical across models "
+                         "(gemma runs the same 2048) for a fair comparison. "
+                         "Thinking budget is separate (--thinking-budget); "
+                         "the forced-answer fallback covers truncation.")
     ap.add_argument("--thinking-budget", type=int, default=None,
                     help="bound reasoning tokens while keeping thinking ON "
                          "(e.g. 2048 ~ 45s/position; unbounded ~3min/position)")
