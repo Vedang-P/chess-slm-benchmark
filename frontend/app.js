@@ -820,6 +820,9 @@
     if (o.best_move) moves.push(o.best_move);
     if (Array.isArray(o.mate_moves) && o.mate_moves.length) moves.push(o.mate_moves[0]);
     if (o.first_move && o.first_move !== o.best_move) moves.push(o.first_move);
+    // MATE move-selection shape: truth_label picks the expert's candidate
+    if (o.truth_label === "A" && o.candidate_a) moves.push(o.candidate_a);
+    if (o.truth_label === "B" && o.candidate_b) moves.push(o.candidate_b);
     return [...new Set(moves)];
   }
 
