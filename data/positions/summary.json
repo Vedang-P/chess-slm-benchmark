@@ -4,40 +4,40 @@
   "values": {
    "win": 40
   },
-  "seconds": 0.2
+  "seconds": 0.5
  },
  "sm-3x3-draw": {
   "n": 40,
   "values": {
    "draw": 40
   },
-  "seconds": 1.4
+  "seconds": 3.1
  },
  "sm-5x5-win": {
   "n": 40,
   "values": {
    "win": 40
   },
-  "seconds": 37.9
+  "seconds": 59.9
  },
  "sm-5x5-draw": {
   "n": 40,
   "values": {
    "draw": 40
   },
-  "seconds": 156.8
+  "seconds": 246.7
  },
  "mate1-8x8": {
   "n": 40,
   "values": {
-   "draw": 40
+   "cap": 40
   },
-  "seconds": 0.2
+  "seconds": 0.1
  },
  "mob-8x8": {
   "n": 40,
   "values": {
-   "draw": 40
+   "cap": 40
   },
   "seconds": 0.0
  }

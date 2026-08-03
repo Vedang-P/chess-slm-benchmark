@@ -178,6 +178,163 @@ def mate1_positions(
     return out
 
 
+def _std_record(board, pid: str, task_extra: Optional[dict] = None) -> Dict[str, object]:
+    """Record for an 8x8 position under STANDARD chess (python-chess)."""
+    import chess
+
+    rec = {
+        "id": pid,
+        "n": 8,
+        "turn": "w" if board.turn == chess.WHITE else "b",
+        "value": "cap",
+        "fen": board.fen(),
+        "presented_fen": board.fen(),
+        "pieces": [
+            {"sq": chess.square_name(sq),
+             "color": "w" if board.piece_at(sq).color == chess.WHITE else "b",
+             "kind": board.piece_at(sq).symbol().upper()}
+            for sq in chess.SQUARES if board.piece_at(sq) is not None
+        ],
+        "win_moves": [],
+        "lose_moves": [],
+        "over_budget": False,
+    }
+    if task_extra:
+        rec["task_extra"] = task_extra
+    return rec
+
+
+def _std_mate1_candidate(rng, max_pieces: int):
+    """Random legal 8x8 position with a mate-in-1 (python-chess). Returns a
+    chess.Board or None. Material biased toward the side to move."""
+    import chess
+
+    turn = rng.choice(COLORS)
+    other = "b" if turn == "w" else "w"
+    for _ in range(200):
+        b = chess.Board(None)
+        wk = chess.square(rng.randint(0, 7), rng.randint(0, 7))
+        bk = chess.square(rng.randint(0, 7), rng.randint(0, 7))
+        if wk == bk:
+            continue
+        b.set_piece_at(wk, chess.Piece(chess.KING, chess.WHITE))
+        b.set_piece_at(bk, chess.Piece(chess.KING, chess.BLACK))
+        b.turn = chess.WHITE if turn == "w" else chess.BLACK
+        n_attack = rng.randint(2, min(max_pieces, 4))
+        material = [("Q" if turn == "w" else "q")] + [
+            (rng.choice(["R", "R", "B", "N"]) if turn == "w"
+             else rng.choice(["r", "r", "b", "n"])) for _ in range(n_attack - 1)
+        ]
+        if rng.random() < 0.4:
+            material.append(rng.choice(["B", "b", "N", "n", "P", "p"]))
+        occupied = {wk, bk}
+        ok = True
+        for sym in material:
+            for _ in range(50):
+                sq = chess.square(rng.randint(0, 7), rng.randint(0, 7))
+                if sq not in occupied:
+                    b.set_piece_at(sq, chess.Piece.from_symbol(sym))
+                    occupied.add(sq)
+                    break
+            else:
+                ok = False
+                break
+        if not ok:
+            continue
+        if not (b.king(chess.WHITE) and b.king(chess.BLACK)):
+            continue
+        if b.is_check() or b.is_game_over():
+            continue
+        # require at least one mating move and non-vacuity
+        mates = []
+        for mv in b.legal_moves:
+            b.push(mv)
+            if b.is_checkmate():
+                mates.append(mv.uci())
+            b.pop()
+        if not mates or len(mates) == len(list(b.legal_moves)):
+            continue
+        return b, mates
+    return None
+
+
+def std_mate1_positions(
+    n: int, seed: int, n_positions: int, max_pieces: int,
+) -> List[Dict[str, object]]:
+    """8x8 mate-in-1 task under STANDARD chess (python-chess). The custom
+    engine's mate1_positions is only valid for NxN small boards."""
+    rng = random.Random(seed)
+    out: List[Dict[str, object]] = []
+    attempts = 0
+    while len(out) < n_positions and attempts < MAX_ATTEMPTS * 5:
+        attempts += 1
+        cand = _std_mate1_candidate(rng, max_pieces)
+        if cand is None:
+            continue
+        board, mates = cand
+        rec = _std_record(board, f"mate1-{n}x{n}-{len(out):04d}")
+        rec["task_extra"] = {"mate_moves": mates}
+        out.append(rec)
+    if len(out) < n_positions:
+        raise RuntimeError(f"std_mate1_positions: only {len(out)}/{n_positions} after attempts")
+    return out
+
+
+def std_mobility_positions(
+    n: int, seed: int, n_positions: int, max_pieces: int,
+) -> List[Dict[str, object]]:
+    """8x8 opponent-mobility task under STANDARD chess (python-chess)."""
+    import chess
+
+    rng = random.Random(seed)
+    out: List[Dict[str, object]] = []
+    attempts = 0
+    while len(out) < n_positions and attempts < MAX_ATTEMPTS * 3:
+        attempts += 1
+        b = chess.Board(None)
+        wk = chess.square(rng.randint(0, 7), rng.randint(0, 7))
+        bk = chess.square(rng.randint(0, 7), rng.randint(0, 7))
+        if wk == bk:
+            continue
+        b.set_piece_at(wk, chess.Piece(chess.KING, chess.WHITE))
+        b.set_piece_at(bk, chess.Piece(chess.KING, chess.BLACK))
+        b.turn = rng.choice((chess.WHITE, chess.BLACK))
+        occupied = {wk, bk}
+        ok = True
+        for _ in range(rng.randint(2, max_pieces - 2)):
+            sym = rng.choice(["Q", "q", "R", "r", "B", "b", "N", "n", "P", "p"])
+            for _ in range(50):
+                sq = chess.square(rng.randint(0, 7), rng.randint(0, 7))
+                if sq not in occupied:
+                    b.set_piece_at(sq, chess.Piece.from_symbol(sym))
+                    occupied.add(sq)
+                    break
+            else:
+                ok = False
+                break
+        if not ok:
+            continue
+        if b.is_check() or b.is_game_over():
+            continue
+        if len(list(b.legal_moves)) < 2:
+            continue
+        moves = []
+        for mv in b.legal_moves:
+            b.push(mv)
+            replies = len(list(b.legal_moves))
+            b.pop()
+            moves.append({"move": mv.uci(), "opp_replies": replies})
+        replies = [m["opp_replies"] for m in moves]
+        if min(replies) == max(replies):
+            continue
+        rec = _std_record(b, f"mob-{n}x{n}-{len(out):04d}",
+                          {"mobility": {"min": min(replies), "max": max(replies), "moves": moves}})
+        out.append(rec)
+    if len(out) < n_positions:
+        raise RuntimeError(f"std_mobility_positions: only {len(out)}/{n_positions} after attempts")
+    return out
+
+
 class _Dummy:
     value = 0
     win_moves = []

@@ -1,13 +1,18 @@
 """Task definitions: prompt construction, output parsing, oracle-based
-compliance scoring for the anti-goal benchmark.
+compliance scoring for the chess representation study.
 
 Every metric is computed against EXTERNAL oracles embedded in the position
-records (see positions.py): no model self-judgment anywhere.
+records — no model self-judgment anywhere.
+
+Rules engine: STANDARD chess, faithfully. 8x8 tasks (mate1/mate2/bestmove/
+cap/mob) use python-chess (the de-facto standard used by the lichess
+ecosystem) — castling, en passant, double-step, and promotion are all
+legal. The custom NxN engine is used only for the staged small-board
+tasks (3x3/5x5), which are not part of the active study.
 
 Taxonomy per (position, condition) sample:
   status: no_answer | parse_error | illegal | legal
-  compliance (only for legal): True/False/None (None = condition undefined,
-  e.g. LOSE on an already-lost position)
+  compliance (only for legal): True/False/None
 """
 from __future__ import annotations
 
@@ -23,7 +28,7 @@ from src.benchmarks.games.prompts import (
 from src.benchmarks.games.rules import algebraic_to_sq
 
 _MOVE_RE = re.compile(r"([a-h][1-8])\s*[- ]?\s*([a-h][1-8])")
-_SAN_RE = re.compile(r"[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?(?:[+#])?")
+_SAN_RE = re.compile(r"[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?(?:[+#])?|[O0]-[O0](?:-[O0])?")
 _COLOR_PREFIX_RE = re.compile(r"\b[wb](?=[KQRBN])")
 
 
@@ -43,34 +48,26 @@ def _from_to(text: str) -> Optional[str]:
 
 
 def _san_to_uci(text: str, board) -> Optional[str]:
-    """Resolve SAN-style moves (Nf3, Rc8, Kb8, b7b8Q, e2e4) against OUR
-    engine's legal moves. Returns the uci if exactly one legal move matches.
-    Handles piece-letter moves, from-to with promotion suffix, and a leading
-    color prefix ('bKb8' -> Kb8) that the model may add."""
-    for token in _SAN_RE.findall(text):
+    """Resolve SAN-style moves (Nf3, Rc8, Kb8, b7b8Q, O-O, e2e4) using
+    python-chess's own parser — handles disambiguation, promotion, check/
+    mate suffixes, and coordinate notation, exactly as real chess does.
+    A leading color prefix ('bKb8' -> Kb8) is stripped first. Only valid
+    for python-chess boards (8x8); custom small-board engines skip SAN."""
+    if not hasattr(board, "parse_san"):
+        return None
+    import chess
+
+    stripped = _COLOR_PREFIX_RE.sub("", text)
+    if stripped != text:
+        return _san_to_uci(stripped, board)
+    for token in _SAN_RE.findall(stripped):
         t = token.rstrip("#+")
-        m = re.match(r"^(?:(K|Q|R|B|N|P)?)([a-h]?)([1-8]?)?x?([a-h])([1-8])(?:=([QRBN]))?$", t)
-        if not m:
-            # color-prefixed king move: 'bKb8'
-            stripped = _COLOR_PREFIX_RE.sub("", text)
-            if stripped != text:
-                return _san_to_uci(stripped, board)
+        if not t:
             continue
-        kind, df, dr, tf, tr = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
-        target = (int(tr) - 1, ord(tf) - ord("a"))
-        cands = []
-        for mv in board.legal_moves():
-            if mv.to != target:
-                continue
-            if kind and mv.piece != kind:
-                continue
-            if df and mv.fr[1] != ord(df) - ord("a"):
-                continue
-            if dr and mv.fr[0] != int(dr) - 1:
-                continue
-            cands.append(mv.uci)
-        if len(cands) == 1:
-            return cands[0]
+        try:
+            return board.parse_san(t).uci()
+        except ValueError:
+            continue
     return None
 
 
@@ -92,6 +89,13 @@ def parse_move_output(text: str, board=None) -> tuple:
 
 
 def _board(rec: Dict[str, object]):
+    """The rules board for a record. 8x8 = python-chess (standard chess);
+    NxN != 8 = the custom small-board engine (staged tasks only)."""
+    import chess
+
+    if rec["n"] == 8:
+        fen = rec.get("presented_fen") or rec.get("fen")
+        return chess.Board(fen)
     from src.benchmarks.games.rules import Board
 
     pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
@@ -99,9 +103,13 @@ def _board(rec: Dict[str, object]):
     return Board(rec["n"], pieces, rec["turn"])
 
 
+def _legal_ucis(board) -> set:
+    moves = board.legal_moves() if callable(board.legal_moves) else board.legal_moves
+    return {m.uci() if hasattr(m, "uci") else m.uci for m in moves}
+
 
 # ---------------------------------------------------------------------- #
-# single-move task (3x3/5x5, exact game values)
+# single-move task (3x3/5x5, exact game values; custom engine)
 # ---------------------------------------------------------------------- #
 def score_single_move(rec: Dict[str, object], condition: str,
                       model_text: str) -> Dict[str, object]:
@@ -109,7 +117,7 @@ def score_single_move(rec: Dict[str, object], condition: str,
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
         return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
-    legal = {m.uci for m in board.legal_moves()}
+    legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
     if condition == "win":
@@ -123,7 +131,7 @@ def score_single_move(rec: Dict[str, object], condition: str,
 
 
 # ---------------------------------------------------------------------- #
-# mate-in-1 task (8x8)
+# mate-in-1 task (8x8, python-chess)
 # ---------------------------------------------------------------------- #
 def score_mate1(rec: Dict[str, object], condition: str,
                 model_text: str) -> Dict[str, object]:
@@ -131,7 +139,7 @@ def score_mate1(rec: Dict[str, object], condition: str,
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
         return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
-    legal = {m.uci for m in board.legal_moves()}
+    legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
     mates = set(rec["task_extra"]["mate_moves"])
@@ -143,7 +151,7 @@ def score_mate1(rec: Dict[str, object], condition: str,
 
 
 # ---------------------------------------------------------------------- #
-# max/min opponent mobility task (8x8)
+# max/min opponent mobility task (8x8, python-chess)
 # ---------------------------------------------------------------------- #
 def score_mobility(rec: Dict[str, object], condition: str,
                    model_text: str) -> Dict[str, object]:
@@ -151,7 +159,7 @@ def score_mobility(rec: Dict[str, object], condition: str,
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
         return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
-    legal = {m.uci for m in board.legal_moves()}
+    legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
     stats = {s["move"]: s["opp_replies"] for s in rec["task_extra"]["mobility"]["moves"]}
@@ -162,7 +170,7 @@ def score_mobility(rec: Dict[str, object], condition: str,
 
 
 # ---------------------------------------------------------------------- #
-# cap task (pure legality probe, no objective)
+# cap task (pure legality probe, no objective; python-chess)
 # ---------------------------------------------------------------------- #
 def score_cap(rec: Dict[str, object], condition: str,
               model_text: str) -> Dict[str, object]:
@@ -170,14 +178,14 @@ def score_cap(rec: Dict[str, object], condition: str,
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
         return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
-    legal = {m.uci for m in board.legal_moves()}
+    legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
     return {"status": "legal", "move": uci, "compliance": None, "format": fmt}
 
 
 # ---------------------------------------------------------------------- #
-# best-move task (8x8, Stockfish ground truth from lichess eval DB / cloud)
+# best-move task (8x8, Stockfish ground truth from lichess eval DB)
 # ---------------------------------------------------------------------- #
 def score_bestmove(rec: Dict[str, object], condition: str,
                    model_text: str) -> Dict[str, object]:
@@ -185,7 +193,7 @@ def score_bestmove(rec: Dict[str, object], condition: str,
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
         return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
-    legal = {m.uci for m in board.legal_moves()}
+    legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
     best = rec["task_extra"]["best_move"]
@@ -193,7 +201,7 @@ def score_bestmove(rec: Dict[str, object], condition: str,
 
 
 # ---------------------------------------------------------------------- #
-# mate-in-2 task (8x8, lichess puzzles, mateIn2 theme)
+# mate-in-2 task (8x8, lichess puzzles, mateIn2 theme; python-chess)
 # ---------------------------------------------------------------------- #
 def score_mate2(rec: Dict[str, object], condition: str,
                 model_text: str) -> Dict[str, object]:
@@ -201,7 +209,7 @@ def score_mate2(rec: Dict[str, object], condition: str,
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
         return {"status": "no_answer" if not model_text.strip() else "parse_error", "format": fmt}
-    legal = {m.uci for m in board.legal_moves()}
+    legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
     first = rec["task_extra"]["first_move"]  # the lichess 'only move' of the mate line

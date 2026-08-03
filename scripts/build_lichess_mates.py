@@ -4,6 +4,11 @@ Source: the official lichess puzzle database (CC0,
 https://database.lichess.org/lichess_db_puzzle.csv.zst), filtered by theme
 and stratified by rating so the committed sets span the difficulty range.
 
+Rules: STANDARD chess, faithfully — python-chess applies the opponent's
+first move, serializes the presented FEN with real castling/ep rights, and
+verifies checkmating moves. Castling, en passant, double-step, and
+promotion are all legal, exactly as the models were trained to know them.
+
 Lichess convention: FEN is the position BEFORE the solver's opponent moves;
 the position presented to the solver is FEN + first move. For mate-in-N the
 solver's solution begins at the presented position; all solution moves are
@@ -18,8 +23,7 @@ Outputs (committed):
     data/positions/mate2-lichess.json   (~250 positions, unique best first move)
 
 Usage:
-    python scripts/build_lichess_mates.py   # build both task sets (uses the
-                                            # local data/raw/lichess_db_puzzle.csv)
+    python scripts/build_lichess_mates.py   # needs data/raw/lichess_db_puzzle.csv
 """
 from __future__ import annotations
 
@@ -30,9 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.benchmarks.games import oracles as O  # noqa: E402
-from src.benchmarks.games.fen import fen_of_board, parse_fen  # noqa: E402
-from src.benchmarks.games.rules import algebraic_to_sq  # noqa: E402
+import chess  # noqa: E402
 
 RAW_PATH = Path("data/raw/lichess_db_puzzle.csv")
 OUT_1 = Path("data/positions/mate1-lichess.json")
@@ -54,12 +56,6 @@ def _candidate_ok(row: dict) -> bool:
             return False
     except (KeyError, ValueError):
         return False
-    # en-passant square present in the FEN (field index 3): our variant has
-    # no en passant, and the puzzle's solution may rely on it -- reject
-    parts = row["FEN"].split()
-    if len(parts) >= 4 and parts[3] != "-":
-        return False
-    # puzzle FEN must be an 8x8 board (all lichess standard puzzles are)
     if not any("mateIn" in t for t in row["Themes"].split()):
         return False
     return True
@@ -82,31 +78,29 @@ def select_candidates() -> dict:
     return keep
 
 
-def _uci_to_sq(uci: str):
-    return algebraic_to_sq(uci[:2]), algebraic_to_sq(uci[2:4])
-
-
 def _presented(p: dict):
-    fen = p["fen"]
+    """Presented position = puzzle FEN + the opponent's first move, applied
+    by python-chess (standard rules). Returns (board, first_uci) or None.
+    p is the meta dict (lowercase keys: fen, moves, ...)."""
+    try:
+        board = chess.Board(p["fen"])
+    except ValueError:
+        return None
     first = p["moves"].split()[0]
-    fr, to = _uci_to_sq(first)
-    b0 = parse_fen(fen)
-    legal0 = {m.uci for m in b0.legal_moves()}
-    if first not in legal0:
+    try:
+        board.push_uci(first)
+    except ValueError:
         return None
-    m0 = next(m for m in b0.legal_moves() if m.uci == first)
-    presented = b0.apply(m0)
-    if not presented.king_square(presented.turn):
+    if not (board.king(chess.WHITE) and board.king(chess.BLACK)):
         return None
-    terminal, _ = presented.outcome()
-    if terminal:
+    if board.is_game_over():
         return None
-    return presented, first
+    return board, first
 
 
-def _record(presented, first, rec_id, puzzle_id: str, solution_start: str,
+def _record(board, first, rec_id, puzzle_id: str, solution_start: str,
             meta: dict) -> dict:
-    task_extra = {"first_move": solution_start, "presented_after": first}
+    task_extra = {"first_move": solution_start, "opponent_first_move": first}
     for k in META_FIELDS:
         task_extra[k] = meta.get(k)
     return {
@@ -114,13 +108,14 @@ def _record(presented, first, rec_id, puzzle_id: str, solution_start: str,
         "source": "lichess-puzzle-db",
         "puzzle_id": puzzle_id,
         "n": 8,
-        "turn": presented.turn,
+        "turn": "w" if board.turn == chess.WHITE else "b",
         "value": "cap",
         "fen": meta["fen"],
-        "presented_fen": fen_of_board(presented),
+        "presented_fen": board.fen(),
         "pieces": [
-            {"sq": f"{chr(ord('a') + c)}{r + 1}", "color": color, "kind": kind}
-            for (r, c), (color, kind) in sorted(presented.pieces.items())
+            {"sq": chess.square_name(sq), "color": "w" if board.piece_at(sq).color == chess.WHITE else "b",
+             "kind": board.piece_at(sq).symbol().upper()}
+            for sq in chess.SQUARES if board.piece_at(sq) is not None
         ],
         "win_moves": [],
         "lose_moves": [],
@@ -130,7 +125,6 @@ def _record(presented, first, rec_id, puzzle_id: str, solution_start: str,
 
 
 def build() -> None:
-    O.clear_cache()
     candidates = select_candidates()
     out1, out2 = [], []
     seen_fens1, seen_fens2 = set(), set()
@@ -161,39 +155,53 @@ def build() -> None:
                     if parsed is None:
                         skipped["bad"] += 1
                         continue
-                    presented, first = parsed
-                    fen_key = fen_of_board(presented)
+                    board, first = parsed
+                    fen_key = board.fen()
                     moves = meta["moves"].split()
                     sol = moves[1:]  # solver's solution from the presented position
                     if theme == "mateIn1":
                         if fen_key in seen_fens1:
                             skipped["dup_fen"] += 1
                             continue
-                        mates = O.checkmate_moves(presented)
+                        # python-chess verification: all moves that actually mate
+                        mates = []
+                        for mv in board.legal_moves:
+                            board.push(mv)
+                            if board.is_checkmate():
+                                mates.append(mv.uci())
+                            board.pop()
                         if not mates:
                             skipped["mate1_no_mate"] += 1
                             continue
-                        if len(mates) == len(presented.legal_moves()):
+                        if len(mates) == board.legal_moves.count():
                             skipped["mate1_vacuous"] += 1
                             continue
                         seen_fens1.add(fen_key)
-                        rec = _record(presented, first, f"lichess-{p['PuzzleId']}",
-                                      p["PuzzleId"], sol[0] if sol else mates[0].uci,
+                        rec = _record(board, first, f"lichess-{p['PuzzleId']}",
+                                      p["PuzzleId"], sol[0] if sol else mates[0],
                                       meta)
-                        rec["task_extra"]["mate_moves"] = [m.uci for m in mates]
+                        rec["task_extra"]["mate_moves"] = mates
                         out1.append(rec)
                     else:  # mateIn2
                         if fen_key in seen_fens2:
                             skipped["dup_fen"] += 1
                             continue
-                        if len(sol) < 1 or sol[0] not in {m.uci for m in presented.legal_moves()}:
+                        if len(sol) < 1:
                             skipped["mate2_no_line"] += 1
                             continue
-                        if len(presented.legal_moves()) < 2:
+                        try:
+                            first_uci = chess.Move.from_uci(sol[0])
+                        except ValueError:
+                            skipped["mate2_no_line"] += 1
+                            continue
+                        if first_uci not in board.legal_moves:
+                            skipped["mate2_no_line"] += 1
+                            continue
+                        if board.legal_moves.count() < 2:
                             skipped["mate2_no_line"] += 1
                             continue
                         seen_fens2.add(fen_key)
-                        rec = _record(presented, first, f"lichess2-{p['PuzzleId']}",
+                        rec = _record(board, first, f"lichess2-{p['PuzzleId']}",
                                       p["PuzzleId"], sol[0], meta)
                         out2.append(rec)
                     picked += 1
@@ -209,4 +217,3 @@ def build() -> None:
 
 if __name__ == "__main__":
     build()
-

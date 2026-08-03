@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.benchmarks.games.fen import fen_of_board, parse_fen  # noqa: E402
+import chess  # noqa: E402
 
 OUT = Path("data/positions/bestmove-8x8.json")
 TARGET = 120
@@ -46,11 +46,12 @@ def _piece_count(fen: str) -> int:
 
 
 def _best_move_legal(fen: str, line_first: str) -> bool:
+    """Best move must be legal under STANDARD chess (python-chess)."""
     try:
-        board = parse_fen(fen)
-    except Exception:
+        board = chess.Board(fen)
+    except ValueError:
         return False
-    legal = {m.uci for m in board.legal_moves()}
+    legal = {m.uci() for m in board.legal_moves}
     if line_first not in legal:
         return False
     if len(legal) < 5:
@@ -60,9 +61,6 @@ def _best_move_legal(fen: str, line_first: str) -> bool:
 
 def _row_ok(row: dict) -> bool:
     fen = row["fen"]
-    parts = fen.split()
-    if len(parts) >= 4 and parts[3] != "-":
-        return False  # en-passant square: variant mismatch
     if not (PIECES_MIN <= _piece_count(fen) <= PIECES_MAX):
         return False
     if row.get("mate") is not None:
@@ -119,18 +117,20 @@ def build() -> None:
     records = []
     for row in out:
         line = row["line"].split()
-        board = parse_fen(row["fen"])
+        board = chess.Board(row["fen"])
         records.append({
             "id": f"bm-{len(records):04d}",
             "source": "lichess-eval-db",
             "n": 8,
-            "turn": board.turn,
+            "turn": "w" if board.turn == chess.WHITE else "b",
             "value": "cap",
             "fen": row["fen"],
-            "presented_fen": fen_of_board(board),
+            "presented_fen": board.fen(),
             "pieces": [
-                {"sq": f"{chr(ord('a') + c)}{r + 1}", "color": color, "kind": kind}
-                for (r, c), (color, kind) in sorted(board.pieces.items())
+                {"sq": chess.square_name(sq),
+                 "color": "w" if board.piece_at(sq).color == chess.WHITE else "b",
+                 "kind": board.piece_at(sq).symbol().upper()}
+                for sq in chess.SQUARES if board.piece_at(sq) is not None
             ],
             "win_moves": [],
             "lose_moves": [],

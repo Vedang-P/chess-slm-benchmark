@@ -28,7 +28,7 @@ import yaml  # noqa: E402
 
 from src.report import write_comparison_csv  # noqa: E402
 
-SCHEMA = 2  # must match src/report.py ResultWriter.finish; bump both when
+SCHEMA = 3  # must match src/report.py ResultWriter.finish; bump both when
             # scorer/parser/loader changes so stale summaries re-run
 
 ROOT = Path(__file__).resolve().parent.parent

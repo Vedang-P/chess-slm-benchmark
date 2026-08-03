@@ -103,23 +103,16 @@ def test_dataset_invariants() -> None:
             if path.stem.startswith("mate2"):
                 extra = rec["task_extra"]
                 check(f"{pid} has first_move", "first_move" in extra)
-                from src.benchmarks.games.rules import Board
-
-                pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
-                          for p in rec["pieces"]}
-                b = Board(rec["n"], pieces, rec["turn"])
-                check(f"{pid} first_move legal", extra["first_move"] in {m.uci for m in b.legal_moves()})
-                check(f"{pid} mate2 non-vacuous", len(b.legal_moves()) >= 2)
+                board = _std_board(rec)
+                legal = {m.uci() for m in board.legal_moves}
+                check(f"{pid} first_move legal", extra["first_move"] in legal)
+                check(f"{pid} mate2 non-vacuous", len(legal) >= 2)
             if path.stem.startswith("bestmove"):
                 extra = rec["task_extra"]
                 check(f"{pid} has best_move", "best_move" in extra)
-                from src.benchmarks.games.rules import Board
-
-                pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
-                          for p in rec["pieces"]}
-                b = Board(rec["n"], pieces, rec["turn"])
-                legal = {m.uci for m in b.legal_moves()}
-                check(f"{pid} best_move legal in our variant",
+                board = _std_board(rec)
+                legal = {m.uci() for m in board.legal_moves}
+                check(f"{pid} best_move legal (standard chess)",
                       extra["best_move"] in legal, f"best={extra['best_move']}")
                 check(f"{pid} bestmove non-vacuous", len(legal) >= 2)
             if path.stem.startswith("mob"):
@@ -128,13 +121,28 @@ def test_dataset_invariants() -> None:
     clear_cache()
 
 
-def _n_legal_moves(rec) -> int:
+def _std_board(rec):
+    """Standard-chess board (python-chess) for 8x8 records — the study's
+    rules engine. Falls back to the custom NxN engine for small boards."""
+    import chess
+
+    if rec["n"] == 8:
+        return chess.Board(rec.get("presented_fen") or rec.get("fen"))
+    return _variant_board(rec)
+
+
+def _variant_board(rec):
     from src.benchmarks.games.rules import Board
 
     pieces = {(int(p["sq"][1:]) - 1, ord(p["sq"][0]) - ord("a")): (p["color"], p["kind"])
               for p in rec["pieces"]}
-    b = Board(rec["n"], pieces, rec["turn"])
-    return len(b.legal_moves())
+    return Board(rec["n"], pieces, rec["turn"])
+
+
+def _n_legal_moves(rec) -> int:
+    board = _std_board(rec)
+    moves = board.legal_moves() if callable(board.legal_moves) else board.legal_moves
+    return len(list(moves))
 
 
 def test_fuzz_legality(rounds: int = 200) -> None:
@@ -165,86 +173,63 @@ def test_fuzz_legality(rounds: int = 200) -> None:
     check("fuzz legality 200 rounds", not FAILURES or all("fuzz" not in f for f in FAILURES))
 
 
-def test_python_chess_parity() -> None:
-    """Cross-validate 8x8 legality + mate detection against python-chess.
-    Skipped (silently passes) if python-chess is not installed."""
-    try:
-        import chess  # noqa
-    except ImportError:
-        print("ok   python-chess parity (skipped: not installed)")
-        return
-    from src.benchmarks.games.fen import parse_fen, fen_of_board
+def test_dataset_standard_chess() -> None:
+    """The committed 8x8 datasets are scored under STANDARD chess (python-chess
+    is the rules engine). Every record must be self-consistent under it: FEN
+    parses, pieces match the FEN, oracles are legal, and mate moves really
+    mate. Also a regression check that castling / en passant / double-step
+    are legal — the study does not use a simplified variant."""
+    import chess
 
     data_dir = Path(__file__).resolve().parent.parent / "data" / "positions"
-    recs = json.loads((data_dir / "mate1-lichess.json").read_text())[:40]
-
-    # 1) legal-move parity on the lichess positions. Our documented variant
-    #    excludes double-step pawn pushes and en-passant; everything else
-    #    must agree with python-chess exactly.
-    mismatches = 0
-    double_steps = 0
-    for rec in recs:
-        board = parse_fen(rec["fen"])
-        ours = {m.uci for m in board.legal_moves()}
-        theirs = {m.uci() for m in chess.Board(rec["fen"]).legal_moves}
-        for uci in theirs - ours:
-            fr_r, fr_c = int(uci[1]) - 1, ord(uci[0]) - ord("a")
-            to_r, to_c = int(uci[3]) - 1, ord(uci[2]) - ord("a")
-            piece = board.at((fr_r, fr_c))
-            # documented variant differences: no double-step pushes, no
-            # castling (puzzle FENs carry castling rights python-chess honors)
-            if piece and piece[1] == "P" and abs(to_r - fr_r) == 2:
-                double_steps += 1
+    for name in ("mate1-lichess", "mate2-lichess", "bestmove-8x8"):
+        recs = json.loads((data_dir / f"{name}.json").read_text())
+        check(f"dataset {name} non-empty", len(recs) >= 40)
+        for rec in recs:
+            try:
+                board = chess.Board(rec["presented_fen"])
+            except ValueError:
+                check(f"{rec['id']} fen parses", False, rec["presented_fen"])
                 continue
-            if piece and piece[1] == "K" and abs(to_c - fr_c) == 2:
-                double_steps += 1
-                continue
-            mismatches += 1
-            if mismatches <= 2:
-                print(f"  parity diff at {rec['id']}: ours-only={ours - theirs} "
-                      f"theirs-only={uci}")
-        if ours - theirs:
-            mismatches += 1
-            print(f"  ours-extra at {rec['id']}: {ours - theirs}")
-    check("python-chess legal-move parity (8x8)", mismatches == 0,
-          f"{mismatches} mismatches ({double_steps} double-step pushes, documented variant)")
+            fen_map = {chess.square_name(sq): p.symbol()
+                       for sq in chess.SQUARES if (p := board.piece_at(sq)) is not None}
+            rec_map = {p["sq"]: (p["kind"] if p["color"] == "w" else p["kind"].lower())
+                       for p in rec["pieces"]}
+            check(f"{rec['id']} pieces match fen", fen_map == rec_map)
+            check(f"{rec['id']} turn matches",
+                  ("w" if board.turn == chess.WHITE else "b") == rec["turn"])
+            extra = rec["task_extra"]
+            if name == "mate1-lichess":
+                for uci in extra.get("mate_moves", []):
+                    b = chess.Board(rec["presented_fen"])
+                    b.push_uci(uci)
+                    check(f"{rec['id']} {uci} mates", b.is_checkmate())
+            elif name == "mate2-lichess":
+                mv = chess.Move.from_uci(extra["first_move"])
+                check(f"{rec['id']} first_move legal", mv in board.legal_moves)
+            else:  # bestmove
+                mv = chess.Move.from_uci(extra["best_move"])
+                check(f"{rec['id']} best_move legal", mv in board.legal_moves)
 
-    # 2) mate-move parity on the presented positions
-    mate_mismatch = 0
-    for rec in recs:
-        board = parse_fen(rec["fen"])
-        first = rec["task_extra"]["presented_after"]
-        m0 = next(m for m in board.legal_moves() if m.uci == first)
-        presented = board.apply(m0)
-        ours_mates = {m.uci for m in checkmate_moves(presented)}
-        cb = chess.Board(rec["fen"])
-        cb.push(chess.Move.from_uci(first))
-        theirs_mates = {m.uci() for m in cb.legal_moves
-                        if cb.copy().push(m) or (cb.is_checkmate() and True)}
-        # python-chess: is_checkmate() is valid only after the move; recompute:
-        theirs_mates = set()
-        for m in cb.legal_moves:
-            nb = cb.copy()
-            nb.push(m)
-            if nb.is_checkmate():
-                theirs_mates.add(m.uci())
-        if ours_mates != theirs_mates:
-            mate_mismatch += 1
-            if mate_mismatch <= 2:
-                print(f"  mate diff at {rec['id']}: ours={ours_mates} theirs={theirs_mates}")
-    check("python-chess mate-move parity (8x8)", mate_mismatch == 0, f"{mate_mismatch} mismatches")
+    # standard-rules regression: these moves MUST be legal
+    b = chess.Board("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
+    check("standard: castling e1g1 legal", chess.Move.from_uci("e1g1") in b.legal_moves)
+    b = chess.Board("rnbqkbnr/pppppppp/8/8/3pP3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+    check("standard: en passant d4e3 legal", chess.Move.from_uci("d4e3") in b.legal_moves)
+    b = chess.Board()
+    check("standard: double-step e2e4 legal", chess.Move.from_uci("e2e4") in b.legal_moves)
 
 
 def test_san_parsing() -> None:
     """SAN/lenient move parsing — the format models like Gemma actually
-    produce ('Nf3', 'Rc8', 'bKb8#', 'b7b8Q'). Regression cases from the
-    check run."""
-    from src.benchmarks.games.tasks import _board, parse_move_output
+    produce ('Nf3', 'Rc8', 'bKb8#', 'b7b8Q'). Resolved with python-chess's
+    own parser (standard chess). Regression cases from the check run."""
+    import chess
+
+    from src.benchmarks.games.tasks import parse_move_output
 
     def board_from_fen(fen):
-        from src.benchmarks.games.fen import parse_fen
-
-        return parse_fen(fen)
+        return chess.Board(fen)
 
     cases = [
         # (fen, output, expected_uci, expected_fmt)
@@ -279,6 +264,14 @@ def test_san_parsing() -> None:
     uci, fmt = parse_move_output("MOVE: Ka1-b1", b3)
     check("san 3x3 king move", uci == "a1b1", f"got {(uci, fmt)}")
 
+    # standard-chess extras: castling + promotion in SAN
+    b = chess.Board("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
+    uci, fmt = parse_move_output("MOVE: O-O", b)
+    check("san castling O-O", uci == "e1g1" and fmt == "san", f"got {(uci, fmt)}")
+    b = chess.Board("8/1P6/8/8/8/8/8/k1K5 w - - 0 1")
+    uci, fmt = parse_move_output("MOVE: b8=Q", b)
+    check("san promotion b8=Q", uci == "b7b8q" and fmt == "san", f"got {(uci, fmt)}")
+
 
 def main() -> None:
     quick = "--quick" in sys.argv
@@ -287,7 +280,7 @@ def main() -> None:
     test_known_values()
     test_win_lose_move_semantics()
     test_dataset_invariants()
-    test_python_chess_parity()
+    test_dataset_standard_chess()
     test_san_parsing()
     if not quick:
         t0 = time.time()

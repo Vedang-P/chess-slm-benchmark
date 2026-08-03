@@ -1,6 +1,6 @@
 # Chess Benchmark — Live Monitor Dashboard
 
-Static dashboard for the anti-goal chess benchmark sweep running on Kaggle.
+Static dashboard for the chess representation study (gemma + deepseek-v4-flash).
 No build step — plain HTML/CSS/JS + Chart.js (CDN). Deploy to Cloudflare Pages
 as-is.
 

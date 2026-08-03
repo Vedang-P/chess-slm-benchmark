@@ -90,7 +90,8 @@ src/
   models.py         4-bit HF loader + OpenCodeGo gateway client + registry
   report.py         per-sample JSONL, summaries, comparison_table.csv
   benchmarks/games/
-    rules.py        simplified NxN chess engine (no castling/en-passant/double-step)
+    rules.py        custom NxN engine for staged small-board tasks only; 8x8
+                    scoring uses python-chess (standard chess)
     oracles.py      exact retrograde solver + checkmate/mobility oracles
     positions.py    seeded generation with non-vacuity filters
     fen.py          FEN <-> board schema (+ python-chess validation)

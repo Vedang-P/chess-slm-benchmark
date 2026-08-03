@@ -6,7 +6,294 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "b1",
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b5",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "b5b1",
+   "b5a5",
+   "b5c5",
+   "b5d5",
+   "b5e5",
+   "e1d1",
+   "e1d2",
+   "e1e2"
+  ],
+  "lose_moves": [
+   "b5b4",
+   "b5b3",
+   "b5b2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0001",
+  "n": 5,
+  "turn": "b",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "d1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c2",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "c2b1",
+   "c2b3",
+   "c2a4",
+   "c2c1",
+   "c2c3",
+   "c2c5",
+   "c2b2",
+   "c2a2",
+   "c2d2",
+   "c2e2",
+   "d1c1",
+   "d1e1"
+  ],
+  "lose_moves": [
+   "c2d3",
+   "c2e4",
+   "c2c4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0002",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "b3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "d4d3",
+   "d4d2",
+   "d4d1",
+   "d4d5",
+   "d4c4",
+   "d4b4",
+   "d4e4",
+   "c5b5",
+   "c5d5"
+  ],
+  "lose_moves": [
+   "d4a4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0003",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [
+   "e3d2",
+   "e3c1",
+   "e3d4",
+   "e3c5",
+   "e3e4",
+   "e3e5",
+   "e3d3",
+   "e3c3",
+   "e2d1",
+   "e2e1",
+   "e2d2",
+   "e2d3"
+  ],
+  "lose_moves": [
+   "e3b3",
+   "e3a3"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0004",
+  "n": 5,
+  "turn": "b",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [
+   "d5c4",
+   "d5a2",
+   "d5e4",
+   "d5d4",
+   "d5d3",
+   "d5d2",
+   "d5d1",
+   "d5c5",
+   "d5e5",
+   "c1b1",
+   "c1d1",
+   "c1b2",
+   "c1c2",
+   "c1d2"
+  ],
+  "lose_moves": [
+   "d5b3",
+   "d5b5",
+   "d5a5"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0005",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "c2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b5",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [
+   "b5a4",
+   "b5c4",
+   "b5d3",
+   "b5b4",
+   "b5a5",
+   "b5c5",
+   "b5d5",
+   "b5e5",
+   "e2e1",
+   "e2e3"
+  ],
+  "lose_moves": [
+   "b5b3",
+   "b5b2",
+   "b5b1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0006",
+  "n": 5,
+  "turn": "b",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a5",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "e4e3",
+   "e4e2",
+   "e4e1",
+   "e4e5",
+   "e4d4",
+   "e4c4",
+   "a1b1",
+   "a1a2",
+   "a1b2"
+  ],
+  "lose_moves": [
+   "e4b4",
+   "e4a4"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0007",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "d1",
     "color": "b",
     "kind": "K"
    },
@@ -16,7 +303,7 @@
     "kind": "R"
    },
    {
-    "sq": "b4",
+    "sq": "e4",
     "color": "w",
     "kind": "K"
    }
@@ -28,13 +315,11 @@
    "c3a3",
    "c3d3",
    "c3e3",
-   "b4a3",
-   "b4b3",
-   "b4a4",
-   "b4c4",
-   "b4a5",
-   "b4b5",
-   "b4c5"
+   "e4d3",
+   "e4e3",
+   "e4d4",
+   "e4d5",
+   "e4e5"
   ],
   "lose_moves": [
    "c3c2",
@@ -43,269 +328,19 @@
   "over_budget": false
  },
  {
-  "id": "sm-5x5-0001",
+  "id": "sm-5x5-0008",
   "n": 5,
   "turn": "b",
   "value": "win",
   "pieces": [
    {
-    "sq": "e1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "b3",
+    "sq": "c1",
     "color": "w",
     "kind": "K"
    },
    {
-    "sq": "d4",
+    "sq": "a5",
     "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [
-   "d4a1",
-   "d4e3",
-   "d4c5",
-   "d4e5",
-   "d4d3",
-   "d4d2",
-   "d4d1",
-   "d4d5",
-   "d4e4",
-   "e1d1",
-   "e1d2",
-   "e1e2"
-  ],
-  "lose_moves": [
-   "d4c3",
-   "d4b2",
-   "d4c4",
-   "d4b4",
-   "d4a4"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0002",
-  "n": 5,
-  "turn": "w",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "c5",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [
-   "a2a1",
-   "a2a3",
-   "a2a4",
-   "a2a5",
-   "a2b2",
-   "a2c2",
-   "c5b4",
-   "c5c4",
-   "c5b5",
-   "c5d5"
-  ],
-  "lose_moves": [
-   "a2d2",
-   "a2e2"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0003",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d5",
-    "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [
-   "d5c4",
-   "d5e4",
-   "d5d4",
-   "d5d3",
-   "d5d2",
-   "d5d1",
-   "d5c5",
-   "d5b5",
-   "d5a5",
-   "d5e5",
-   "e1d1",
-   "e1d2",
-   "e1e2"
-  ],
-  "lose_moves": [
-   "d5b3",
-   "d5a2"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0004",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d5",
-    "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [
-   "d5c4",
-   "d5e4",
-   "d5d4",
-   "d5d3",
-   "d5d2",
-   "d5d1",
-   "d5c5",
-   "d5b5",
-   "d5a5",
-   "d5e5",
-   "e1d1",
-   "e1d2",
-   "e1e2"
-  ],
-  "lose_moves": [
-   "d5b3",
-   "d5a2"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0005",
-  "n": 5,
-  "turn": "w",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "e2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e3",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "c4",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [
-   "e3d2",
-   "e3c1",
-   "e3e4",
-   "e3e5",
-   "e3d3",
-   "e3a3",
-   "e2d1",
-   "e2e1",
-   "e2d2"
-  ],
-  "lose_moves": [
-   "e3d4",
-   "e3c5",
-   "e3c3",
-   "e3b3"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0006",
-  "n": 5,
-  "turn": "w",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "a3",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a4",
-    "color": "w",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [
-   "a4b3",
-   "a4d1",
-   "a4b5",
-   "a4a5",
-   "a4b4",
-   "a4e4",
-   "a3a2"
-  ],
-  "lose_moves": [
-   "a4c2",
-   "a4c4",
-   "a4d4"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0007",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "b2",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a4",
-    "color": "w",
     "kind": "K"
    },
    {
@@ -321,63 +356,16 @@
    "d5e4",
    "d5d4",
    "d5d3",
-   "d5d2",
-   "d5d1",
-   "d5e5",
-   "b2a1",
-   "b2b1",
-   "b2c1",
-   "b2a2",
-   "b2c2",
-   "b2c3"
-  ],
-  "lose_moves": [
    "d5c5",
    "d5b5",
-   "d5a5"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0008",
-  "n": 5,
-  "turn": "w",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "b4",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e4",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a5",
-    "color": "w",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [
+   "d5e5",
    "a5a4",
-   "a5a3",
-   "a5a2",
-   "a5a1",
-   "a5b5",
-   "a5c5",
-   "b4a3",
-   "b4b3",
-   "b4c3",
-   "b4a4",
-   "b4c4",
-   "b4b5",
-   "b4c5"
+   "a5b4",
+   "a5b5"
   ],
   "lose_moves": [
-   "a5d5",
-   "a5e5"
+   "d5d2",
+   "d5d1"
   ],
   "over_budget": false
  },
@@ -388,42 +376,38 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "c2",
+    "sq": "a1",
     "color": "b",
     "kind": "K"
    },
    {
-    "sq": "d3",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "a4",
+    "sq": "d2",
     "color": "w",
     "kind": "K"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "Q"
    }
   ],
   "win_moves": [
-   "d3e2",
-   "d3c4",
-   "d3e4",
-   "d3d2",
-   "d3d1",
-   "d3d4",
-   "d3d5",
-   "d3c3",
-   "d3b3",
-   "d3e3",
-   "c2b1",
-   "c2c1",
-   "c2d1",
-   "c2b2",
-   "c2d2",
-   "c2c3"
+   "e5d4",
+   "e5b2",
+   "e5e4",
+   "e5d5",
+   "e5c5",
+   "e5b5",
+   "e5a5",
+   "a1b1",
+   "a1a2",
+   "a1b2"
   ],
   "lose_moves": [
-   "d3b5",
-   "d3a3"
+   "e5c3",
+   "e5e3",
+   "e5e2",
+   "e5e1"
   ],
   "over_budget": false
  },
@@ -434,38 +418,34 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "b3",
+    "sq": "e1",
     "color": "w",
     "kind": "K"
    },
    {
-    "sq": "e4",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "b5",
+    "sq": "a5",
     "color": "b",
     "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "R"
    }
   ],
   "win_moves": [
-   "e4d3",
-   "e4b1",
-   "e4d5",
-   "e4e3",
-   "e4e2",
-   "e4e1",
-   "e4e5",
-   "e4d4",
-   "e4c4",
-   "e4b4",
-   "e4a4",
-   "b5a5",
-   "b5c5"
+   "d5d4",
+   "d5d3",
+   "d5c5",
+   "d5b5",
+   "d5e5",
+   "a5a4",
+   "a5b4",
+   "a5b5"
   ],
   "lose_moves": [
-   "e4c2"
+   "d5d2",
+   "d5d1"
   ],
   "over_budget": false
  },
@@ -476,7 +456,12 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "a1",
+    "sq": "b1",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "c1",
     "color": "b",
     "kind": "K"
    },
@@ -484,30 +469,22 @@
     "sq": "e2",
     "color": "w",
     "kind": "K"
-   },
-   {
-    "sq": "a4",
-    "color": "b",
-    "kind": "Q"
    }
   ],
   "win_moves": [
-   "a4b3",
-   "a4c2",
-   "a4b5",
-   "a4a3",
-   "a4a2",
-   "a4a5",
-   "a4b4",
-   "a4c4",
-   "a4d4",
-   "a4e4",
-   "a1b1",
-   "a1a2",
-   "a1b2"
+   "b1a2",
+   "b1c2",
+   "b1e4",
+   "b1b2",
+   "b1b3",
+   "b1b4",
+   "b1b5",
+   "b1a1",
+   "c1b2",
+   "c1c2"
   ],
   "lose_moves": [
-   "a4d1"
+   "b1d3"
   ],
   "over_budget": false
  },
@@ -518,174 +495,162 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c2",
+    "sq": "b2",
     "color": "b",
-    "kind": "K"
+    "kind": "R"
    },
    {
     "sq": "d2",
     "color": "b",
-    "kind": "R"
+    "kind": "K"
+   },
+   {
+    "sq": "a5",
+    "color": "w",
+    "kind": "K"
    }
   ],
   "win_moves": [
+   "b2b1",
+   "b2b3",
+   "b2a2",
+   "b2c2",
+   "d2c1",
    "d2d1",
-   "d2d3",
-   "d2d4",
-   "d2d5",
+   "d2e1",
+   "d2c2",
    "d2e2",
-   "c2d1",
-   "c2b3",
-   "c2c3",
-   "c2d3"
+   "d2c3",
+   "d2d3",
+   "d2e3"
   ],
   "lose_moves": [
-   "c2c1"
+   "b2b4",
+   "b2b5"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0013",
   "n": 5,
-  "turn": "b",
+  "turn": "w",
   "value": "win",
   "pieces": [
    {
-    "sq": "d2",
+    "sq": "c2",
     "color": "b",
     "kind": "K"
    },
    {
-    "sq": "b3",
-    "color": "b",
-    "kind": "Q"
+    "sq": "b4",
+    "color": "w",
+    "kind": "R"
    },
    {
-    "sq": "e5",
+    "sq": "d5",
     "color": "w",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "b3a2",
-   "b3c2",
-   "b3d1",
-   "b3a4",
-   "b3b2",
-   "b3b1",
-   "b3b4",
-   "b3b5",
-   "b3a3",
-   "b3c3",
-   "b3e3",
-   "d2c1",
-   "d2d1",
-   "d2e1",
-   "d2c2",
-   "d2e2",
-   "d2c3"
+   "b4b5",
+   "b4a4",
+   "b4c4",
+   "b4d4",
+   "b4e4",
+   "d5c4",
+   "d5d4",
+   "d5e4",
+   "d5c5",
+   "d5e5"
   ],
   "lose_moves": [
-   "b3c4",
-   "b3d5",
-   "b3d3",
-   "d2d3",
-   "d2e3"
+   "b4b3",
+   "b4b2",
+   "b4b1"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0014",
   "n": 5,
-  "turn": "w",
+  "turn": "b",
   "value": "win",
   "pieces": [
    {
-    "sq": "c1",
-    "color": "w",
+    "sq": "b2",
+    "color": "b",
     "kind": "Q"
    },
    {
-    "sq": "b3",
+    "sq": "e4",
     "color": "w",
     "kind": "K"
    },
    {
-    "sq": "e5",
+    "sq": "a5",
     "color": "b",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "c1b2",
-   "c1a3",
-   "c1d2",
-   "c1e3",
-   "c1c2",
-   "c1c3",
-   "c1c5",
-   "c1b1",
-   "c1a1",
-   "c1d1",
-   "c1e1",
-   "b3a2",
-   "b3b2",
-   "b3c2",
-   "b3a3",
-   "b3c3",
-   "b3a4",
-   "b3b4",
-   "b3c4"
+   "b2a1",
+   "b2c1",
+   "b2a3",
+   "b2c3",
+   "b2b1",
+   "b2b3",
+   "b2b4",
+   "b2b5",
+   "b2a2",
+   "b2c2",
+   "b2d2",
+   "b2e2",
+   "a5a4",
+   "a5b4",
+   "a5b5"
   ],
   "lose_moves": [
-   "c1c4"
+   "b2d4",
+   "b2e5"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0015",
   "n": 5,
-  "turn": "b",
+  "turn": "w",
   "value": "win",
   "pieces": [
    {
-    "sq": "d2",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "a3",
+    "sq": "a1",
     "color": "w",
     "kind": "K"
    },
    {
-    "sq": "d4",
+    "sq": "d2",
     "color": "b",
     "kind": "K"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "R"
    }
   ],
   "win_moves": [
-   "d2d1",
-   "d2d3",
-   "d2c2",
-   "d2e2",
-   "d4c3",
-   "d4d3",
-   "d4e3",
-   "d4c4",
-   "d4e4",
-   "d4c5",
-   "d4d5",
-   "d4e5"
+   "a3a2",
+   "a3a4",
+   "a3a5",
+   "a3b3",
+   "a1b1",
+   "a1a2",
+   "a1b2"
   ],
   "lose_moves": [
-   "d2b2",
-   "d2a2"
+   "a3c3",
+   "a3d3",
+   "a3e3"
   ],
   "over_budget": false
  },
@@ -701,14 +666,14 @@
     "kind": "K"
    },
    {
-    "sq": "b3",
-    "color": "w",
-    "kind": "K"
-   },
-   {
     "sq": "c5",
     "color": "w",
     "kind": "Q"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "K"
    }
   ],
   "win_moves": [
@@ -716,21 +681,17 @@
    "c5a3",
    "c5d4",
    "c5c4",
-   "c5c3",
-   "c5c2",
    "c5b5",
    "c5a5",
    "c5d5",
-   "c5e5",
-   "b3a2",
-   "b3b2",
-   "b3a3",
-   "b3a4",
-   "b3b4",
-   "b3c4"
+   "e5d4",
+   "e5e4",
+   "e5d5"
   ],
   "lose_moves": [
    "c5e3",
+   "c5c3",
+   "c5c2",
    "c5c1"
   ],
   "over_budget": false
@@ -738,46 +699,40 @@
  {
   "id": "sm-5x5-0017",
   "n": 5,
-  "turn": "b",
+  "turn": "w",
   "value": "win",
   "pieces": [
    {
-    "sq": "b2",
-    "color": "b",
+    "sq": "a2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
     "kind": "K"
    },
    {
-    "sq": "e3",
+    "sq": "b3",
     "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "a4",
-    "color": "w",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "e3d2",
-   "e3c1",
-   "e3d4",
-   "e3e2",
-   "e3e1",
-   "e3e4",
-   "e3e5",
-   "e3d3",
-   "e3c3",
-   "e3b3",
-   "e3a3",
-   "b2a1",
-   "b2b1",
-   "b2c1",
-   "b2a2",
-   "b2c2",
-   "b2c3"
+   "a2a1",
+   "a2a5",
+   "a2d2"
   ],
   "lose_moves": [
-   "e3c5"
+   "a2a3",
+   "a2a4",
+   "a2b2",
+   "a2c2",
+   "e2d1",
+   "e2e1",
+   "e2d2",
+   "e2d3",
+   "e2e3"
   ],
   "over_budget": false
  },
@@ -788,87 +743,132 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "c1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a2",
+    "sq": "d1",
     "color": "b",
     "kind": "K"
    },
    {
-    "sq": "c3",
+    "sq": "b2",
     "color": "w",
-    "kind": "Q"
+    "kind": "R"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
+    "kind": "K"
    }
   ],
   "win_moves": [
-   "c3b2",
-   "c3d2",
-   "c3e1",
-   "c3b4",
-   "c3a5",
-   "c3d4",
-   "c3e5",
-   "c3c2",
-   "c3c4",
-   "c3c5",
-   "c3d3",
-   "c3e3",
-   "c1d1",
-   "c1d2"
+   "b2b1",
+   "b2b3",
+   "b2b4",
+   "b2b5",
+   "b2a2",
+   "d5c4",
+   "d5d4",
+   "d5e4",
+   "d5c5",
+   "d5e5"
   ],
   "lose_moves": [
-   "c3a1",
-   "c3b3",
-   "c3a3",
-   "c1c2"
+   "b2c2",
+   "b2d2",
+   "b2e2"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0019",
   "n": 5,
-  "turn": "b",
+  "turn": "w",
   "value": "win",
   "pieces": [
    {
-    "sq": "a2",
+    "sq": "b1",
     "color": "b",
     "kind": "K"
    },
    {
-    "sq": "c2",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "e3",
+    "sq": "b4",
     "color": "w",
     "kind": "K"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "Q"
    }
   ],
   "win_moves": [
-   "c2c1",
-   "c2c3",
-   "c2c4",
-   "c2c5",
-   "c2b2",
-   "a2a1",
-   "a2b1",
-   "a2b2",
-   "a2a3",
-   "a2b3"
+   "d4c3",
+   "d4e3",
+   "d4c5",
+   "d4e5",
+   "d4d3",
+   "d4d2",
+   "d4d1",
+   "d4d5",
+   "d4c4",
+   "d4e4",
+   "b4a3",
+   "b4b3",
+   "b4c3",
+   "b4a4",
+   "b4c4",
+   "b4a5",
+   "b4b5",
+   "b4c5"
   ],
   "lose_moves": [
-   "c2d2",
-   "c2e2"
+   "d4b2",
+   "d4a1"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0020",
+  "n": 5,
+  "turn": "b",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [
+   "c5c4",
+   "c5c3",
+   "c5b5",
+   "c5a5",
+   "c5d5",
+   "c5e5",
+   "d4d3",
+   "d4e3",
+   "d4c4",
+   "d4e4",
+   "d4d5",
+   "d4e5"
+  ],
+  "lose_moves": [
+   "c5c2",
+   "c5c1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0021",
   "n": 5,
   "turn": "w",
   "value": "win",
@@ -876,79 +876,33 @@
    {
     "sq": "b1",
     "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
     "kind": "R"
-   },
-   {
-    "sq": "a2",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d4",
-    "color": "w",
-    "kind": "K"
    }
   ],
   "win_moves": [
-   "b1b4",
-   "b1b5",
-   "b1c1",
-   "b1d1",
-   "b1e1"
-  ],
-  "lose_moves": [
-   "b1b2",
-   "b1b3",
+   "d5d1",
+   "d5c5",
+   "d5b5",
+   "d5a5",
+   "d5e5",
    "b1a1",
-   "d4c3",
-   "d4d3",
-   "d4e3",
-   "d4c4",
-   "d4e4",
-   "d4c5",
-   "d4d5",
-   "d4e5"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0021",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "e2",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "e3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a5",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [
-   "e2d1",
-   "e2d3",
-   "e2e1",
-   "e2d2",
-   "e2c2",
-   "e2b2",
-   "e2a2",
-   "e3d2",
-   "e3d3",
-   "e3d4",
-   "e3e4"
+   "b1c1",
+   "b1a2"
   ],
   "lose_moves": [
-   "e2c4",
-   "e2b5"
+   "d5d4",
+   "d5d3",
+   "d5d2"
   ],
   "over_budget": false
  },
@@ -959,7 +913,90 @@
   "value": "win",
   "pieces": [
    {
+    "sq": "a2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "a3b2",
+   "a3c1",
+   "a3b4",
+   "a3c5",
+   "a3a4",
+   "a3a5",
+   "a3b3",
+   "a3c3",
+   "a2a1",
+   "a2b1",
+   "a2b2",
+   "a2b3"
+  ],
+  "lose_moves": [
+   "a3d3",
+   "a3e3"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0023",
+  "n": 5,
+  "turn": "b",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
     "sq": "e2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "e2e1",
+   "e2e3",
+   "e2e4",
+   "e2e5",
+   "e2d2",
+   "e2c2",
+   "a4a3",
+   "a4b3",
+   "a4b4",
+   "a4a5",
+   "a4b5"
+  ],
+  "lose_moves": [
+   "e2b2",
+   "e2a2"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0024",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "c2",
     "color": "w",
     "kind": "K"
    },
@@ -969,7 +1006,7 @@
     "kind": "R"
    },
    {
-    "sq": "b5",
+    "sq": "c5",
     "color": "b",
     "kind": "K"
    }
@@ -978,108 +1015,21 @@
    "a4a3",
    "a4a2",
    "a4a1",
-   "a4d4",
-   "a4e4"
+   "a4a5",
+   "a4e4",
+   "c2b1",
+   "c2c1",
+   "c2d1",
+   "c2b2",
+   "c2d2",
+   "c2b3",
+   "c2c3",
+   "c2d3"
   ],
   "lose_moves": [
-   "a4a5",
    "a4b4",
    "a4c4",
-   "e2d1",
-   "e2e1",
-   "e2d2",
-   "e2d3",
-   "e2e3"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0023",
-  "n": 5,
-  "turn": "w",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "c1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a5",
-    "color": "w",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [
-   "a5b4",
-   "a5c3",
-   "a5e1",
-   "a5a4",
-   "a5a3",
-   "a5a2",
-   "a5a1",
-   "a5b5",
-   "a5c5",
-   "a5d5",
-   "a5e5",
-   "e4d3",
-   "e4e3",
-   "e4d4",
-   "e4d5",
-   "e4e5"
-  ],
-  "lose_moves": [
-   "a5d2"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0024",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "c2",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "e3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e5",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [
-   "c2b1",
-   "c2a4",
-   "c2e4",
-   "c2c1",
-   "c2c3",
-   "c2c5",
-   "c2b2",
-   "c2e2",
-   "e3d2",
-   "e3e2",
-   "e3d3"
-  ],
-  "lose_moves": [
-   "c2d1",
-   "c2b3",
-   "c2d3",
-   "c2c4",
-   "c2a2",
-   "c2d2"
+   "a4d4"
   ],
   "over_budget": false
  },
@@ -1090,85 +1040,87 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "e2",
+    "sq": "a3",
     "color": "w",
-    "kind": "Q"
+    "kind": "R"
    },
    {
-    "sq": "c4",
-    "color": "w",
+    "sq": "b4",
+    "color": "b",
     "kind": "K"
    },
    {
-    "sq": "a5",
-    "color": "b",
+    "sq": "e4",
+    "color": "w",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "e2d3",
-   "e2e1",
-   "e2e3",
-   "e2e4",
-   "e2e5",
-   "e2d2",
-   "e2b2",
-   "e2a2",
-   "c4c3",
-   "c4d3",
-   "c4d4",
-   "c4c5",
-   "c4d5"
+   "a3a2",
+   "a3a1",
+   "a3d3",
+   "a3e3"
   ],
   "lose_moves": [
-   "e2d1",
-   "e2c2",
-   "c4b3"
+   "a3a4",
+   "a3a5",
+   "a3b3",
+   "a3c3",
+   "e4d3",
+   "e4e3",
+   "e4d4",
+   "e4d5",
+   "e4e5"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0026",
   "n": 5,
-  "turn": "b",
+  "turn": "w",
   "value": "win",
   "pieces": [
    {
-    "sq": "e1",
+    "sq": "a1",
     "color": "b",
     "kind": "K"
    },
    {
-    "sq": "c2",
-    "color": "b",
+    "sq": "d3",
+    "color": "w",
     "kind": "Q"
    },
    {
-    "sq": "a5",
+    "sq": "b4",
     "color": "w",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "c2b1",
-   "c2d1",
-   "c2d3",
-   "c2e4",
-   "c2c1",
-   "c2c3",
-   "c2c5",
-   "c2b2",
-   "c2a2",
-   "c2d2",
-   "c2e2",
-   "e1d1",
-   "e1d2",
-   "e1e2"
+   "d3e2",
+   "d3c4",
+   "d3b5",
+   "d3e4",
+   "d3d2",
+   "d3d1",
+   "d3d4",
+   "d3d5",
+   "d3c3",
+   "d3a3",
+   "d3e3",
+   "b4c3",
+   "b4a4",
+   "b4c4",
+   "b4a5",
+   "b4b5",
+   "b4c5"
   ],
   "lose_moves": [
-   "c2b3",
-   "c2a4",
-   "c2c4"
+   "d3c2",
+   "d3b1",
+   "d3b3",
+   "b4a3",
+   "b4b3"
   ],
   "over_budget": false
  },
@@ -1179,13 +1131,100 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "a1",
+    "sq": "b1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e3",
     "color": "b",
     "kind": "K"
    },
    {
-    "sq": "b4",
+    "sq": "e5",
     "color": "b",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [
+   "e5d4",
+   "e5c3",
+   "e5e4",
+   "e5d5",
+   "e5c5",
+   "e5b5",
+   "e5a5",
+   "e3d2",
+   "e3e2",
+   "e3d3",
+   "e3d4",
+   "e3e4"
+  ],
+  "lose_moves": [
+   "e5b2",
+   "e5a1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0028",
+  "n": 5,
+  "turn": "b",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c4",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "c4d3",
+   "c4e2",
+   "c4b5",
+   "c4d5",
+   "c4b4",
+   "c4a4",
+   "c4d4",
+   "c4e4",
+   "c5b4",
+   "c5d4",
+   "c5b5",
+   "c5d5"
+  ],
+  "lose_moves": [
+   "c4b3",
+   "c4a2",
+   "c4c3",
+   "c4c2",
+   "c4c1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0029",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
     "kind": "R"
    },
    {
@@ -1195,135 +1234,59 @@
    }
   ],
   "win_moves": [
-   "b4b3",
-   "b4b2",
-   "b4b1",
-   "b4b5",
-   "b4a4",
-   "a1b1",
-   "a1a2",
-   "a1b2"
-  ],
-  "lose_moves": [
-   "b4c4",
-   "b4d4",
-   "b4e4"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0028",
-  "n": 5,
-  "turn": "w",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "d4",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [
+   "c3c4",
+   "c3c5",
    "c3b3",
    "c3a3",
    "c3d3",
-   "c2b2",
-   "c2d2",
-   "c2b3"
-  ],
-  "lose_moves": [
-   "c3c4",
-   "c3c5",
    "c3e3",
-   "c2b1",
-   "c2c1",
-   "c2d1"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0029",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "e1",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e4",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [
-   "e1e2",
-   "e1e3",
-   "e1d1",
-   "e1c1",
-   "e4d3",
-   "e4e3",
-   "e4d4",
-   "e4d5",
-   "e4e5"
+   "d5c4",
+   "d5d4",
+   "d5e4",
+   "d5c5",
+   "d5e5"
   ],
   "lose_moves": [
-   "e1b1",
-   "e1a1"
+   "c3c2",
+   "c3c1"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0030",
   "n": 5,
-  "turn": "b",
+  "turn": "w",
   "value": "win",
   "pieces": [
    {
     "sq": "a1",
-    "color": "b",
+    "color": "w",
     "kind": "K"
    },
    {
-    "sq": "b1",
-    "color": "b",
+    "sq": "b2",
+    "color": "w",
     "kind": "R"
    },
    {
     "sq": "a5",
-    "color": "w",
+    "color": "b",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "b1b2",
-   "b1b3",
-   "b1c1",
-   "b1d1",
-   "b1e1",
-   "a1a2",
-   "a1b2"
+   "b2b1",
+   "b2b3",
+   "b2a2",
+   "b2c2",
+   "b2d2",
+   "b2e2",
+   "a1b1",
+   "a1a2"
   ],
   "lose_moves": [
-   "b1b4",
-   "b1b5"
+   "b2b4",
+   "b2b5"
   ],
   "over_budget": false
  },
@@ -1334,54 +1297,57 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "a2",
+    "sq": "d4",
     "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
     "kind": "K"
    },
    {
-    "sq": "c2",
+    "sq": "e5",
     "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "d4",
-    "color": "b",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "c2c1",
-   "c2b2",
-   "c2d2",
-   "c2e2",
-   "a2a1",
-   "a2b1",
-   "a2b2",
-   "a2a3",
-   "a2b3"
+   "d4c3",
+   "d4b2",
+   "d4a1",
+   "d4e3",
+   "d4d3",
+   "d4d2",
+   "d4d1",
+   "d4d5",
+   "d4e4",
+   "e5e4",
+   "e5d5"
   ],
   "lose_moves": [
-   "c2c3",
-   "c2c4",
-   "c2c5"
+   "d4c5",
+   "d4c4",
+   "d4b4",
+   "d4a4"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0032",
   "n": 5,
-  "turn": "w",
+  "turn": "b",
   "value": "win",
   "pieces": [
    {
-    "sq": "e1",
+    "sq": "c1",
     "color": "b",
-    "kind": "K"
+    "kind": "Q"
    },
    {
-    "sq": "d3",
-    "color": "w",
-    "kind": "Q"
+    "sq": "a2",
+    "color": "b",
+    "kind": "K"
    },
    {
     "sq": "d5",
@@ -1390,26 +1356,25 @@
    }
   ],
   "win_moves": [
-   "d3b1",
-   "d3c4",
-   "d3b5",
-   "d3e4",
-   "d3d4",
-   "d3c3",
-   "d3b3",
-   "d3a3",
-   "d3e3"
+   "c1b2",
+   "c1a3",
+   "c1d2",
+   "c1e3",
+   "c1c2",
+   "c1c3",
+   "c1b1",
+   "c1a1",
+   "c1d1",
+   "c1e1",
+   "a2a1",
+   "a2b1",
+   "a2b2",
+   "a2a3",
+   "a2b3"
   ],
   "lose_moves": [
-   "d3c2",
-   "d3e2",
-   "d3d2",
-   "d3d1",
-   "d5c4",
-   "d5d4",
-   "d5e4",
-   "d5c5",
-   "d5e5"
+   "c1c4",
+   "c1c5"
   ],
   "over_budget": false
  },
@@ -1420,81 +1385,83 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "a5",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c5",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d5",
+    "sq": "b1",
     "color": "b",
     "kind": "Q"
+   },
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "K"
    }
   ],
   "win_moves": [
-   "d5a2",
-   "d5d3",
-   "d5d2",
-   "d5e5",
-   "c5c4",
-   "c5d4"
+   "b1e4",
+   "b1b2",
+   "b1b3",
+   "b1b5",
+   "b1a1",
+   "b1c1",
+   "b1d1",
+   "b1e1",
+   "a2a1",
+   "a2a3"
   ],
   "lose_moves": [
-   "d5c4",
-   "d5b3",
-   "d5e4",
-   "d5d4",
-   "d5d1"
+   "b1c2",
+   "b1d3",
+   "b1b4"
   ],
   "over_budget": false
  },
  {
   "id": "sm-5x5-0034",
   "n": 5,
-  "turn": "b",
+  "turn": "w",
   "value": "win",
   "pieces": [
    {
-    "sq": "d2",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "a3",
+    "sq": "b1",
     "color": "w",
     "kind": "K"
    },
    {
     "sq": "d3",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "b4",
     "color": "b",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "d2c1",
-   "d2e1",
-   "d2c3",
-   "d2a5",
-   "d2e3",
-   "d2d1",
-   "d2c2",
-   "d2e2",
    "d3c2",
    "d3e2",
-   "d3c3",
-   "d3e3",
-   "d3c4",
+   "d3e4",
+   "d3d2",
+   "d3d1",
    "d3d4",
-   "d3e4"
+   "d3d5",
+   "d3e3",
+   "b1a1",
+   "b1c1",
+   "b1a2",
+   "b1b2",
+   "b1c2"
   ],
   "lose_moves": [
-   "d2b4",
-   "d2b2",
-   "d2a2"
+   "d3c4",
+   "d3b5",
+   "d3c3",
+   "d3b3",
+   "d3a3"
   ],
   "over_budget": false
  },
@@ -1510,29 +1477,38 @@
     "kind": "K"
    },
    {
-    "sq": "a3",
+    "sq": "c3",
     "color": "b",
-    "kind": "R"
+    "kind": "Q"
    },
    {
-    "sq": "a4",
+    "sq": "d4",
     "color": "b",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "a3a2",
-   "a3a1",
-   "a3b3",
-   "a3c3",
-   "a4b3",
-   "a4b4",
-   "a4a5",
-   "a4b5"
+   "c3b2",
+   "c3a1",
+   "c3b4",
+   "c3a5",
+   "c3c2",
+   "c3c4",
+   "c3c5",
+   "c3b3",
+   "c3a3",
+   "c3d3",
+   "c3e3",
+   "d4c4",
+   "d4e4",
+   "d4c5",
+   "d4d5",
+   "d4e5"
   ],
   "lose_moves": [
-   "a3d3",
-   "a3e3"
+   "c3d2",
+   "c3e1",
+   "c3c1"
   ],
   "over_budget": false
  },
@@ -1543,14 +1519,95 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "d2",
+    "sq": "d3",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c4",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [
+   "d3d2",
+   "d3d1",
+   "d3d4",
+   "d3a3",
+   "e3d2",
+   "e3e2",
+   "e3e4"
+  ],
+  "lose_moves": [
+   "d3d5",
+   "d3c3",
+   "d3b3"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0037",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "e1",
     "color": "b",
     "kind": "K"
    },
    {
-    "sq": "b3",
+    "sq": "a2",
     "color": "w",
-    "kind": "R"
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [
+   "a4b3",
+   "a4b5",
+   "a4a3",
+   "a4a5",
+   "a4b4",
+   "a4c4",
+   "a4d4",
+   "a4e4",
+   "a2a1",
+   "a2b1",
+   "a2b2",
+   "a2a3",
+   "a2b3"
+  ],
+  "lose_moves": [
+   "a4c2",
+   "a4d1"
+  ],
+  "over_budget": false
+ },
+ {
+  "id": "sm-5x5-0038",
+  "n": 5,
+  "turn": "w",
+  "value": "win",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "K"
    },
    {
     "sq": "d5",
@@ -1559,103 +1616,23 @@
    }
   ],
   "win_moves": [
-   "b3b2",
-   "b3b1",
-   "b3b4",
-   "b3b5",
-   "b3a3",
-   "d5c4",
+   "c1b2",
+   "c1d2",
+   "c1e3",
+   "c1c2",
+   "c1c4",
+   "c1c5",
+   "c1b1",
+   "c1a1",
+   "c1d1",
+   "c1e1",
    "d5d4",
    "d5e4",
-   "d5c5",
    "d5e5"
   ],
   "lose_moves": [
-   "b3c3",
-   "b3d3",
-   "b3e3"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0037",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "c1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a4",
-    "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [
-   "a4c2",
-   "a4b5",
-   "a4a3",
-   "a4a2",
-   "a4a1",
-   "a4a5",
-   "a4b4",
-   "a4c4",
-   "a4d4",
-   "a4e4",
-   "c3b3",
-   "c3d3",
-   "c3b4",
-   "c3c4",
-   "c3d4"
-  ],
-  "lose_moves": [
-   "a4b3",
-   "a4d1"
-  ],
-  "over_budget": false
- },
- {
-  "id": "sm-5x5-0038",
-  "n": 5,
-  "turn": "b",
-  "value": "win",
-  "pieces": [
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "b5",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "c5",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [
-   "b5b4",
-   "b5a5",
-   "c5b4",
-   "c5c4",
-   "c5d4",
-   "c5d5"
-  ],
-  "lose_moves": [
-   "b5b3",
-   "b5b2",
-   "b5b1"
+   "c1a3",
+   "c1c3"
   ],
   "over_budget": false
  },
@@ -1666,35 +1643,35 @@
   "value": "win",
   "pieces": [
    {
-    "sq": "e1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c4",
+    "sq": "b1",
     "color": "w",
     "kind": "R"
    },
    {
-    "sq": "d5",
+    "sq": "c3",
     "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
     "kind": "K"
    }
   ],
   "win_moves": [
-   "c4c3",
-   "c4c2",
-   "c4c1",
-   "c4b4",
-   "c4a4"
+   "b1b5",
+   "b1a1",
+   "b1c1",
+   "b1d1",
+   "b1e1",
+   "d5e4",
+   "d5c5",
+   "d5e5"
   ],
   "lose_moves": [
-   "c4c5",
-   "c4d4",
-   "c4e4",
-   "e1d1",
-   "e1d2",
-   "e1e2"
+   "b1b2",
+   "b1b3",
+   "b1b4"
   ],
   "over_budget": false
  }

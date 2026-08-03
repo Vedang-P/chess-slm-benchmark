@@ -26,7 +26,7 @@ from src.benchmarks.games import tasks as T  # noqa: E402
 from src.benchmarks.games.envs import ENVS  # noqa: E402
 from src.live_push import PUBLIC_LIVE_REPO, resolve_token, upload_file  # noqa: E402
 from src.models import MODEL_IDS, configure_quiet_logging, make_model  # noqa: E402
-from src.report import ResultWriter, aggregate_samples, divergence_rate  # noqa: E402
+from src.report import ResultWriter, aggregate_samples  # noqa: E402
 
 TASK_FILES = {
     "cap-legal-8x8": "cap-legal-8x8.json",
@@ -333,7 +333,18 @@ def main() -> None:
                                  stream=args.verbose or args.stream,
                                  on_chunk=_live_partial if not args.smoke else None)
             fallback = None
-            if not out.get("content", "").strip() and hasattr(model, "force_answer") \
+            def _answer_has_move(text: str) -> bool:
+                """A move counts as given only if the text parses against the
+                board — prose without a move is NOT an answer."""
+                try:
+                    from src.benchmarks.games.tasks import _board, parse_move_output
+
+                    uci, _ = parse_move_output(text or "", _board(rec))
+                    return uci is not None
+                except Exception:
+                    return False
+
+            if not _answer_has_move(out.get("content")) and hasattr(model, "force_answer") \
                     and not args.smoke:
                 # 'no answer' is not an option for the API model: force a
                 # committed second pass, then extract from the reasoning,
@@ -354,7 +365,7 @@ def main() -> None:
                        "latency_ms": (out.get("latency_ms") or 0)
                                      + (out2.get("latency_ms") or 0)}
                 fallback = "forced"
-                if not out.get("content", "").strip():
+                if not _answer_has_move(out.get("content")):
                     # last resort: the best legal move we can extract, or a
                     # random legal move so there is always a comparison
                     from src.benchmarks.games.tasks import _board, parse_move_output
@@ -366,7 +377,7 @@ def main() -> None:
                             fallback = "reasoning-extract"
                     except Exception:
                         pass
-                if not out.get("content", "").strip():
+                if not _answer_has_move(out.get("content")):
                     from src.benchmarks.games.tasks import _board
                     try:
                         board = _board(rec)
@@ -411,8 +422,6 @@ def main() -> None:
                   f"({el / (i + 1):.1f}s/position)", flush=True)
 
     agg = aggregate_samples(samples)
-    if kind not in ("cap", "bestmove"):
-        agg["divergence_rate"] = divergence_rate(samples)
     summary = writer.finish(agg)
     print(json.dumps(summary["metrics"], indent=1), flush=True)
     _cleanup(model)

@@ -7,7 +7,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r6r/1pNk1ppp/2np4/b3p3/4P1b1/N1Q5/P4PPP/R3KB1R w KQ - 3 18",
-  "presented_fen": "N6r/1p1k1ppp/2np4/b3p3/4P1b1/N1Q5/P4PPP/R3KB1R b - - 0 1",
+  "presented_fen": "N6r/1p1k1ppp/2np4/b3p3/4P1b1/N1Q5/P4PPP/R3KB1R b KQ - 0 18",
   "pieces": [
    {
     "sq": "a1",
@@ -130,7 +130,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a5c3",
-   "presented_after": "c7a8",
+   "opponent_first_move": "c7a8",
    "rating": 819,
    "rating_deviation": 119,
    "popularity": 69,
@@ -151,7 +151,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "7k/p4R1p/3p3r/2pN1n2/2PbBBb1/3P2P1/P3r3/5R1K w - - 1 28",
-  "presented_fen": "7k/p4R1p/3p3B/2pN1n2/2PbB1b1/3P2P1/P3r3/5R1K b - - 0 1",
+  "presented_fen": "7k/p4R1p/3p3B/2pN1n2/2PbB1b1/3P2P1/P3r3/5R1K b - - 0 28",
   "pieces": [
    {
     "sq": "f1",
@@ -254,7 +254,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f5g3",
-   "presented_after": "f4h6",
+   "opponent_first_move": "f4h6",
    "rating": 911,
    "rating_deviation": 78,
    "popularity": 100,
@@ -275,7 +275,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3r3/1kpRnqpp/p4p2/Qp2P2P/1N6/4Pb2/PPP3P1/2K2R2 b - - 0 22",
-  "presented_fen": "r3r3/1kpR1qpp/p1n2p2/Qp2P2P/1N6/4Pb2/PPP3P1/2K2R2 w - - 0 1",
+  "presented_fen": "r3r3/1kpR1qpp/p1n2p2/Qp2P2P/1N6/4Pb2/PPP3P1/2K2R2 w - - 1 23",
   "pieces": [
    {
     "sq": "c1",
@@ -403,7 +403,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a5c7",
-   "presented_after": "e7c6",
+   "opponent_first_move": "e7c6",
    "rating": 1276,
    "rating_deviation": 75,
    "popularity": 94,
@@ -424,7 +424,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3r2k/p2n1p1R/5n2/qp3Q2/3P4/B3Pp2/P4P1P/1B5K b - - 0 23",
-  "presented_fen": "r3r1k1/p2n1p1R/5n2/qp3Q2/3P4/B3Pp2/P4P1P/1B5K w - - 0 1",
+  "presented_fen": "r3r1k1/p2n1p1R/5n2/qp3Q2/3P4/B3Pp2/P4P1P/1B5K w - - 1 24",
   "pieces": [
    {
     "sq": "b1",
@@ -532,7 +532,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f5g5",
-   "presented_after": "h8g8",
+   "opponent_first_move": "h8g8",
    "rating": 1123,
    "rating_deviation": 76,
    "popularity": 67,
@@ -553,7 +553,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r4b1r/pppqpkpp/6B1/7Q/2PP4/2N1P2P/PP4P1/R5K1 b - - 0 15",
-  "presented_fen": "r4bkr/pppqp1pp/6B1/7Q/2PP4/2N1P2P/PP4P1/R5K1 w - - 0 1",
+  "presented_fen": "r4bkr/pppqp1pp/6B1/7Q/2PP4/2N1P2P/PP4P1/R5K1 w - - 1 16",
   "pieces": [
    {
     "sq": "a1",
@@ -676,7 +676,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6f7",
-   "presented_after": "f7g8",
+   "opponent_first_move": "f7g8",
    "rating": 874,
    "rating_deviation": 77,
    "popularity": 100,
@@ -697,7 +697,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b1k1nr/pppp1ppp/5q2/2b1n3/4P3/2N2N2/PPPP2PP/R1BQKB1R w KQkq - 0 6",
-  "presented_fen": "r1b1k1nr/pppp1ppp/5q2/2b1N3/4P3/2N5/PPPP2PP/R1BQKB1R b - - 0 1",
+  "presented_fen": "r1b1k1nr/pppp1ppp/5q2/2b1N3/4P3/2N5/PPPP2PP/R1BQKB1R b KQkq - 0 6",
   "pieces": [
    {
     "sq": "a1",
@@ -850,7 +850,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6f2",
-   "presented_after": "f3e5",
+   "opponent_first_move": "f3e5",
    "rating": 1087,
    "rating_deviation": 84,
    "popularity": 77,
@@ -871,7 +871,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3rrbk1/2p3R1/1p2q2Q/3p4/1P6/2B4P/6P1/3R2K1 b - - 0 33",
-  "presented_fen": "3rr1k1/2p3b1/1p2q2Q/3p4/1P6/2B4P/6P1/3R2K1 w - - 0 1",
+  "presented_fen": "3rr1k1/2p3b1/1p2q2Q/3p4/1P6/2B4P/6P1/3R2K1 w - - 0 34",
   "pieces": [
    {
     "sq": "d1",
@@ -954,7 +954,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h6g7",
-   "presented_after": "f8g7",
+   "opponent_first_move": "f8g7",
    "rating": 879,
    "rating_deviation": 78,
    "popularity": 99,
@@ -975,7 +975,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "rq2kb1r/1b1p1pp1/p3pn2/1p5p/4P1n1/1NN1BB2/PPP1QPPP/R4RK1 w kq - 2 14",
-  "presented_fen": "rq2kb1r/1b1p1pp1/p3pn2/1p5p/4P1n1/1NN1BB1P/PPP1QPP1/R4RK1 b - - 0 1",
+  "presented_fen": "rq2kb1r/1b1p1pp1/p3pn2/1p5p/4P1n1/1NN1BB1P/PPP1QPP1/R4RK1 b kq - 0 14",
   "pieces": [
    {
     "sq": "a1",
@@ -1133,7 +1133,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b8h2",
-   "presented_after": "h2h3",
+   "opponent_first_move": "h2h3",
    "rating": 911,
    "rating_deviation": 80,
    "popularity": 92,
@@ -1154,7 +1154,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4b2k/R7/p4q2/2P1r2p/3QP1pP/1B6/P5p1/6KR w - - 0 36",
-  "presented_fen": "4b2k/R7/p4q2/2P1r2p/3QP1pP/1B6/P5pR/6K1 b - - 0 1",
+  "presented_fen": "4b2k/R7/p4q2/2P1r2p/3QP1pP/1B6/P5pR/6K1 b - - 1 36",
   "pieces": [
    {
     "sq": "g1",
@@ -1247,7 +1247,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6f1",
-   "presented_after": "h1h2",
+   "opponent_first_move": "h1h2",
    "rating": 958,
    "rating_deviation": 87,
    "popularity": 76,
@@ -1268,7 +1268,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3rkb1r/pppqp1pp/2n5/1Q3p2/4N3/1P2P3/PBP2PPP/R3KB1R w KQk - 0 12",
-  "presented_fen": "3rkb1r/pppqp1pp/2n5/1QN2p2/8/1P2P3/PBP2PPP/R3KB1R b - - 0 1",
+  "presented_fen": "3rkb1r/pppqp1pp/2n5/1QN2p2/8/1P2P3/PBP2PPP/R3KB1R b KQk - 1 12",
   "pieces": [
    {
     "sq": "a1",
@@ -1411,7 +1411,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d7d2",
-   "presented_after": "e4c5",
+   "opponent_first_move": "e4c5",
    "rating": 1117,
    "rating_deviation": 75,
    "popularity": 100,
@@ -1432,7 +1432,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1r5r/3b4/pk2P3/1p2Q1Np/4BP2/1P5n/P5PP/R5qK w - - 5 36",
-  "presented_fen": "1r5r/3b4/pk2P3/1p2Q1Np/4BP2/1P5n/P5PP/6RK b - - 0 1",
+  "presented_fen": "1r5r/3b4/pk2P3/1p2Q1Np/4BP2/1P5n/P5PP/6RK b - - 0 36",
   "pieces": [
    {
     "sq": "g1",
@@ -1535,7 +1535,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3f2",
-   "presented_after": "a1g1",
+   "opponent_first_move": "a1g1",
    "rating": 974,
    "rating_deviation": 87,
    "popularity": 92,
@@ -1556,7 +1556,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1r1r3k/p2qR1pp/b1p5/2p3Q1/8/2PPR2P/PP3PP1/6K1 b - - 2 26",
-  "presented_fen": "1r1r3k/p3R1pp/b1p5/2pq2Q1/8/2PPR2P/PP3PP1/6K1 w - - 0 1",
+  "presented_fen": "1r1r3k/p3R1pp/b1p5/2pq2Q1/8/2PPR2P/PP3PP1/6K1 w - - 3 27",
   "pieces": [
    {
     "sq": "g1",
@@ -1669,7 +1669,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g5g7",
-   "presented_after": "d7d5",
+   "opponent_first_move": "d7d5",
    "rating": 1174,
    "rating_deviation": 77,
    "popularity": 88,
@@ -1690,7 +1690,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2k5/1p5R/3K4/P5r1/8/1p6/8/8 b - - 1 46",
-  "presented_fen": "2k5/1p5R/3K4/Pr6/8/1p6/8/8 w - - 0 1",
+  "presented_fen": "2k5/1p5R/3K4/Pr6/8/1p6/8/8 w - - 2 47",
   "pieces": [
    {
     "sq": "b3",
@@ -1733,7 +1733,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h7h8",
-   "presented_after": "g5b5",
+   "opponent_first_move": "g5b5",
    "rating": 1358,
    "rating_deviation": 82,
    "popularity": 92,
@@ -1754,7 +1754,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r4r1k/1ppq2p1/1pnp1nQp/4pN2/4P3/3PB2P/PPP2RP1/R5K1 b - - 11 18",
-  "presented_fen": "r4r1k/1ppqn1p1/1p1p1nQp/4pN2/4P3/3PB2P/PPP2RP1/R5K1 w - - 0 1",
+  "presented_fen": "r4r1k/1ppqn1p1/1p1p1nQp/4pN2/4P3/3PB2P/PPP2RP1/R5K1 w - - 12 19",
   "pieces": [
    {
     "sq": "a1",
@@ -1892,7 +1892,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6g7",
-   "presented_after": "c6e7",
+   "opponent_first_move": "c6e7",
    "rating": 1106,
    "rating_deviation": 88,
    "popularity": 73,
@@ -1913,7 +1913,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "rn1q2k1/p1pp2pB/1p2pb2/6NQ/3P4/2P5/PP3P2/R3K2b b Q - 5 20",
-  "presented_fen": "rn1q1k2/p1pp2pB/1p2pb2/6NQ/3P4/2P5/PP3P2/R3K2b w - - 0 1",
+  "presented_fen": "rn1q1k2/p1pp2pB/1p2pb2/6NQ/3P4/2P5/PP3P2/R3K2b w Q - 6 21",
   "pieces": [
    {
     "sq": "a1",
@@ -2031,7 +2031,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h5f7",
-   "presented_after": "g8f8",
+   "opponent_first_move": "g8f8",
    "rating": 929,
    "rating_deviation": 75,
    "popularity": 91,
@@ -2052,7 +2052,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1bqk2r/pp2bpp1/2p1pn1p/4N3/3PNQ2/2P3P1/PP3PBP/R3K2R b KQkq - 4 13",
-  "presented_fen": "r1bqk2r/pp2bpp1/2p1p2p/4N3/3PnQ2/2P3P1/PP3PBP/R3K2R w - - 0 1",
+  "presented_fen": "r1bqk2r/pp2bpp1/2p1p2p/4N3/3PnQ2/2P3P1/PP3PBP/R3K2R w KQkq - 0 14",
   "pieces": [
    {
     "sq": "a1",
@@ -2195,7 +2195,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f4f7",
-   "presented_after": "f6e4",
+   "opponent_first_move": "f6e4",
    "rating": 836,
    "rating_deviation": 77,
    "popularity": 84,
@@ -2216,7 +2216,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2r3q1/1p6/p2p3R/3PpkP1/4np2/3B4/PP6/1K4R1 b - - 5 31",
-  "presented_fen": "2r5/1p6/p2p3R/3qpkP1/4np2/3B4/PP6/1K4R1 w - - 0 1",
+  "presented_fen": "2r5/1p6/p2p3R/3qpkP1/4np2/3B4/PP6/1K4R1 w - - 0 32",
   "pieces": [
    {
     "sq": "b1",
@@ -2304,7 +2304,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h6f6",
-   "presented_after": "g8d5",
+   "opponent_first_move": "g8d5",
    "rating": 1252,
    "rating_deviation": 156,
    "popularity": 81,
@@ -2325,7 +2325,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b2k1r/pppp2pp/2n5/4q1N1/2Q1P3/8/P4PPP/R1B2RK1 b - - 2 15",
-  "presented_fen": "r1b2k1r/pppp2p1/2n4p/4q1N1/2Q1P3/8/P4PPP/R1B2RK1 w - - 0 1",
+  "presented_fen": "r1b2k1r/pppp2p1/2n4p/4q1N1/2Q1P3/8/P4PPP/R1B2RK1 w - - 0 16",
   "pieces": [
    {
     "sq": "a1",
@@ -2448,7 +2448,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c4f7",
-   "presented_after": "h7h6",
+   "opponent_first_move": "h7h6",
    "rating": 982,
    "rating_deviation": 87,
    "popularity": 81,
@@ -2469,7 +2469,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r3kb1r/1p2pppp/pqnp4/3P4/B3n1b1/5N2/PP1B1PPP/RN1QK2R w KQkq - 0 11",
-  "presented_fen": "r3kb1r/1p2pppp/pqPp4/8/B3n1b1/5N2/PP1B1PPP/RN1QK2R b - - 0 1",
+  "presented_fen": "r3kb1r/1p2pppp/pqPp4/8/B3n1b1/5N2/PP1B1PPP/RN1QK2R b KQkq - 0 11",
   "pieces": [
    {
     "sq": "a1",
@@ -2617,7 +2617,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b6f2",
-   "presented_after": "d5c6",
+   "opponent_first_move": "d5c6",
    "rating": 1393,
    "rating_deviation": 90,
    "popularity": 55,
@@ -2638,7 +2638,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r3k2r/pp3pp1/2pqpn2/2N3p1/2P5/8/PPP1QPPP/R4RK1 w kq - 1 15",
-  "presented_fen": "r3k2r/pN3pp1/2pqpn2/6p1/2P5/8/PPP1QPPP/R4RK1 b - - 0 1",
+  "presented_fen": "r3k2r/pN3pp1/2pqpn2/6p1/2P5/8/PPP1QPPP/R4RK1 b kq - 0 15",
   "pieces": [
    {
     "sq": "a1",
@@ -2761,7 +2761,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d6h2",
-   "presented_after": "c5b7",
+   "opponent_first_move": "c5b7",
    "rating": 816,
    "rating_deviation": 76,
    "popularity": 100,
@@ -2782,7 +2782,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r3r1k1/p4ppp/2p5/3p4/3bbPP1/2N4q/PPPQ3N/4RRK1 w - - 2 22",
-  "presented_fen": "r3r1k1/p4ppp/2p5/3p4/3QbPP1/2N4q/PPP4N/4RRK1 b - - 0 1",
+  "presented_fen": "r3r1k1/p4ppp/2p5/3p4/3QbPP1/2N4q/PPP4N/4RRK1 b - - 0 22",
   "pieces": [
    {
     "sq": "e1",
@@ -2900,7 +2900,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3g2",
-   "presented_after": "d2d4",
+   "opponent_first_move": "d2d4",
    "rating": 1034,
    "rating_deviation": 98,
    "popularity": 81,
@@ -2909,8 +2909,8 @@
    "opening_tags": "",
    "game_url": "https://lichess.org/w6R9zYaz#43",
    "mate_moves": [
-    "h3g2",
-    "h3g3"
+    "h3g3",
+    "h3g2"
    ]
   }
  },
@@ -2922,7 +2922,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b2k1r/pppq1ppp/1n6/1B1PQ1B1/8/2P5/P4PPP/R3K2R b KQ - 2 15",
-  "presented_fen": "r1b2k1r/ppp2ppp/1n1q4/1B1PQ1B1/8/2P5/P4PPP/R3K2R w - - 0 1",
+  "presented_fen": "r1b2k1r/ppp2ppp/1n1q4/1B1PQ1B1/8/2P5/P4PPP/R3K2R w KQ - 3 16",
   "pieces": [
    {
     "sq": "a1",
@@ -3050,7 +3050,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e5e8",
-   "presented_after": "d7d6",
+   "opponent_first_move": "d7d6",
    "rating": 1206,
    "rating_deviation": 76,
    "popularity": 96,
@@ -3071,7 +3071,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b5/ppp3pp/3k4/4p2Q/1q5P/3B4/P2KR3/4R3 w - - 9 30",
-  "presented_fen": "r1b5/ppp3pp/3k4/4p2Q/1q5P/3BK3/P3R3/4R3 b - - 0 1",
+  "presented_fen": "r1b5/ppp3pp/3k4/4p2Q/1q5P/3BK3/P3R3/4R3 b - - 10 30",
   "pieces": [
    {
     "sq": "e1",
@@ -3164,7 +3164,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b4f4",
-   "presented_after": "d2e3",
+   "opponent_first_move": "d2e3",
    "rating": 1432,
    "rating_deviation": 78,
    "popularity": 91,
@@ -3185,7 +3185,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3R1k2/nbp1q1p1/4PpQp/pp6/6P1/P3p3/1P2BbP1/1K5R b - - 2 29",
-  "presented_fen": "3q1k2/nbp3p1/4PpQp/pp6/6P1/P3p3/1P2BbP1/1K5R w - - 0 1",
+  "presented_fen": "3q1k2/nbp3p1/4PpQp/pp6/6P1/P3p3/1P2BbP1/1K5R w - - 0 30",
   "pieces": [
    {
     "sq": "b1",
@@ -3298,7 +3298,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6f7",
-   "presented_after": "e7d8",
+   "opponent_first_move": "e7d8",
    "rating": 969,
    "rating_deviation": 77,
    "popularity": 100,
@@ -3319,7 +3319,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "7r/1p6/2p3R1/2PpR3/5b1k/6P1/p4P1K/8 b - - 0 39",
-  "presented_fen": "7r/1p6/2p3R1/2PpR3/7k/6b1/p4P1K/8 w - - 0 1",
+  "presented_fen": "7r/1p6/2p3R1/2PpR3/7k/6b1/p4P1K/8 w - - 0 40",
   "pieces": [
    {
     "sq": "a2",
@@ -3387,7 +3387,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f2g3",
-   "presented_after": "f4g3",
+   "opponent_first_move": "f4g3",
    "rating": 1099,
    "rating_deviation": 78,
    "popularity": 98,
@@ -3408,7 +3408,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4k3/pp6/6P1/2pPn3/3b2BQ/PPq5/K2R4/8 w - - 1 38",
-  "presented_fen": "4k3/pp6/6P1/2pPn3/3b2BQ/PPq5/K3R3/8 b - - 0 1",
+  "presented_fen": "4k3/pp6/6P1/2pPn3/3b2BQ/PPq5/K3R3/8 b - - 2 38",
   "pieces": [
    {
     "sq": "a2",
@@ -3491,7 +3491,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c3a1",
-   "presented_after": "d2e2",
+   "opponent_first_move": "d2e2",
    "rating": 946,
    "rating_deviation": 84,
    "popularity": 81,
@@ -3512,7 +3512,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4kb2/Bp6/p4p2/4p3/8/2PQ2P1/PP3K1r/3R3q w - - 7 29",
-  "presented_fen": "4kb2/Bp6/p4p2/4p3/8/2PQK1P1/PP5r/3R3q b - - 0 1",
+  "presented_fen": "4kb2/Bp6/p4p2/4p3/8/2PQK1P1/PP5r/3R3q b - - 8 29",
   "pieces": [
    {
     "sq": "d1",
@@ -3600,7 +3600,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f8h6",
-   "presented_after": "f2e3",
+   "opponent_first_move": "f2e3",
    "rating": 1253,
    "rating_deviation": 75,
    "popularity": 84,
@@ -3621,7 +3621,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b2rk1/p4pp1/1bp1p2p/4N3/1PPq4/P2B3P/5PP1/R2QK2R w KQ - 1 18",
-  "presented_fen": "r1b2rk1/p4pp1/1bN1p2p/8/1PPq4/P2B3P/5PP1/R2QK2R b - - 0 1",
+  "presented_fen": "r1b2rk1/p4pp1/1bN1p2p/8/1PPq4/P2B3P/5PP1/R2QK2R b KQ - 0 18",
   "pieces": [
    {
     "sq": "a1",
@@ -3744,7 +3744,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4f2",
-   "presented_after": "e5c6",
+   "opponent_first_move": "e5c6",
    "rating": 1126,
    "rating_deviation": 79,
    "popularity": 100,
@@ -3765,7 +3765,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6k1/1p6/3p1n1q/1P1PpQ2/P3P1p1/3Bb1P1/2N5/6K1 w - - 1 50",
-  "presented_fen": "6k1/1p6/3p1n1q/1P1PpQ2/P3P1p1/3Bb1P1/2N3K1/8 b - - 0 1",
+  "presented_fen": "6k1/1p6/3p1n1q/1P1PpQ2/P3P1p1/3Bb1P1/2N3K1/8 b - - 2 50",
   "pieces": [
    {
     "sq": "c2",
@@ -3858,7 +3858,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h6h3",
-   "presented_after": "g1g2",
+   "opponent_first_move": "g1g2",
    "rating": 895,
    "rating_deviation": 75,
    "popularity": 100,
@@ -3879,7 +3879,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4r1k1/1b3ppp/8/7Q/4qP2/1P1r3P/P5P1/R3BB1K w - - 0 32",
-  "presented_fen": "4r1k1/1b3ppp/8/7Q/4qP2/1P1B3P/P5P1/R3B2K b - - 0 1",
+  "presented_fen": "4r1k1/1b3ppp/8/7Q/4qP2/1P1B3P/P5P1/R3B2K b - - 0 32",
   "pieces": [
    {
     "sq": "a1",
@@ -3972,7 +3972,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e4g2",
-   "presented_after": "f1d3",
+   "opponent_first_move": "f1d3",
    "rating": 1206,
    "rating_deviation": 76,
    "popularity": 90,
@@ -3993,7 +3993,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "6k1/R7/6K1/7P/8/6p1/8/7r b - - 3 58",
-  "presented_fen": "6k1/R7/6K1/7P/8/8/6p1/7r w - - 0 1",
+  "presented_fen": "6k1/R7/6K1/7P/8/8/6p1/7r w - - 0 59",
   "pieces": [
    {
     "sq": "h1",
@@ -4031,7 +4031,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a7a8",
-   "presented_after": "g3g2",
+   "opponent_first_move": "g3g2",
    "rating": 951,
    "rating_deviation": 80,
    "popularity": 96,
@@ -4052,7 +4052,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r3k2r/ppp2pp1/2p5/2b1q2p/2B1P1n1/2N5/PPPPQPP1/R1B2RK1 w kq - 2 11",
-  "presented_fen": "r3k2r/ppp2pp1/2p5/2b1q2p/2B1P1n1/2N2Q2/PPPP1PP1/R1B2RK1 b - - 0 1",
+  "presented_fen": "r3k2r/ppp2pp1/2p5/2b1q2p/2B1P1n1/2N2Q2/PPPP1PP1/R1B2RK1 b kq - 3 11",
   "pieces": [
    {
     "sq": "a1",
@@ -4195,7 +4195,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e5h2",
-   "presented_after": "e2f3",
+   "opponent_first_move": "e2f3",
    "rating": 924,
    "rating_deviation": 102,
    "popularity": 95,
@@ -4216,7 +4216,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r4rk1/1p4p1/2pp3p/p1bPp3/2P1Pp2/2N4K/PP2Bq2/R2Q3R w - - 0 26",
-  "presented_fen": "r4rk1/1p4p1/2pp3p/p1bPp3/2P1Pp2/2N4K/PP2Bq2/R4Q1R b - - 0 1",
+  "presented_fen": "r4rk1/1p4p1/2pp3p/p1bPp3/2P1Pp2/2N4K/PP2Bq2/R4Q1R b - - 1 26",
   "pieces": [
    {
     "sq": "a1",
@@ -4344,7 +4344,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f2g3",
-   "presented_after": "d1f1",
+   "opponent_first_move": "d1f1",
    "rating": 1019,
    "rating_deviation": 75,
    "popularity": 100,
@@ -4365,7 +4365,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b4r/ppp1nk1p/2pb1Np1/6B1/2B5/5P2/PPP2P1P/R3K1R1 b Q - 4 14",
-  "presented_fen": "r1b2k1r/ppp1n2p/2pb1Np1/6B1/2B5/5P2/PPP2P1P/R3K1R1 w - - 0 1",
+  "presented_fen": "r1b2k1r/ppp1n2p/2pb1Np1/6B1/2B5/5P2/PPP2P1P/R3K1R1 w Q - 5 15",
   "pieces": [
    {
     "sq": "a1",
@@ -4493,7 +4493,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g5h6",
-   "presented_after": "f7f8",
+   "opponent_first_move": "f7f8",
    "rating": 1511,
    "rating_deviation": 113,
    "popularity": 89,
@@ -4514,7 +4514,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1r1q1rk1/p2bbpp1/1p1ppn1p/8/2PQN3/1P2P1P1/PB3PBP/3R1RK1 b - - 3 14",
-  "presented_fen": "1r1q1rk1/p2bbpp1/1p1pp2p/8/2PQn3/1P2P1P1/PB3PBP/3R1RK1 w - - 0 1",
+  "presented_fen": "1r1q1rk1/p2bbpp1/1p1pp2p/8/2PQn3/1P2P1P1/PB3PBP/3R1RK1 w - - 0 15",
   "pieces": [
    {
     "sq": "d1",
@@ -4657,7 +4657,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4g7",
-   "presented_after": "f6e4",
+   "opponent_first_move": "f6e4",
    "rating": 1088,
    "rating_deviation": 76,
    "popularity": 100,
@@ -4678,7 +4678,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6rk/pp2p2p/1n1p1nq1/2pP1R2/3b4/2NQ4/PPPB2PP/5R1K w - - 3 21",
-  "presented_fen": "6rk/pp2p2p/1n1p1nq1/2pP1R2/3bN3/3Q4/PPPB2PP/5R1K b - - 0 1",
+  "presented_fen": "6rk/pp2p2p/1n1p1nq1/2pP1R2/3bN3/3Q4/PPPB2PP/5R1K b - - 4 21",
   "pieces": [
    {
     "sq": "f1",
@@ -4806,7 +4806,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6g2",
-   "presented_after": "c3e4",
+   "opponent_first_move": "c3e4",
    "rating": 1121,
    "rating_deviation": 76,
    "popularity": 85,
@@ -4827,7 +4827,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5rk1/pp3p2/3p2p1/2pP4/2P1Pn1p/4RP1q/PP2NQrP/4R2K w - - 2 29",
-  "presented_fen": "5rk1/pp3p2/3p2p1/2pP4/2P1PN1p/4RP1q/PP3QrP/4R2K b - - 0 1",
+  "presented_fen": "5rk1/pp3p2/3p2p1/2pP4/2P1PN1p/4RP1q/PP3QrP/4R2K b - - 0 29",
   "pieces": [
    {
     "sq": "e1",
@@ -4950,7 +4950,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3h2",
-   "presented_after": "e2f4",
+   "opponent_first_move": "e2f4",
    "rating": 899,
    "rating_deviation": 94,
    "popularity": 93,
@@ -4971,7 +4971,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2kr1b1r/1p1n1pp1/p1N1p1b1/2p4p/3PPB1P/1PP2P2/6P1/R3KB1R b KQ - 1 16",
-  "presented_fen": "2kr1b1r/3n1pp1/p1p1p1b1/2p4p/3PPB1P/1PP2P2/6P1/R3KB1R w - - 0 1",
+  "presented_fen": "2kr1b1r/3n1pp1/p1p1p1b1/2p4p/3PPB1P/1PP2P2/6P1/R3KB1R w KQ - 0 17",
   "pieces": [
    {
     "sq": "a1",
@@ -5104,7 +5104,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f1a6",
-   "presented_after": "b7c6",
+   "opponent_first_move": "b7c6",
    "rating": 930,
    "rating_deviation": 94,
    "popularity": 82,
@@ -5125,7 +5125,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3k1r2/1b3P2/q3p2Q/3pN2P/8/1p2R3/1Pr3B1/2K4R w - - 0 32",
-  "presented_fen": "3k1r2/1b3P2/q3p2Q/3pN2P/8/1p2R3/1Pr3B1/1K5R b - - 0 1",
+  "presented_fen": "3k1r2/1b3P2/q3p2Q/3pN2P/8/1p2R3/1Pr3B1/1K5R b - - 1 32",
   "pieces": [
    {
     "sq": "b1",
@@ -5218,7 +5218,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a6a2",
-   "presented_after": "c1b1",
+   "opponent_first_move": "c1b1",
    "rating": 921,
    "rating_deviation": 80,
    "popularity": 68,
@@ -5239,7 +5239,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4B3/2R1b2p/4pkp1/5p2/1P3P2/r7/6PP/5K2 b - - 2 35",
-  "presented_fen": "4B3/2R4p/4pkp1/5p2/1b3P2/r7/6PP/5K2 w - - 0 1",
+  "presented_fen": "4B3/2R4p/4pkp1/5p2/1b3P2/r7/6PP/5K2 w - - 0 36",
   "pieces": [
    {
     "sq": "f1",
@@ -5312,7 +5312,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c7f7",
-   "presented_after": "e7b4",
+   "opponent_first_move": "e7b4",
    "rating": 832,
    "rating_deviation": 94,
    "popularity": 72,
@@ -5326,6 +5326,125 @@
   }
  },
  {
+  "id": "lichess-03Xd6",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "03Xd6",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "r1b1r3/ppp2p2/3pk3/4n1B1/8/2N4Q/Pq4PK/5R2 b - - 9 28",
+  "presented_fen": "r1b1r3/ppp5/3pk3/4npB1/8/2N4Q/Pq4PK/5R2 w - - 0 29",
+  "pieces": [
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "h3f5",
+   "opponent_first_move": "f7f5",
+   "rating": 1167,
+   "rating_deviation": 76,
+   "popularity": 100,
+   "nb_plays": 2514,
+   "themes": "mate mateIn1 middlegame oneMove",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/JEaoQ1Kz/black#56",
+   "mate_moves": [
+    "h3f5"
+   ]
+  }
+ },
+ {
   "id": "lichess-03iVi",
   "source": "lichess-puzzle-db",
   "puzzle_id": "03iVi",
@@ -5333,7 +5452,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2q1r2/1p1nbpk1/2p3p1/p6p/P1BP1Q1P/6P1/1P3P2/R1B2RK1 b - - 2 17",
-  "presented_fen": "r2q3r/1p1nbpk1/2p3p1/p6p/P1BP1Q1P/6P1/1P3P2/R1B2RK1 w - - 0 1",
+  "presented_fen": "r2q3r/1p1nbpk1/2p3p1/p6p/P1BP1Q1P/6P1/1P3P2/R1B2RK1 w - - 3 18",
   "pieces": [
    {
     "sq": "a1",
@@ -5461,7 +5580,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f4f7",
-   "presented_after": "f8h8",
+   "opponent_first_move": "f8h8",
    "rating": 875,
    "rating_deviation": 79,
    "popularity": 62,
@@ -5482,7 +5601,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2rq1rk1/3bbpp1/p3p2p/n2pP3/1p1P4/1P1Q1NN1/P1BR1PPP/R5K1 b - - 5 21",
-  "presented_fen": "2rq1rk1/4bpp1/p3p2p/nb1pP3/1p1P4/1P1Q1NN1/P1BR1PPP/R5K1 w - - 0 1",
+  "presented_fen": "2rq1rk1/4bpp1/p3p2p/nb1pP3/1p1P4/1P1Q1NN1/P1BR1PPP/R5K1 w - - 6 22",
   "pieces": [
    {
     "sq": "a1",
@@ -5630,7 +5749,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d3h7",
-   "presented_after": "d7b5",
+   "opponent_first_move": "d7b5",
    "rating": 863,
    "rating_deviation": 85,
    "popularity": 85,
@@ -5651,7 +5770,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b2qk1/p4Bpp/1pp2p2/8/3P1b2/1QP2N1P/PP3PP1/4R1K1 b - - 0 18",
-  "presented_fen": "r1b3k1/p4qpp/1pp2p2/8/3P1b2/1QP2N1P/PP3PP1/4R1K1 w - - 0 1",
+  "presented_fen": "r1b3k1/p4qpp/1pp2p2/8/3P1b2/1QP2N1P/PP3PP1/4R1K1 w - - 0 19",
   "pieces": [
    {
     "sq": "e1",
@@ -5769,7 +5888,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e1e8",
-   "presented_after": "f8f7",
+   "opponent_first_move": "f8f7",
    "rating": 1037,
    "rating_deviation": 76,
    "popularity": 100,
@@ -5790,7 +5909,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r6k/p5pp/2Q5/1p1p4/8/8/PqP2PPP/3R2K1 b - - 0 23",
-  "presented_fen": "r6k/p5pp/2Q5/1p1p4/8/8/q1P2PPP/3R2K1 w - - 0 1",
+  "presented_fen": "r6k/p5pp/2Q5/1p1p4/8/8/q1P2PPP/3R2K1 w - - 0 24",
   "pieces": [
    {
     "sq": "d1",
@@ -5873,7 +5992,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c6a8",
-   "presented_after": "b2a2",
+   "opponent_first_move": "b2a2",
    "rating": 825,
    "rating_deviation": 78,
    "popularity": 67,
@@ -5894,7 +6013,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3r1r1k/1p4pp/p1p5/PbR1N3/1P1P1P2/4Q1P1/3R2KP/1q6 w - - 7 31",
-  "presented_fen": "3r1r1k/1p4pp/p1p5/PbRPN3/1P3P2/4Q1P1/3R2KP/1q6 b - - 0 1",
+  "presented_fen": "3r1r1k/1p4pp/p1p5/PbRPN3/1P3P2/4Q1P1/3R2KP/1q6 b - - 0 31",
   "pieces": [
    {
     "sq": "b1",
@@ -6007,7 +6126,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b1f1",
-   "presented_after": "d4d5",
+   "opponent_first_move": "d4d5",
    "rating": 1084,
    "rating_deviation": 91,
    "popularity": 93,
@@ -6028,7 +6147,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b2rk1/pppp1pp1/1bn4p/7n/2B1P2q/P1NP4/1PPBN1PP/R2Q1R1K w - - 5 13",
-  "presented_fen": "r1b2rk1/pppp1pp1/1bn4p/7n/2B1PN1q/P1NP4/1PPB2PP/R2Q1R1K b - - 0 1",
+  "presented_fen": "r1b2rk1/pppp1pp1/1bn4p/7n/2B1PN1q/P1NP4/1PPB2PP/R2Q1R1K b - - 6 13",
   "pieces": [
    {
     "sq": "a1",
@@ -6186,7 +6305,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h5g3",
-   "presented_after": "e2f4",
+   "opponent_first_move": "e2f4",
    "rating": 1169,
    "rating_deviation": 80,
    "popularity": 93,
@@ -6207,7 +6326,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2kr3r/4q1pp/1Q3p2/3pp3/P7/2R1PP2/3P1P1P/6K1 b - - 0 23",
-  "presented_fen": "3r3r/3kq1pp/1Q3p2/3pp3/P7/2R1PP2/3P1P1P/6K1 w - - 0 1",
+  "presented_fen": "3r3r/3kq1pp/1Q3p2/3pp3/P7/2R1PP2/3P1P1P/6K1 w - - 1 24",
   "pieces": [
    {
     "sq": "g1",
@@ -6305,7 +6424,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b6c6",
-   "presented_after": "c8d7",
+   "opponent_first_move": "c8d7",
    "rating": 1705,
    "rating_deviation": 82,
    "popularity": 82,
@@ -6326,7 +6445,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r3k3/1p3p1p/p1p1p3/3pPp2/2P1n2P/PP4r1/1BQ1Nq2/R2K2R1 w q - 0 23",
-  "presented_fen": "r3k3/1p3p1p/p1p1p3/3pPp2/2P1n2P/PP4R1/1BQ1Nq2/R2K4 b - - 0 1",
+  "presented_fen": "r3k3/1p3p1p/p1p1p3/3pPp2/2P1n2P/PP4R1/1BQ1Nq2/R2K4 b q - 0 23",
   "pieces": [
    {
     "sq": "a1",
@@ -6449,7 +6568,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f2f1",
-   "presented_after": "g1g3",
+   "opponent_first_move": "g1g3",
    "rating": 892,
    "rating_deviation": 81,
    "popularity": 94,
@@ -6470,7 +6589,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4q1k1/pb5p/1p3Qp1/2p2p2/2P5/1P1P3P/1BP3P1/7K b - - 1 27",
-  "presented_fen": "6k1/pb5p/1pq2Qp1/2p2p2/2P5/1P1P3P/1BP3P1/7K w - - 0 1",
+  "presented_fen": "6k1/pb5p/1pq2Qp1/2p2p2/2P5/1P1P3P/1BP3P1/7K w - - 2 28",
   "pieces": [
    {
     "sq": "h1",
@@ -6568,7 +6687,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6g7",
-   "presented_after": "e8c6",
+   "opponent_first_move": "e8c6",
    "rating": 1019,
    "rating_deviation": 76,
    "popularity": 100,
@@ -6589,7 +6708,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/5kpp/pp1Q1p2/8/P2P2N1/1P3P2/2r1q2r/1R2R2K w - - 0 35",
-  "presented_fen": "8/5kpp/pp1Q1p2/8/P2P4/1P3P2/2r1q2N/1R2R2K b - - 0 1",
+  "presented_fen": "8/5kpp/pp1Q1p2/8/P2P4/1P3P2/2r1q2N/1R2R2K b - - 0 35",
   "pieces": [
    {
     "sq": "b1",
@@ -6682,7 +6801,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e2g2",
-   "presented_after": "g4h2",
+   "opponent_first_move": "g4h2",
    "rating": 1827,
    "rating_deviation": 79,
    "popularity": 67,
@@ -6703,7 +6822,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2rq1rk1/3b2b1/p1n2n1p/1ppB2N1/5P2/2PQ2PP/PPN5/R1B2RK1 b - - 0 22",
-  "presented_fen": "2rq1rk1/3b2b1/p1n4p/1ppn2N1/5P2/2PQ2PP/PPN5/R1B2RK1 w - - 0 1",
+  "presented_fen": "2rq1rk1/3b2b1/p1n4p/1ppn2N1/5P2/2PQ2PP/PPN5/R1B2RK1 w - - 0 23",
   "pieces": [
    {
     "sq": "a1",
@@ -6836,7 +6955,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d3h7",
-   "presented_after": "f6d5",
+   "opponent_first_move": "f6d5",
    "rating": 1207,
    "rating_deviation": 81,
    "popularity": 84,
@@ -6857,7 +6976,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4r3/ppR5/3P2pk/3N2p1/2Bb2n1/1P5P/P5P1/1R4K1 w - - 1 32",
-  "presented_fen": "4r3/ppR5/3P2pk/3N2p1/2Bb2n1/1P5P/P5P1/1R3K2 b - - 0 1",
+  "presented_fen": "4r3/ppR5/3P2pk/3N2p1/2Bb2n1/1P5P/P5P1/1R3K2 b - - 2 32",
   "pieces": [
    {
     "sq": "b1",
@@ -6955,7 +7074,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4h2",
-   "presented_after": "g1f1",
+   "opponent_first_move": "g1f1",
    "rating": 1349,
    "rating_deviation": 77,
    "popularity": 94,
@@ -6976,7 +7095,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/7p/3p2p1/3Pp3/3qP3/3k3P/6PK/3Q4 b - - 4 46",
-  "presented_fen": "8/7p/3p2p1/3Pp3/3qk3/7P/6PK/3Q4 w - - 0 1",
+  "presented_fen": "8/7p/3p2p1/3Pp3/3qk3/7P/6PK/3Q4 w - - 0 47",
   "pieces": [
    {
     "sq": "d1",
@@ -7039,7 +7158,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d1f3",
-   "presented_after": "d3e4",
+   "opponent_first_move": "d3e4",
    "rating": 1302,
    "rating_deviation": 79,
    "popularity": 78,
@@ -7060,7 +7179,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4r1k1/1pp2pp1/3p1q2/p6R/2P3Q1/1P1BP3/1K3P2/8 w - - 1 24",
-  "presented_fen": "4r1k1/1pp2pp1/3p1q2/p6R/2P3Q1/KP1BP3/5P2/8 b - - 0 1",
+  "presented_fen": "4r1k1/1pp2pp1/3p1q2/p6R/2P3Q1/KP1BP3/5P2/8 b - - 2 24",
   "pieces": [
    {
     "sq": "f2",
@@ -7153,7 +7272,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6a1",
-   "presented_after": "b2a3",
+   "opponent_first_move": "b2a3",
    "rating": 924,
    "rating_deviation": 83,
    "popularity": 87,
@@ -7174,7 +7293,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "b2r2k1/6Rp/1p2Nn2/4N3/2P1p3/1r6/5K2/8 b - - 0 37",
-  "presented_fen": "b2r3k/6Rp/1p2Nn2/4N3/2P1p3/1r6/5K2/8 w - - 0 1",
+  "presented_fen": "b2r3k/6Rp/1p2Nn2/4N3/2P1p3/1r6/5K2/8 w - - 1 38",
   "pieces": [
    {
     "sq": "f2",
@@ -7247,7 +7366,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e5f7",
-   "presented_after": "g8h8",
+   "opponent_first_move": "g8h8",
    "rating": 1065,
    "rating_deviation": 75,
    "popularity": 78,
@@ -7268,7 +7387,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3r3r/p3k3/2p1n3/1p3P1K/8/3B1R2/P1P4P/R7 w - - 1 29",
-  "presented_fen": "3r3r/p3k3/2p1n3/1p3P2/6K1/3B1R2/P1P4P/R7 b - - 0 1",
+  "presented_fen": "3r3r/p3k3/2p1n3/1p3P2/6K1/3B1R2/P1P4P/R7 b - - 2 29",
   "pieces": [
    {
     "sq": "a1",
@@ -7351,7 +7470,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d8g8",
-   "presented_after": "h5g4",
+   "opponent_first_move": "h5g4",
    "rating": 1460,
    "rating_deviation": 88,
    "popularity": 86,
@@ -7365,6 +7484,81 @@
   }
  },
  {
+  "id": "lichess-04o8O",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "04o8O",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/1P3N1p/6p1/2P5/8/4k3/3p1r2/6K1 w - - 2 62",
+  "presented_fen": "1Q6/5N1p/6p1/2P5/8/4k3/3p1r2/6K1 b - - 0 62",
+  "pieces": [
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b8",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "d2d1q",
+   "opponent_first_move": "b7b8q",
+   "rating": 1047,
+   "rating_deviation": 76,
+   "popularity": 95,
+   "nb_plays": 420,
+   "themes": "advancedPawn endgame mate mateIn1 oneMove promotion",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/j0X0G7oz#123",
+   "mate_moves": [
+    "d2d1q",
+    "d2d1r"
+   ]
+  }
+ },
+ {
   "id": "lichess-04sR6",
   "source": "lichess-puzzle-db",
   "puzzle_id": "04sR6",
@@ -7372,7 +7566,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3r2r1/p1kpn1Qp/Bpp5/8/4q3/8/PPP2PPP/3RR1K1 w - - 3 18",
-  "presented_fen": "3r2r1/p1kpQ2p/Bpp5/8/4q3/8/PPP2PPP/3RR1K1 b - - 0 1",
+  "presented_fen": "3r2r1/p1kpQ2p/Bpp5/8/4q3/8/PPP2PPP/3RR1K1 b - - 0 18",
   "pieces": [
    {
     "sq": "d1",
@@ -7480,7 +7674,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e4g2",
-   "presented_after": "g7e7",
+   "opponent_first_move": "g7e7",
    "rating": 948,
    "rating_deviation": 93,
    "popularity": 95,
@@ -7501,7 +7695,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1k5r/pp3p2/4pR2/3pP1p1/1Q1P4/PP2q1K1/3N4/8 w - - 0 28",
-  "presented_fen": "1k5r/pp3p2/4p3/3pP1p1/1Q1P4/PP2qRK1/3N4/8 b - - 0 1",
+  "presented_fen": "1k5r/pp3p2/4p3/3pP1p1/1Q1P4/PP2qRK1/3N4/8 b - - 1 28",
   "pieces": [
    {
     "sq": "d2",
@@ -7594,7 +7788,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e3g1",
-   "presented_after": "f6f3",
+   "opponent_first_move": "f6f3",
    "rating": 1295,
    "rating_deviation": 75,
    "popularity": 100,
@@ -7615,7 +7809,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1R6/1P4p1/7p/5P2/8/5kP1/1r5P/6K1 w - - 1 46",
-  "presented_fen": "1R6/1P4p1/7p/5P2/8/5kP1/1r5P/5K2 b - - 0 1",
+  "presented_fen": "1R6/1P4p1/7p/5P2/8/5kP1/1r5P/5K2 b - - 2 46",
   "pieces": [
    {
     "sq": "f1",
@@ -7673,7 +7867,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2b1",
-   "presented_after": "g1f1",
+   "opponent_first_move": "g1f1",
    "rating": 803,
    "rating_deviation": 102,
    "popularity": 92,
@@ -7694,7 +7888,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5k2/p4P2/1p6/2pR4/B1P3rp/8/PP1prRPb/6K1 w - - 0 40",
-  "presented_fen": "5k2/p4P2/1p6/2pR4/B1P3rp/8/PP1prRPb/5K2 b - - 0 1",
+  "presented_fen": "5k2/p4P2/1p6/2pR4/B1P3rp/8/PP1prRPb/5K2 b - - 1 40",
   "pieces": [
    {
     "sq": "f1",
@@ -7792,7 +7986,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e2e1",
-   "presented_after": "g1f1",
+   "opponent_first_move": "g1f1",
    "rating": 1439,
    "rating_deviation": 77,
    "popularity": 88,
@@ -7813,7 +8007,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2kr1bnr/pb1p1ppp/1p4q1/2p1P3/P1BQ4/2N5/1PPB1PPP/4RRK1 w - - 0 14",
-  "presented_fen": "2kr1bnr/pb1p1ppp/1p4q1/2p1P3/P1B2Q2/2N5/1PPB1PPP/4RRK1 b - - 0 1",
+  "presented_fen": "2kr1bnr/pb1p1ppp/1p4q1/2p1P3/P1B2Q2/2N5/1PPB1PPP/4RRK1 b - - 1 14",
   "pieces": [
    {
     "sq": "e1",
@@ -7961,7 +8155,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6g2",
-   "presented_after": "d4f4",
+   "opponent_first_move": "d4f4",
    "rating": 939,
    "rating_deviation": 80,
    "popularity": 73,
@@ -7982,7 +8176,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "rn2kbnr/p2Bp1pp/5p2/q1p1N3/4b3/2N5/PPP2PPP/R1BQK2R b KQkq - 0 8",
-  "presented_fen": "r3kbnr/p2np1pp/5p2/q1p1N3/4b3/2N5/PPP2PPP/R1BQK2R w - - 0 1",
+  "presented_fen": "r3kbnr/p2np1pp/5p2/q1p1N3/4b3/2N5/PPP2PPP/R1BQK2R w KQkq - 0 9",
   "pieces": [
    {
     "sq": "a1",
@@ -8125,7 +8319,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d1d7",
-   "presented_after": "b8d7",
+   "opponent_first_move": "b8d7",
    "rating": 920,
    "rating_deviation": 89,
    "popularity": 92,
@@ -8146,7 +8340,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1Q5k/pp3Bp1/7p/2q5/3n2n1/8/P4PPP/6K1 b - - 2 28",
-  "presented_fen": "1Q6/pp3Bpk/7p/2q5/3n2n1/8/P4PPP/6K1 w - - 0 1",
+  "presented_fen": "1Q6/pp3Bpk/7p/2q5/3n2n1/8/P4PPP/6K1 w - - 3 29",
   "pieces": [
    {
     "sq": "g1",
@@ -8229,7 +8423,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b8g8",
-   "presented_after": "h8h7",
+   "opponent_first_move": "h8h7",
    "rating": 829,
    "rating_deviation": 83,
    "popularity": 100,
@@ -8250,7 +8444,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2qr1k1/ppp3b1/2n3p1/2P5/2Q4N/6p1/PP3PP1/RN3K1R b - - 0 18",
-  "presented_fen": "r2qrk2/ppp3b1/2n3p1/2P5/2Q4N/6p1/PP3PP1/RN3K1R w - - 0 1",
+  "presented_fen": "r2qrk2/ppp3b1/2n3p1/2P5/2Q4N/6p1/PP3PP1/RN3K1R w - - 1 19",
   "pieces": [
    {
     "sq": "a1",
@@ -8368,7 +8562,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4g6",
-   "presented_after": "g8f8",
+   "opponent_first_move": "g8f8",
    "rating": 1067,
    "rating_deviation": 77,
    "popularity": 79,
@@ -8389,7 +8583,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3Rq1rk/pb2nppp/1p2pn2/1P2N3/1BP5/4P3/2Q1BPPP/6K1 b - - 5 21",
-  "presented_fen": "3q2rk/pb2nppp/1p2pn2/1P2N3/1BP5/4P3/2Q1BPPP/6K1 w - - 0 1",
+  "presented_fen": "3q2rk/pb2nppp/1p2pn2/1P2N3/1BP5/4P3/2Q1BPPP/6K1 w - - 0 22",
   "pieces": [
    {
     "sq": "g1",
@@ -8512,7 +8706,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e5f7",
-   "presented_after": "e8d8",
+   "opponent_first_move": "e8d8",
    "rating": 927,
    "rating_deviation": 78,
    "popularity": 100,
@@ -8533,7 +8727,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3r2k1/3r4/2p3p1/P7/4p2p/6qP/1Q2b1P1/B2RR1K1 b - - 4 34",
-  "presented_fen": "3r2k1/8/2p3p1/P7/4p2p/6qP/1Q2b1P1/B2rR1K1 w - - 0 1",
+  "presented_fen": "3r2k1/8/2p3p1/P7/4p2p/6qP/1Q2b1P1/B2rR1K1 w - - 0 35",
   "pieces": [
    {
     "sq": "a1",
@@ -8621,7 +8815,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2g7",
-   "presented_after": "d7d1",
+   "opponent_first_move": "d7d1",
    "rating": 1374,
    "rating_deviation": 97,
    "popularity": 88,
@@ -8642,7 +8836,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/p4R1p/k1p1Bp2/Pp3Pp1/1P6/K1P1P3/3r3P/1r6 b - - 7 34",
-  "presented_fen": "8/p4R1p/k1p1Bp2/Pp3Pp1/1P6/K1P1P3/7r/1r6 w - - 0 1",
+  "presented_fen": "8/p4R1p/k1p1Bp2/Pp3Pp1/1P6/K1P1P3/7r/1r6 w - - 0 35",
   "pieces": [
    {
     "sq": "b1",
@@ -8735,7 +8929,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e6c8",
-   "presented_after": "d2h2",
+   "opponent_first_move": "d2h2",
    "rating": 1050,
    "rating_deviation": 82,
    "popularity": 85,
@@ -8756,7 +8950,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2k2r2/pp2bBpp/8/2p1B3/4P1q1/2N2P2/PPP3PP/3R3K b - - 0 18",
-  "presented_fen": "2k2r2/pp2bBpp/8/2p1B1q1/4P3/2N2P2/PPP3PP/3R3K w - - 0 1",
+  "presented_fen": "2k2r2/pp2bBpp/8/2p1B1q1/4P3/2N2P2/PPP3PP/3R3K w - - 1 19",
   "pieces": [
    {
     "sq": "d1",
@@ -8869,7 +9063,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f7e6",
-   "presented_after": "g4g5",
+   "opponent_first_move": "g4g5",
    "rating": 852,
    "rating_deviation": 103,
    "popularity": 85,
@@ -8890,7 +9084,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3r1rk1/p6p/8/8/2Pp4/1P1R3b/P1Q4P/4RqK1 w - - 2 27",
-  "presented_fen": "3r1rk1/p6p/8/8/2Pp4/1P1R3b/P1Q4P/5RK1 b - - 0 1",
+  "presented_fen": "3r1rk1/p6p/8/8/2Pp4/1P1R3b/P1Q4P/5RK1 b - - 0 27",
   "pieces": [
    {
     "sq": "f1",
@@ -8973,7 +9167,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f8f1",
-   "presented_after": "e1f1",
+   "opponent_first_move": "e1f1",
    "rating": 1027,
    "rating_deviation": 81,
    "popularity": 67,
@@ -8994,7 +9188,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b1r1Qk/ppqnp1b1/2p2npN/6N1/3P3P/2P5/PP3PP1/R1B1K2R b KQ - 2 17",
-  "presented_fen": "r1b1r1nk/ppqnp1b1/2p3pN/6N1/3P3P/2P5/PP3PP1/R1B1K2R w - - 0 1",
+  "presented_fen": "r1b1r1nk/ppqnp1b1/2p3pN/6N1/3P3P/2P5/PP3PP1/R1B1K2R w KQ - 0 18",
   "pieces": [
    {
     "sq": "a1",
@@ -9132,7 +9326,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h6f7",
-   "presented_after": "f6g8",
+   "opponent_first_move": "f6g8",
    "rating": 1290,
    "rating_deviation": 75,
    "popularity": 81,
@@ -9153,7 +9347,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1rb2rk1/p1p2ppp/3p1q2/2pP4/2B5/P4P2/1PPQ2PP/2KR3R w - - 3 16",
-  "presented_fen": "1rb2rk1/p1p2ppp/3p1q2/2pP4/2B5/PP3P2/2PQ2PP/2KR3R b - - 0 1",
+  "presented_fen": "1rb2rk1/p1p2ppp/3p1q2/2pP4/2B5/PP3P2/2PQ2PP/2KR3R b - - 0 16",
   "pieces": [
    {
     "sq": "c1",
@@ -9281,7 +9475,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6a1",
-   "presented_after": "b2b3",
+   "opponent_first_move": "b2b3",
    "rating": 875,
    "rating_deviation": 84,
    "popularity": 83,
@@ -9302,7 +9496,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4q2k/2Q4p/2p3p1/2p2rN1/3b1P2/3P3P/2P5/5R1K b - - 3 29",
-  "presented_fen": "4q2k/2Q5/2p3pp/2p2rN1/3b1P2/3P3P/2P5/5R1K w - - 0 1",
+  "presented_fen": "4q2k/2Q5/2p3pp/2p2rN1/3b1P2/3P3P/2P5/5R1K w - - 0 30",
   "pieces": [
    {
     "sq": "f1",
@@ -9390,7 +9584,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c7h7",
-   "presented_after": "h7h6",
+   "opponent_first_move": "h7h6",
    "rating": 1102,
    "rating_deviation": 76,
    "popularity": 100,
@@ -9411,7 +9605,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6k1/5p2/8/P3p3/4P1P1/8/2NprqPK/R2Q4 w - - 3 42",
-  "presented_fen": "6k1/5p2/8/P3p3/4P1P1/8/2NprqPK/R5Q1 b - - 0 1",
+  "presented_fen": "6k1/5p2/8/P3p3/4P1P1/8/2NprqPK/R5Q1 b - - 4 42",
   "pieces": [
    {
     "sq": "a1",
@@ -9489,7 +9683,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f2h4",
-   "presented_after": "d1g1",
+   "opponent_first_move": "d1g1",
    "rating": 1204,
    "rating_deviation": 75,
    "popularity": 100,
@@ -9510,7 +9704,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2q2nk/pb3prQ/1p2p1p1/2p1n1N1/3pPNP1/3P1P2/PPP3B1/2KR3R b - - 0 20",
-  "presented_fen": "r2q2nk/pb3p1r/1p2p1p1/2p1n1N1/3pPNP1/3P1P2/PPP3B1/2KR3R w - - 0 1",
+  "presented_fen": "r2q2nk/pb3p1r/1p2p1p1/2p1n1N1/3pPNP1/3P1P2/PPP3B1/2KR3R w - - 0 21",
   "pieces": [
    {
     "sq": "c1",
@@ -9653,7 +9847,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h1h7",
-   "presented_after": "g7h7",
+   "opponent_first_move": "g7h7",
    "rating": 1184,
    "rating_deviation": 78,
    "popularity": 92,
@@ -9674,7 +9868,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/1p3k2/p1p5/2Pp4/PP2p3/2K1Qq2/4N3/8 w - - 1 51",
-  "presented_fen": "8/1p3k2/p1p5/2Pp4/PP1Kp3/4Qq2/4N3/8 b - - 0 1",
+  "presented_fen": "8/1p3k2/p1p5/2Pp4/PP1Kp3/4Qq2/4N3/8 b - - 2 51",
   "pieces": [
    {
     "sq": "e2",
@@ -9747,7 +9941,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f3f6",
-   "presented_after": "c3d4",
+   "opponent_first_move": "c3d4",
    "rating": 1201,
    "rating_deviation": 75,
    "popularity": 100,
@@ -9768,7 +9962,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4R1rk/5Q2/2Pp4/1q5K/6p1/2P2pP1/1P3P1P/8 w - - 0 36",
-  "presented_fen": "4R1rk/5Q2/2Pp3K/1q6/6p1/2P2pP1/1P3P1P/8 b - - 0 1",
+  "presented_fen": "4R1rk/5Q2/2Pp3K/1q6/6p1/2P2pP1/1P3P1P/8 b - - 1 36",
   "pieces": [
    {
     "sq": "b2",
@@ -9851,7 +10045,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b5g5",
-   "presented_after": "h5h6",
+   "opponent_first_move": "h5h6",
    "rating": 913,
    "rating_deviation": 79,
    "popularity": 93,
@@ -9872,7 +10066,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1bQ4/1p2Nr1k/3p2qp/p3p3/2B1P3/8/PPn5/1K5R b - - 1 27",
-  "presented_fen": "r1bQ4/1p2Nr1k/3p3p/p3p3/2B1q3/8/PPn5/1K5R w - - 0 1",
+  "presented_fen": "r1bQ4/1p2Nr1k/3p3p/p3p3/2B1q3/8/PPn5/1K5R w - - 0 28",
   "pieces": [
    {
     "sq": "b1",
@@ -9970,7 +10164,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d8g8",
-   "presented_after": "g6e4",
+   "opponent_first_move": "g6e4",
    "rating": 1075,
    "rating_deviation": 77,
    "popularity": 64,
@@ -9991,7 +10185,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1k1Rq1r/3p3p/pQn5/8/1pN5/8/P4PPP/6K1 b - - 6 26",
-  "presented_fen": "r1k1q2r/3p3p/pQn5/8/1pN5/8/P4PPP/6K1 w - - 0 1",
+  "presented_fen": "r1k1q2r/3p3p/pQn5/8/1pN5/8/P4PPP/6K1 w - - 0 27",
   "pieces": [
    {
     "sq": "g1",
@@ -10079,7 +10273,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c4d6",
-   "presented_after": "f8e8",
+   "opponent_first_move": "f8e8",
    "rating": 819,
    "rating_deviation": 108,
    "popularity": 95,
@@ -10100,7 +10294,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2kr2r1/p2p1p1p/1p2p3/4qp2/2P2P2/P1N4b/1PQ1Bb1P/3R3K w - - 0 25",
-  "presented_fen": "2kr2r1/p2p1p1p/1p2p3/4Pp2/2P5/P1N4b/1PQ1Bb1P/3R3K b - - 0 1",
+  "presented_fen": "2kr2r1/p2p1p1p/1p2p3/4Pp2/2P5/P1N4b/1PQ1Bb1P/3R3K b - - 0 25",
   "pieces": [
    {
     "sq": "d1",
@@ -10218,7 +10412,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3g2",
-   "presented_after": "f4e5",
+   "opponent_first_move": "f4e5",
    "rating": 1119,
    "rating_deviation": 76,
    "popularity": 100,
@@ -10239,7 +10433,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4R3/1br2Q1k/p1pq2pp/2p5/6Nb/2NP4/PPP3P1/5R1K b - - 1 23",
-  "presented_fen": "4R3/1b3r1k/p1pq2pp/2p5/6Nb/2NP4/PPP3P1/5R1K w - - 0 1",
+  "presented_fen": "4R3/1b3r1k/p1pq2pp/2p5/6Nb/2NP4/PPP3P1/5R1K w - - 0 24",
   "pieces": [
    {
     "sq": "f1",
@@ -10347,7 +10541,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f1f7",
-   "presented_after": "c7f7",
+   "opponent_first_move": "c7f7",
    "rating": 1234,
    "rating_deviation": 106,
    "popularity": 88,
@@ -10368,7 +10562,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2r2rk1/8/p3p1Q1/8/1b5P/2P5/1P3q2/2K3R1 b - - 0 29",
-  "presented_fen": "2r2r1k/8/p3p1Q1/8/1b5P/2P5/1P3q2/2K3R1 w - - 0 1",
+  "presented_fen": "2r2r1k/8/p3p1Q1/8/1b5P/2P5/1P3q2/2K3R1 w - - 1 30",
   "pieces": [
    {
     "sq": "c1",
@@ -10441,7 +10635,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6h6",
-   "presented_after": "g8h8",
+   "opponent_first_move": "g8h8",
    "rating": 933,
    "rating_deviation": 76,
    "popularity": 82,
@@ -10450,9 +10644,9 @@
    "opening_tags": "",
    "game_url": "https://lichess.org/w9ZywNOL/black#58",
    "mate_moves": [
-    "g6h5",
     "g6g7",
-    "g6h6"
+    "g6h6",
+    "g6h5"
    ]
   }
  },
@@ -10464,7 +10658,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1q1k1r1/1b3p1p/p1nPpQp1/3pN3/2pP4/8/P4PPP/R1B2RK1 b q - 1 20",
-  "presented_fen": "r1q1k1r1/1b3p1p/p2PpQp1/3pn3/2pP4/8/P4PPP/R1B2RK1 w - - 0 1",
+  "presented_fen": "r1q1k1r1/1b3p1p/p2PpQp1/3pn3/2pP4/8/P4PPP/R1B2RK1 w q - 0 21",
   "pieces": [
    {
     "sq": "a1",
@@ -10592,7 +10786,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6e7",
-   "presented_after": "c6e5",
+   "opponent_first_move": "c6e5",
    "rating": 984,
    "rating_deviation": 76,
    "popularity": 97,
@@ -10613,7 +10807,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2q1r1k/ppp3pp/5n2/b7/2Bp1NbQ/2P5/PP4PP/R1B2R1K b - - 0 18",
-  "presented_fen": "r2q1r1k/ppp3pp/5n2/b7/2B2NbQ/2p5/PP4PP/R1B2R1K w - - 0 1",
+  "presented_fen": "r2q1r1k/ppp3pp/5n2/b7/2B2NbQ/2p5/PP4PP/R1B2R1K w - - 0 19",
   "pieces": [
    {
     "sq": "a1",
@@ -10741,7 +10935,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f4g6",
-   "presented_after": "d4c3",
+   "opponent_first_move": "d4c3",
    "rating": 926,
    "rating_deviation": 82,
    "popularity": 88,
@@ -10762,7 +10956,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3kb1r/2q1p1p1/p2pPn1p/1p2Q3/8/3B4/PP3PPP/R1BR2K1 b kq - 0 15",
-  "presented_fen": "r3kb1r/2q1p1p1/p3Pn1p/1p2p3/8/3B4/PP3PPP/R1BR2K1 w - - 0 1",
+  "presented_fen": "r3kb1r/2q1p1p1/p3Pn1p/1p2p3/8/3B4/PP3PPP/R1BR2K1 w kq - 0 16",
   "pieces": [
    {
     "sq": "a1",
@@ -10885,7 +11079,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d3g6",
-   "presented_after": "d6e5",
+   "opponent_first_move": "d6e5",
    "rating": 837,
    "rating_deviation": 78,
    "popularity": 100,
@@ -10906,7 +11100,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1q2k2r/3bn3/4ppp1/p1Q5/1r6/4P3/PP2BPPP/RNB2RK1 w k - 2 18",
-  "presented_fen": "1q2k2r/3bn3/4ppp1/p1Q5/1r6/1P2P3/P3BPPP/RNB2RK1 b - - 0 1",
+  "presented_fen": "1q2k2r/3bn3/4ppp1/p1Q5/1r6/1P2P3/P3BPPP/RNB2RK1 b k - 0 18",
   "pieces": [
    {
     "sq": "a1",
@@ -11029,7 +11223,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b8h2",
-   "presented_after": "b2b3",
+   "opponent_first_move": "b2b3",
    "rating": 1033,
    "rating_deviation": 88,
    "popularity": 88,
@@ -11050,7 +11244,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2b2rk1/2p2p1p/7r/2pp1qp1/P3p3/2B1n1PN/2PP1PKb/RN1Q3R w - - 0 21",
-  "presented_fen": "2b2rk1/2p2p1p/7r/2pp1qp1/P3p3/2B1P1PN/2P2PKb/RN1Q3R b - - 0 1",
+  "presented_fen": "2b2rk1/2p2p1p/7r/2pp1qp1/P3p3/2B1P1PN/2P2PKb/RN1Q3R b - - 0 21",
   "pieces": [
    {
     "sq": "a1",
@@ -11183,7 +11377,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f5h3",
-   "presented_after": "d2e3",
+   "opponent_first_move": "d2e3",
    "rating": 1179,
    "rating_deviation": 77,
    "popularity": 94,
@@ -11204,7 +11398,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1bq1rk1/p1n1b1pp/2p1p2B/2p5/2P3N1/1PQP4/P4PPP/4RRK1 b - - 0 17",
-  "presented_fen": "r1bq1rk1/p1n1b2p/2p1p2p/2p5/2P3N1/1PQP4/P4PPP/4RRK1 w - - 0 1",
+  "presented_fen": "r1bq1rk1/p1n1b2p/2p1p2p/2p5/2P3N1/1PQP4/P4PPP/4RRK1 w - - 0 18",
   "pieces": [
    {
     "sq": "e1",
@@ -11337,7 +11531,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4h6",
-   "presented_after": "g7h6",
+   "opponent_first_move": "g7h6",
    "rating": 913,
    "rating_deviation": 77,
    "popularity": 100,
@@ -11358,7 +11552,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4R3/pp4pk/6rp/2p5/P1P4Q/3P1q2/1P3P1K/8 w - - 5 37",
-  "presented_fen": "8/pp4pk/6rp/2p5/P1P4Q/3PRq2/1P3P1K/8 b - - 0 1",
+  "presented_fen": "8/pp4pk/6rp/2p5/P1P4Q/3PRq2/1P3P1K/8 b - - 6 37",
   "pieces": [
    {
     "sq": "b2",
@@ -11446,7 +11640,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f3g2",
-   "presented_after": "e8e3",
+   "opponent_first_move": "e8e3",
    "rating": 1302,
    "rating_deviation": 83,
    "popularity": 87,
@@ -11467,7 +11661,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5b2/1Q4kp/p4N2/1p3pP1/4pP2/1P5K/P1rq4/4R3 b - - 4 42",
-  "presented_fen": "5b2/1Q5p/p4Nk1/1p3pP1/4pP2/1P5K/P1rq4/4R3 w - - 0 1",
+  "presented_fen": "5b2/1Q5p/p4Nk1/1p3pP1/4pP2/1P5K/P1rq4/4R3 w - - 5 43",
   "pieces": [
    {
     "sq": "e1",
@@ -11560,7 +11754,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b7h7",
-   "presented_after": "g7g6",
+   "opponent_first_move": "g7g6",
    "rating": 914,
    "rating_deviation": 79,
    "popularity": 71,
@@ -11581,7 +11775,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5r1k/8/Q6p/1pR5/3Pr2q/P3PP2/1P3P2/3RK3 w - - 0 31",
-  "presented_fen": "5r1k/8/Q6p/1pR5/3PP2q/P3P3/1P3P2/3RK3 b - - 0 1",
+  "presented_fen": "5r1k/8/Q6p/1pR5/3PP2q/P3P3/1P3P2/3RK3 b - - 0 31",
   "pieces": [
    {
     "sq": "d1",
@@ -11664,7 +11858,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4f2",
-   "presented_after": "f3e4",
+   "opponent_first_move": "f3e4",
    "rating": 984,
    "rating_deviation": 79,
    "popularity": 97,
@@ -11685,7 +11879,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5rk1/p1p3pp/2p5/3p4/4p3/2N1B2q/PPPQ3R/R4rK1 w - - 1 22",
-  "presented_fen": "5rk1/p1p3pp/2p5/3p4/4p3/2N1B2q/PPPQ3R/5RK1 b - - 0 1",
+  "presented_fen": "5rk1/p1p3pp/2p5/3p4/4p3/2N1B2q/PPPQ3R/5RK1 b - - 0 22",
   "pieces": [
    {
     "sq": "f1",
@@ -11788,7 +11982,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3f1",
-   "presented_after": "a1f1",
+   "opponent_first_move": "a1f1",
    "rating": 1383,
    "rating_deviation": 136,
    "popularity": 73,
@@ -11810,7 +12004,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4R3/r4k2/1p3rpB/p2p3p/1p6/5P2/1b3P1P/4R1K1 b - - 5 32",
-  "presented_fen": "4R3/r4k2/1p3rpB/p2p3p/1p6/2b2P2/5P1P/4R1K1 w - - 0 1",
+  "presented_fen": "4R3/r4k2/1p3rpB/p2p3p/1p6/2b2P2/5P1P/4R1K1 w - - 6 33",
   "pieces": [
    {
     "sq": "e1",
@@ -11903,7 +12097,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e8f8",
-   "presented_after": "b2c3",
+   "opponent_first_move": "b2c3",
    "rating": 1187,
    "rating_deviation": 76,
    "popularity": 85,
@@ -11924,7 +12118,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/3pQ1kp/2b3p1/8/p4pK1/3q1P2/7P/8 b - - 1 48",
-  "presented_fen": "8/3pQ2p/2b3pk/8/p4pK1/3q1P2/7P/8 w - - 0 1",
+  "presented_fen": "8/3pQ2p/2b3pk/8/p4pK1/3q1P2/7P/8 w - - 2 49",
   "pieces": [
    {
     "sq": "h2",
@@ -11992,7 +12186,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e7f8",
-   "presented_after": "g7h6",
+   "opponent_first_move": "g7h6",
    "rating": 1442,
    "rating_deviation": 81,
    "popularity": 94,
@@ -12013,7 +12207,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r4rk1/p4Np1/7p/1ppN4/3bP2q/3P3b/PPP3P1/R2Q1R1K w - - 1 20",
-  "presented_fen": "r4rk1/p4Np1/7p/1ppN4/3bPR1q/3P3b/PPP3P1/R2Q3K b - - 0 1",
+  "presented_fen": "r4rk1/p4Np1/7p/1ppN4/3bPR1q/3P3b/PPP3P1/R2Q3K b - - 2 20",
   "pieces": [
    {
     "sq": "a1",
@@ -12136,7 +12330,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3g4",
-   "presented_after": "f1f4",
+   "opponent_first_move": "f1f4",
    "rating": 1713,
    "rating_deviation": 87,
    "popularity": 51,
@@ -12157,7 +12351,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2q1rk1/ppp2pbp/3p1np1/3Np3/2B1PP1Q/3P3R/PPn3PP/R1B3K1 b - - 1 12",
-  "presented_fen": "r2q1rk1/ppp2pbp/3p2p1/3np3/2B1PP1Q/3P3R/PPn3PP/R1B3K1 w - - 0 1",
+  "presented_fen": "r2q1rk1/ppp2pbp/3p2p1/3np3/2B1PP1Q/3P3R/PPn3PP/R1B3K1 w - - 0 13",
   "pieces": [
    {
     "sq": "a1",
@@ -12305,7 +12499,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4h7",
-   "presented_after": "f6d5",
+   "opponent_first_move": "f6d5",
    "rating": 1377,
    "rating_deviation": 98,
    "popularity": 80,
@@ -12326,7 +12520,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1k1r1b1r/ppp1p1pp/5p2/8/2PnQ1P1/5N1P/Pq1P1P2/RR4K1 b - - 5 17",
-  "presented_fen": "1k1r1b1r/ppp1p1pp/5p2/8/2PnQ1P1/5N1P/P1qP1P2/RR4K1 w - - 0 1",
+  "presented_fen": "1k1r1b1r/ppp1p1pp/5p2/8/2PnQ1P1/5N1P/P1qP1P2/RR4K1 w - - 6 18",
   "pieces": [
    {
     "sq": "a1",
@@ -12454,7 +12648,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e4b7",
-   "presented_after": "b2c2",
+   "opponent_first_move": "b2c2",
    "rating": 990,
    "rating_deviation": 79,
    "popularity": 99,
@@ -12475,7 +12669,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1r2r1k1/5p1p/4b1p1/2p5/1n1b1N2/1P3PPq/P2BK2P/1BRQ3R w - - 9 23",
-  "presented_fen": "1r2r1k1/5p1p/4b1p1/2p5/1n1b4/1P3PPN/P2BK2P/1BRQ3R b - - 0 1",
+  "presented_fen": "1r2r1k1/5p1p/4b1p1/2p5/1n1b4/1P3PPN/P2BK2P/1BRQ3R b - - 0 23",
   "pieces": [
    {
     "sq": "b1",
@@ -12593,7 +12787,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e6c4",
-   "presented_after": "f4h3",
+   "opponent_first_move": "f4h3",
    "rating": 1812,
    "rating_deviation": 80,
    "popularity": 86,
@@ -12614,7 +12808,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/2q2p2/1p6/4rNk1/2bQ1bP1/2P2B2/1P4K1/4R3 b - - 1 48",
-  "presented_fen": "8/2q2p2/1p6/5Nk1/2bQ1bP1/2P2B2/1P4K1/4r3 w - - 0 1",
+  "presented_fen": "8/2q2p2/1p6/5Nk1/2bQ1bP1/2P2B2/1P4K1/4r3 w - - 0 49",
   "pieces": [
    {
     "sq": "e1",
@@ -12692,7 +12886,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4g7",
-   "presented_after": "e5e1",
+   "opponent_first_move": "e5e1",
    "rating": 956,
    "rating_deviation": 75,
    "popularity": 100,
@@ -12713,7 +12907,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/p4p1k/7p/R2NP3/5PP1/Pr4K1/1r5P/8 w - - 3 36",
-  "presented_fen": "8/p4p1k/7p/R2NP3/5PPK/Pr6/1r5P/8 b - - 0 1",
+  "presented_fen": "8/p4p1k/7p/R2NP3/5PPK/Pr6/1r5P/8 b - - 4 36",
   "pieces": [
    {
     "sq": "b2",
@@ -12791,7 +12985,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2h2",
-   "presented_after": "g3h4",
+   "opponent_first_move": "g3h4",
    "rating": 814,
    "rating_deviation": 100,
    "popularity": 88,
@@ -12812,7 +13006,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2kr3r/ppp4p/5p2/6p1/1nP1b3/4PN2/PP2BPPP/2KR3R w - - 0 18",
-  "presented_fen": "2kr3r/ppp4p/5p2/6p1/1nP1b3/P3PN2/1P2BPPP/2KR3R b - - 0 1",
+  "presented_fen": "2kr3r/ppp4p/5p2/6p1/1nP1b3/P3PN2/1P2BPPP/2KR3R b - - 0 18",
   "pieces": [
    {
     "sq": "c1",
@@ -12935,7 +13129,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b4a2",
-   "presented_after": "a2a3",
+   "opponent_first_move": "a2a3",
    "rating": 919,
    "rating_deviation": 103,
    "popularity": 92,
@@ -12956,7 +13150,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b2Bk1/p4p1p/2pp2p1/8/2P1n2q/2NB1P2/PP5P/R2QK2R w KQ - 1 16",
-  "presented_fen": "r1b2Bk1/p4p1p/2pp2p1/8/2P1n2q/2NB1P2/PP2K2P/R2Q3R b - - 0 1",
+  "presented_fen": "r1b2Bk1/p4p1p/2pp2p1/8/2P1n2q/2NB1P2/PP2K2P/R2Q3R b - - 2 16",
   "pieces": [
    {
     "sq": "a1",
@@ -13079,7 +13273,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4f2",
-   "presented_after": "e1e2",
+   "opponent_first_move": "e1e2",
    "rating": 973,
    "rating_deviation": 76,
    "popularity": 97,
@@ -13100,7 +13294,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b2Q2/p3b3/3N3p/2R5/1P3p1k/P2q3P/1B3PP1/5RK1 b - - 0 31",
-  "presented_fen": "r1b2b2/p7/3N3p/2R5/1P3p1k/P2q3P/1B3PP1/5RK1 w - - 0 1",
+  "presented_fen": "r1b2b2/p7/3N3p/2R5/1P3p1k/P2q3P/1B3PP1/5RK1 w - - 0 32",
   "pieces": [
    {
     "sq": "f1",
@@ -13198,7 +13392,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2f6",
-   "presented_after": "e7f8",
+   "opponent_first_move": "e7f8",
    "rating": 1564,
    "rating_deviation": 85,
    "popularity": 84,
@@ -13219,7 +13413,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b4k/1pq2pbp/p1n1pNp1/2Q1P1N1/3r4/1P6/P3BPPP/R4RK1 b - - 1 18",
-  "presented_fen": "r1b4k/1pq2p1p/p1n1pbp1/2Q1P1N1/3r4/1P6/P3BPPP/R4RK1 w - - 0 1",
+  "presented_fen": "r1b4k/1pq2p1p/p1n1pbp1/2Q1P1N1/3r4/1P6/P3BPPP/R4RK1 w - - 0 19",
   "pieces": [
    {
     "sq": "a1",
@@ -13352,7 +13546,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c5f8",
-   "presented_after": "g7f6",
+   "opponent_first_move": "g7f6",
    "rating": 1062,
    "rating_deviation": 98,
    "popularity": 68,
@@ -13373,7 +13567,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3k2r/pp3p1p/2pQb3/6B1/1P2P2K/P5PP/5q2/R6R b kq - 8 21",
-  "presented_fen": "r3k2r/pp3p2/2pQb2p/6B1/1P2P2K/P5PP/5q2/R6R w - - 0 1",
+  "presented_fen": "r3k2r/pp3p2/2pQb2p/6B1/1P2P2K/P5PP/5q2/R6R w kq - 0 22",
   "pieces": [
    {
     "sq": "a1",
@@ -13481,7 +13675,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d6e7",
-   "presented_after": "h7h6",
+   "opponent_first_move": "h7h6",
    "rating": 1064,
    "rating_deviation": 77,
    "popularity": 84,
@@ -13502,7 +13696,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2q3r/p5nk/2ppbp1p/2p1p3/2P1P3/1P1P2R1/P2Q1PPP/R1B3K1 b - - 1 23",
-  "presented_fen": "r2q3r/p6k/2ppbp1p/2p1p2n/2P1P3/1P1P2R1/P2Q1PPP/R1B3K1 w - - 0 1",
+  "presented_fen": "r2q3r/p6k/2ppbp1p/2p1p2n/2P1P3/1P1P2R1/P2Q1PPP/R1B3K1 w - - 2 24",
   "pieces": [
    {
     "sq": "a1",
@@ -13640,7 +13834,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d2h6",
-   "presented_after": "g7h5",
+   "opponent_first_move": "g7h5",
    "rating": 938,
    "rating_deviation": 82,
    "popularity": 89,
@@ -13661,7 +13855,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "7R/1pk2Np1/1pp4p/2b4n/4P1P1/1PP5/1r6/4R1K1 w - - 1 30",
-  "presented_fen": "7R/1pk2Np1/1pp4p/2b4n/4P1P1/1PP5/1r6/4R2K b - - 0 1",
+  "presented_fen": "7R/1pk2Np1/1pp4p/2b4n/4P1P1/1PP5/1r6/4R2K b - - 2 30",
   "pieces": [
    {
     "sq": "e1",
@@ -13754,7 +13948,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h5g3",
-   "presented_after": "g1h1",
+   "opponent_first_move": "g1h1",
    "rating": 801,
    "rating_deviation": 77,
    "popularity": 86,
@@ -13775,7 +13969,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "rn1qkbnr/pp2p1p1/2p1Q2p/3p4/3P2PP/3P1P2/PP1B4/RN2K1NR b KQkq - 4 14",
-  "presented_fen": "r2qkbnr/pp1np1p1/2p1Q2p/3p4/3P2PP/3P1P2/PP1B4/RN2K1NR w - - 0 1",
+  "presented_fen": "r2qkbnr/pp1np1p1/2p1Q2p/3p4/3P2PP/3P1P2/PP1B4/RN2K1NR w KQkq - 5 15",
   "pieces": [
    {
     "sq": "a1",
@@ -13923,7 +14117,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e6g6",
-   "presented_after": "b8d7",
+   "opponent_first_move": "b8d7",
    "rating": 988,
    "rating_deviation": 87,
    "popularity": 89,
@@ -13944,7 +14138,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2k3nb/1b6/p1nppq2/8/2P1PNp1/3p2P1/P2Q1PB1/2KR4 w - - 0 26",
-  "presented_fen": "2k3nb/1b6/p1nppq2/8/2P1PNp1/3Q2P1/P4PB1/2KR4 b - - 0 1",
+  "presented_fen": "2k3nb/1b6/p1nppq2/8/2P1PNp1/3Q2P1/P4PB1/2KR4 b - - 0 26",
   "pieces": [
    {
     "sq": "c1",
@@ -14052,7 +14246,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6b2",
-   "presented_after": "d2d3",
+   "opponent_first_move": "d2d3",
    "rating": 1539,
    "rating_deviation": 78,
    "popularity": 100,
@@ -14073,7 +14267,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3r1k1/pp3pp1/2p4B/3bq3/6Q1/P5P1/1P3P1P/4RRK1 b - - 0 21",
-  "presented_fen": "r3r1k1/pp3pp1/2p4B/3b4/6Q1/P5P1/1P3P1P/4qRK1 w - - 0 1",
+  "presented_fen": "r3r1k1/pp3pp1/2p4B/3b4/6Q1/P5P1/1P3P1P/4qRK1 w - - 0 22",
   "pieces": [
    {
     "sq": "e1",
@@ -14176,7 +14370,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4g7",
-   "presented_after": "e5e1",
+   "opponent_first_move": "e5e1",
    "rating": 970,
    "rating_deviation": 77,
    "popularity": 99,
@@ -14197,7 +14391,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1rb2r2/1pqpppbk/p4npp/3N4/2PQ4/1P4P1/PB2PPBP/R2R2K1 b - - 2 14",
-  "presented_fen": "1rb2r2/1pqpppbk/p5pp/3n4/2PQ4/1P4P1/PB2PPBP/R2R2K1 w - - 0 1",
+  "presented_fen": "1rb2r2/1pqpppbk/p5pp/3n4/2PQ4/1P4P1/PB2PPBP/R2R2K1 w - - 0 15",
   "pieces": [
    {
     "sq": "a1",
@@ -14340,7 +14534,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4g7",
-   "presented_after": "f6d5",
+   "opponent_first_move": "f6d5",
    "rating": 809,
    "rating_deviation": 82,
    "popularity": 87,
@@ -14361,7 +14555,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5rR1/1p3p1k/7p/2p1b3/2Pp3Q/PP1q4/3B2P1/5RK1 b - - 0 36",
-  "presented_fen": "6r1/1p3p1k/7p/2p1b3/2Pp3Q/PP1q4/3B2P1/5RK1 w - - 0 1",
+  "presented_fen": "6r1/1p3p1k/7p/2p1b3/2Pp3Q/PP1q4/3B2P1/5RK1 w - - 0 37",
   "pieces": [
    {
     "sq": "f1",
@@ -14454,7 +14648,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4h6",
-   "presented_after": "f8g8",
+   "opponent_first_move": "f8g8",
    "rating": 1501,
    "rating_deviation": 79,
    "popularity": 95,
@@ -14475,7 +14669,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/p3b1kp/1p6/1Q3p2/2R1P2K/1N1P2P1/P3q2P/8 w - - 0 38",
-  "presented_fen": "8/p3b1kp/1p6/1Q3p2/2R1P3/1N1P2PK/P3q2P/8 b - - 0 1",
+  "presented_fen": "8/p3b1kp/1p6/1Q3p2/2R1P3/1N1P2PK/P3q2P/8 b - - 1 38",
   "pieces": [
    {
     "sq": "a2",
@@ -14563,7 +14757,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e2f1",
-   "presented_after": "h4h3",
+   "opponent_first_move": "h4h3",
    "rating": 1605,
    "rating_deviation": 80,
    "popularity": 91,
@@ -14584,7 +14778,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1bkr3r/pp1n1ppp/2p2nb1/q4N2/2B5/2NPBQ2/PPP3PP/R4R1K b - - 0 15",
-  "presented_fen": "1bkr3r/ppqn1ppp/2p2nb1/5N2/2B5/2NPBQ2/PPP3PP/R4R1K w - - 0 1",
+  "presented_fen": "1bkr3r/ppqn1ppp/2p2nb1/5N2/2B5/2NPBQ2/PPP3PP/R4R1K w - - 1 16",
   "pieces": [
    {
     "sq": "a1",
@@ -14732,7 +14926,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f5e7",
-   "presented_after": "a5c7",
+   "opponent_first_move": "a5c7",
    "rating": 975,
    "rating_deviation": 95,
    "popularity": 97,
@@ -14753,7 +14947,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1bqr1k1/pp3pp1/2n5/3p2nQ/3p3R/2PB4/PP1N1P2/2KR4 b - - 1 18",
-  "presented_fen": "r1bqr1k1/pp3pp1/2n5/3p2nQ/7R/2pB4/PP1N1P2/2KR4 w - - 0 1",
+  "presented_fen": "r1bqr1k1/pp3pp1/2n5/3p2nQ/7R/2pB4/PP1N1P2/2KR4 w - - 0 19",
   "pieces": [
    {
     "sq": "c1",
@@ -14871,7 +15065,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h5h8",
-   "presented_after": "d4c3",
+   "opponent_first_move": "d4c3",
    "rating": 1051,
    "rating_deviation": 75,
    "popularity": 83,
@@ -14892,7 +15086,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4rr1k/3Q1R1p/6p1/p1qB4/1p2P3/2b4P/2P3P1/1R5K b - - 4 38",
-  "presented_fen": "3r1r1k/3Q1R1p/6p1/p1qB4/1p2P3/2b4P/2P3P1/1R5K w - - 0 1",
+  "presented_fen": "3r1r1k/3Q1R1p/6p1/p1qB4/1p2P3/2b4P/2P3P1/1R5K w - - 5 39",
   "pieces": [
    {
     "sq": "b1",
@@ -14990,7 +15184,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f7h7",
-   "presented_after": "e8d8",
+   "opponent_first_move": "e8d8",
    "rating": 1160,
    "rating_deviation": 87,
    "popularity": 93,
@@ -15011,7 +15205,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r4rk1/pp4p1/1b2p3/3b1q1p/1P3P2/2Q1p1P1/PB2B2P/R4RK1 b - - 5 24",
-  "presented_fen": "2r2rk1/pp4p1/1b2p3/3b1q1p/1P3P2/2Q1p1P1/PB2B2P/R4RK1 w - - 0 1",
+  "presented_fen": "2r2rk1/pp4p1/1b2p3/3b1q1p/1P3P2/2Q1p1P1/PB2B2P/R4RK1 w - - 6 25",
   "pieces": [
    {
     "sq": "a1",
@@ -15134,7 +15328,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c3g7",
-   "presented_after": "a8c8",
+   "opponent_first_move": "a8c8",
    "rating": 803,
    "rating_deviation": 80,
    "popularity": 89,
@@ -15155,7 +15349,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r4rk1/1p3p1p/p2p2p1/2pP4/P1PbP2q/3B1QNb/1P4P1/3N1R1K w - - 0 24",
-  "presented_fen": "r4rk1/1p3p1p/p2p2p1/2pP4/P1PbP2q/3B1QNP/1P6/3N1R1K b - - 0 1",
+  "presented_fen": "r4rk1/1p3p1p/p2p2p1/2pP4/P1PbP2q/3B1QNP/1P6/3N1R1K b - - 0 24",
   "pieces": [
    {
     "sq": "d1",
@@ -15283,7 +15477,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4h3",
-   "presented_after": "g2h3",
+   "opponent_first_move": "g2h3",
    "rating": 865,
    "rating_deviation": 107,
    "popularity": 95,
@@ -15304,7 +15498,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2q1rk1/pp3pb1/5Bp1/2P5/7Q/1P1B4/P1P2PP1/2Kb2NR b - - 0 19",
-  "presented_fen": "r4rk1/pp3pb1/5qp1/2P5/7Q/1P1B4/P1P2PP1/2Kb2NR w - - 0 1",
+  "presented_fen": "r4rk1/pp3pb1/5qp1/2P5/7Q/1P1B4/P1P2PP1/2Kb2NR w - - 0 20",
   "pieces": [
    {
     "sq": "c1",
@@ -15417,7 +15611,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4h7",
-   "presented_after": "d8f6",
+   "opponent_first_move": "d8f6",
    "rating": 1177,
    "rating_deviation": 77,
    "popularity": 94,
@@ -15438,7 +15632,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "rq3bkr/pp2p1pp/1nn5/1N4N1/6Q1/2Pp4/PP3PPP/R1B2RK1 b - - 0 14",
-  "presented_fen": "rq3bkr/pp2p1p1/1nn4p/1N4N1/6Q1/2Pp4/PP3PPP/R1B2RK1 w - - 0 1",
+  "presented_fen": "rq3bkr/pp2p1p1/1nn4p/1N4N1/6Q1/2Pp4/PP3PPP/R1B2RK1 w - - 0 15",
   "pieces": [
    {
     "sq": "a1",
@@ -15576,7 +15770,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4e6",
-   "presented_after": "h7h6",
+   "opponent_first_move": "h7h6",
    "rating": 894,
    "rating_deviation": 79,
    "popularity": 100,
@@ -15597,7 +15791,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "N1bk1b1r/1p1p1ppp/3Pp3/n1p5/2P1n3/4PN2/Pq3PPP/R2QKB1R w KQ - 0 14",
-  "presented_fen": "N1bk1b1r/1p1p1ppp/3Pp3/n1p5/2P1n3/4PN2/Pq3PPP/1R1QKB1R b - - 0 1",
+  "presented_fen": "N1bk1b1r/1p1p1ppp/3Pp3/n1p5/2P1n3/4PN2/Pq3PPP/1R1QKB1R b K - 1 14",
   "pieces": [
    {
     "sq": "b1",
@@ -15745,7 +15939,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2f2",
-   "presented_after": "a1b1",
+   "opponent_first_move": "a1b1",
    "rating": 1510,
    "rating_deviation": 78,
    "popularity": 83,
@@ -15766,7 +15960,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2r5/p6R/1pPpkp2/1r1N4/4P3/P4K2/6P1/8 b - - 1 41",
-  "presented_fen": "8/p6R/1prpkp2/1r1N4/4P3/P4K2/6P1/8 w - - 0 1",
+  "presented_fen": "8/p6R/1prpkp2/1r1N4/4P3/P4K2/6P1/8 w - - 0 42",
   "pieces": [
    {
     "sq": "g2",
@@ -15839,7 +16033,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h7e7",
-   "presented_after": "c8c6",
+   "opponent_first_move": "c8c6",
    "rating": 1079,
    "rating_deviation": 77,
    "popularity": 94,
@@ -15853,6 +16047,55 @@
   }
  },
  {
+  "id": "lichess-09rCC",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "09rCC",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/8/8/8/8/6KQ/5p2/6k1 b - - 25 67",
+  "presented_fen": "8/8/8/8/8/6KQ/8/5qk1 w - - 0 68",
+  "pieces": [
+   {
+    "sq": "f1",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "h3h2",
+   "opponent_first_move": "f2f1q",
+   "rating": 1103,
+   "rating_deviation": 76,
+   "popularity": 71,
+   "nb_plays": 145,
+   "themes": "endgame mate mateIn1 oneMove queenEndgame",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/nstmr6IK/black#134",
+   "mate_moves": [
+    "h3h2"
+   ]
+  }
+ },
+ {
   "id": "lichess-09vlO",
   "source": "lichess-puzzle-db",
   "puzzle_id": "09vlO",
@@ -15860,7 +16103,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6k1/p4pP1/4pKrQ/4Pb2/2pq1R2/P7/8/4R3 w - - 8 43",
-  "presented_fen": "6k1/p4pP1/4pKQ1/4Pb2/2pq1R2/P7/8/4R3 b - - 0 1",
+  "presented_fen": "6k1/p4pP1/4pKQ1/4Pb2/2pq1R2/P7/8/4R3 b - - 0 43",
   "pieces": [
    {
     "sq": "e1",
@@ -15938,7 +16181,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4d8",
-   "presented_after": "h6g6",
+   "opponent_first_move": "h6g6",
    "rating": 1629,
    "rating_deviation": 79,
    "popularity": 75,
@@ -15959,7 +16202,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1rbq4/6p1/pn2Rk1r/1p3pN1/2pP1P2/2P3Q1/P4PPP/4R1K1 b - - 0 23",
-  "presented_fen": "1r1q4/6p1/pn2bk1r/1p3pN1/2pP1P2/2P3Q1/P4PPP/4R1K1 w - - 0 1",
+  "presented_fen": "1r1q4/6p1/pn2bk1r/1p3pN1/2pP1P2/2P3Q1/P4PPP/4R1K1 w - - 0 24",
   "pieces": [
    {
     "sq": "e1",
@@ -16077,7 +16320,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e1e6",
-   "presented_after": "c8e6",
+   "opponent_first_move": "c8e6",
    "rating": 1174,
    "rating_deviation": 85,
    "popularity": 94,
@@ -16098,7 +16341,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4rr1k/pp5p/4N1p1/8/3Q4/3b1p2/P2q2PP/2R3RK b - - 1 33",
-  "presented_fen": "4rrk1/pp5p/4N1p1/8/3Q4/3b1p2/P2q2PP/2R3RK w - - 0 1",
+  "presented_fen": "4rrk1/pp5p/4N1p1/8/3Q4/3b1p2/P2q2PP/2R3RK w - - 2 34",
   "pieces": [
    {
     "sq": "c1",
@@ -16196,7 +16439,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4g7",
-   "presented_after": "h8g8",
+   "opponent_first_move": "h8g8",
    "rating": 894,
    "rating_deviation": 80,
    "popularity": 88,
@@ -16217,7 +16460,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1r4k1/5r1p/5p1R/4pp2/KP6/7R/5PPP/8 w - - 0 31",
-  "presented_fen": "1r4k1/5r1p/5p1R/4pp2/KP6/1R6/5PPP/8 b - - 0 1",
+  "presented_fen": "1r4k1/5r1p/5p1R/4pp2/KP6/1R6/5PPP/8 b - - 1 31",
   "pieces": [
    {
     "sq": "f2",
@@ -16295,7 +16538,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f7a7",
-   "presented_after": "h3b3",
+   "opponent_first_move": "h3b3",
    "rating": 981,
    "rating_deviation": 76,
    "popularity": 97,
@@ -16316,7 +16559,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4rrk1/p4p2/1b2b2p/6q1/4BRp1/2PP3P/PP1NQ1P1/5R1K w - - 1 25",
-  "presented_fen": "4rrk1/p4p2/1b2b2p/6q1/4BRP1/2PP4/PP1NQ1P1/5R1K b - - 0 1",
+  "presented_fen": "4rrk1/p4p2/1b2b2p/6q1/4BRP1/2PP4/PP1NQ1P1/5R1K b - - 0 25",
   "pieces": [
    {
     "sq": "f1",
@@ -16429,7 +16672,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g5h4",
-   "presented_after": "h3g4",
+   "opponent_first_move": "h3g4",
    "rating": 868,
    "rating_deviation": 81,
    "popularity": 78,
@@ -16450,7 +16693,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5k2/2R5/p4K1P/2p5/8/8/8/6r1 b - - 4 59",
-  "presented_fen": "5k2/2R5/p4K1P/2p5/8/8/8/7r w - - 0 1",
+  "presented_fen": "5k2/2R5/p4K1P/2p5/8/8/8/7r w - - 5 60",
   "pieces": [
    {
     "sq": "h1",
@@ -16493,7 +16736,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c7c8",
-   "presented_after": "g1h1",
+   "opponent_first_move": "g1h1",
    "rating": 1255,
    "rating_deviation": 76,
    "popularity": 100,
@@ -16514,7 +16757,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2kr3r/1p2bppp/p1n5/2pN4/2b1PB2/2N2P2/1PP3PP/2KR3R b - - 3 16",
-  "presented_fen": "2krr3/1p2bppp/p1n5/2pN4/2b1PB2/2N2P2/1PP3PP/2KR3R w - - 0 1",
+  "presented_fen": "2krr3/1p2bppp/p1n5/2pN4/2b1PB2/2N2P2/1PP3PP/2KR3R w - - 4 17",
   "pieces": [
    {
     "sq": "c1",
@@ -16642,7 +16885,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d5b6",
-   "presented_after": "h8e8",
+   "opponent_first_move": "h8e8",
    "rating": 1055,
    "rating_deviation": 77,
    "popularity": 100,
@@ -16663,7 +16906,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r2qkbnr/p1p2ppp/4p3/1p1P4/2p1P3/5B2/PP2KPPP/RNQ1R3 w kq - 0 11",
-  "presented_fen": "r2qkbnr/p1p2ppp/4P3/1p6/2p1P3/5B2/PP2KPPP/RNQ1R3 b - - 0 1",
+  "presented_fen": "r2qkbnr/p1p2ppp/4P3/1p6/2p1P3/5B2/PP2KPPP/RNQ1R3 b kq - 0 11",
   "pieces": [
    {
     "sq": "a1",
@@ -16801,7 +17044,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d8d3",
-   "presented_after": "d5e6",
+   "opponent_first_move": "d5e6",
    "rating": 855,
    "rating_deviation": 86,
    "popularity": 98,
@@ -16822,7 +17065,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/p3rkp1/6p1/3p4/5bQ1/1P3q2/P5RK/4R3 w - - 0 36",
-  "presented_fen": "8/p3rkp1/6p1/3p4/5bQ1/1P3q2/P5R1/4R2K b - - 0 1",
+  "presented_fen": "8/p3rkp1/6p1/3p4/5bQ1/1P3q2/P5R1/4R2K b - - 1 36",
   "pieces": [
    {
     "sq": "e1",
@@ -16900,7 +17143,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e7e1",
-   "presented_after": "h2h1",
+   "opponent_first_move": "h2h1",
    "rating": 844,
    "rating_deviation": 78,
    "popularity": 83,
@@ -16921,7 +17164,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2r1r1k1/p1pQq1pp/1p2P3/2b2p2/2P1n3/1P3NP1/PB4KP/3RR3 b - - 8 23",
-  "presented_fen": "2r1r1k1/p1pQ2pp/1p2q3/2b2p2/2P1n3/1P3NP1/PB4KP/3RR3 w - - 0 1",
+  "presented_fen": "2r1r1k1/p1pQ2pp/1p2q3/2b2p2/2P1n3/1P3NP1/PB4KP/3RR3 w - - 0 24",
   "pieces": [
    {
     "sq": "d1",
@@ -17044,7 +17287,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d7g7",
-   "presented_after": "e7e6",
+   "opponent_first_move": "e7e6",
    "rating": 1459,
    "rating_deviation": 76,
    "popularity": 80,
@@ -17065,7 +17308,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/1p1R4/p3pkp1/2R5/6P1/P3P2P/1r3r2/6K1 b - - 0 32",
-  "presented_fen": "8/1p1R4/p3pkp1/2R5/6P1/P3P2P/1r2r3/6K1 w - - 0 1",
+  "presented_fen": "8/1p1R4/p3pkp1/2R5/6P1/P3P2P/1r2r3/6K1 w - - 1 33",
   "pieces": [
    {
     "sq": "g1",
@@ -17143,7 +17386,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4g5",
-   "presented_after": "f2e2",
+   "opponent_first_move": "f2e2",
    "rating": 1262,
    "rating_deviation": 76,
    "popularity": 85,
@@ -17164,7 +17407,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1r5k/pq2P2p/p2Q4/5p2/5P2/3N1K1P/1P4r1/RB6 w - - 2 35",
-  "presented_fen": "1r5k/pq2P2p/p2Q4/5p2/5P2/3NK2P/1P4r1/RB6 b - - 0 1",
+  "presented_fen": "1r5k/pq2P2p/p2Q4/5p2/5P2/3NK2P/1P4r1/RB6 b - - 3 35",
   "pieces": [
    {
     "sq": "a1",
@@ -17257,7 +17500,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b7e4",
-   "presented_after": "f3e3",
+   "opponent_first_move": "f3e3",
    "rating": 1504,
    "rating_deviation": 80,
    "popularity": 91,
@@ -17271,130 +17514,6 @@
   }
  },
  {
-  "id": "lichess-0Ahoy",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0Ahoy",
-  "n": 8,
-  "turn": "b",
-  "value": "cap",
-  "fen": "2r4k/3r2b1/7p/5Pp1/n5PP/Pp2Q3/1N3B2/K1qNR2R w - - 7 40",
-  "presented_fen": "2r4k/3r2b1/7p/5Pp1/n5PP/Pp6/1N3B2/K1QNR2R b - - 0 1",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c1",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "e1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "a3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b3",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a4",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "g4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f5",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d7",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "c8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "c8c1",
-   "presented_after": "e3c1",
-   "rating": 904,
-   "rating_deviation": 78,
-   "popularity": 98,
-   "nb_plays": 620,
-   "themes": "mate mateIn1 middlegame oneMove pin",
-   "opening_tags": "",
-   "game_url": "https://lichess.org/mWOKJnQy#79",
-   "mate_moves": [
-    "c8c1"
-   ]
-  }
- },
- {
   "id": "lichess-0Ai1Q",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0Ai1Q",
@@ -17402,7 +17521,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b2rk1/pp2R2p/2p3B1/5Q2/3q1B2/8/PP3PPP/RN4K1 w - - 5 24",
-  "presented_fen": "r1b2rk1/pp2R2p/2p3B1/4BQ2/3q4/8/PP3PPP/RN4K1 b - - 0 1",
+  "presented_fen": "r1b2rk1/pp2R2p/2p3B1/4BQ2/3q4/8/PP3PPP/RN4K1 b - - 6 24",
   "pieces": [
    {
     "sq": "a1",
@@ -17515,7 +17634,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4d1",
-   "presented_after": "f4e5",
+   "opponent_first_move": "f4e5",
    "rating": 1459,
    "rating_deviation": 99,
    "popularity": 79,
@@ -17536,7 +17655,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6k1/pp3p2/3B2p1/b3n3/5Q2/P4P1P/BPr4K/8 w - - 1 27",
-  "presented_fen": "6k1/pp3p2/3B2p1/b3n3/5Q2/P4PKP/BPr5/8 b - - 0 1",
+  "presented_fen": "6k1/pp3p2/3B2p1/b3n3/5Q2/P4PKP/BPr5/8 b - - 2 27",
   "pieces": [
    {
     "sq": "a2",
@@ -17624,7 +17743,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a5e1",
-   "presented_after": "h2g3",
+   "opponent_first_move": "h2g3",
    "rating": 1102,
    "rating_deviation": 80,
    "popularity": 100,
@@ -17645,7 +17764,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5k2/5pp1/1rNp1n2/1qpPpP1p/p3P2P/P1Q1R1P1/KP6/8 w - - 9 45",
-  "presented_fen": "5k2/5pp1/1rNp1n2/1qpPpP1p/p3P2P/P2QR1P1/KP6/8 b - - 0 1",
+  "presented_fen": "5k2/5pp1/1rNp1n2/1qpPpP1p/p3P2P/P2QR1P1/KP6/8 b - - 10 45",
   "pieces": [
    {
     "sq": "a2",
@@ -17763,7 +17882,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b5b2",
-   "presented_after": "c3d3",
+   "opponent_first_move": "c3d3",
    "rating": 1072,
    "rating_deviation": 88,
    "popularity": 95,
@@ -17784,7 +17903,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6kb/pp3p1p/7P/3Qq1p1/8/4PP2/P7/1KrR2NR w - - 1 26",
-  "presented_fen": "6kb/pp3p1p/7P/3Qq1p1/8/4PP2/P7/1KR3NR b - - 0 1",
+  "presented_fen": "6kb/pp3p1p/7P/3Qq1p1/8/4PP2/P7/1KR3NR b - - 0 26",
   "pieces": [
    {
     "sq": "b1",
@@ -17877,7 +17996,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e5b2",
-   "presented_after": "d1c1",
+   "opponent_first_move": "d1c1",
    "rating": 1372,
    "rating_deviation": 78,
    "popularity": 85,
@@ -17898,7 +18017,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2kr3r/pp3pp1/2n1p3/3p2q1/3P2P1/2N1K3/PPP1B1P1/R2Q1R2 w - - 1 19",
-  "presented_fen": "2kr3r/pp3pp1/2n1p3/3p2q1/3P2P1/2NK4/PPP1B1P1/R2Q1R2 b - - 0 1",
+  "presented_fen": "2kr3r/pp3pp1/2n1p3/3p2q1/3P2P1/2NK4/PPP1B1P1/R2Q1R2 b - - 2 19",
   "pieces": [
    {
     "sq": "a1",
@@ -18021,7 +18140,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c6b4",
-   "presented_after": "e3d3",
+   "opponent_first_move": "e3d3",
    "rating": 1101,
    "rating_deviation": 80,
    "popularity": 92,
@@ -18042,7 +18161,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2qr1k1/1p3ppp/p1b2n2/3p1NB1/8/2Q5/PPP3PP/R4R1K b - - 0 19",
-  "presented_fen": "r2qr1k1/1p3ppp/p1b5/3p1NB1/4n3/2Q5/PPP3PP/R4R1K w - - 0 1",
+  "presented_fen": "r2qr1k1/1p3ppp/p1b5/3p1NB1/4n3/2Q5/PPP3PP/R4R1K w - - 1 20",
   "pieces": [
    {
     "sq": "a1",
@@ -18165,7 +18284,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c3g7",
-   "presented_after": "f6e4",
+   "opponent_first_move": "f6e4",
    "rating": 1064,
    "rating_deviation": 79,
    "popularity": 95,
@@ -18186,7 +18305,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6rk/pp5p/2p2N1Q/8/8/7P/2q3P1/3R3K w - - 9 40",
-  "presented_fen": "6rk/pp1R3p/2p2N1Q/8/8/7P/2q3P1/7K b - - 0 1",
+  "presented_fen": "6rk/pp1R3p/2p2N1Q/8/8/7P/2q3P1/7K b - - 10 40",
   "pieces": [
    {
     "sq": "h1",
@@ -18259,7 +18378,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c2g2",
-   "presented_after": "d1d7",
+   "opponent_first_move": "d1d7",
    "rating": 1008,
    "rating_deviation": 79,
    "popularity": 85,
@@ -18280,7 +18399,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5bk1/4pp2/6p1/3Q3p/2P1BPn1/5NP1/Pr5q/6RK w - - 0 31",
-  "presented_fen": "5bk1/4pp2/6p1/3Q3p/2P1BPn1/6P1/Pr5N/6RK b - - 0 1",
+  "presented_fen": "5bk1/4pp2/6p1/3Q3p/2P1BPn1/6P1/Pr5N/6RK b - - 0 31",
   "pieces": [
    {
     "sq": "g1",
@@ -18373,7 +18492,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2h2",
-   "presented_after": "f3h2",
+   "opponent_first_move": "f3h2",
    "rating": 1232,
    "rating_deviation": 77,
    "popularity": 70,
@@ -18394,7 +18513,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2kr2r1/Qbpq1pp1/Bp1bp2p/8/6n1/1PN3P1/PBPP1P1P/2KR2R1 b - - 2 17",
-  "presented_fen": "2kr2r1/Q1pq1pp1/bp1bp2p/8/6n1/1PN3P1/PBPP1P1P/2KR2R1 w - - 0 1",
+  "presented_fen": "2kr2r1/Q1pq1pp1/bp1bp2p/8/6n1/1PN3P1/PBPP1P1P/2KR2R1 w - - 0 18",
   "pieces": [
    {
     "sq": "c1",
@@ -18532,7 +18651,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a7a8",
-   "presented_after": "b7a6",
+   "opponent_first_move": "b7a6",
    "rating": 1254,
    "rating_deviation": 75,
    "popularity": 100,
@@ -18553,7 +18672,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/p3R3/8/8/2P5/3kp3/Pr6/4K3 w - - 2 43",
-  "presented_fen": "8/p3R3/8/2P5/8/3kp3/Pr6/4K3 b - - 0 1",
+  "presented_fen": "8/p3R3/8/2P5/8/3kp3/Pr6/4K3 b - - 0 43",
   "pieces": [
    {
     "sq": "e1",
@@ -18601,7 +18720,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2b1",
-   "presented_after": "c4c5",
+   "opponent_first_move": "c4c5",
    "rating": 1242,
    "rating_deviation": 81,
    "popularity": 92,
@@ -18622,7 +18741,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2rr2k1/p4pp1/4p2p/2P5/1P3b2/1Q1B1KqP/P5P1/3R1R2 w - - 1 31",
-  "presented_fen": "2rr2k1/p4pp1/4p2p/2P5/1P3b2/1Q1B2qP/P3K1P1/3R1R2 b - - 0 1",
+  "presented_fen": "2rr2k1/p4pp1/4p2p/2P5/1P3b2/1Q1B2qP/P3K1P1/3R1R2 b - - 2 31",
   "pieces": [
    {
     "sq": "d1",
@@ -18730,7 +18849,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g3e3",
-   "presented_after": "f3e2",
+   "opponent_first_move": "f3e2",
    "rating": 930,
    "rating_deviation": 92,
    "popularity": 95,
@@ -18751,7 +18870,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "7k/1b2N1p1/p3RN2/1p1p1Q1p/3P2n1/PPP5/1q2KPP1/8 w - - 1 31",
-  "presented_fen": "7k/1b2N1p1/p3RN2/1p1p1Q1p/3P2n1/PPP2K2/1q3PP1/8 b - - 0 1",
+  "presented_fen": "7k/1b2N1p1/p3RN2/1p1p1Q1p/3P2n1/PPP2K2/1q3PP1/8 b - - 2 31",
   "pieces": [
    {
     "sq": "b2",
@@ -18859,7 +18978,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2f2",
-   "presented_after": "e2f3",
+   "opponent_first_move": "e2f3",
    "rating": 1219,
    "rating_deviation": 76,
    "popularity": 100,
@@ -18880,7 +18999,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1bk1b1r/ppN2ppp/8/3pP3/2p1n3/2P1PN2/Pq3PPP/2RQKB1R w K - 1 12",
-  "presented_fen": "N1bk1b1r/pp3ppp/8/3pP3/2p1n3/2P1PN2/Pq3PPP/2RQKB1R b - - 0 1",
+  "presented_fen": "N1bk1b1r/pp3ppp/8/3pP3/2p1n3/2P1PN2/Pq3PPP/2RQKB1R b K - 0 12",
   "pieces": [
    {
     "sq": "c1",
@@ -19023,7 +19142,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2f2",
-   "presented_after": "c7a8",
+   "opponent_first_move": "c7a8",
    "rating": 1183,
    "rating_deviation": 78,
    "popularity": 94,
@@ -19044,7 +19163,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3rk2r/1p2qpp1/p3b3/4p2p/1n5P/NPn3P1/P3PPB1/RQB1K2R w KQk - 4 17",
-  "presented_fen": "3rk2r/1p2qpp1/p3b3/4p2p/1n5P/NPn3P1/PQ2PPB1/R1B1K2R b - - 0 1",
+  "presented_fen": "3rk2r/1p2qpp1/p3b3/4p2p/1n5P/NPn3P1/PQ2PPB1/R1B1K2R b KQk - 5 17",
   "pieces": [
    {
     "sq": "a1",
@@ -19182,7 +19301,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d8d1",
-   "presented_after": "b1b2",
+   "opponent_first_move": "b1b2",
    "rating": 1168,
    "rating_deviation": 76,
    "popularity": 81,
@@ -19203,7 +19322,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "rn1qkb1r/pp2pppp/2p2n2/5b2/4N3/2N5/PPPPQPPP/R1B1KB1R b KQkq - 0 6",
-  "presented_fen": "rn1qkb1r/pp2pp1p/2p2np1/5b2/4N3/2N5/PPPPQPPP/R1B1KB1R w - - 0 1",
+  "presented_fen": "rn1qkb1r/pp2pp1p/2p2np1/5b2/4N3/2N5/PPPPQPPP/R1B1KB1R w KQkq - 0 7",
   "pieces": [
    {
     "sq": "a1",
@@ -19361,7 +19480,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e4f6",
-   "presented_after": "g7g6",
+   "opponent_first_move": "g7g6",
    "rating": 964,
    "rating_deviation": 77,
    "popularity": 99,
@@ -19382,7 +19501,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/8/2p3k1/2pp4/5K2/2P2R2/2q5/6R1 b - - 5 46",
-  "presented_fen": "8/7k/2p5/2pp4/5K2/2P2R2/2q5/6R1 w - - 0 1",
+  "presented_fen": "8/7k/2p5/2pp4/5K2/2P2R2/2q5/6R1 w - - 6 47",
   "pieces": [
    {
     "sq": "g1",
@@ -19435,7 +19554,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f3h3",
-   "presented_after": "g6h7",
+   "opponent_first_move": "g6h7",
    "rating": 819,
    "rating_deviation": 90,
    "popularity": 92,
@@ -19456,7 +19575,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4rrk1/p1p1bp1p/1p1q1p2/3PRQ2/2P5/3B4/PP3PPP/4R1K1 b - - 1 18",
-  "presented_fen": "4rrk1/p1p1bp1p/1p1q4/3PpQ2/2P5/3B4/PP3PPP/4R1K1 w - - 0 1",
+  "presented_fen": "4rrk1/p1p1bp1p/1p1q4/3PpQ2/2P5/3B4/PP3PPP/4R1K1 w - - 0 19",
   "pieces": [
    {
     "sq": "e1",
@@ -19574,7 +19693,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f5h7",
-   "presented_after": "f6e5",
+   "opponent_first_move": "f6e5",
    "rating": 801,
    "rating_deviation": 80,
    "popularity": 100,
@@ -19595,7 +19714,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5N2/R7/6pk/7r/5PK1/1r6/8/8 b - - 2 60",
-  "presented_fen": "5N2/R7/7k/6pr/5PK1/1r6/8/8 w - - 0 1",
+  "presented_fen": "5N2/R7/7k/6pr/5PK1/1r6/8/8 w - - 0 61",
   "pieces": [
    {
     "sq": "b3",
@@ -19643,7 +19762,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a7h7",
-   "presented_after": "g6g5",
+   "opponent_first_move": "g6g5",
    "rating": 1477,
    "rating_deviation": 76,
    "popularity": 84,
@@ -19664,7 +19783,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/8/2R5/8/5Kpk/5N2/5rP1/8 b - - 2 61",
-  "presented_fen": "8/8/2R5/8/5K1k/5p2/5rP1/8 w - - 0 1",
+  "presented_fen": "8/8/2R5/8/5K1k/5p2/5rP1/8 w - - 0 62",
   "pieces": [
    {
     "sq": "f2",
@@ -19702,7 +19821,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c6h6",
-   "presented_after": "g4f3",
+   "opponent_first_move": "g4f3",
    "rating": 1170,
    "rating_deviation": 80,
    "popularity": 98,
@@ -19716,6 +19835,75 @@
   }
  },
  {
+  "id": "lichess-0BrU2",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "0BrU2",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/PP6/8/8/8/5p1k/4r1p1/1R4K1 w - - 3 52",
+  "presented_fen": "1Q6/P7/8/8/8/5p1k/4r1p1/1R4K1 b - - 0 52",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f3",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a7",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b8",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "f3f2",
+   "opponent_first_move": "b7b8q",
+   "rating": 964,
+   "rating_deviation": 79,
+   "popularity": 88,
+   "nb_plays": 95,
+   "themes": "advancedPawn endgame master mate mateIn1 oneMove queenRookEndgame",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/vgeCUw0L#103",
+   "mate_moves": [
+    "f3f2"
+   ]
+  }
+ },
+ {
   "id": "lichess-0Bsk6",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0Bsk6",
@@ -19723,7 +19911,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/7p/5Qpk/3PP3/6PP/1p1q1PK1/rP6/8 b - - 0 48",
-  "presented_fen": "8/7p/5Qpk/3PP3/6PP/1p3PK1/rP2q3/8 w - - 0 1",
+  "presented_fen": "8/7p/5Qpk/3PP3/6PP/1p3PK1/rP2q3/8 w - - 1 49",
   "pieces": [
    {
     "sq": "a2",
@@ -19801,7 +19989,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6f8",
-   "presented_after": "d3e2",
+   "opponent_first_move": "d3e2",
    "rating": 1668,
    "rating_deviation": 82,
    "popularity": 91,
@@ -19822,7 +20010,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2rk4/p4p2/1p2pqp1/nB1p3r/3P4/Q1P4P/4KP2/R6R b - - 3 24",
-  "presented_fen": "2rk4/p4p2/1p2p1p1/nB1p1q1r/3P4/Q1P4P/4KP2/R6R w - - 0 1",
+  "presented_fen": "2rk4/p4p2/1p2p1p1/nB1p1q1r/3P4/Q1P4P/4KP2/R6R w - - 4 25",
   "pieces": [
    {
     "sq": "a1",
@@ -19930,7 +20118,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a3d6",
-   "presented_after": "f6f5",
+   "opponent_first_move": "f6f5",
    "rating": 1719,
    "rating_deviation": 81,
    "popularity": 91,
@@ -19951,7 +20139,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2r2k2/4rpb1/1Q2p3/2n1q3/1B1pB3/5P2/PP3P2/2R1K2R b K - 0 23",
-  "presented_fen": "2r2k2/4rpb1/1Q2p3/4q3/1B1pn3/5P2/PP3P2/2R1K2R w - - 0 1",
+  "presented_fen": "2r2k2/4rpb1/1Q2p3/4q3/1B1pn3/5P2/PP3P2/2R1K2R w K - 0 24",
   "pieces": [
    {
     "sq": "c1",
@@ -20049,7 +20237,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c1c8",
-   "presented_after": "c5e4",
+   "opponent_first_move": "c5e4",
    "rating": 1453,
    "rating_deviation": 76,
    "popularity": 93,
@@ -20070,7 +20258,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5r2/p1pk2p1/2p3p1/3pP3/8/2PQ2Pb/P4q1P/R3R2K w - - 3 29",
-  "presented_fen": "5r2/p1pk2p1/2p3p1/3pP3/8/2P3Pb/P3Qq1P/R3R2K b - - 0 1",
+  "presented_fen": "5r2/p1pk2p1/2p3p1/3pP3/8/2P3Pb/P3Qq1P/R3R2K b - - 4 29",
   "pieces": [
    {
     "sq": "a1",
@@ -20173,7 +20361,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3g2",
-   "presented_after": "d3e2",
+   "opponent_first_move": "d3e2",
    "rating": 1365,
    "rating_deviation": 76,
    "popularity": 93,
@@ -20194,7 +20382,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1r1qkbnr/p1pppp1p/np4p1/4Nb2/2PP4/PN1B1Q2/1P3PPP/R1B1K2R b KQk - 5 11",
-  "presented_fen": "1r1qkbnr/p1pppp1p/np4p1/4N3/2PP4/PN1b1Q2/1P3PPP/R1B1K2R w - - 0 1",
+  "presented_fen": "1r1qkbnr/p1pppp1p/np4p1/4N3/2PP4/PN1b1Q2/1P3PPP/R1B1K2R w KQk - 0 12",
   "pieces": [
    {
     "sq": "a1",
@@ -20352,7 +20540,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f3f7",
-   "presented_after": "f5d3",
+   "opponent_first_move": "f5d3",
    "rating": 918,
    "rating_deviation": 94,
    "popularity": 93,
@@ -20373,7 +20561,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b1kb2/pppp2p1/2n3Np/2q1p3/2B1n3/8/PPPP1PPP/RNBQK2R w KQq - 2 8",
-  "presented_fen": "r1b1kb2/pppp2p1/2n3Np/2q1p3/2B1n3/3P4/PPP2PPP/RNBQK2R b - - 0 1",
+  "presented_fen": "r1b1kb2/pppp2p1/2n3Np/2q1p3/2B1n3/3P4/PPP2PPP/RNBQK2R b KQq - 0 8",
   "pieces": [
    {
     "sq": "a1",
@@ -20526,7 +20714,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c5f2",
-   "presented_after": "d2d3",
+   "opponent_first_move": "d2d3",
    "rating": 938,
    "rating_deviation": 96,
    "popularity": 68,
@@ -20547,7 +20735,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3rbn2/pp3p2/3kpP2/2ppN3/5P2/2N3P1/PPP5/2K4R b - - 0 27",
-  "presented_fen": "3rb3/pp1n1p2/3kpP2/2ppN3/5P2/2N3P1/PPP5/2K4R w - - 0 1",
+  "presented_fen": "3rb3/pp1n1p2/3kpP2/2ppN3/5P2/2N3P1/PPP5/2K4R w - - 1 28",
   "pieces": [
    {
     "sq": "c1",
@@ -20655,7 +20843,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c3b5",
-   "presented_after": "f8d7",
+   "opponent_first_move": "f8d7",
    "rating": 1113,
    "rating_deviation": 76,
    "popularity": 100,
@@ -20676,7 +20864,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1r1q1r1k/ppp1b1pR/2n5/4p3/2BP4/PP6/1B4PP/R2Q2K1 b - - 0 21",
-  "presented_fen": "1r1q1r2/ppp1b1pk/2n5/4p3/2BP4/PP6/1B4PP/R2Q2K1 w - - 0 1",
+  "presented_fen": "1r1q1r2/ppp1b1pk/2n5/4p3/2BP4/PP6/1B4PP/R2Q2K1 w - - 0 22",
   "pieces": [
    {
     "sq": "a1",
@@ -20789,7 +20977,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d1h5",
-   "presented_after": "h8h7",
+   "opponent_first_move": "h8h7",
    "rating": 1205,
    "rating_deviation": 81,
    "popularity": 60,
@@ -20810,7 +20998,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2k2b2/pp6/1qp3pp/4P3/n2r2PN/P1N3QP/1P1R1P2/1K5R w - - 0 25",
-  "presented_fen": "2k2b2/pp6/1qp3pp/4P3/n2R2PN/P1N3QP/1P3P2/1K5R b - - 0 1",
+  "presented_fen": "2k2b2/pp6/1qp3pp/4P3/n2R2PN/P1N3QP/1P3P2/1K5R b - - 0 25",
   "pieces": [
    {
     "sq": "b1",
@@ -20923,7 +21111,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b6b2",
-   "presented_after": "d2d4",
+   "opponent_first_move": "d2d4",
    "rating": 1564,
    "rating_deviation": 90,
    "popularity": 79,
@@ -20944,7 +21132,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4r3/5R2/2p3p1/p1p4p/P1PpNbkP/3P1P2/P3K1P1/8 b - - 0 37",
-  "presented_fen": "4r3/5R2/2p3p1/p1p4p/P1PpNb1k/3P1P2/P3K1P1/8 w - - 0 1",
+  "presented_fen": "4r3/5R2/2p3p1/p1p4p/P1PpNb1k/3P1P2/P3K1P1/8 w - - 0 38",
   "pieces": [
    {
     "sq": "a2",
@@ -21042,7 +21230,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f7f4",
-   "presented_after": "g4h4",
+   "opponent_first_move": "g4h4",
    "rating": 947,
    "rating_deviation": 92,
    "popularity": 90,
@@ -21063,7 +21251,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3r1rk1/4bppp/8/pp1R4/4Q3/P4P1P/1q3P2/1B3RK1 b - - 3 27",
-  "presented_fen": "5rk1/4bppp/8/pp1r4/4Q3/P4P1P/1q3P2/1B3RK1 w - - 0 1",
+  "presented_fen": "5rk1/4bppp/8/pp1r4/4Q3/P4P1P/1q3P2/1B3RK1 w - - 0 28",
   "pieces": [
    {
     "sq": "b1",
@@ -21161,7 +21349,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e4h7",
-   "presented_after": "d8d5",
+   "opponent_first_move": "d8d5",
    "rating": 907,
    "rating_deviation": 102,
    "popularity": 97,
@@ -21182,7 +21370,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3Rr1k/1pp1R1pn/p2p2Qp/3P4/2P5/PP1P3P/5qP1/7K b - - 10 32",
-  "presented_fen": "4rr1k/1pp1R1pn/p2p2Qp/3P4/2P5/PP1P3P/5qP1/7K w - - 0 1",
+  "presented_fen": "4rr1k/1pp1R1pn/p2p2Qp/3P4/2P5/PP1P3P/5qP1/7K w - - 0 33",
   "pieces": [
    {
     "sq": "h1",
@@ -21295,7 +21483,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6g7",
-   "presented_after": "a8e8",
+   "opponent_first_move": "a8e8",
    "rating": 1263,
    "rating_deviation": 83,
    "popularity": 88,
@@ -21316,7 +21504,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2q1r1k/1p4pR/p3B3/2bp4/4n3/4BQ2/PPP2PPP/2K4R b - - 0 18",
-  "presented_fen": "r2q1r2/1p4pk/p3B3/2bp4/4n3/4BQ2/PPP2PPP/2K4R w - - 0 1",
+  "presented_fen": "r2q1r2/1p4pk/p3B3/2bp4/4n3/4BQ2/PPP2PPP/2K4R w - - 0 19",
   "pieces": [
    {
     "sq": "c1",
@@ -21429,7 +21617,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f3h5",
-   "presented_after": "h8h7",
+   "opponent_first_move": "h8h7",
    "rating": 1273,
    "rating_deviation": 80,
    "popularity": 94,
@@ -21450,7 +21638,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r4r1k/1ppq1p2/p2p1b2/3P1P2/6Q1/3B3P/PP3P2/6RK b - - 3 28",
-  "presented_fen": "r5rk/1ppq1p2/p2p1b2/3P1P2/6Q1/3B3P/PP3P2/6RK w - - 0 1",
+  "presented_fen": "r5rk/1ppq1p2/p2p1b2/3P1P2/6Q1/3B3P/PP3P2/6RK w - - 4 29",
   "pieces": [
    {
     "sq": "g1",
@@ -21558,7 +21746,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4h5",
-   "presented_after": "f8g8",
+   "opponent_first_move": "f8g8",
    "rating": 1221,
    "rating_deviation": 78,
    "popularity": 91,
@@ -21579,7 +21767,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r5rk/pp2NnQp/5Pp1/8/3B4/8/P1qp2bP/R4RK1 b - - 3 26",
-  "presented_fen": "r6k/pp2Nnrp/5Pp1/8/3B4/8/P1qp2bP/R4RK1 w - - 0 1",
+  "presented_fen": "r6k/pp2Nnrp/5Pp1/8/3B4/8/P1qp2bP/R4RK1 w - - 0 27",
   "pieces": [
    {
     "sq": "a1",
@@ -21682,7 +21870,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6g7",
-   "presented_after": "g8g7",
+   "opponent_first_move": "g8g7",
    "rating": 1006,
    "rating_deviation": 76,
    "popularity": 100,
@@ -21703,7 +21891,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r4rk1/p6R/3p2p1/2pN1bNp/3p1P1P/4R1K1/P1P3P1/8 b - - 0 29",
-  "presented_fen": "r4rk1/p6R/3p2p1/2pN1bNp/5P1P/4p1K1/P1P3P1/8 w - - 0 1",
+  "presented_fen": "r4rk1/p6R/3p2p1/2pN1bNp/5P1P/4p1K1/P1P3P1/8 w - - 0 30",
   "pieces": [
    {
     "sq": "a2",
@@ -21806,7 +21994,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d5e7",
-   "presented_after": "d4e3",
+   "opponent_first_move": "d4e3",
    "rating": 1135,
    "rating_deviation": 78,
    "popularity": 79,
@@ -21827,7 +22015,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3rkbr1/p3np1p/1qp1pQp1/3p4/8/B1N1R3/PPP2PPP/3R2K1 b - - 3 16",
-  "presented_fen": "3rk1r1/p3npbp/1qp1pQp1/3p4/8/B1N1R3/PPP2PPP/3R2K1 w - - 0 1",
+  "presented_fen": "3rk1r1/p3npbp/1qp1pQp1/3p4/8/B1N1R3/PPP2PPP/3R2K1 w - - 4 17",
   "pieces": [
    {
     "sq": "d1",
@@ -21960,7 +22148,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f6e7",
-   "presented_after": "f8g7",
+   "opponent_first_move": "f8g7",
    "rating": 977,
    "rating_deviation": 79,
    "popularity": 96,
@@ -21981,7 +22169,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5rk1/p5p1/1q5p/3b3P/8/P1P3Q1/2P5/2K3R1 b - - 3 35",
-  "presented_fen": "5rk1/p5p1/7p/3b3P/8/P1P3Q1/2P2q2/2K3R1 w - - 0 1",
+  "presented_fen": "5rk1/p5p1/7p/3b3P/8/P1P3Q1/2P2q2/2K3R1 w - - 4 36",
   "pieces": [
    {
     "sq": "c1",
@@ -22059,7 +22247,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g3g7",
-   "presented_after": "b6f2",
+   "opponent_first_move": "b6f2",
    "rating": 867,
    "rating_deviation": 89,
    "popularity": 95,
@@ -22080,7 +22268,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r2b2k1/6r1/pp6/3b3Q/4pP2/N3B2R/P5PK/q7 b - - 2 35",
-  "presented_fen": "r2b2k1/6r1/pp6/3b3Q/4pP2/N3B2R/q5PK/8 w - - 0 1",
+  "presented_fen": "r2b2k1/6r1/pp6/3b3Q/4pP2/N3B2R/q5PK/8 w - - 0 36",
   "pieces": [
    {
     "sq": "a2",
@@ -22168,7 +22356,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h5e8",
-   "presented_after": "a1a2",
+   "opponent_first_move": "a1a2",
    "rating": 1671,
    "rating_deviation": 75,
    "popularity": 96,
@@ -22189,7 +22377,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b2rk1/4qpp1/p1n4p/3pPN2/2pP2QP/5N2/PP4P1/2KR3R b - - 0 18",
-  "presented_fen": "r1b2rk1/5pp1/p1n1q2p/3pPN2/2pP2QP/5N2/PP4P1/2KR3R w - - 0 1",
+  "presented_fen": "r1b2rk1/5pp1/p1n1q2p/3pPN2/2pP2QP/5N2/PP4P1/2KR3R w - - 1 19",
   "pieces": [
    {
     "sq": "c1",
@@ -22317,7 +22505,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4g7",
-   "presented_after": "e7e6",
+   "opponent_first_move": "e7e6",
    "rating": 895,
    "rating_deviation": 79,
    "popularity": 88,
@@ -22338,7 +22526,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1k5r/pppQ4/3b4/4q2p/8/2PR4/PP2BPP1/6K1 w - - 2 26",
-  "presented_fen": "1k5r/pppQ4/3b4/4q2p/8/2PR1B2/PP3PP1/6K1 b - - 0 1",
+  "presented_fen": "1k5r/pppQ4/3b4/4q2p/8/2PR1B2/PP3PP1/6K1 b - - 3 26",
   "pieces": [
    {
     "sq": "g1",
@@ -22431,7 +22619,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e5e1",
-   "presented_after": "e2f3",
+   "opponent_first_move": "e2f3",
    "rating": 1129,
    "rating_deviation": 76,
    "popularity": 96,
@@ -22452,7 +22640,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6k1/pbq5/1p2p3/7R/8/P6P/1P1QR1PK/5r2 w - - 5 33",
-  "presented_fen": "6k1/pbq5/1p2p3/7R/8/P5PP/1P1QR2K/5r2 b - - 0 1",
+  "presented_fen": "6k1/pbq5/1p2p3/7R/8/P5PP/1P1QR2K/5r2 b - - 0 33",
   "pieces": [
    {
     "sq": "f1",
@@ -22535,7 +22723,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f1h1",
-   "presented_after": "g2g3",
+   "opponent_first_move": "g2g3",
    "rating": 951,
    "rating_deviation": 83,
    "popularity": 91,
@@ -22549,6 +22737,85 @@
   }
  },
  {
+  "id": "lichess-0D5c0",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "0D5c0",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/4R3/3p2k1/6P1/1p2P1KP/8/r1p5/8 b - - 1 46",
+  "presented_fen": "8/4R3/3p2k1/6P1/1p2P1KP/8/r7/2q5 w - - 0 47",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e7",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "h4h5",
+   "opponent_first_move": "c2c1q",
+   "rating": 1195,
+   "rating_deviation": 77,
+   "popularity": 94,
+   "nb_plays": 3065,
+   "themes": "endgame mate mateIn1 oneMove queenRookEndgame",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/l1trnCex/black#92",
+   "mate_moves": [
+    "h4h5"
+   ]
+  }
+ },
+ {
   "id": "lichess-0DC4G",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0DC4G",
@@ -22556,7 +22823,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/6p1/2p1p1k1/3pP3/1P1BbP1K/2P2qQ1/8/8 b - - 35 55",
-  "presented_fen": "8/6p1/2p1p3/3pPk2/1P1BbP1K/2P2qQ1/8/8 w - - 0 1",
+  "presented_fen": "8/6p1/2p1p3/3pPk2/1P1BbP1K/2P2qQ1/8/8 w - - 36 56",
   "pieces": [
    {
     "sq": "c3",
@@ -22634,7 +22901,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g3g5",
-   "presented_after": "g6f5",
+   "opponent_first_move": "g6f5",
    "rating": 923,
    "rating_deviation": 77,
    "popularity": 87,
@@ -22655,7 +22922,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "6r1/pp3R2/4k2p/3pP1r1/5R2/2P1P3/PP5K/8 w - - 5 34",
-  "presented_fen": "6r1/pp3R2/4k2p/3pP1r1/8/2P1P3/PP3R1K/8 b - - 0 1",
+  "presented_fen": "6r1/pp3R2/4k2p/3pP1r1/8/2P1P3/PP3R1K/8 b - - 6 34",
   "pieces": [
    {
     "sq": "a2",
@@ -22738,7 +23005,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g5h5",
-   "presented_after": "f4f2",
+   "opponent_first_move": "f4f2",
    "rating": 1115,
    "rating_deviation": 75,
    "popularity": 98,
@@ -22759,7 +23026,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1bk1b1N/ppp1nB1p/8/8/4nppq/8/PPPP2PP/RNBQ1K1R w - - 2 12",
-  "presented_fen": "r1bk1b1N/ppp1nB1p/8/8/4nppq/3P4/PPP3PP/RNBQ1K1R b - - 0 1",
+  "presented_fen": "r1bk1b1N/ppp1nB1p/8/8/4nppq/3P4/PPP3PP/RNBQ1K1R b - - 0 12",
   "pieces": [
    {
     "sq": "a1",
@@ -22902,7 +23169,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4f2",
-   "presented_after": "d2d3",
+   "opponent_first_move": "d2d3",
    "rating": 912,
    "rating_deviation": 95,
    "popularity": 95,
@@ -22923,7 +23190,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/2kp4/1p3R2/p4R2/P6p/KP6/2r1rPPP/8 w - - 0 33",
-  "presented_fen": "8/2kp4/1p3R2/p4R2/PP5p/K7/2r1rPPP/8 b - - 0 1",
+  "presented_fen": "8/2kp4/1p3R2/p4R2/PP5p/K7/2r1rPPP/8 b - - 0 33",
   "pieces": [
    {
     "sq": "c2",
@@ -23006,7 +23273,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c2c3",
-   "presented_after": "b3b4",
+   "opponent_first_move": "b3b4",
    "rating": 1470,
    "rating_deviation": 82,
    "popularity": 94,
@@ -23027,7 +23294,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/Q6p/3p2pk/2p1rq2/P5n1/1bN5/5PPP/2KRR3 w - - 8 23",
-  "presented_fen": "8/Q6p/3p2pk/2p1Rq2/P5n1/1bN5/5PPP/2KR4 b - - 0 1",
+  "presented_fen": "8/Q6p/3p2pk/2p1Rq2/P5n1/1bN5/5PPP/2KR4 b - - 0 23",
   "pieces": [
    {
     "sq": "c1",
@@ -23120,7 +23387,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f5c2",
-   "presented_after": "e1e5",
+   "opponent_first_move": "e1e5",
    "rating": 1445,
    "rating_deviation": 90,
    "popularity": 76,
@@ -23141,7 +23408,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r4r1k/p1Q3Rp/4p3/3p4/3P4/2P1K2b/P1q1B2P/6R1 w - - 2 27",
-  "presented_fen": "r4r1k/p1Q3Rp/4p3/3p4/3P4/2PBK2b/P1q4P/6R1 b - - 0 1",
+  "presented_fen": "r4r1k/p1Q3Rp/4p3/3p4/3P4/2PBK2b/P1q4P/6R1 b - - 3 27",
   "pieces": [
    {
     "sq": "g1",
@@ -23239,7 +23506,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c2f2",
-   "presented_after": "e2d3",
+   "opponent_first_move": "e2d3",
    "rating": 997,
    "rating_deviation": 77,
    "popularity": 98,
@@ -23260,7 +23527,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/5ppk/2Q1p1p1/1pNp4/1Pnq1P2/8/4RKPP/8 w - - 0 35",
-  "presented_fen": "8/5ppk/2Q1p1p1/1pNp4/1Pnq1P2/8/4R1PP/4K3 b - - 0 1",
+  "presented_fen": "8/5ppk/2Q1p1p1/1pNp4/1Pnq1P2/8/4R1PP/4K3 b - - 1 35",
   "pieces": [
    {
     "sq": "e1",
@@ -23353,7 +23620,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d4g1",
-   "presented_after": "f2e1",
+   "opponent_first_move": "f2e1",
    "rating": 1402,
    "rating_deviation": 75,
    "popularity": 100,
@@ -23374,7 +23641,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3rkb2/pp6/4pQ1p/2P5/8/8/PPP1rPqP/R3KR2 w Q - 0 22",
-  "presented_fen": "3rkb2/pp6/4pQ1p/2P5/8/8/PPP1KPqP/R4R2 b - - 0 1",
+  "presented_fen": "3rkb2/pp6/4pQ1p/2P5/8/8/PPP1KPqP/R4R2 b - - 0 22",
   "pieces": [
    {
     "sq": "a1",
@@ -23472,7 +23739,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g2e4",
-   "presented_after": "e1e2",
+   "opponent_first_move": "e1e2",
    "rating": 1131,
    "rating_deviation": 75,
    "popularity": 86,
@@ -23493,7 +23760,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/8/ppn4p/2p2p2/2K1k3/1PP4P/PN3PP1/8 w - - 0 36",
-  "presented_fen": "8/8/ppn4p/2p2p2/N1K1k3/1PP4P/P4PP1/8 b - - 0 1",
+  "presented_fen": "8/8/ppn4p/2p2p2/N1K1k3/1PP4P/P4PP1/8 b - - 1 36",
   "pieces": [
    {
     "sq": "a2",
@@ -23576,7 +23843,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c6e5",
-   "presented_after": "b2a4",
+   "opponent_first_move": "b2a4",
    "rating": 1895,
    "rating_deviation": 77,
    "popularity": 93,
@@ -23585,8 +23852,8 @@
    "opening_tags": "",
    "game_url": "https://lichess.org/MlJCE2Yn#71",
    "mate_moves": [
-    "c6a5",
-    "c6e5"
+    "c6e5",
+    "c6a5"
    ]
   }
  },
@@ -23598,7 +23865,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4rrk1/Q5pp/2p3q1/3bpp2/2N2n2/1P1P2N1/P1P2R1P/5RK1 w - - 1 25",
-  "presented_fen": "4rrk1/Q5pp/2p3q1/3bNp2/5n2/1P1P2N1/P1P2R1P/5RK1 b - - 0 1",
+  "presented_fen": "4rrk1/Q5pp/2p3q1/3bNp2/5n2/1P1P2N1/P1P2R1P/5RK1 b - - 0 25",
   "pieces": [
    {
     "sq": "f1",
@@ -23711,7 +23978,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f4h3",
-   "presented_after": "c4e5",
+   "opponent_first_move": "c4e5",
    "rating": 1212,
    "rating_deviation": 89,
    "popularity": 93,
@@ -23732,7 +23999,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1b2rk1/ppQp4/6pp/8/4R3/2PP4/P1P3PP/R4q1K w - - 2 18",
-  "presented_fen": "r1b2rk1/ppQp4/6pp/8/4R3/2PP4/P1P3PP/5R1K b - - 0 1",
+  "presented_fen": "r1b2rk1/ppQp4/6pp/8/4R3/2PP4/P1P3PP/5R1K b - - 0 18",
   "pieces": [
    {
     "sq": "f1",
@@ -23835,7 +24102,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f8f1",
-   "presented_after": "a1f1",
+   "opponent_first_move": "a1f1",
    "rating": 995,
    "rating_deviation": 147,
    "popularity": 41,
@@ -23849,6 +24116,100 @@
   }
  },
  {
+  "id": "lichess-0EBGy",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "0EBGy",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "3r2Qk/7P/8/3Bp1P1/2p5/2PqP3/P4P2/4K3 b - - 3 44",
+  "presented_fen": "6rk/7P/8/3Bp1P1/2p5/2PqP3/P4P2/4K3 w - - 0 45",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h7",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "h7g8q",
+   "opponent_first_move": "d8g8",
+   "rating": 1332,
+   "rating_deviation": 76,
+   "popularity": 83,
+   "nb_plays": 168,
+   "themes": "advancedPawn endgame mate mateIn1 oneMove promotion",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/VqGRIU1X/black#88",
+   "mate_moves": [
+    "h7g8q"
+   ]
+  }
+ },
+ {
   "id": "lichess-0EFKg",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0EFKg",
@@ -23856,7 +24217,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2rq1r2/pp1bpp1k/3p4/6Qp/4P2P/2N5/PPP5/R3K1R1 b Q - 3 18",
-  "presented_fen": "2rq2r1/pp1bpp1k/3p4/6Qp/4P2P/2N5/PPP5/R3K1R1 w - - 0 1",
+  "presented_fen": "2rq2r1/pp1bpp1k/3p4/6Qp/4P2P/2N5/PPP5/R3K1R1 w Q - 4 19",
   "pieces": [
    {
     "sq": "a1",
@@ -23969,7 +24330,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g5h5",
-   "presented_after": "f8g8",
+   "opponent_first_move": "f8g8",
    "rating": 1138,
    "rating_deviation": 77,
    "popularity": 100,
@@ -23990,7 +24351,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1r3k1/4bppp/p7/4pbP1/1P1p3P/3B4/1PPn1P2/1NKR2R1 w - - 0 23",
-  "presented_fen": "r1r3k1/4bppp/p7/4pBP1/1P1p3P/8/1PPn1P2/1NKR2R1 b - - 0 1",
+  "presented_fen": "r1r3k1/4bppp/p7/4pBP1/1P1p3P/8/1PPn1P2/1NKR2R1 b - - 0 23",
   "pieces": [
    {
     "sq": "b1",
@@ -24108,7 +24469,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d2b3",
-   "presented_after": "d3f5",
+   "opponent_first_move": "d3f5",
    "rating": 1021,
    "rating_deviation": 90,
    "popularity": 100,
@@ -24122,6 +24483,130 @@
   }
  },
  {
+  "id": "lichess-0EJpw",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "0EJpw",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "2nr3k/pb1P1Qp1/1p5p/2p1P3/2P1q3/8/4B1PP/4RR1K w - - 1 30",
+  "presented_fen": "2Qr3k/pb3Qp1/1p5p/2p1P3/2P1q3/8/4B1PP/4RR1K b - - 0 30",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f7",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c8",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "e4g2",
+   "opponent_first_move": "d7c8q",
+   "rating": 1108,
+   "rating_deviation": 77,
+   "popularity": 96,
+   "nb_plays": 1494,
+   "themes": "mate mateIn1 middlegame oneMove",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/qu0nC5gJ#59",
+   "mate_moves": [
+    "e4g2"
+   ]
+  }
+ },
+ {
   "id": "lichess-0EMXg",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0EMXg",
@@ -24129,7 +24614,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2k5/pp6/8/2p5/3pP3/P1PPqrr1/1P2Q1P1/R4KR1 w - - 0 29",
-  "presented_fen": "2k5/pp6/8/2p5/3pP3/P1PPqPr1/1P2Q3/R4KR1 b - - 0 1",
+  "presented_fen": "2k5/pp6/8/2p5/3pP3/P1PPqPr1/1P2Q3/R4KR1 b - - 0 29",
   "pieces": [
    {
     "sq": "a1",
@@ -24222,7 +24707,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g3g1",
-   "presented_after": "g2f3",
+   "opponent_first_move": "g2f3",
    "rating": 948,
    "rating_deviation": 98,
    "popularity": 95,
@@ -24231,8 +24716,8 @@
    "opening_tags": "",
    "game_url": "https://lichess.org/KM5ldHH0#57",
    "mate_moves": [
-    "e3g1",
-    "g3g1"
+    "g3g1",
+    "e3g1"
    ]
   }
  },
@@ -24244,7 +24729,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4R3/5r2/6k1/8/R3p1P1/6P1/6PK/4r3 w - - 7 50",
-  "presented_fen": "4R3/5r2/6k1/8/4R1P1/6P1/6PK/4r3 b - - 0 1",
+  "presented_fen": "4R3/5r2/6k1/8/4R1P1/6P1/6PK/4r3 b - - 0 50",
   "pieces": [
    {
     "sq": "e1",
@@ -24297,7 +24782,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f7h7",
-   "presented_after": "a4e4",
+   "opponent_first_move": "a4e4",
    "rating": 1071,
    "rating_deviation": 90,
    "popularity": 94,
@@ -24318,7 +24803,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4Q3/5pk1/1p4pp/2b1P1KP/6P1/5r2/8/8 w - - 0 51",
-  "presented_fen": "4Q3/5pk1/1p4pp/2b1P2P/6PK/5r2/8/8 b - - 0 1",
+  "presented_fen": "4Q3/5pk1/1p4pp/2b1P2P/6PK/5r2/8/8 b - - 1 51",
   "pieces": [
    {
     "sq": "f3",
@@ -24386,7 +24871,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6g5",
-   "presented_after": "g5h4",
+   "opponent_first_move": "g5h4",
    "rating": 936,
    "rating_deviation": 87,
    "popularity": 100,
@@ -24395,8 +24880,8 @@
    "opening_tags": "",
    "game_url": "https://lichess.org/gsVXkSqN#101",
    "mate_moves": [
-    "g6g5",
-    "c5f2"
+    "c5f2",
+    "g6g5"
    ]
   }
  },
@@ -24408,7 +24893,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1Q6/1P3pbk/1BB4p/4Pb2/5p1q/3p3P/7K/6R1 w - - 3 51",
-  "presented_fen": "8/1PQ2pbk/1BB4p/4Pb2/5p1q/3p3P/7K/6R1 b - - 0 1",
+  "presented_fen": "8/1PQ2pbk/1BB4p/4Pb2/5p1q/3p3P/7K/6R1 b - - 4 51",
   "pieces": [
    {
     "sq": "g1",
@@ -24496,7 +24981,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4h3",
-   "presented_after": "b8c7",
+   "opponent_first_move": "b8c7",
    "rating": 1244,
    "rating_deviation": 82,
    "popularity": 92,
@@ -24517,7 +25002,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5r2/2R5/4p1k1/4N1p1/3nK3/8/8/8 b - - 0 48",
-  "presented_fen": "5r2/2R5/4p3/4N1pk/3nK3/8/8/8 w - - 0 1",
+  "presented_fen": "5r2/2R5/4p3/4N1pk/3nK3/8/8/8 w - - 1 49",
   "pieces": [
    {
     "sq": "d4",
@@ -24565,7 +25050,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c7h7",
-   "presented_after": "g6h5",
+   "opponent_first_move": "g6h5",
    "rating": 932,
    "rating_deviation": 87,
    "popularity": 55,
@@ -24586,7 +25071,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/8/3k4/1P6/K1q2N2/2P2P2/3n2PP/Q7 w - - 2 46",
-  "presented_fen": "8/8/3k4/1P6/2q2N2/K1P2P2/3n2PP/Q7 b - - 0 1",
+  "presented_fen": "8/8/3k4/1P6/2q2N2/K1P2P2/3n2PP/Q7 b - - 3 46",
   "pieces": [
    {
     "sq": "a1",
@@ -24649,7 +25134,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c4b3",
-   "presented_after": "a4a3",
+   "opponent_first_move": "a4a3",
    "rating": 973,
    "rating_deviation": 87,
    "popularity": 95,
@@ -24670,7 +25155,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1b3rk1/1p3ppp/q4r2/2Pp4/3Pp3/2N1P2P/P3K1P1/2R1Q2R w - - 5 29",
-  "presented_fen": "1b3rk1/1p3ppp/q4r2/2Pp4/3Pp3/2N1P2P/P2K2P1/2R1Q2R b - - 0 1",
+  "presented_fen": "1b3rk1/1p3ppp/q4r2/2Pp4/3Pp3/2N1P2P/P2K2P1/2R1Q2R b - - 6 29",
   "pieces": [
    {
     "sq": "c1",
@@ -24788,7 +25273,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a6d3",
-   "presented_after": "e2d2",
+   "opponent_first_move": "e2d2",
    "rating": 1121,
    "rating_deviation": 77,
    "popularity": 87,
@@ -24809,7 +25294,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3k2r/1b3ppp/p2Qpn2/1p6/1B2q3/2P2BP1/PP3P1P/R4RK1 b kq - 0 17",
-  "presented_fen": "r3k2r/1b3ppp/p2Qpn2/1p6/1B6/2P2qP1/PP3P1P/R4RK1 w - - 0 1",
+  "presented_fen": "r3k2r/1b3ppp/p2Qpn2/1p6/1B6/2P2qP1/PP3P1P/R4RK1 w kq - 0 18",
   "pieces": [
    {
     "sq": "a1",
@@ -24932,7 +25417,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d6e7",
-   "presented_after": "e4f3",
+   "opponent_first_move": "e4f3",
    "rating": 875,
    "rating_deviation": 90,
    "popularity": 95,
@@ -24953,7 +25438,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1k1r3r/ppqn1Np1/2p1pn2/8/1Q1P2p1/3B4/PPP1NPP1/R4RK1 w - - 1 20",
-  "presented_fen": "1k1N3r/ppqn2p1/2p1pn2/8/1Q1P2p1/3B4/PPP1NPP1/R4RK1 b - - 0 1",
+  "presented_fen": "1k1N3r/ppqn2p1/2p1pn2/8/1Q1P2p1/3B4/PPP1NPP1/R4RK1 b - - 0 20",
   "pieces": [
    {
     "sq": "a1",
@@ -25081,7 +25566,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c7h2",
-   "presented_after": "f7d8",
+   "opponent_first_move": "f7d8",
    "rating": 924,
    "rating_deviation": 80,
    "popularity": 57,
@@ -25102,7 +25587,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "B5k1/p4pp1/7p/6r1/7q/PP2P3/5PK1/2RQ1R2 w - - 1 27",
-  "presented_fen": "B5k1/p4pp1/7p/6r1/7q/PP2PK2/5P2/2RQ1R2 b - - 0 1",
+  "presented_fen": "B5k1/p4pp1/7p/6r1/7q/PP2PK2/5P2/2RQ1R2 b - - 2 27",
   "pieces": [
    {
     "sq": "c1",
@@ -25190,7 +25675,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4g4",
-   "presented_after": "g2f3",
+   "opponent_first_move": "g2f3",
    "rating": 1195,
    "rating_deviation": 77,
    "popularity": 95,
@@ -25211,7 +25696,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "rnb1k2r/1pp2ppp/p2p4/3Pp3/2P1P1nq/2NB4/PP4PP/R1BQ1KNR w kq - 3 9",
-  "presented_fen": "rnb1k2r/1pp2ppp/p2p4/3Pp3/2P1P1nq/2NB1N2/PP4PP/R1BQ1K1R b - - 0 1",
+  "presented_fen": "rnb1k2r/1pp2ppp/p2p4/3Pp3/2P1P1nq/2NB1N2/PP4PP/R1BQ1K1R b kq - 4 9",
   "pieces": [
    {
     "sq": "a1",
@@ -25369,7 +25854,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h4f2",
-   "presented_after": "g1f3",
+   "opponent_first_move": "g1f3",
    "rating": 1127,
    "rating_deviation": 88,
    "popularity": 92,
@@ -25390,7 +25875,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "3r3k/ppp3p1/2n3Qp/5B2/6R1/P4r2/1q1N1P2/3R2K1 b - - 1 26",
-  "presented_fen": "3r3k/ppp1n1p1/6Qp/5B2/6R1/P4r2/1q1N1P2/3R2K1 w - - 0 1",
+  "presented_fen": "3r3k/ppp1n1p1/6Qp/5B2/6R1/P4r2/1q1N1P2/3R2K1 w - - 2 27",
   "pieces": [
    {
     "sq": "d1",
@@ -25488,7 +25973,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6h7",
-   "presented_after": "c6e7",
+   "opponent_first_move": "c6e7",
    "rating": 1381,
    "rating_deviation": 76,
    "popularity": 67,
@@ -25509,7 +25994,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "8/R3b1k1/4P3/5P1p/4P1rK/8/P7/8 w - - 4 46",
-  "presented_fen": "8/R3b1k1/4P3/5P1K/4P1r1/8/P7/8 b - - 0 1",
+  "presented_fen": "8/R3b1k1/4P3/5P1K/4P1r1/8/P7/8 b - - 0 46",
   "pieces": [
    {
     "sq": "a2",
@@ -25562,7 +26047,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4h4",
-   "presented_after": "h4h5",
+   "opponent_first_move": "h4h5",
    "rating": 1292,
    "rating_deviation": 76,
    "popularity": 97,
@@ -25583,7 +26068,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2bkr3/3R1ppp/1N2n3/1Qb5/8/4PP2/PPP2q1P/2K2B1R b - - 0 17",
-  "presented_fen": "3kr3/3b1ppp/1N2n3/1Qb5/8/4PP2/PPP2q1P/2K2B1R w - - 0 1",
+  "presented_fen": "3kr3/3b1ppp/1N2n3/1Qb5/8/4PP2/PPP2q1P/2K2B1R w - - 0 18",
   "pieces": [
    {
     "sq": "c1",
@@ -25691,7 +26176,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b5d7",
-   "presented_after": "c8d7",
+   "opponent_first_move": "c8d7",
    "rating": 1176,
    "rating_deviation": 108,
    "popularity": 38,
@@ -25705,6 +26190,65 @@
   }
  },
  {
+  "id": "lichess-0FNQq",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "0FNQq",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "1Q6/6p1/8/2K5/k6P/8/5p2/8 b - - 0 68",
+  "presented_fen": "1Q6/6p1/8/2K5/k6P/8/8/5q2 w - - 0 69",
+  "pieces": [
+   {
+    "sq": "f1",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h4",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "b8",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "b8b4",
+   "opponent_first_move": "f2f1q",
+   "rating": 1403,
+   "rating_deviation": 76,
+   "popularity": 76,
+   "nb_plays": 164,
+   "themes": "endgame mate mateIn1 oneMove queenEndgame",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/9JX5vRRz/black#136",
+   "mate_moves": [
+    "b8b4"
+   ]
+  }
+ },
+ {
   "id": "lichess-0FPIc",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0FPIc",
@@ -25712,7 +26256,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r5k1/1q3pp1/p3p2p/2p4r/2Nb1P2/1P1P3P/R1PQ2P1/5R1K w - - 2 36",
-  "presented_fen": "r5k1/1q3pp1/p3p2p/2p4r/2Nb1P2/1P1P3P/R1P1Q1P1/5R1K b - - 0 1",
+  "presented_fen": "r5k1/1q3pp1/p3p2p/2p4r/2Nb1P2/1P1P3P/R1P1Q1P1/5R1K b - - 3 36",
   "pieces": [
    {
     "sq": "f1",
@@ -25830,7 +26374,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h5h3",
-   "presented_after": "d2e2",
+   "opponent_first_move": "d2e2",
    "rating": 916,
    "rating_deviation": 78,
    "popularity": 99,
@@ -25851,7 +26395,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r4rk1/1pp2pp1/1pnp2qp/4p2b/2B1P3/P1PP1NK1/1P3P2/R1BQ3R w - - 6 17",
-  "presented_fen": "r4rk1/1pp2pp1/1pnp2qp/4p2b/2B1P2K/P1PP1N2/1P3P2/R1BQ3R b - - 0 1",
+  "presented_fen": "r4rk1/1pp2pp1/1pnp2qp/4p2b/2B1P2K/P1PP1N2/1P3P2/R1BQ3R b - - 7 17",
   "pieces": [
    {
     "sq": "a1",
@@ -25994,7 +26538,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g6g4",
-   "presented_after": "g3h4",
+   "opponent_first_move": "g3h4",
    "rating": 806,
    "rating_deviation": 80,
    "popularity": 100,
@@ -26015,7 +26559,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "7q/4Q3/6pk/4pp2/4b3/6PP/6PK/8 b - - 1 44",
-  "presented_fen": "8/4Q1q1/6pk/4pp2/4b3/6PP/6PK/8 w - - 0 1",
+  "presented_fen": "8/4Q1q1/6pk/4pp2/4b3/6PP/6PK/8 w - - 2 45",
   "pieces": [
    {
     "sq": "g2",
@@ -26078,7 +26622,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e7h4",
-   "presented_after": "h8g7",
+   "opponent_first_move": "h8g7",
    "rating": 968,
    "rating_deviation": 77,
    "popularity": 60,
@@ -26099,7 +26643,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r1k4r/pbp3pp/1q6/1p2N1B1/4nP2/3Q4/PPP3PP/R3R1K1 w - - 2 18",
-  "presented_fen": "r1k4r/pbp3pp/1q6/1p2N1B1/4nP2/3Q4/PPP3PP/R3RK2 b - - 0 1",
+  "presented_fen": "r1k4r/pbp3pp/1q6/1p2N1B1/4nP2/3Q4/PPP3PP/R3RK2 b - - 3 18",
   "pieces": [
    {
     "sq": "a1",
@@ -26222,7 +26766,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b6f2",
-   "presented_after": "g1f1",
+   "opponent_first_move": "g1f1",
    "rating": 857,
    "rating_deviation": 111,
    "popularity": 95,
@@ -26243,7 +26787,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "rnbqkb1r/1p1pnppp/p3p3/2p1P3/4N3/5NP1/PPPP1PBP/R1BQK2R b KQkq - 3 7",
-  "presented_fen": "r1bqkb1r/1p1pnppp/p1n1p3/2p1P3/4N3/5NP1/PPPP1PBP/R1BQK2R w - - 0 1",
+  "presented_fen": "r1bqkb1r/1p1pnppp/p1n1p3/2p1P3/4N3/5NP1/PPPP1PBP/R1BQK2R w KQkq - 4 8",
   "pieces": [
    {
     "sq": "a1",
@@ -26411,7 +26955,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e4d6",
-   "presented_after": "b8c6",
+   "opponent_first_move": "b8c6",
    "rating": 949,
    "rating_deviation": 102,
    "popularity": 86,
@@ -26432,7 +26976,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "8/p5pk/3NR1P1/7p/3P4/2pn2P1/r7/7K b - - 0 47",
-  "presented_fen": "8/p5p1/3NR1Pk/7p/3P4/2pn2P1/r7/7K w - - 0 1",
+  "presented_fen": "8/p5p1/3NR1Pk/7p/3P4/2pn2P1/r7/7K w - - 1 48",
   "pieces": [
    {
     "sq": "h1",
@@ -26505,7 +27049,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d6f7",
-   "presented_after": "h7h6",
+   "opponent_first_move": "h7h6",
    "rating": 1201,
    "rating_deviation": 75,
    "popularity": 100,
@@ -26526,7 +27070,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r4rk1/p1p2p1p/1p4pn/2p1P1QP/2Bn4/2NP4/PPP2q2/2KR2R1 w - - 0 21",
-  "presented_fen": "r4rk1/p1p2p1p/1p4Pn/2p1P1Q1/2Bn4/2NP4/PPP2q2/2KR2R1 b - - 0 1",
+  "presented_fen": "r4rk1/p1p2p1p/1p4Pn/2p1P1Q1/2Bn4/2NP4/PPP2q2/2KR2R1 b - - 0 21",
   "pieces": [
    {
     "sq": "c1",
@@ -26654,7 +27198,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f2c2",
-   "presented_after": "h5g6",
+   "opponent_first_move": "h5g6",
    "rating": 1029,
    "rating_deviation": 77,
    "popularity": 87,
@@ -26675,7 +27219,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1r3rk1/p1p2qp1/2ppb1P1/8/4P3/2N1P3/P1P4Q/2K3R1 b - - 0 24",
-  "presented_fen": "1r3rk1/p1p3p1/2ppb1P1/8/4P3/2N1P3/P1P2q1Q/2K3R1 w - - 0 1",
+  "presented_fen": "1r3rk1/p1p3p1/2ppb1P1/8/4P3/2N1P3/P1P2q1Q/2K3R1 w - - 1 25",
   "pieces": [
    {
     "sq": "c1",
@@ -26778,7 +27322,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h2h7",
-   "presented_after": "f7f2",
+   "opponent_first_move": "f7f2",
    "rating": 1496,
    "rating_deviation": 156,
    "popularity": 0,
@@ -26799,7 +27343,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5r1k/5q2/p6p/8/4Q3/6P1/2R3KP/8 w - - 0 35",
-  "presented_fen": "5r1k/5q2/p1R4p/8/4Q3/6P1/6KP/8 b - - 0 1",
+  "presented_fen": "5r1k/5q2/p1R4p/8/4Q3/6P1/6KP/8 b - - 1 35",
   "pieces": [
    {
     "sq": "g2",
@@ -26857,7 +27401,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f7f1",
-   "presented_after": "c2c6",
+   "opponent_first_move": "c2c6",
    "rating": 1491,
    "rating_deviation": 78,
    "popularity": 94,
@@ -26878,7 +27422,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "6k1/pRp2pp1/4b2p/2p5/2p1B3/P6P/2P2PPK/3r4 b - - 1 26",
-  "presented_fen": "6k1/pRp2pp1/7p/2pb4/2p1B3/P6P/2P2PPK/3r4 w - - 0 1",
+  "presented_fen": "6k1/pRp2pp1/7p/2pb4/2p1B3/P6P/2P2PPK/3r4 w - - 2 27",
   "pieces": [
    {
     "sq": "d1",
@@ -26976,7 +27520,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b7b8",
-   "presented_after": "e6d5",
+   "opponent_first_move": "e6d5",
    "rating": 850,
    "rating_deviation": 81,
    "popularity": 91,
@@ -26997,7 +27541,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5rr1/p1qnb1pk/b1p1pN2/2ppPpp1/2P2P2/1P1P3Q/P5PP/R1B2R1K b - - 1 20",
-  "presented_fen": "5rr1/p1qnb1p1/b1p1pNk1/2ppPpp1/2P2P2/1P1P3Q/P5PP/R1B2R1K w - - 0 1",
+  "presented_fen": "5rr1/p1qnb1p1/b1p1pNk1/2ppPpp1/2P2P2/1P1P3Q/P5PP/R1B2R1K w - - 2 21",
   "pieces": [
    {
     "sq": "a1",
@@ -27150,7 +27694,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3h5",
-   "presented_after": "h7g6",
+   "opponent_first_move": "h7g6",
    "rating": 1166,
    "rating_deviation": 78,
    "popularity": 85,
@@ -27171,7 +27715,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1Q6/2p1r3/1k1p4/p5P1/Pb6/1KP1r3/8/8 b - - 4 51",
-  "presented_fen": "1Q6/2p1r3/2kp4/p5P1/Pb6/1KP1r3/8/8 w - - 0 1",
+  "presented_fen": "1Q6/2p1r3/2kp4/p5P1/Pb6/1KP1r3/8/8 w - - 5 52",
   "pieces": [
    {
     "sq": "b3",
@@ -27239,7 +27783,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b8b5",
-   "presented_after": "b6c6",
+   "opponent_first_move": "b6c6",
    "rating": 969,
    "rating_deviation": 84,
    "popularity": 87,
@@ -27260,7 +27804,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "5rk1/5pp1/7p/1P1RR3/8/3Q2PP/3N1P1K/r1q5 w - - 1 35",
-  "presented_fen": "5rk1/5pp1/7p/1P1RR3/8/5QPP/3N1P1K/r1q5 b - - 0 1",
+  "presented_fen": "5rk1/5pp1/7p/1P1RR3/8/5QPP/3N1P1K/r1q5 b - - 2 35",
   "pieces": [
    {
     "sq": "a1",
@@ -27348,7 +27892,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c1g1",
-   "presented_after": "d3f3",
+   "opponent_first_move": "d3f3",
    "rating": 1064,
    "rating_deviation": 79,
    "popularity": 95,
@@ -27369,7 +27913,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "5rk1/1b1R3p/p3p1pQ/1q2N2n/2p5/1BP2P2/PP4PP/6K1 b - - 1 25",
-  "presented_fen": "5rk1/1b1R3p/p3p1pQ/4q2n/2p5/1BP2P2/PP4PP/6K1 w - - 0 1",
+  "presented_fen": "5rk1/1b1R3p/p3p1pQ/4q2n/2p5/1BP2P2/PP4PP/6K1 w - - 0 26",
   "pieces": [
    {
     "sq": "g1",
@@ -27477,7 +28021,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h6h7",
-   "presented_after": "b5e5",
+   "opponent_first_move": "b5e5",
    "rating": 1167,
    "rating_deviation": 85,
    "popularity": 94,
@@ -27498,7 +28042,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4r3/pp3rkp/3R1pp1/5p2/2P2P2/1P3Q1P/P2R2P1/1q3K2 w - - 9 31",
-  "presented_fen": "4r3/pp3rkp/3R1pp1/5p2/2P2P2/1P3Q1P/P2R1KP1/1q6 b - - 0 1",
+  "presented_fen": "4r3/pp3rkp/3R1pp1/5p2/2P2P2/1P3Q1P/P2R1KP1/1q6 b - - 10 31",
   "pieces": [
    {
     "sq": "b1",
@@ -27606,7 +28150,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b1e1",
-   "presented_after": "f1f2",
+   "opponent_first_move": "f1f2",
    "rating": 888,
    "rating_deviation": 76,
    "popularity": 100,
@@ -27627,7 +28171,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2kr3r/p1pnqpp1/1pN1pn1p/3p4/3Pb2B/2P5/P1PQBPPP/R4RK1 b - - 5 13",
-  "presented_fen": "2kr3r/p1pn1pp1/1pNqpn1p/3p4/3Pb2B/2P5/P1PQBPPP/R4RK1 w - - 0 1",
+  "presented_fen": "2kr3r/p1pn1pp1/1pNqpn1p/3p4/3Pb2B/2P5/P1PQBPPP/R4RK1 w - - 6 14",
   "pieces": [
    {
     "sq": "a1",
@@ -27780,7 +28324,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e2a6",
-   "presented_after": "e7d6",
+   "opponent_first_move": "e7d6",
    "rating": 1520,
    "rating_deviation": 76,
    "popularity": 83,
@@ -27801,7 +28345,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4r1k1/5ppp/1q3b2/pQ6/3N4/1P5P/P4PP1/3R2K1 b - - 2 25",
-  "presented_fen": "4r1k1/5ppp/1q6/pQ6/3b4/1P5P/P4PP1/3R2K1 w - - 0 1",
+  "presented_fen": "4r1k1/5ppp/1q6/pQ6/3b4/1P5P/P4PP1/3R2K1 w - - 0 26",
   "pieces": [
    {
     "sq": "d1",
@@ -27889,7 +28433,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b5e8",
-   "presented_after": "f6d4",
+   "opponent_first_move": "f6d4",
    "rating": 889,
    "rating_deviation": 79,
    "popularity": 82,
@@ -27910,7 +28454,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3r2k1/R7/p6p/3b2p1/8/P4qPP/1PRQ3K/8 w - - 2 38",
-  "presented_fen": "3r2k1/R7/p6p/3b2p1/8/P1R2qPP/1P1Q3K/8 b - - 0 1",
+  "presented_fen": "3r2k1/R7/p6p/3b2p1/8/P1R2qPP/1P1Q3K/8 b - - 3 38",
   "pieces": [
    {
     "sq": "b2",
@@ -27993,7 +28537,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f3h1",
-   "presented_after": "c2c3",
+   "opponent_first_move": "c2c3",
    "rating": 1145,
    "rating_deviation": 86,
    "popularity": 95,
@@ -28007,6 +28551,70 @@
   }
  },
  {
+  "id": "lichess-0H1V6",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "0H1V6",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "4k3/pR6/3pK3/4b3/r7/8/8/8 b - - 3 44",
+  "presented_fen": "4k3/1R6/3pK3/p3b3/r7/8/8/8 w - - 0 45",
+  "pieces": [
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e6",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b7",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "b7b8",
+   "opponent_first_move": "a7a5",
+   "rating": 1153,
+   "rating_deviation": 80,
+   "popularity": 93,
+   "nb_plays": 567,
+   "themes": "endgame mate mateIn1 oneMove",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/tHf2mKN4/black#88",
+   "mate_moves": [
+    "b7b8"
+   ]
+  }
+ },
+ {
   "id": "lichess-0HHgU",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0HHgU",
@@ -28014,7 +28622,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2kr3r/ppp2ppp/4pn2/4q3/4N3/5Q1P/2PB1PP1/2KR3R w - - 3 16",
-  "presented_fen": "2kr3r/ppp2ppp/4pN2/4q3/8/5Q1P/2PB1PP1/2KR3R b - - 0 1",
+  "presented_fen": "2kr3r/ppp2ppp/4pN2/4q3/8/5Q1P/2PB1PP1/2KR3R b - - 0 16",
   "pieces": [
    {
     "sq": "c1",
@@ -28127,7 +28735,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e5a1",
-   "presented_after": "e4f6",
+   "opponent_first_move": "e4f6",
    "rating": 864,
    "rating_deviation": 77,
    "popularity": 75,
@@ -28148,7 +28756,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2r5/p2n1kp1/2q5/1p1p2B1/3p1QP1/P7/1PPK1P2/7R b - - 2 29",
-  "presented_fen": "2r5/p2n2p1/2q3k1/1p1p2B1/3p1QP1/P7/1PPK1P2/7R w - - 0 1",
+  "presented_fen": "2r5/p2n2p1/2q3k1/1p1p2B1/3p1QP1/P7/1PPK1P2/7R w - - 3 30",
   "pieces": [
    {
     "sq": "h1",
@@ -28246,7 +28854,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "f4f5",
-   "presented_after": "f7g6",
+   "opponent_first_move": "f7g6",
    "rating": 1344,
    "rating_deviation": 76,
    "popularity": 78,
@@ -28267,7 +28875,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r5k1/1p4pp/2p2n2/p2p2P1/5Q2/P2BP2b/1q6/2R2RK1 w - - 0 27",
-  "presented_fen": "r5k1/1p4pp/2p2P2/p2p4/5Q2/P2BP2b/1q6/2R2RK1 b - - 0 1",
+  "presented_fen": "r5k1/1p4pp/2p2P2/p2p4/5Q2/P2BP2b/1q6/2R2RK1 b - - 0 27",
   "pieces": [
    {
     "sq": "c1",
@@ -28365,7 +28973,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b2g2",
-   "presented_after": "g5f6",
+   "opponent_first_move": "g5f6",
    "rating": 801,
    "rating_deviation": 78,
    "popularity": 81,
@@ -28386,7 +28994,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r3k3/pbQ4p/5K2/5p2/8/3q4/P5rP/4R3 b q - 1 31",
-  "presented_fen": "r3k3/p1Q4p/5K2/5p2/4b3/3q4/P5rP/4R3 w - - 0 1",
+  "presented_fen": "r3k3/p1Q4p/5K2/5p2/4b3/3q4/P5rP/4R3 w q - 2 32",
   "pieces": [
    {
     "sq": "e1",
@@ -28459,7 +29067,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c7e7",
-   "presented_after": "b7e4",
+   "opponent_first_move": "b7e4",
    "rating": 1154,
    "rating_deviation": 78,
    "popularity": 94,
@@ -28480,7 +29088,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1k1r4/nb6/4p2p/1p2Ppp1/B1Nq1n2/Q7/6PP/1R3R1K w - - 0 33",
-  "presented_fen": "1k1r4/nb6/3Np2p/1p2Ppp1/B2q1n2/Q7/6PP/1R3R1K b - - 0 1",
+  "presented_fen": "1k1r4/nb6/3Np2p/1p2Ppp1/B2q1n2/Q7/6PP/1R3R1K b - - 1 33",
   "pieces": [
    {
     "sq": "b1",
@@ -28588,7 +29196,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "b7g2",
-   "presented_after": "c4d6",
+   "opponent_first_move": "c4d6",
    "rating": 997,
    "rating_deviation": 77,
    "popularity": 97,
@@ -28609,7 +29217,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r1b2rk1/pp3ppB/4N3/q2pn3/6Q1/2p5/P1PB1PPP/R3K2R b KQ - 1 16",
-  "presented_fen": "r1b2r2/pp3ppk/4N3/q2pn3/6Q1/2p5/P1PB1PPP/R3K2R w - - 0 1",
+  "presented_fen": "r1b2r2/pp3ppk/4N3/q2pn3/6Q1/2p5/P1PB1PPP/R3K2R w KQ - 0 17",
   "pieces": [
    {
     "sq": "a1",
@@ -28732,7 +29340,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g4g7",
-   "presented_after": "g8h7",
+   "opponent_first_move": "g8h7",
    "rating": 1151,
    "rating_deviation": 77,
    "popularity": 94,
@@ -28746,6 +29354,110 @@
   }
  },
  {
+  "id": "lichess-0HunK",
+  "source": "lichess-puzzle-db",
+  "puzzle_id": "0HunK",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/p4pp1/1p1Q4/1bK1Ppk1/7R/P2q2P1/7P/8 w - - 0 41",
+  "presented_fen": "8/p4pp1/1p1Q4/1b2Ppk1/1K5R/P2q2P1/7P/8 b - - 1 41",
+  "pieces": [
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "a3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "f5",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "d6",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "f7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g7",
+    "color": "b",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "first_move": "a7a5",
+   "opponent_first_move": "c5b4",
+   "rating": 1936,
+   "rating_deviation": 81,
+   "popularity": 75,
+   "nb_plays": 366,
+   "themes": "endgame master mate mateIn1 oneMove",
+   "opening_tags": "",
+   "game_url": "https://lichess.org/rcioDVeq#81",
+   "mate_moves": [
+    "a7a5"
+   ]
+  }
+ },
+ {
   "id": "lichess-0HzMQ",
   "source": "lichess-puzzle-db",
   "puzzle_id": "0HzMQ",
@@ -28753,7 +29465,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "1r1q1r2/1p5Q/p1nk1p1p/3NpBp1/PPP2p2/5b2/5P1P/1R3RK1 b - - 0 29",
-  "presented_fen": "1r1q1r2/1p5Q/p1nk1p1p/3bpBp1/PPP2p2/8/5P1P/1R3RK1 w - - 0 1",
+  "presented_fen": "1r1q1r2/1p5Q/p1nk1p1p/3bpBp1/PPP2p2/8/5P1P/1R3RK1 w - - 0 30",
   "pieces": [
    {
     "sq": "b1",
@@ -28876,7 +29588,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c4c5",
-   "presented_after": "f3d5",
+   "opponent_first_move": "f3d5",
    "rating": 1284,
    "rating_deviation": 78,
    "popularity": 92,
@@ -28897,7 +29609,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "2kr3r/1ppbqp2/1b1p1n1p/nP2p1p1/2B1P3/1NPP1NB1/5PPP/R2Q1RK1 b - - 2 15",
-  "presented_fen": "2kr3r/1ppbqp2/1b1p1n1p/1P2p1p1/2n1P3/1NPP1NB1/5PPP/R2Q1RK1 w - - 0 1",
+  "presented_fen": "2kr3r/1ppbqp2/1b1p1n1p/1P2p1p1/2n1P3/1NPP1NB1/5PPP/R2Q1RK1 w - - 0 16",
   "pieces": [
    {
     "sq": "a1",
@@ -29050,7 +29762,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a1a8",
-   "presented_after": "a5c4",
+   "opponent_first_move": "a5c4",
    "rating": 1010,
    "rating_deviation": 77,
    "popularity": 75,
@@ -29071,7 +29783,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "6r1/p5r1/5n1p/2k1pP2/P3P1n1/2RB3R/1PP3P1/5K2 b - - 4 30",
-  "presented_fen": "6r1/p5r1/5n1p/4pP2/P2kP1n1/2RB3R/1PP3P1/5K2 w - - 0 1",
+  "presented_fen": "6r1/p5r1/5n1p/4pP2/P2kP1n1/2RB3R/1PP3P1/5K2 w - - 5 31",
   "pieces": [
    {
     "sq": "f1",
@@ -29169,7 +29881,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c3c4",
-   "presented_after": "c5d4",
+   "opponent_first_move": "c5d4",
    "rating": 827,
    "rating_deviation": 80,
    "popularity": 68,
@@ -29190,7 +29902,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "4R3/1p3ppk/p6p/P2p4/8/1PP1B3/2qN1PPP/6K1 w - - 5 32",
-  "presented_fen": "4R3/1p3ppk/p6p/P2p4/8/1PP1B3/2qN1PPP/5K2 b - - 0 1",
+  "presented_fen": "4R3/1p3ppk/p6p/P2p4/8/1PP1B3/2qN1PPP/5K2 b - - 6 32",
   "pieces": [
    {
     "sq": "f1",
@@ -29288,7 +30000,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "c2d1",
-   "presented_after": "g1f1",
+   "opponent_first_move": "g1f1",
    "rating": 1104,
    "rating_deviation": 86,
    "popularity": 96,
@@ -29309,7 +30021,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1b1r2nr/p3kppp/1Pb1p3/1N1q4/Q7/4B1P1/PP2BP1P/R3R1K1 w - - 1 19",
-  "presented_fen": "1b1r2nr/P3kppp/2b1p3/1N1q4/Q7/4B1P1/PP2BP1P/R3R1K1 b - - 0 1",
+  "presented_fen": "1b1r2nr/P3kppp/2b1p3/1N1q4/Q7/4B1P1/PP2BP1P/R3R1K1 b - - 0 19",
   "pieces": [
    {
     "sq": "a1",
@@ -29437,7 +30149,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d5g2",
-   "presented_after": "b6a7",
+   "opponent_first_move": "b6a7",
    "rating": 823,
    "rating_deviation": 112,
    "popularity": 92,
@@ -29459,7 +30171,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "4rrk1/ppq2ppp/2p2nn1/3pNN2/3P1P2/2P3Q1/PP4PP/R3R1K1 b - - 6 20",
-  "presented_fen": "4rrk1/ppq2ppp/2p2n2/3pnN2/3P1P2/2P3Q1/PP4PP/R3R1K1 w - - 0 1",
+  "presented_fen": "4rrk1/ppq2ppp/2p2n2/3pnN2/3P1P2/2P3Q1/PP4PP/R3R1K1 w - - 0 21",
   "pieces": [
    {
     "sq": "a1",
@@ -29592,7 +30304,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g3g7",
-   "presented_after": "g6e5",
+   "opponent_first_move": "g6e5",
    "rating": 1491,
    "rating_deviation": 86,
    "popularity": 88,
@@ -29613,7 +30325,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r3k2r/1bb1n1p1/p2q3p/1p3p2/3p4/1BN5/PPP1NPPP/R2Q1RK1 w kq - 0 16",
-  "presented_fen": "r3k2r/1bb1n1p1/p2q3p/1p3p2/3Q4/1BN5/PPP1NPPP/R4RK1 b - - 0 1",
+  "presented_fen": "r3k2r/1bb1n1p1/p2q3p/1p3p2/3Q4/1BN5/PPP1NPPP/R4RK1 b kq - 0 16",
   "pieces": [
    {
     "sq": "a1",
@@ -29746,7 +30458,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d6h2",
-   "presented_after": "d1d4",
+   "opponent_first_move": "d1d4",
    "rating": 907,
    "rating_deviation": 78,
    "popularity": 91,
@@ -29767,7 +30479,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "r3r1k1/pp3p1p/6p1/1Pp5/4Bb2/P1PP1N1q/2QN1P1P/6RK w - - 2 22",
-  "presented_fen": "r3r1k1/pp3p1p/6p1/1Pp3N1/4Bb2/P1PP3q/2QN1P1P/6RK b - - 0 1",
+  "presented_fen": "r3r1k1/pp3p1p/6p1/1Pp3N1/4Bb2/P1PP3q/2QN1P1P/6RK b - - 3 22",
   "pieces": [
    {
     "sq": "g1",
@@ -29890,7 +30602,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h3h2",
-   "presented_after": "f3g5",
+   "opponent_first_move": "f3g5",
    "rating": 832,
    "rating_deviation": 77,
    "popularity": 83,
@@ -29911,7 +30623,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "3R4/5k2/r3p2p/PR2Kpp1/3P4/4nP2/6PP/8 w - - 4 47",
-  "presented_fen": "8/5k2/r2Rp2p/PR2Kpp1/3P4/4nP2/6PP/8 b - - 0 1",
+  "presented_fen": "8/5k2/r2Rp2p/PR2Kpp1/3P4/4nP2/6PP/8 b - - 5 47",
   "pieces": [
    {
     "sq": "g2",
@@ -29994,7 +30706,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "e3c4",
-   "presented_after": "d8d6",
+   "opponent_first_move": "d8d6",
    "rating": 985,
    "rating_deviation": 82,
    "popularity": 100,
@@ -30015,7 +30727,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "rr1k3R/pp2p1B1/8/1BP5/1n1PPP2/8/b2K2P1/8 b - - 1 31",
-  "presented_fen": "rr5R/ppk1p1B1/8/1BP5/1n1PPP2/8/b2K2P1/8 w - - 0 1",
+  "presented_fen": "rr5R/ppk1p1B1/8/1BP5/1n1PPP2/8/b2K2P1/8 w - - 2 32",
   "pieces": [
    {
     "sq": "a2",
@@ -30108,7 +30820,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g7e5",
-   "presented_after": "d8c7",
+   "opponent_first_move": "d8c7",
    "rating": 867,
    "rating_deviation": 80,
    "popularity": 96,
@@ -30129,7 +30841,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "1R1b4/8/7k/1P2N1pp/5P2/3r2PK/1r6/5R2 w - - 0 42",
-  "presented_fen": "1R1b4/8/7k/1P4pp/5P2/3N2PK/1r6/5R2 b - - 0 1",
+  "presented_fen": "1R1b4/8/7k/1P4pp/5P2/3N2PK/1r6/5R2 b - - 0 42",
   "pieces": [
    {
     "sq": "f1",
@@ -30197,7 +30909,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g5g4",
-   "presented_after": "e5d3",
+   "opponent_first_move": "e5d3",
    "rating": 920,
    "rating_deviation": 77,
    "popularity": 100,
@@ -30218,7 +30930,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "6rk/1p1P2rp/p6Q/3pP3/8/P2B1q2/1P4RP/6RK b - - 0 30",
-  "presented_fen": "6rk/1p1P3p/p6Q/3pP3/8/P2B1q2/1P4rP/6RK w - - 0 1",
+  "presented_fen": "6rk/1p1P3p/p6Q/3pP3/8/P2B1q2/1P4rP/6RK w - - 0 31",
   "pieces": [
    {
     "sq": "g1",
@@ -30311,7 +31023,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "h6h7",
-   "presented_after": "g7g2",
+   "opponent_first_move": "g7g2",
    "rating": 957,
    "rating_deviation": 93,
    "popularity": 96,
@@ -30332,7 +31044,7 @@
   "turn": "w",
   "value": "cap",
   "fen": "r4r2/5p2/2pp4/5Q2/4P1k1/p7/2P3PK/8 b - - 5 38",
-  "presented_fen": "r4r2/5p2/2pp4/5Q2/4P2k/p7/2P3PK/8 w - - 0 1",
+  "presented_fen": "r4r2/5p2/2pp4/5Q2/4P2k/p7/2P3PK/8 w - - 6 39",
   "pieces": [
    {
     "sq": "c2",
@@ -30400,7 +31112,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "g2g3",
-   "presented_after": "g4h4",
+   "opponent_first_move": "g4h4",
    "rating": 1277,
    "rating_deviation": 76,
    "popularity": 96,
@@ -30421,7 +31133,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2r3k1/1b3pp1/p6p/1p2Pp2/1PpP1P1b/P1Q1B1N1/q5PR/6K1 w - - 14 34",
-  "presented_fen": "2r3k1/1b3pp1/p6p/1p2Pp2/1PpP1P1R/P1Q1B1N1/q5P1/6K1 b - - 0 1",
+  "presented_fen": "2r3k1/1b3pp1/p6p/1p2Pp2/1PpP1P1R/P1Q1B1N1/q5P1/6K1 b - - 0 34",
   "pieces": [
    {
     "sq": "g1",
@@ -30539,7 +31251,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "a2g2",
-   "presented_after": "h2h4",
+   "opponent_first_move": "h2h4",
    "rating": 1223,
    "rating_deviation": 75,
    "popularity": 100,
@@ -30560,7 +31272,7 @@
   "turn": "b",
   "value": "cap",
   "fen": "2k4r/ppp2b1p/2p3p1/6Q1/1P2P1P1/P3P1q1/2Pr3N/R4R1K w - - 1 26",
-  "presented_fen": "2k4r/ppp2b1p/2p3p1/8/1P2PQP1/P3P1q1/2Pr3N/R4R1K b - - 0 1",
+  "presented_fen": "2k4r/ppp2b1p/2p3p1/8/1P2PQP1/P3P1q1/2Pr3N/R4R1K b - - 2 26",
   "pieces": [
    {
     "sq": "a1",
@@ -30678,7 +31390,7 @@
   "over_budget": false,
   "task_extra": {
    "first_move": "d2h2",
-   "presented_after": "g5f4",
+   "opponent_first_move": "g5f4",
    "rating": 989,
    "rating_deviation": 93,
    "popularity": 94,
@@ -30689,1317 +31401,6 @@
    "mate_moves": [
     "g3g2",
     "d2h2"
-   ]
-  }
- },
- {
-  "id": "lichess-0JCn6",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JCn6",
-  "n": 8,
-  "turn": "w",
-  "value": "cap",
-  "fen": "r3r1k1/ppp2p1n/2p4Q/8/4P2P/1bPP2R1/q1PK1PP1/5B1R b - - 3 18",
-  "presented_fen": "r3r2k/ppp2p1n/2p4Q/8/4P2P/1bPP2R1/q1PK1PP1/5B1R w - - 0 1",
-  "pieces": [
-   {
-    "sq": "f1",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "a2",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "d2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b3",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "d3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g3",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h6",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "a7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "h6g7",
-   "presented_after": "g8h8",
-   "rating": 915,
-   "rating_deviation": 83,
-   "popularity": 74,
-   "nb_plays": 155,
-   "themes": "mate mateIn1 middlegame oneMove",
-   "opening_tags": "Petrovs_Defense Petrovs_Defense_Stafford_Gambit",
-   "game_url": "https://lichess.org/nYxhhy9z/black#36",
-   "mate_moves": [
-    "h6g7"
-   ]
-  }
- },
- {
-  "id": "lichess-0JGms",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JGms",
-  "n": 8,
-  "turn": "w",
-  "value": "cap",
-  "fen": "r2qkb1r/pp1npp2/2p2n2/5bpp/3PN3/2N3P1/PPP2PBP/R1BQR1K1 b kq - 0 10",
-  "presented_fen": "r2qkb1r/pp1npp2/2p2n2/5b1p/3PN1p1/2N3P1/PPP2PBP/R1BQR1K1 w - - 0 1",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "c1",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "e1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "g1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "g3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "d4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "g4",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f5",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "h5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f6",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "a7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d7",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "e7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "d8",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "f8",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "e4d6",
-   "presented_after": "g5g4",
-   "rating": 1485,
-   "rating_deviation": 85,
-   "popularity": 83,
-   "nb_plays": 700,
-   "themes": "mate mateIn1 oneMove opening pin smotheredMate",
-   "opening_tags": "Kings_Indian_Attack Kings_Indian_Attack_Other_variations",
-   "game_url": "https://lichess.org/TLRJZEfu/black#20",
-   "mate_moves": [
-    "e4d6"
-   ]
-  }
- },
- {
-  "id": "lichess-0JM7C",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JM7C",
-  "n": 8,
-  "turn": "b",
-  "value": "cap",
-  "fen": "5k2/6b1/8/2pN1P2/7P/p1P1n3/1r6/K2R1R2 w - - 1 36",
-  "presented_fen": "5k2/6b1/5P2/2pN4/7P/p1P1n3/1r6/K2R1R2 b - - 0 1",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "f1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "b2",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "a3",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "e3",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "h4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d5",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "f6",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "f8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "e3c2",
-   "presented_after": "f5f6",
-   "rating": 976,
-   "rating_deviation": 76,
-   "popularity": 100,
-   "nb_plays": 529,
-   "themes": "endgame master mate mateIn1 oneMove",
-   "opening_tags": "",
-   "game_url": "https://lichess.org/4prUAQsd#71",
-   "mate_moves": [
-    "e3c2"
-   ]
-  }
- },
- {
-  "id": "lichess-0JNGm",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JNGm",
-  "n": 8,
-  "turn": "b",
-  "value": "cap",
-  "fen": "r3k2r/1b1p1ppp/3bp2q/1p6/1P6/P1P1BN1n/B5PP/R2Q2RK w kq - 4 22",
-  "presented_fen": "r3k2r/1b1p1ppp/3bp2B/1p6/1P6/P1P2N1n/B5PP/R2Q2RK b - - 0 1",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "g1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "a3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f3",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "h3",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "b4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d6",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "e6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h6",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "d7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "h3f2",
-   "presented_after": "e3h6",
-   "rating": 884,
-   "rating_deviation": 84,
-   "popularity": 89,
-   "nb_plays": 1041,
-   "themes": "mate mateIn1 middlegame oneMove smotheredMate",
-   "opening_tags": "",
-   "game_url": "https://lichess.org/QOMLIynq#43",
-   "mate_moves": [
-    "h3f2"
-   ]
-  }
- },
- {
-  "id": "lichess-0JNwQ",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JNwQ",
-  "n": 8,
-  "turn": "w",
-  "value": "cap",
-  "fen": "r2r4/ppkb2Rp/2pQpB2/3p3B/3P4/2P5/q1PK2P1/8 b - - 9 28",
-  "presented_fen": "r2r4/pp1b2Rp/2pkpB2/3p3B/3P4/2P5/q1PK2P1/8 w - - 0 1",
-  "pieces": [
-   {
-    "sq": "a2",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "d2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "d4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "d5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h5",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "c6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d6",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f6",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "a7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "g7",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "d8",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "f6e5",
-   "presented_after": "c7d6",
-   "rating": 1215,
-   "rating_deviation": 75,
-   "popularity": 95,
-   "nb_plays": 2790,
-   "themes": "mate mateIn1 middlegame oneMove",
-   "opening_tags": "",
-   "game_url": "https://lichess.org/KD8EAIpw/black#56",
-   "mate_moves": [
-    "f6e5"
-   ]
-  }
- },
- {
-  "id": "lichess-0JP1U",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JP1U",
-  "n": 8,
-  "turn": "b",
-  "value": "cap",
-  "fen": "r1b1k1nr/pppp1ppp/2n2q2/2b5/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 3 6",
-  "presented_fen": "r1b1k1nr/pppp1ppp/2N2q2/2b5/4P3/2N5/PPP2PPP/R1BQKB1R b - - 0 1",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "c1",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "e1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "f1",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c5",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "c6",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "f6",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "a7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "c8",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "g8",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "f6f2",
-   "presented_after": "d4c6",
-   "rating": 1008,
-   "rating_deviation": 98,
-   "popularity": 92,
-   "nb_plays": 2444,
-   "themes": "attackingF2F7 mate mateIn1 oneMove opening",
-   "opening_tags": "Scotch_Game Scotch_Game_Other_variations",
-   "game_url": "https://lichess.org/ii7FMqmA#11",
-   "mate_moves": [
-    "f6f2"
-   ]
-  }
- },
- {
-  "id": "lichess-0JT0m",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JT0m",
-  "n": 8,
-  "turn": "w",
-  "value": "cap",
-  "fen": "rn1qkb1r/p1p3pb/1p2Qn1p/4N3/3PP3/2N1B3/PP3PPP/R3K2R b KQkq - 0 11",
-  "presented_fen": "rn1qk2r/p1p1b1pb/1p2Qn1p/4N3/3PP3/2N1B3/PP3PPP/R3K2R w - - 0 1",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "e3",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "d4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "e5",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "b6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "e6",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "f6",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "h6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "e7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "b8",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "d8",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "e6f7",
-   "presented_after": "f8e7",
-   "rating": 909,
-   "rating_deviation": 80,
-   "popularity": 96,
-   "nb_plays": 221,
-   "themes": "mate mateIn1 middlegame oneMove",
-   "opening_tags": "Queens_Pawn_Game Queens_Pawn_Game_Zukertort_Variation",
-   "game_url": "https://lichess.org/aNmiN1eM/black#22",
-   "mate_moves": [
-    "e6f7"
-   ]
-  }
- },
- {
-  "id": "lichess-0JXiu",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0JXiu",
-  "n": 8,
-  "turn": "w",
-  "value": "cap",
-  "fen": "1r3rk1/1ppQ1Bp1/7R/p3p3/4P3/P2P4/4q1PP/5R1K b - - 0 21",
-  "presented_fen": "1r4k1/1ppQ1rp1/7R/p3p3/4P3/P2P4/4q1PP/5R1K w - - 0 1",
-  "pieces": [
-   {
-    "sq": "f1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e2",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "a3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "d3",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "a5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "e5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "h6",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "d7",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "b8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "g8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "d7f7",
-   "presented_after": "f8f7",
-   "rating": 1091,
-   "rating_deviation": 78,
-   "popularity": 100,
-   "nb_plays": 483,
-   "themes": "endgame mate mateIn1 oneMove",
-   "opening_tags": "",
-   "game_url": "https://lichess.org/Q9BHueCe/black#42",
-   "mate_moves": [
-    "d7f7"
-   ]
-  }
- },
- {
-  "id": "lichess-0Jk0Q",
-  "source": "lichess-puzzle-db",
-  "puzzle_id": "0Jk0Q",
-  "n": 8,
-  "turn": "b",
-  "value": "cap",
-  "fen": "r1b2rk1/p1q1ppbp/2p3p1/3p4/3BP1n1/1BN5/PPP2PPP/1R1Q1R1K w - - 0 14",
-  "presented_fen": "r1b2rk1/p1q1ppBp/2p3p1/3p4/4P1n1/1BN5/PPP2PPP/1R1Q1R1K b - - 0 1",
-  "pieces": [
-   {
-    "sq": "b1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "f1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "b3",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "c3",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "g4",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "d5",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "g6",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "c7",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "e7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "g7",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "c8",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "f8",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "g8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "first_move": "c7h2",
-   "presented_after": "d4g7",
-   "rating": 875,
-   "rating_deviation": 77,
-   "popularity": 100,
-   "nb_plays": 336,
-   "themes": "kingsideAttack mate mateIn1 middlegame oneMove",
-   "opening_tags": "Sicilian_Defense Sicilian_Defense_Godiva_Variation",
-   "game_url": "https://lichess.org/Aw4RJ77E#27",
-   "mate_moves": [
-    "c7h2"
    ]
   }
  }

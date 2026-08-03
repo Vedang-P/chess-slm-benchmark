@@ -25,8 +25,8 @@ TASKS = [
     ("sm-3x3-draw", lambda n, seed: P.single_move_positions(3, seed=seed, n_positions=n, want_value="draw")),
     ("sm-5x5-win", lambda n, seed: P.single_move_positions(5, seed=seed, n_positions=n, want_value="win")),
     ("sm-5x5-draw", lambda n, seed: P.single_move_positions(5, seed=seed, n_positions=n, want_value="draw")),
-    ("mate1-8x8", lambda n, seed: P.mate1_positions(8, seed=seed, n_positions=n, max_pieces=6)),
-    ("mob-8x8", lambda n, seed: P.mobility_positions(8, seed=seed, n_positions=n, max_pieces=6)),
+    ("mate1-8x8", lambda n, seed: P.std_mate1_positions(8, seed=seed, n_positions=n, max_pieces=6)),
+    ("mob-8x8", lambda n, seed: P.std_mobility_positions(8, seed=seed, n_positions=n, max_pieces=6)),
 ]
 
 

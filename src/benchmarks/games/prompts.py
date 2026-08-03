@@ -13,10 +13,9 @@ from __future__ import annotations
 from typing import Dict, List
 
 RULES_SUMMARY = (
-    "Standard chess rules apply on this {n}x{n} board. Pawns move one square "
-    "forward and capture diagonally; a pawn reaching the last rank promotes to "
-    "a queen. There is no castling and no en passant. It is illegal to leave "
-    "your own king in check."
+    "Standard chess rules apply on this {n}x{n} board: castling, en passant, "
+    "double-step pawn moves, and pawn promotion are all legal. It is illegal "
+    "to leave your own king in check."
 )
 
 OBJECTIVES = {

@@ -3,32 +3,39 @@
   "id": "mate1-8x8-0000",
   "n": 8,
   "turn": "w",
-  "value": "draw",
+  "value": "cap",
+  "fen": "4B3/5R2/Q7/R5K1/k7/8/8/8 w - - 0 1",
+  "presented_fen": "4B3/5R2/Q7/R5K1/k7/8/8/8 w - - 0 1",
   "pieces": [
    {
-    "sq": "b2",
+    "sq": "a4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a5",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a6",
     "color": "w",
     "kind": "Q"
    },
    {
-    "sq": "e2",
-    "color": "b",
-    "kind": "P"
-   },
-   {
-    "sq": "a5",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d6",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "h8",
+    "sq": "f7",
     "color": "w",
     "kind": "R"
+   },
+   {
+    "sq": "e8",
+    "color": "w",
+    "kind": "B"
    }
   ],
   "win_moves": [],
@@ -36,310 +43,25 @@
   "over_budget": false,
   "task_extra": {
    "mate_moves": [
-    "h8a8"
+    "f7b7",
+    "a6b6",
+    "a6b5",
+    "a5b5"
    ]
   }
  },
  {
   "id": "mate1-8x8-0001",
   "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "e1",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "a4",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "f5",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "b6",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "b8",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "a4a7"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0002",
-  "n": 8,
   "turn": "w",
-  "value": "draw",
+  "value": "cap",
+  "fen": "5R2/4Q3/8/3K4/8/5k1R/5P2/8 w - - 0 1",
+  "presented_fen": "5R2/4Q3/8/3K4/8/5k1R/5P2/8 w - - 0 1",
   "pieces": [
-   {
-    "sq": "h1",
-    "color": "b",
-    "kind": "K"
-   },
    {
     "sq": "f2",
     "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c5",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "g5",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h7",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "b8",
-    "color": "w",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "g5g1",
-    "g5h5"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0003",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a5",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "d6",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a7",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "g7",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "c8",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e8",
-    "color": "w",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "e8e6"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0004",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "h1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a3",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "g4",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "e8",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "g7e7"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0005",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "d2",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h2",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "h3",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "g5",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a7",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "g7",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "d2d5",
-    "d2g2",
-    "a7a5"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0006",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "c1",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "e2",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "d3",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "h4",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "c7",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "a8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "b2h8",
-    "b2b7"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0007",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "f1",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "g2",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "a3",
-    "color": "w",
-    "kind": "K"
+    "kind": "P"
    },
    {
     "sq": "f3",
@@ -347,13 +69,23 @@
     "kind": "K"
    },
    {
-    "sq": "e5",
+    "sq": "h3",
     "color": "w",
-    "kind": "P"
+    "kind": "R"
    },
    {
-    "sq": "b8",
-    "color": "b",
+    "sq": "d5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e7",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f8",
+    "color": "w",
     "kind": "R"
    }
   ],
@@ -362,26 +94,185 @@
   "over_budget": false,
   "task_extra": {
    "mate_moves": [
-    "f1a6",
-    "f1a1"
+    "e7e4",
+    "h3g3"
    ]
   }
  },
  {
-  "id": "mate1-8x8-0008",
+  "id": "mate1-8x8-0002",
   "n": 8,
-  "turn": "b",
-  "value": "draw",
+  "turn": "w",
+  "value": "cap",
+  "fen": "7k/8/7Q/8/3K4/7R/8/8 w - - 0 1",
+  "presented_fen": "7k/8/7Q/8/3K4/7R/8/8 w - - 0 1",
   "pieces": [
    {
-    "sq": "d1",
+    "sq": "h3",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d4",
     "color": "w",
     "kind": "K"
    },
    {
-    "sq": "f2",
+    "sq": "h6",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "h6f8",
+    "h6h7",
+    "h6g6",
+    "h6g5",
+    "h3g3"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0003",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "kn6/8/8/3r4/1r6/8/8/q5K1 b - - 0 1",
+  "presented_fen": "kn6/8/8/3r4/1r6/8/8/q5K1 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b4",
     "color": "b",
     "kind": "R"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "d5d2",
+    "b4b2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0004",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "4b3/4p3/7k/3r4/6Kr/4q3/8/8 b - - 0 1",
+  "presented_fen": "4b3/4p3/7k/3r4/6Kr/4q3/8/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "e3",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "d5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "B"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "d5h5",
+    "e3f4",
+    "e3h3",
+    "e3f2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0005",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/2r5/8/8/q4r2/2rk4/8/2K5 b - - 0 1",
+  "presented_fen": "8/2r5/8/8/q4r2/2rk4/8/2K5 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "Q"
    },
    {
     "sq": "f4",
@@ -389,17 +280,7 @@
     "kind": "R"
    },
    {
-    "sq": "a5",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "b8",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e8",
+    "sq": "c7",
     "color": "b",
     "kind": "R"
    }
@@ -409,28 +290,1529 @@
   "over_budget": false,
   "task_extra": {
    "mate_moves": [
-    "a5d2",
-    "a5e1",
-    "a5a1",
-    "e8e1"
+    "c7b7",
+    "f4b4",
+    "a4b3",
+    "a4c2",
+    "a4a1"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0006",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "kbqn4/8/1r6/6K1/r7/8/8/8 b - - 0 1",
+  "presented_fen": "kbqn4/8/1r6/6K1/r7/8/8/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "N"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "c8c5",
+    "c8g4"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0007",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "3b4/q3k3/8/8/8/3r4/8/1K2r3 b - - 0 1",
+  "presented_fen": "3b4/q3k3/8/8/8/3r4/8/1K2r3 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e1",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d8",
+    "color": "b",
+    "kind": "B"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "a7f2",
+    "d3d2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0008",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/8/8/2QN4/8/5BK1/8/5Bk1 w - - 0 1",
+  "presented_fen": "8/8/8/2QN4/8/5BK1/8/5Bk1 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "f1",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "d5",
+    "color": "w",
+    "kind": "N"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "c5f2",
+    "f3g2",
+    "f1a6",
+    "f1b5",
+    "f1c4",
+    "f1h3",
+    "f1d3",
+    "f1g2",
+    "f1e2"
    ]
   }
  },
  {
   "id": "mate1-8x8-0009",
   "n": 8,
-  "turn": "w",
-  "value": "draw",
+  "turn": "b",
+  "value": "cap",
+  "fen": "2K3n1/1r6/3k4/8/8/8/8/1q1n4 b - - 0 1",
+  "presented_fen": "2K3n1/1r6/3k4/8/8/8/8/1q1n4 b - - 0 1",
   "pieces": [
    {
-    "sq": "h1",
+    "sq": "b1",
     "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "d1",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "c8",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "N"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "b7b8"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0010",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/8/6k1/1q2r3/2K1r3/8/6p1/6r1 b - - 0 1",
+  "presented_fen": "8/8/6k1/1q2r3/2K1r3/8/6p1/6r1 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "g1",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g2",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "e4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "e5c5",
+    "g1c1"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0011",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "3N4/8/8/2K5/8/2k5/1R6/Q3N3 w - - 0 1",
+  "presented_fen": "3N4/8/8/2K5/8/2k5/1R6/Q3N3 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "a1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "d8",
+    "color": "w",
+    "kind": "N"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "a1a3",
+    "a1c1"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0012",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "1n3q2/2kb4/8/K7/6n1/8/8/1p6 b - - 0 1",
+  "presented_fen": "1n3q2/2kb4/8/K7/6n1/8/8/1p6 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "b1",
+    "color": "b",
+    "kind": "P"
+   },
+   {
+    "sq": "g4",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "a5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d7",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "f8c5",
+    "f8a3"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0013",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "R7/k7/2N5/6KQ/8/8/4B3/8 w - - 0 1",
+  "presented_fen": "R7/k7/2N5/6KQ/8/8/4B3/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h5",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "c6",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "a8",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "a8b8"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0014",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/8/8/8/5K2/k7/R5R1/2RQ4 w - - 0 1",
+  "presented_fen": "8/8/8/8/5K2/k7/R5R1/2RQ4 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "g2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "g2b2",
+    "d1a4",
+    "c1c4",
+    "c1b1"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0015",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/8/2r5/1q4K1/8/1b6/r7/2k1r3 b - - 0 1",
+  "presented_fen": "8/8/2r5/1q4K1/8/1b6/r7/2k1r3 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e1",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b3",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "a2a4",
+    "e1e4"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0016",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "7k/q7/K7/8/r7/6r1/8/2r5 b - - 0 1",
+  "presented_fen": "7k/q7/K7/8/r7/6r1/8/2r5 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "c1",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g3",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "a6",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "a7b8",
+    "a4a5",
+    "g3g5",
+    "g3b3",
+    "c1c5",
+    "c1b1"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0017",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "3Q4/3R4/8/8/8/3k4/KR2R3/8 w - - 0 1",
+  "presented_fen": "3Q4/3R4/8/8/8/3k4/KR2R3/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d7",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d8",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "d8c8",
+    "d8c7",
+    "d7c7",
+    "b2c2",
+    "a2b3"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0018",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/8/K5kR/1Q6/6R1/2N5/8/8 w - - 0 1",
+  "presented_fen": "8/8/K5kR/1Q6/6R1/2N5/8/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "c3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "b5",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "a6",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h6",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "b5h5"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0019",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "1r4K1/8/8/4r2P/8/8/1q6/4k3 b - - 0 1",
+  "presented_fen": "1r4K1/8/8/4r2P/8/8/1q6/4k3 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h5",
+    "color": "w",
+    "kind": "P"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g8",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "e5e7",
+    "b2b7"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0020",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/6Q1/K7/5N2/2R4k/8/8/8 w - - 0 1",
+  "presented_fen": "8/6Q1/K7/5N2/2R4k/8/8/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "c4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f5",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "a6",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g7",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "g7h6",
+    "g7g4"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0021",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "4q2K/8/5r2/8/8/8/5kn1/8 b - - 0 1",
+  "presented_fen": "4q2K/8/5r2/8/8/8/5kn1/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "f2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g2",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "e8",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "h8",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "f6f7"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0022",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "5K2/8/R3R3/8/5R2/8/1b6/4Q1k1 w - - 0 1",
+  "presented_fen": "5K2/8/R3R3/8/5R2/8/1b6/4Q1k1 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "e1",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "g1",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "f4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a6",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e6",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f8",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "e6e2",
+    "f4f2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0023",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "1r6/7K/8/1k4qb/8/6r1/8/8 b - - 0 1",
+  "presented_fen": "1r6/7K/8/1k4qb/8/6r1/8/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "g3",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b5",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "h5",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "h7",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "g5g7",
+    "g5g6"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0024",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/1r6/3r4/4k2q/5b2/6K1/8/8 b - - 0 1",
+  "presented_fen": "8/1r6/3r4/4k2q/5b2/6K1/8/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "g3",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "f4",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "e5",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "d6",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b7",
+    "color": "b",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "b7b2",
+    "d6d2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0025",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "7k/8/2r5/4K3/r7/2q5/8/8 b - - 0 1",
+  "presented_fen": "7k/8/2r5/4K3/r7/2q5/8/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "c3",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "e5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c6",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "c3c5",
+    "c3a5"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0026",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "1k3R2/8/1K6/1Q6/8/7B/8/6N1 w - - 0 1",
+  "presented_fen": "1k3R2/8/1K6/1Q6/8/7B/8/6N1 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h3",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "b5",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "b6",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "f8h8",
+    "f8g8",
+    "f8e8",
+    "f8d8",
+    "f8c8",
+    "b5e8",
+    "b5d7",
+    "b5c6",
+    "b5a6",
+    "b5h5",
+    "b5g5",
+    "b5f5",
+    "b5e5",
+    "b5d5",
+    "b5c5",
+    "b5a5",
+    "b5c4",
+    "b5b4",
+    "b5a4",
+    "b5d3",
+    "b5b3",
+    "b5e2",
+    "b5b2",
+    "b5f1",
+    "b5b1",
+    "h3d7",
+    "h3e6",
+    "h3f5",
+    "h3g4",
+    "h3g2",
+    "h3f1",
+    "g1f3",
+    "g1e2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0027",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "4Q3/k7/R7/8/8/4K3/8/8 w - - 0 1",
+  "presented_fen": "4Q3/k7/R7/8/8/4K3/8/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "e3",
+    "color": "w",
     "kind": "K"
    },
    {
     "sq": "a6",
     "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "e8",
+    "color": "w",
     "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "e8c8",
+    "e8a8",
+    "e8b5"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0028",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "7Q/7R/8/8/6Nk/8/4K2N/8 w - - 0 1",
+  "presented_fen": "7Q/7R/8/8/6Nk/8/4K2N/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "e2",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h2",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "g4",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "h4",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "h7",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h8",
+    "color": "w",
+    "kind": "Q"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "h8e5"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0029",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "5kR1/2B5/2K5/8/8/8/Q2R4/8 w - - 0 1",
+  "presented_fen": "5kR1/2B5/2K5/8/8/8/Q2R4/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "a2",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "d2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "c6",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c7",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g8",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "c7d8",
+    "c7d6",
+    "c6d7",
+    "c6d6",
+    "d2d7",
+    "d2e2",
+    "a2e6"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0030",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "6R1/4K3/8/8/3Q3R/3k4/5R2/8 w - - 0 1",
+  "presented_fen": "6R1/4K3/8/8/3Q3R/3k4/5R2/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "f2",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "d3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "d4",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "h4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "e7",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g8",
+    "color": "w",
+    "kind": "R"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "g8h8",
+    "g8f8",
+    "g8e8",
+    "g8d8",
+    "g8c8",
+    "g8b8",
+    "g8a8",
+    "g8g7",
+    "g8g6",
+    "g8g5",
+    "g8g4",
+    "g8g3",
+    "g8g2",
+    "g8g1",
+    "e7f8",
+    "e7e8",
+    "e7d8",
+    "e7f7",
+    "e7d7",
+    "e7f6",
+    "e7e6",
+    "e7d6",
+    "h4g4",
+    "h4f4",
+    "h4e4",
+    "f2h2",
+    "f2g2",
+    "f2d2",
+    "f2b2",
+    "f2a2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0031",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "1P6/8/5r2/6qK/8/8/2k5/8 b - - 0 1",
+  "presented_fen": "1P6/8/5r2/6qK/8/8/2k5/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "c2",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "h5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "f6",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b8",
+    "color": "w",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "f6g6",
+    "f6f5"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0032",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "7b/k1K5/6b1/8/2q2r2/8/7r/8 b - - 0 1",
+  "presented_fen": "7b/k1K5/6b1/8/2q2r2/8/7r/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "h2",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "c4",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "f4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "B"
+   },
+   {
+    "sq": "a7",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c7",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h8",
+    "color": "b",
+    "kind": "B"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "f4d4",
+    "h2d2"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0033",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "2k5/Q7/8/1R6/8/8/8/6K1 w - - 0 1",
+  "presented_fen": "2k5/Q7/8/1R6/8/8/8/6K1 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "g1",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b5",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a7",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "c8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "b5b8"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0034",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "k4P2/8/1q6/1K6/r7/8/1n6/8 b - - 0 1",
+  "presented_fen": "k4P2/8/1q6/1K6/r7/8/1n6/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "b2",
+    "color": "b",
+    "kind": "N"
+   },
+   {
+    "sq": "a4",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "b5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "b6",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "a8",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "f8",
+    "color": "w",
+    "kind": "P"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "a8b7",
+    "a8a7",
+    "a4a6",
+    "a4b4"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0035",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/1n6/4r1rK/6q1/8/1k6/8/8 b - - 0 1",
+  "presented_fen": "8/1n6/4r1rK/6q1/8/1k6/8/8 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "b3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "g5",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "e6",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g6",
+    "color": "b",
+    "kind": "R"
    },
    {
     "sq": "h6",
@@ -439,99 +1821,6 @@
    },
    {
     "sq": "b7",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "b8",
-    "color": "w",
-    "kind": "B"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "a6f1"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0010",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "g2",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "a5",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "f5",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "c6",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d8",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "h8",
-    "color": "w",
-    "kind": "P"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "f5d7",
-    "f5f8"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0011",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "c1",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c4",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "h8",
     "color": "b",
     "kind": "N"
    }
@@ -541,1085 +1830,9 @@
   "over_budget": false,
   "task_extra": {
    "mate_moves": [
-    "c1b2"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0012",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a3",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "b3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "h3",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "g4",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "e8e1",
-    "g4g1"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0013",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a2",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "b6",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "d6",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "e7",
-    "color": "w",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "e7a7"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0014",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "b3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "c5",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e7",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "g7",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "e7b7"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0015",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "g1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e2",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "f4",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "h4",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "f7",
-    "color": "w",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "f4c1",
-    "f4h2",
-    "f4f1"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0016",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "c4",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "d5",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e6",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "b7",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "h7",
-    "color": "w",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "d5d6"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0017",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "f4",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "e5",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "b6",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "d8",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "h7d7"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0018",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "d4",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "c7",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "g7",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "c8",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "c8h8",
-    "d4h4"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0019",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "h3",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "f6",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "c7",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e7",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "h3e6"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0020",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "d2",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "e2",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "f2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "g2",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "a6",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "b8",
-    "color": "w",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "d2a2"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0021",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "g4",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "a5",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "f6",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "g4a4"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0022",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "b2",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "b3",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "e3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "f7f1"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0023",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "d1",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "b4",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "a5",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "b7",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "e8",
-    "color": "b",
-    "kind": "B"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "d1a4"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0024",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "b3",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "c4",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "g4",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "d5",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d7",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "a8",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "b3b7",
-    "g4g8"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0025",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "d1",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "c2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "b3",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "f5",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "d7",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "f5f8",
-    "b3b8"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0026",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "g1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "d2",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "b4",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "f8",
-    "color": "b",
-    "kind": "N"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "b2c3",
-    "g1g3"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0027",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e3",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "f4",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "f5",
-    "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "f5b1",
-    "f5a5",
-    "f4a4"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0028",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "b3",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "c7",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "g8",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "h8",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "c7c1"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0029",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "g1",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "g2",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "h3",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "c6",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "a7",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "g8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "b2g7",
-    "b2b8"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0030",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "g4",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d5",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "c6",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "h7",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "f8",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "d5f7",
-    "d5d8"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0031",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "e1",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "f3",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "c4",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "c5",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "d6",
-    "color": "b",
-    "kind": "Q"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "d6h2",
-    "d6d2",
-    "c4c2"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0032",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "b1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "e2",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "c7",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "g8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "b2g7",
-    "b2b8"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0033",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a2",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "b6",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "e8",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "f8",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "h8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "e8h5"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0034",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "e1",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "g2",
-    "color": "b",
-    "kind": "B"
-   },
-   {
-    "sq": "h3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "a6",
-    "color": "w",
-    "kind": "P"
-   },
-   {
-    "sq": "e7",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "f7",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "c8",
-    "color": "w",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "f7e8",
-    "f7g8",
-    "f7f8",
-    "e7e8"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0035",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e3",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "e4",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "g5",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "d6",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "f8",
-    "color": "b",
-    "kind": "K"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "e4f4",
-    "a1f1",
-    "e3f3"
+    "g6g7",
+    "e6e7",
+    "g5h4"
    ]
   }
  },
@@ -1627,10 +1840,157 @@
   "id": "mate1-8x8-0036",
   "n": 8,
   "turn": "w",
-  "value": "draw",
+  "value": "cap",
+  "fen": "4K1k1/5N2/7Q/8/R7/8/8/8 w - - 0 1",
+  "presented_fen": "4K1k1/5N2/7Q/8/R7/8/8/8 w - - 0 1",
   "pieces": [
    {
-    "sq": "a3",
+    "sq": "a4",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "h6",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f7",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "e8",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "g8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "h6h8",
+    "h6g6",
+    "a4g4"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0037",
+  "n": 8,
+  "turn": "b",
+  "value": "cap",
+  "fen": "8/8/8/2r3K1/8/6k1/8/3q4 b - - 0 1",
+  "presented_fen": "8/8/8/2r3K1/8/6k1/8/3q4 b - - 0 1",
+  "pieces": [
+   {
+    "sq": "d1",
+    "color": "b",
+    "kind": "Q"
+   },
+   {
+    "sq": "g3",
+    "color": "b",
+    "kind": "K"
+   },
+   {
+    "sq": "c5",
+    "color": "b",
+    "kind": "R"
+   },
+   {
+    "sq": "g5",
+    "color": "w",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "d1d6"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0038",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "4Rk2/Q4B2/8/5K1R/8/8/8/8 w - - 0 1",
+  "presented_fen": "4Rk2/Q4B2/8/5K1R/8/8/8/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "f5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "h5",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "a7",
+    "color": "w",
+    "kind": "Q"
+   },
+   {
+    "sq": "f7",
+    "color": "w",
+    "kind": "B"
+   },
+   {
+    "sq": "e8",
+    "color": "w",
+    "kind": "R"
+   },
+   {
+    "sq": "f8",
+    "color": "b",
+    "kind": "K"
+   }
+  ],
+  "win_moves": [],
+  "lose_moves": [],
+  "over_budget": false,
+  "task_extra": {
+   "mate_moves": [
+    "f7g6",
+    "h5h7",
+    "h5g5",
+    "f5g6",
+    "f5f6"
+   ]
+  }
+ },
+ {
+  "id": "mate1-8x8-0039",
+  "n": 8,
+  "turn": "w",
+  "value": "cap",
+  "fen": "8/6Q1/2Rk4/5K2/8/3N4/8/8 w - - 0 1",
+  "presented_fen": "8/6Q1/2Rk4/5K2/8/3N4/8/8 w - - 0 1",
+  "pieces": [
+   {
+    "sq": "d3",
+    "color": "w",
+    "kind": "N"
+   },
+   {
+    "sq": "f5",
+    "color": "w",
+    "kind": "K"
+   },
+   {
+    "sq": "c6",
     "color": "w",
     "kind": "R"
    },
@@ -1640,159 +2000,9 @@
     "kind": "K"
    },
    {
-    "sq": "f6",
-    "color": "w",
-    "kind": "B"
-   },
-   {
-    "sq": "b7",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "e8",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "h8",
-    "color": "w",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "e8c6"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0037",
-  "n": 8,
-  "turn": "w",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "g1",
-    "color": "w",
-    "kind": "R"
-   },
-   {
-    "sq": "b2",
-    "color": "w",
-    "kind": "Q"
-   },
-   {
-    "sq": "d2",
-    "color": "w",
-    "kind": "N"
-   },
-   {
-    "sq": "c5",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "h5",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e7",
-    "color": "w",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "b2h8",
-    "e7h7"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0038",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "a1",
-    "color": "w",
-    "kind": "K"
-   },
-   {
-    "sq": "c1",
-    "color": "b",
-    "kind": "K"
-   },
-   {
-    "sq": "e1",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "h1",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "b4",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "c4",
-    "color": "b",
-    "kind": "R"
-   }
-  ],
-  "win_moves": [],
-  "lose_moves": [],
-  "over_budget": false,
-  "task_extra": {
-   "mate_moves": [
-    "h1a8",
-    "b4a4"
-   ]
-  }
- },
- {
-  "id": "mate1-8x8-0039",
-  "n": 8,
-  "turn": "b",
-  "value": "draw",
-  "pieces": [
-   {
-    "sq": "b2",
-    "color": "b",
-    "kind": "N"
-   },
-   {
-    "sq": "f2",
-    "color": "b",
-    "kind": "R"
-   },
-   {
-    "sq": "g3",
-    "color": "b",
-    "kind": "K"
-   },
-   {
     "sq": "g7",
-    "color": "b",
-    "kind": "Q"
-   },
-   {
-    "sq": "a8",
     "color": "w",
-    "kind": "K"
+    "kind": "Q"
    }
   ],
   "win_moves": [],
@@ -1800,7 +2010,7 @@
   "over_budget": false,
   "task_extra": {
    "mate_moves": [
-    "f2f8"
+    "d3b4"
    ]
   }
  }
