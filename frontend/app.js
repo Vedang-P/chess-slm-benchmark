@@ -654,12 +654,13 @@
   function piecesMap(sample) {
     const listed = listedPieces(sample);
     const fen = fenPieces(positionFen(sample));
+    const listedOk = listed && Object.keys(listed).length > 0;
     // Grid/list prompts are generated from the piece record; FEN prompts are
-    // verified against that same record before rendering.
-    if (sample.cell && sample.cell.variant !== "fen" && listed) return listed;
-    if (sample.cell && sample.cell.variant === "fen" && fen) return fen;
-    if (listed) return listed;
+    // verified against that same record before rendering. An empty piece list
+    // (e.g. FEN-only sources like MATE) must fall back to the FEN board.
+    if (sample.cell && sample.cell.variant !== "fen" && listedOk) return listed;
     if (fen) return fen;
+    if (listedOk) return listed;
     return null;
   }
 

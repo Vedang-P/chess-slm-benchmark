@@ -70,6 +70,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="deepseek-v4-flash")
     ap.add_argument("--n", type=int, default=1000)
+    ap.add_argument("--offset", type=int, default=0,
+                    help="start index into the record set (parallel shards)")
     ap.add_argument("--output_dir", default="results/mate-selection")
     ap.add_argument("--max_new_tokens", type=int, default=32768)
     ap.add_argument("--thinking-budget", type=int, default=None,
@@ -85,7 +87,8 @@ def main() -> None:
     args = ap.parse_args()
 
     configure_quiet_logging()
-    records = json.loads(RECORDS_PATH.read_text())[: args.n]
+    all_records = json.loads(RECORDS_PATH.read_text())
+    records = all_records[args.offset: args.offset + args.n]
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
     run_name = f"{args.model}_mate-selection-test_strategy"
     out_dir = Path(args.output_dir)
@@ -142,7 +145,16 @@ def main() -> None:
         threading.Thread(target=_live_pusher, daemon=True).start()
 
     def write_live(rec, out, scored, phase, sample_idx):
+        import chess
+
         extra = rec["task_extra"]
+        board = chess.Board(rec["fen"])
+        piece_list = [
+            {"sq": chess.square_name(sq),
+             "color": "w" if board.piece_at(sq).color == chess.WHITE else "b",
+             "kind": board.piece_at(sq).symbol().upper()}
+            for sq in chess.SQUARES if board.piece_at(sq) is not None
+        ]
         live = {
             "updated_at": _utc_ts(),
             "cell": {"model": args.model, "task": "mate-selection-test",
@@ -169,9 +181,17 @@ def main() -> None:
                        "candidate_b": extra.get("candidate_b"),
                        "truth_label": extra.get("truth_label")},
             "fen": rec.get("fen"),
-            "pieces": rec.get("pieces"),
+            "pieces": piece_list,
             "n": 8,
             "record_id": rec["id"],
+            "position": {
+                "id": rec["id"],
+                "n": 8,
+                "turn": "w" if board.turn == chess.WHITE else "b",
+                "fen": rec["fen"],
+                "pieces": piece_list,
+                "source": "MATE testset",
+            },
         }
         (ROOT / "monitor").mkdir(exist_ok=True)
         (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))
@@ -197,6 +217,14 @@ def main() -> None:
                              stream=args.verbose or args.stream,
                              on_chunk=_live_partial if not args.smoke else None,
                              thinking_budget=args.thinking_budget)
+        for _attempt in range(2):
+            if not str(out.get("content", "")).startswith("ERROR"):
+                break
+            time.sleep(3)
+            out = model.generate(model_input, max_new_tokens=args.max_new_tokens,
+                                 stream=args.verbose or args.stream,
+                                 on_chunk=None,
+                                 thinking_budget=args.thinking_budget)
         if args.smoke:
             out = {"content": "MoveB:d5d4", "reasoning": "",
                    "token_usage": {"input_tokens": 10, "output_tokens": 8,

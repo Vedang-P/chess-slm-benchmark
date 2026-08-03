@@ -33,7 +33,7 @@ def positions_done() -> int:
     updates every position, not just at cell end (cells run 15-30 min)."""
     total = 0
     if RESULTS.exists():
-        for p in RESULTS.glob("*.samples.jsonl"):
+        for p in RESULTS.rglob("*.samples.jsonl"):
             try:
                 total += sum(1 for _ in p.open())
             except Exception:
