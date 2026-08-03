@@ -1,18 +1,18 @@
 {
  "repo": "Vedang-P/neuro-symbolic-pathfinding",
  "mode": "full",
- "run_id": "2026-08-03T06:16:46Z",
+ "run_id": "2026-08-03T06:24:09Z",
  "stage": "sweep",
- "started_at": "2026-08-03T06:16:46Z",
- "updated_at": "2026-08-03T06:18:12Z",
+ "started_at": "2026-08-03T06:24:09Z",
+ "updated_at": "2026-08-03T07:49:29Z",
  "progress": {
-  "cells_done": 0,
+  "cells_done": 1,
   "cells_failed": 0,
-  "cells_attempted": 0,
+  "cells_attempted": 1,
   "cells_total": 4,
-  "fraction": 0.0
+  "fraction": 0.25
  },
- "eta_min": null,
+ "eta_min": 256,
  "models": [
   "deepseek-v4-flash"
  ],
@@ -20,8 +20,25 @@
  "current": {
   "model": "deepseek-v4-flash",
   "task": "mate1-lichess",
-  "variant": "grid"
+  "variant": "fen"
  },
  "last_error": null,
- "cells": []
+ "cells": [
+  {
+   "model": "deepseek-v4-flash",
+   "task": "mate1-lichess",
+   "variant": "grid",
+   "done": true,
+   "n": 5,
+   "win": {
+    "n": 5,
+    "parse_rate": 0.8,
+    "legal_rate": 0.8,
+    "compliance_of_legal": 0.75,
+    "compliance_strict": 0.6
+   },
+   "lose": {},
+   "divergence": null
+  }
+ ]
 }
