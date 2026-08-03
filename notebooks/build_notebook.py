@@ -99,7 +99,7 @@ def build_cells(check: bool) -> list:
 from pathlib import Path
 
 WORK = Path("/kaggle/working")
-REPO = WORK / "neuro-symbolic-pathfinding"
+REPO = WORK / "chess-slm-benchmark"
 # ALWAYS start from a fresh clone: re-runs in the same Kaggle session keep the
 # old /kaggle/working repo, and stale code has bitten us more than once.
 if REPO.exists():
@@ -120,7 +120,7 @@ present = sorted(k for k in os.environ if "TOKEN" in k.upper() or "SECRET" in k.
 print("token-ish env vars present:", present, flush=True)
 token = find_token()
 print("GITHUB_TOKEN resolved:", bool(token), flush=True)
-url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
+url = "https://github.com/Vedang-P/chess-slm-benchmark.git"
 if token:
     url = url.replace("https://", f"https://x-access-token:{token}@")
 res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],

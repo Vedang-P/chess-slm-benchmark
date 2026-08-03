@@ -20,7 +20,7 @@ import os, shutil, subprocess, sys
 from pathlib import Path
 
 WORK = Path("/kaggle/working")
-REPO = WORK / "neuro-symbolic-pathfinding"
+REPO = WORK / "chess-slm-benchmark"
 if REPO.exists():
     shutil.rmtree(REPO)
 
@@ -35,7 +35,7 @@ def find_token():
         return None
 
 token = find_token()
-url = "https://github.com/Vedang-P/neuro-symbolic-pathfinding.git"
+url = "https://github.com/Vedang-P/chess-slm-benchmark.git"
 if token:
     url = url.replace("https://", f"https://x-access-token:{token}@")
 res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],

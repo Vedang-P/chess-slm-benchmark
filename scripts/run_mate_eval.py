@@ -168,7 +168,7 @@ def main() -> None:
                 "compliance_strict": round(sum(bool(s["compliance"]) for s in samples) / done, 4),
             }
         return {
-            "repo": "Vedang-P/neuro-symbolic-pathfinding",
+            "repo": "Vedang-P/chess-slm-benchmark",
             "mode": "mate",
             "run_id": run_id,
             "stage": stage,

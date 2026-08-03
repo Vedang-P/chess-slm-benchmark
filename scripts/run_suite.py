@@ -141,7 +141,7 @@ class Monitor:
         if done > 0 and elapsed_s > 0:
             eta_min = int(elapsed_s / done * (total - done) / 60)
         return {
-            "repo": "Vedang-P/neuro-symbolic-pathfinding",
+            "repo": "Vedang-P/chess-slm-benchmark",
             "mode": self.meta.get("mode"),
             "run_id": self.started_at,
             "stage": "complete" if total > 0 and done + self.cells_failed >= total else "sweep",
