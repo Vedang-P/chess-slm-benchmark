@@ -28,11 +28,13 @@ def log(msg: str) -> None:
         f.write(line + "\n")
 
 def positions_done() -> int:
+    """Count completed samples (one per line in the samples JSONLs) — this
+    updates every position, not just at cell end (cells run 15-30 min)."""
     total = 0
     if RESULTS.exists():
-        for p in RESULTS.glob("*.summary.json"):
+        for p in RESULTS.glob("*.samples.jsonl"):
             try:
-                total += json.loads(p.read_text()).get("n_samples", 0)
+                total += sum(1 for _ in p.open())
             except Exception:
                 pass
     return total

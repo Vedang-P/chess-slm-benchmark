@@ -4,15 +4,15 @@
  "run_id": "2026-08-03T13:13:59Z",
  "stage": "sweep",
  "started_at": "2026-08-03T13:13:59Z",
- "updated_at": "2026-08-03T13:25:29Z",
+ "updated_at": "2026-08-03T13:53:17Z",
  "progress": {
-  "cells_done": 0,
+  "cells_done": 2,
   "cells_failed": 0,
-  "cells_attempted": 0,
+  "cells_attempted": 2,
   "cells_total": 4,
-  "fraction": 0.0
+  "fraction": 0.5
  },
- "eta_min": null,
+ "eta_min": 39,
  "models": [
   "deepseek-v4-flash"
  ],
@@ -20,8 +20,41 @@
  "current": {
   "model": "deepseek-v4-flash",
   "task": "mate1-lichess",
-  "variant": "grid"
+  "variant": "bitboard"
  },
  "last_error": null,
- "cells": []
+ "cells": [
+  {
+   "model": "deepseek-v4-flash",
+   "task": "mate1-lichess",
+   "variant": "fen",
+   "done": true,
+   "n": 5,
+   "win": {
+    "n": 5,
+    "parse_rate": 1.0,
+    "legal_rate": 1.0,
+    "compliance_of_legal": 1.0,
+    "compliance_strict": 1.0
+   },
+   "lose": {},
+   "divergence": null
+  },
+  {
+   "model": "deepseek-v4-flash",
+   "task": "mate1-lichess",
+   "variant": "grid",
+   "done": true,
+   "n": 5,
+   "win": {
+    "n": 5,
+    "parse_rate": 1.0,
+    "legal_rate": 1.0,
+    "compliance_of_legal": 0.6,
+    "compliance_strict": 0.6
+   },
+   "lose": {},
+   "divergence": null
+  }
+ ]
 }
