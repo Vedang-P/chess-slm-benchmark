@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 from src.benchmarks.games import tasks as T  # noqa: E402
 from src.benchmarks.games.envs import ENVS  # noqa: E402
-from src.live_push import PUBLIC_LIVE_REPO  # noqa: E402
+from src.live_push import PUBLIC_LIVE_REPO, resolve_token, upload_file  # noqa: E402
 from src.models import MODEL_IDS, configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_samples, divergence_rate  # noqa: E402
 
@@ -148,6 +148,9 @@ def main() -> None:
                          "models also emit visible reasoning (check/debug only — "
                          "the benchmark itself measures direct answers)")
     ap.add_argument("--smoke", action="store_true", help="stub model, no GPU")
+    ap.add_argument("--live-push", action="store_true",
+                    help="push live.json to the public repo on every snapshot "
+                         "(minimal website lag; ~1 file / 2-5s)")
     ap.add_argument("--data_dir", default="data/positions")
     ap.add_argument("--output_dir", default="results/chess")
     args = ap.parse_args()
@@ -194,6 +197,9 @@ def main() -> None:
          "smoke": args.smoke},
     )
     live_last = [0.0]
+    from src.live_push import resolve_token as _resolve_token
+
+    live_token = _resolve_token() if args.live_push else None
 
     def push_live(rec, condition, prompt, model_input, out=None, scored=None,
                   sample_idx=0, total=0, phase="scored", force=False,
@@ -256,10 +262,17 @@ def main() -> None:
         }
         (ROOT / "monitor").mkdir(exist_ok=True)
         (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))
-        # NOTE: no network upload here anymore. Live.json is written locally;
-        # the suite-level monitor uploads it on its 60s tick, batched. Per-
-        # sample GitHub uploads were hammering the account (2 calls x 40
-        # samples x 51 cells per run).
+        # local runs: push live.json straight to the public repo on every
+        # snapshot (only this ONE file, ~2-5s apart — ~1,500 calls/hr, well
+        # under GitHub's 5,000/hr) so the website shows thinking at ~2-4s
+        # lag instead of the batched monitor cadence.
+        if args.live_push:
+            try:
+                upload_file(live_token, "monitor/live.json",
+                            (ROOT / "monitor" / "live.json").read_bytes(),
+                            message=f"live {_utc_ts()}")
+            except Exception as e:
+                pass  # live is best-effort; never break the run
 
     samples = []
     t0 = time.time()

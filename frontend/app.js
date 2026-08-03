@@ -755,14 +755,15 @@
     };
   }
 
-  function arrowSvg(from, to, n, color) {
+  function arrowSvg(from, to, n, color, side) {
     if (!from || !to) return "";
     const a = sqCenter(from, n);
     const b = sqCenter(to, n);
     if (!a || !b) return "";
-    // lichess-style, kept THIN and TRANSLUCENT so the board stays readable:
-    // gentle curve, 1.9% stroke, ~40% opacity, small arrowhead
-    const pad = 0.13;
+    // lichess-inspired: curved, thin, translucent, with a soft dark halo so
+    // it reads on both light and dark squares; `side` flips the bend so two
+    // arrows on the same path stay visually distinct
+    const pad = 0.14;
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
@@ -772,19 +773,24 @@
     const x2 = b.x - ux * pad, y2 = b.y - uy * pad;
     const V = 100;
     const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-    const bend = Math.min(0.07, len * 0.14);
+    const bend = side * Math.min(0.09, len * 0.16);
     const bx = cx - uy * bend, by = cy + ux * bend;
+    // tangent at the end (control -> end) for the arrowhead
     const tx = x2 - bx, ty = y2 - by;
     const tl = Math.hypot(tx, ty) || 1;
     const tanx = tx / tl, tany = ty / tl;
-    const headLen = 0.055, headW = 0.024;
+    const headLen = 0.062, headW = 0.028;
     const hx = x2 - tanx * headLen, hy = y2 - tany * headLen;
     const px = -tany, py = tanx;
+    const ax1 = hx + px * headW, ay1 = hy + py * headW;
+    const ax2 = hx - px * headW, ay2 = hy - py * headW;
+    const curve = `M ${(x1 * V).toFixed(1)} ${(y1 * V).toFixed(1)} Q ${(bx * V).toFixed(1)} ${(by * V).toFixed(1)} ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)}`;
+    const head = `M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${(ax1 * V).toFixed(1)} ${(ay1 * V).toFixed(1)} L ${(ax2 * V).toFixed(1)} ${(ay2 * V).toFixed(1)} Z`;
     return `
-      <path d="M ${(x1 * V).toFixed(1)} ${(y1 * V).toFixed(1)} Q ${(bx * V).toFixed(1)} ${(by * V).toFixed(1)} ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)}"
-            fill="none" stroke="${color}" stroke-width="1.9" stroke-linecap="round" opacity="0.42"/>
-      <path d="M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${((hx + px * headW) * V).toFixed(1)} ${((hy + py * headW) * V).toFixed(1)} L ${((hx - px * headW) * V).toFixed(1)} ${((hy - py * headW) * V).toFixed(1)} Z"
-            fill="${color}" opacity="0.42"/>`;
+      <path d="${curve}" fill="none" stroke="rgba(0,0,0,0.5)" stroke-width="4.6" stroke-linecap="round" opacity="0.4"/>
+      <path d="${head}" fill="rgba(0,0,0,0.5)" opacity="0.4"/>
+      <path d="${curve}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/>
+      <path d="${head}" fill="${color}" opacity="0.85"/>`;
   }
 
   function oracleMoves(sample) {
@@ -793,7 +799,7 @@
     if (o.best_move) moves.push(o.best_move);
     if (Array.isArray(o.mate_moves) && o.mate_moves.length) moves.push(o.mate_moves[0]);
     if (o.first_move && o.first_move !== o.best_move) moves.push(o.first_move);
-    return moves;
+    return [...new Set(moves)];
   }
 
   function clearArrows() {
@@ -813,14 +819,18 @@
     const modelMove = sample && sample.move ? sample.move : null;
     let svg = "";
     const oracle = oracleMoves(sample);
-    const seen = new Set();
+    let oracleDrawn = null;
     for (const m of oracle) {
-      if (!m || m === modelMove || seen.has(m)) continue;
-      seen.add(m);
-      svg += arrowSvg(m.slice(0, 2), m.slice(2, 4), n, "#34d399");
+      oracleDrawn = m;
+      svg += arrowSvg(m.slice(0, 2), m.slice(2, 4), n, "#34d399", -1);
     }
-    if (modelMove) svg += arrowSvg(modelMove.slice(0, 2), modelMove.slice(2, 4), n, "#60a5fa");
-    overlay.setAttribute("viewBox", `0 0 100 100`);
+    if (modelMove) {
+      // when the model found the reference move, flip the bend so BOTH
+      // arrows stay visible on the same path
+      const side = modelMove === oracleDrawn ? 1 : -1;
+      svg += arrowSvg(modelMove.slice(0, 2), modelMove.slice(2, 4), n, "#60a5fa", side);
+    }
+    overlay.setAttribute("viewBox", "0 0 100 100");
     overlay.innerHTML = svg || "";
   }
 

@@ -66,7 +66,7 @@ export default {
       });
     }
 
-    const ttl = file === "monitor/live.json" ? 3 : 10;
+    const ttl = file === "monitor/live.json" ? 1 : 10;
     res = new Response(content.body, {
       headers: {
         "Content-Type": "application/json; charset=utf-8",

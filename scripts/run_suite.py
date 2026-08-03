@@ -340,6 +340,9 @@ def main() -> None:
     ap.add_argument("--monitor-interval", type=int, default=60)
     ap.add_argument("--verbose", action="store_true",
                     help="forward to run_chess: print the exact prompt per sample")
+    ap.add_argument("--live-push", action="store_true",
+                    help="forward to run_chess: push live.json on every snapshot "
+                         "(minimal website lag for local runs)")
     ap.add_argument("--stream", action="store_true",
                     help="forward to run_chess: stream model output live")
     ap.add_argument("--cot", action="store_true",
@@ -430,6 +433,8 @@ def main() -> None:
                 cmd.append("--cot")
             if args.smoke:
                 cmd.append("--smoke")
+            if args.live_push:
+                cmd.append("--live-push")
             print(f"\n>>> {model} x {task}:{variant} (n={n}, tokens={mt})", flush=True)
             if monitor:
                 monitor.set_current(model, task, variant)
