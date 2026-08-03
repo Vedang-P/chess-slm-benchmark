@@ -1,9 +1,3 @@
-{"ts": "2026-08-01T18:26:09", "cells_done": 5, "fraction": 0.1389, "eta_min": 8, "legal_avg": 0.0, "last_error": null}
-{"ts": "2026-08-01T18:26:17", "cells_done": 6, "fraction": 0.1667, "eta_min": 7, "legal_avg": 0.0, "last_error": null}
-{"ts": "2026-08-01T18:26:25", "cells_done": 6, "fraction": 0.1667, "eta_min": 8, "legal_avg": 0.0, "last_error": null}
-{"ts": "2026-08-01T18:26:33", "cells_done": 7, "fraction": 0.1944, "eta_min": 7, "legal_avg": 0.0, "last_error": null}
-{"ts": "2026-08-01T18:26:41", "cells_done": 7, "fraction": 0.1944, "eta_min": 7, "legal_avg": 0.0, "last_error": null}
-{"ts": "2026-08-01T18:26:49", "cells_done": 8, "fraction": 0.2222, "eta_min": 7, "legal_avg": 0.0, "last_error": null}
 {"ts": "2026-08-01T18:26:57", "cells_done": 8, "fraction": 0.2222, "eta_min": 7, "legal_avg": 0.0, "last_error": null}
 {"ts": "2026-08-01T18:27:06", "cells_done": 9, "fraction": 0.25, "eta_min": 7, "legal_avg": 0.0, "last_error": null}
 {"ts": "2026-08-01T18:27:34", "cells_done": 9, "fraction": 0.25, "eta_min": 8, "legal_avg": 0.0, "last_error": null}
@@ -498,3 +492,9 @@
 {"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T19:59:11Z", "cells_done": 833, "fraction": 0.833, "eta_min": null, "legal_avg": 0.0096, "last_error": null}
 {"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:00:01Z", "cells_done": 858, "fraction": 0.858, "eta_min": null, "legal_avg": 0.0245, "last_error": null}
 {"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:00:55Z", "cells_done": 883, "fraction": 0.883, "eta_min": null, "legal_avg": 0.0306, "last_error": null}
+{"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:01:46Z", "cells_done": 908, "fraction": 0.908, "eta_min": null, "legal_avg": 0.0463, "last_error": null}
+{"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:02:40Z", "cells_done": 933, "fraction": 0.933, "eta_min": null, "legal_avg": 0.0611, "last_error": null}
+{"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:03:32Z", "cells_done": 958, "fraction": 0.958, "eta_min": null, "legal_avg": 0.072, "last_error": null}
+{"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:04:24Z", "cells_done": 983, "fraction": 0.983, "eta_min": null, "legal_avg": 0.0814, "last_error": null}
+{"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:04:59Z", "cells_done": 1000, "fraction": 1.0, "eta_min": null, "legal_avg": 0.087, "last_error": null}
+{"run_id": "2026-08-03T19:58:22Z", "ts": "2026-08-03T20:04:59Z", "cells_done": 1000, "fraction": 1.0, "eta_min": null, "legal_avg": 0.087, "last_error": null}

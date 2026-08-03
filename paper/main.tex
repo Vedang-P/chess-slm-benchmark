@@ -5,8 +5,8 @@
 \usepackage{graphicx}
 \usepackage[numbers]{natbib}
 
-\title{How Well Do Small Language Models Play Chess?\\
-  A Multi-Task Capability Benchmark at the 1.5--4B Scale}
+\title{Fine-Tuned SLMs vs a Frontier Model at Chess:\\
+  A MATE-Grounded Evaluation with Strict Measurement}
 \author{Vedang Pandey}
 \date{}
 
@@ -14,66 +14,142 @@
 \maketitle
 
 \begin{abstract}
-  % Fill from docs/capability-analysis.md after the Kaggle run.
-  Small language models (SLMs, 1.5--4B) are increasingly deployed as on-device agents, yet
-  nearly every benchmark of game-playing ability -- LLM Chess, ChessArena, ChessQA,
-  ChessBench, grid-game leaderboards -- evaluates frontier-scale models. We present the first
-  systematic measurement of SLM chess ability across a multi-task battery: move legality on
-  standard positions, mate-in-1 and mate-in-2 tactics (real lichess puzzles), best-move
-  accuracy against Stockfish, exact endgame play on retrograde-solved 3x3/5x5 boards, and
-  full-game playout vs a random opponent -- in two input representations (rendered grid vs
-  FEN notation) -- plus tic-tac-toe and Connect-4 for cross-game generalization. Every metric
-  uses external oracles; no model self-judgment.
+Chess is a standard testbed for reasoning and instruction-following in
+language models, but evaluations rarely measure the newest small models,
+and the answers reported by models are not always the answers scored. We
+build on MATE~\cite{wang2024mate}, which fine-tuned an 8B model on one
+million expert-annotated chess positions and beat GPT/Claude/Gemini at
+move selection, and update it to current hardware: 4-bit LoRA fine-tuning
+of Gemma~4 E2B/E4B, compared against DeepSeek V4 Flash on MATE's held-out
+move-selection set and on standard-chess mate-in-1/2 and Stockfish
+best-move batteries. This draft reports the measurement infrastructure and
+the first honest results: a Phase~1 representation study that motivates
+FEN-only prompts, and a 1000-position DeepSeek run on MATE selection that
+scored 48.6\% (chance on a balanced binary task) while exhibiting a strong
+position-independent preference for the second candidate. We also report
+a measured failure mode of thinking-mode inference under bounded token
+budgets, and detail the strict, regression-tested answer extraction that
+guarantees every scored answer is the model's own text.
 \end{abstract}
 
 \section{Introduction}
-% Motivation: on-device SLM agents, game ability as a probe of rule-following and reasoning;
-% the frontier-scale bias of existing benchmarks; the clean literature gap. Contributions.
+On-device agents are increasingly small language models (SLMs), and
+games with explicit rules and oracles are a clean probe of their
+reasoning. Existing chess benchmarks~\cite{ruoss2024chessbench,kolasani2025llmchess,wen2025chessqa}
+evaluate frontier-scale models; the training methods that close the gap
+between small models and frontiers at chess are either large-scale and
+unreproducible~\cite{feng2023chessgpt} or not yet validated on the latest
+architectures. Our project asks one question:
+
+\begin{quote}
+Can a current on-device model (Gemma~4 E2B, 2B), fine-tuned on
+expert-annotated chess data via 4-bit LoRA, close the gap to a frontier
+reasoning model (DeepSeek V4 Flash) at chess?
+\end{quote}
+
+This draft is a working paper. It reports the evaluation infrastructure,
+the datasets, and the first measured results, and it is honest about what
+is not yet known.
 
 \section{Related Work}
-% Chess eval (LLM Chess, ChessArena, ChessQA, ChessBench, brittleness), simple-game eval
-% (Topsakal, ChildPlay), training papers (Xiangqi-R1, Complete Chess, distillation), probes
-% (state tracking, world models). Explicitly: none at SLM scale.
+\label{sec:related}
+\textbf{MATE}~\cite{wang2024mate} collects one million positions annotated
+by expert chess players (including world champions) for strategy and
+tactic, with and without explanations, and fine-tunes LLaMA-3-8B to select
+the better of two candidate moves; the fine-tune outperforms GPT-4o,
+Claude, and Gemini. We adopt MATE as the primary base: its recipe
+(fine-tune, then compare against frontiers on a held-out test set) is our
+recipe, updated to Gemma~4 and DeepSeek V4 Flash.
+
+\textbf{KinGPT}~\cite{tang2026gambit} is a 25M character-level model
+trained only on (position, best-move) pairs that \emph{outperforms} much
+larger chess LLMs on a mate-in-N suite, while failing to generalize ---
+strong evidence that puzzle accuracy alone does not imply chess
+understanding, and that training/evaluation FEN overlap must be audited.
+We adopt its evaluation hygiene: theme-held-out splits, position-vs-puzzle
+accuracy, legality as a separate metric, and pass@1 as the default.
+
+\textbf{Other benchmarks.} ChessQA~\cite{wen2025chessqa} organizes chess
+understanding into five ability categories (structural, motifs, short
+tactics, position judgment, semantic); our task battery maps onto short
+tactics and position judgment, with the categories as future scope.
+LLM CHESS~\cite{kolasani2025llmchess} provides game-play protocols;
+ChessBench~\cite{ruoss2024chessbench} is the dataset ancestor of our
+lichess-derived sets.
 
 \section{Method}
-% Task battery table; oracles (retrograde, checkmate detection, Stockfish 18 at depth 15,
-% lichess solution lines); models; metrics (parse, legal, top-1, win rate).
+\label{sec:method}
 
-\subsection{Board representation}
-Every position is presented to the model in \emph{FEN notation} (standard
-chess). We chose FEN based on a Phase~1 representation study (\S\ref{sec:phase1})
-in which the same model attempted mate-in-1 positions rendered as a grid,
-FEN, bitboards, and a piece list: FEN was the only representation solved
-perfectly (5/5), bitboards the worst (0/5, with illegal moves). Because the
-study measures chess capability rather than format-adaptation, each model is
-evaluated on the representation most aligned with its pretraining
-distribution; the representation axis itself is reported as a Phase~1
-finding rather than a full factorial.
+\subsection{Models}
+\begin{itemize}
+\item \textbf{gemma4-e2b / gemma4-e4b} (Google, 2B/4B): local 4-bit
+  inference on a Kaggle T4. Thinking disabled at load time.
+  Fine-tuned variants (MATE-LoRA, 4-bit QLoRA) are the central planned
+  intervention.
+\item \textbf{deepseek-v4-flash} (frontier, via the opencode-go gateway):
+  evaluated in two modes --- thinking enabled and thinking disabled ---
+  because, as we measure in \S\ref{sec:mate}, thinking-mode inference does
+  not complete within practical token budgets.
+\end{itemize}
+All models run with a \textbf{2048-token generation budget}, identical
+across models, so token economics are comparable.
 
-\subsection{Rules}
-All positions and oracles use \emph{standard} chess rules (castling, en
-passant, and double-step pawn moves included), enforced with python-chess.
-No simplified variant is used; an illegal move is exactly what it is in
-real chess.
+\subsection{Tasks and datasets}
+\begin{table}[h]
+\centering
+\begin{tabular}{llll}
+\hline
+Task & Source & Ground truth & Size \\ \hline
+mate1-lichess & lichess puzzle DB (CC0) & engine-verified mate moves & 250 \\
+mate2-lichess & lichess puzzle DB (CC0) & lichess `only move' & 250 \\
+bestmove-8x8 & lichess eval DB (CC0) & Stockfish best move & 120 \\
+mate-selection-test & MATE held-out set & expert choice (MoveA/B) & 1000 \\
+\hline
+\end{tabular}
+\caption{The four task sets. The tactical battery uses standard chess;
+the MATE set is the expert move-selection protocol.}
+\label{tab:tasks}
+\end{table}
+
+\subsection{Rules and representation}
+All positions and oracles use \emph{standard} chess (castling, en passant,
+double-step, promotion), enforced with python-chess. Every position is
+presented in FEN notation, chosen on the basis of the Phase~1 study
+(\S\ref{sec:phase1}).
+
+\subsection{Answer extraction is strict and never invents answers}
+Each sample records the model's exact output text. The scored move is
+extracted in a fixed, regression-tested priority order:
+(1) the last \texttt{MOVE:}-prefixed from-to token (the prompt's demanded
+format); (2) a line that is exactly a from-to move; (3) SAN resolution via
+python-chess, which by construction can only return legal moves.
+There is \textbf{no fallback}: no forced second pass, no extraction from
+the reasoning text, no random choice. If the model returns nothing
+parseable, the sample is a \texttt{parse\_error}/\texttt{no\_answer}.
+Every recorded answer is the model's own verbatim text; the residual risk
+(adversarial phrasing such as ``not MOVE: e2e4'') is documented and
+mitigated by the prompt's output specification.
 
 \subsection{Token and response accounting}
-Each sample stores the exact prompt, complete returned thinking text, final
-answer, oracle answer, parser/verdict outcome, fallback status, and provider
-usage when available. Usage includes input, output, reasoning, and total
-tokens; cache reads/misses; time to first token; generation latency; and
-token rates. This supports the three planned analyses: performance versus
-tokens, outcome breakdowns by category, and model-by-category accuracy
-heatmaps. Missing provider fields remain missing rather than being imputed.
+Every sample stores prompt, model input, full thinking text (when
+produced), final answer, oracle, verdict, and a normalized usage record:
+input/output/reasoning/total tokens, cache reads/misses, time to first
+token, generation latency, and token rates. Missing provider fields
+remain missing rather than imputed. These records drive the paper's
+figures: performance-versus-tokens, outcome breakdowns by category, and a
+category-by-model accuracy heatmap.
 
 \section{Phase 1: representation study}
 \label{sec:phase1}
 Before the main sweep we measured how board representation affects one
 model's (deepseek-v4-flash) ability to solve mate-in-1 positions under
 standard chess. Twenty positions (5 per representation) were presented as
-a rendered grid, FEN, per-piece bitboards, and a piece list. Table~\ref{tab:phase1} shows the result: FEN was solved perfectly, grid and list
+a rendered grid, FEN, per-piece bitboards, and a piece list
+(Table~\ref{tab:phase1}). FEN was solved perfectly, grid and list
 partially, and bitboards not at all --- including two illegal moves, the
-only illegal moves in the study. Section~\ref{sec:method} explains why the
-main evaluation therefore uses FEN only.
+only illegal moves in the study. The main evaluation therefore uses FEN
+only. \emph{Caveat: this is $n{=}5$ per representation --- directional
+evidence, not statistics.}
 
 \begin{table}[h]
 \centering
@@ -90,15 +166,86 @@ representation, standard chess.}
 \label{tab:phase1}
 \end{table}
 
-\section{Experiments}
-% Tables from docs/capability-analysis.md (sections 1-5).
-% Legality as the model-ranking floor; cross-game generalization.
+\section{MATE move-selection results}
+\label{sec:mate}
+We benchmarked deepseek-v4-flash on 1000 positions from MATE's held-out
+strategy test set: FEN + two candidate moves with expert explanations;
+the model must output \texttt{MoveA:\textless move\textgreater} or
+\texttt{MoveB:\textless move\textgreater}; scored against the expert
+choice. Direct mode, 2048-token budget.
+
+\paragraph{Result.} \textbf{48.6\% accuracy} (486/1000) --- statistically
+indistinguishable from chance on a balanced binary task, despite a 100\%
+parse rate (every position answered natively, 2.1s average latency,
+$\sim$6 output tokens). The failure is not uniform noise: the model
+selected candidate B in 68\% of positions, and conditional accuracy is
+31\% when the expert truth is A versus 67\% when it is B
+(Table~\ref{tab:mate}).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\hline
+& Accuracy & $n$ \\ \hline
+Overall & 48.6\% & 1000 \\
+Truth = A & 31\% & 506 \\
+Truth = B & 67\% & 494 \\
+Model picks A & 51\% & 322 \\
+Model picks B & 51\% & 678 \\ \hline
+\end{tabular}
+\caption{MATE move selection, deepseek-v4-flash, direct mode, 2048
+budget. Truth is balanced; the model is strongly B-biased.}
+\label{tab:mate}
+\end{table}
+
+\paragraph{Interpretation, stated precisely.} Direct-mode deepseek does
+not solve MATE selection above chance and exhibits a strong
+position-independent preference for the second candidate. \emph{We do not
+know why it prefers B.} Candidate order (MoveB is always listed second),
+content differences in explanations, or direct-mode behavior are all
+plausible; an order-randomization experiment (swapping MoveA/MoveB in the
+prompt) is the planned test. We explicitly avoid claiming the cause.
+
+\paragraph{A measured failure mode of thinking-mode inference.} With
+thinking enabled, deepseek-v4-flash did not produce a single native answer
+within 2048-8192 token budgets (0/10 at 2048 total), consuming the whole
+budget on reasoning; at a 16k budget it answered natively on 1/3 positions
+(3.5k reasoning tokens) and failed on the others (16k+ tokens, empty
+content). With thinking disabled it answered 10/10 at $\sim$170 tokens
+with 80\% accuracy on a 10-position pilot. This is a real, reproducible
+model-plus-gateway behavior: thinking-mode reasoning is highly
+token-hungry and does not reliably terminate within practical budgets on
+this task. It motivates the direct-mode default and makes the
+thinking-vs-direct accuracy gap itself a planned measurement.
 
 \section{Discussion and Limitations}
-% Horizon/retrograde scope; Stockfish depth; 10 games per playout cell;
-% inference-only; non-archival.
+\label{sec:discussion}
+\begin{itemize}
+\item \textbf{Direct-mode ceiling.} The 48.6\% result is for direct-mode
+  inference at a 2048 budget, the budget chosen for gemma parity. A
+  thinking-on subset (16k budget) and the fine-tuned gemma are the
+  planned comparisons; both may change the picture.
+\item \textbf{The B-preference is unexplained.} Order-randomization is the
+  immediate next experiment.
+\item \textbf{Phase 1 is small.} $n{=}5$ per representation.
+\item \textbf{Gateway constraints.} The opencode-go gateway serializes
+  heavy generations per API key and enforces thinking budgets loosely;
+  these are documented in the repository rather than hidden.
+\item \textbf{Future work.} Gemma 4 E2B 4-bit LoRA on 50k MATE examples;
+  evaluation of base vs LoRA vs deepseek on the MATE test set and the
+  tactical battery; a 100-game head-to-head with full per-move telemetry;
+  candidate-order randomization as a standard control.
+\end{itemize}
 
 \section{Conclusion}
+This draft reports the measurement stack and the first honest results of
+a MATE-grounded comparison between fine-tuned SLMs and a frontier model at
+chess. The infrastructure guarantees that every scored answer is the
+model's own output, with strict extraction, standard chess, and complete
+token accounting. The first measured result --- chance-level MATE
+selection with a strong unexplained B-preference --- is a finding, not a
+failure of the benchmark: it is precisely the kind of behavior the study
+exists to measure.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
