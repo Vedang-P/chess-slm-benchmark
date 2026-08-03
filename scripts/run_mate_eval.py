@@ -214,7 +214,7 @@ def main() -> None:
                        {}, "generating", len(samples) + 1)
 
         out = model.generate(model_input, max_new_tokens=args.max_new_tokens,
-                             stream=args.verbose or args.stream,
+                             stream=True,  # SSE: live thinking on the website
                              on_chunk=_live_partial if not args.smoke else None,
                              thinking_budget=args.thinking_budget)
         for _attempt in range(2):
@@ -222,7 +222,7 @@ def main() -> None:
                 break
             time.sleep(3)
             out = model.generate(model_input, max_new_tokens=args.max_new_tokens,
-                                 stream=args.verbose or args.stream,
+                                 stream=True,
                                  on_chunk=None,
                                  thinking_budget=args.thinking_budget)
         if args.smoke:

@@ -864,12 +864,18 @@
 
   function sampleDone(sample) {
     return sample && (sample.finished === true
-      || ["legal", "illegal", "parse_error", "no_answer"].includes(sample.status));
+      || ["legal", "illegal", "parse_error", "no_answer", "correct", "wrong"].includes(sample.status));
   }
 
   function verdictInfo(sample) {
     if (!sample || !sampleDone(sample)) {
       return { cls: "neutral", title: "waiting", detail: "the model is still generating" };
+    }
+    if (sample.status === "correct") {
+      return { cls: "correct", title: "matches reference", detail: "the model chose the expert's move" };
+    }
+    if (sample.status === "wrong") {
+      return { cls: "wrong", title: "chose the wrong candidate", detail: "the model's choice did not match the reference" };
     }
     if (sample.status === "legal") {
       if (sample.compliance === true) {
