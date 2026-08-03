@@ -30,7 +30,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROOT = Path(__file__).resolve().parent.parent
 from src.models import configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_token_usage  # noqa: E402
-from src.token_usage import merge_usage  # noqa: E402
 
 RECORDS_PATH = ROOT / "data/positions/mate-selection-test.json"
 ANSWER_SPEC = (
@@ -71,8 +70,6 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="deepseek-v4-flash")
     ap.add_argument("--n", type=int, default=1000)
-    ap.add_argument("--offset", type=int, default=0,
-                    help="start index into the record set (parallel shards)")
     ap.add_argument("--output_dir", default="results/mate-selection")
     ap.add_argument("--max_new_tokens", type=int, default=2048,
                     help="total generation budget, identical across models "
@@ -80,8 +77,9 @@ def main() -> None:
                          "Thinking budget is separate (--thinking-budget); "
                          "the forced-answer fallback covers truncation.")
     ap.add_argument("--thinking-budget", type=int, default=None,
-                    help="bound reasoning tokens while keeping thinking ON "
-                         "(e.g. 2048 ~ 45s/position; unbounded ~3min/position)")
+                    help="bound reasoning tokens while keeping thinking ON")
+    ap.add_argument("--thinking-disabled", action="store_true",
+                    help="disable thinking entirely (native direct answers)")
     ap.add_argument("--resume", action="store_true",
                     help="skip position_ids already scored in the samples file")
     ap.add_argument("--verbose", action="store_true")
@@ -92,8 +90,7 @@ def main() -> None:
     args = ap.parse_args()
 
     configure_quiet_logging()
-    all_records = json.loads(RECORDS_PATH.read_text())
-    records = all_records[args.offset: args.offset + args.n]
+    records = json.loads(RECORDS_PATH.read_text())[: args.n]
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
     run_name = f"{args.model}_mate-selection-test_strategy"
     out_dir = Path(args.output_dir)
@@ -219,17 +216,18 @@ def main() -> None:
                        {}, "generating", len(samples) + 1)
 
         out = model.generate(model_input, max_new_tokens=args.max_new_tokens,
-                             stream=True,  # SSE: live thinking on the website
+                             stream=True,  # SSE: live reasoning on the website
                              on_chunk=_live_partial if not args.smoke else None,
-                             thinking_budget=args.thinking_budget)
+                             thinking_budget=args.thinking_budget,
+                             thinking_disabled=args.thinking_disabled)
         for _attempt in range(2):
             if not str(out.get("content", "")).startswith("ERROR"):
                 break
             time.sleep(3)
             out = model.generate(model_input, max_new_tokens=args.max_new_tokens,
-                                 stream=True,
-                                 on_chunk=None,
-                                 thinking_budget=args.thinking_budget)
+                                 stream=True, on_chunk=None,
+                                 thinking_budget=args.thinking_budget,
+                                 thinking_disabled=args.thinking_disabled)
         if args.smoke:
             out = {"content": "MoveB:d5d4", "reasoning": "",
                    "token_usage": {"input_tokens": 10, "output_tokens": 8,
@@ -237,40 +235,9 @@ def main() -> None:
                    "latency_ms": 1, "finished": True}
         label, move = parse_choice(out.get("content", ""),
                                    extra["candidate_a"], extra["candidate_b"])
-        fallback = None
-        if label is None and hasattr(model, "force_answer") and not args.smoke:
-            # 'no answer' is not an option: force a committed second pass
-            out2 = model.force_answer(
-                model_input,
-                answer_instruction=(
-                    "FINAL ANSWER REQUIRED: output exactly one of MoveA:<move> "
-                    "or MoveB:<move>. If you are not sure, still output your "
-                    "best guess — you must output a choice."))
-            out = {**out, "content": out2.get("content", ""),
-                   "reasoning": (out.get("reasoning", "") or "")
-                                + "\n\n[forced answer pass]\n"
-                                + (out2.get("reasoning", "") or ""),
-                   "token_usage": merge_usage(
-                       out.get("token_usage"), out2.get("token_usage"),
-                       out.get("latency_ms")),
-                   "latency_ms": (out.get("latency_ms") or 0)
-                                 + (out2.get("latency_ms") or 0)}
-            fallback = "forced"
-            label, move = parse_choice(out.get("content", ""),
-                                       extra["candidate_a"], extra["candidate_b"])
-        if label is None:
-            # extract a candidate from the reasoning chain
-            label, move = parse_choice(out.get("reasoning", ""),
-                                       extra["candidate_a"], extra["candidate_b"])
-            if label is not None:
-                fallback = "reasoning-extract"
-        if label is None:
-            # last resort: a random candidate, flagged
-            import random as _random
-
-            label = _random.choice(("A", "B"))
-            move = extra["candidate_a"] if label == "A" else extra["candidate_b"]
-            fallback = "random-choice"
+        # NO fallback: if the model's text has no parseable choice, the sample
+        # is a parse_error. An answer recorded on a sample is always the
+        # model's own output.
         correct = label == extra["truth_label"]
         if label is None:
             status = "parse_error"
@@ -302,7 +269,7 @@ def main() -> None:
             "token_usage": out.get("token_usage"),
             "cache_hit": (out.get("token_usage") or {}).get("cache_hit_tokens"),
             "cache_miss": (out.get("token_usage") or {}).get("cache_miss_tokens"),
-            "fallback": fallback,
+            "fallback": None,  # never fabricated: answers are the model's own text
             "position_metadata": {"fen": rec.get("fen"),
                                   "task_extra": extra},
             "correct": {"move": extra.get("output"), "note": "MATE expert choice"},

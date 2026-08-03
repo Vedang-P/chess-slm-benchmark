@@ -98,7 +98,7 @@ illegal moves). The study therefore runs the **fen** representation only**
 — chess capability, not format adaptation. Full Phase-1 report:
 `docs/phase1-results.md` (raw per-sample data in `docs/phase1/`).
 
-- `grid`/`bitboard`/`list` — retained as a reported Phase-1 finding, not run further
+- `grid`/`bitboard`/`list` — retained only as the reported Phase-1 finding, not run further
 - `pgn` — SAN move history **future scope** (needs game-history datasets)
 - **Vision** — explicitly out of scope for now
 
@@ -118,6 +118,23 @@ Every new sample also records a normalized `token_usage` object:
 - thinking enabled, max token setting, fallback type, and usage completeness
 
 These fields are required for the paper figures, not optional diagnostics.
+
+## Honesty guarantees (no fabricated answers)
+
+- The recorded answer on every sample is the model's own text, verbatim.
+- There is NO fallback: no forced second pass, no extraction from the
+  reasoning text, no random move. If the model returns nothing parseable,
+  the sample is a `parse_error`/`no_answer` — an honest failure.
+- Extraction is strict and tested: the last `MOVE:`-prefixed token, then a
+  line-anchored from-to move, then python-chess SAN (which only resolves to
+  legal moves). Nothing is invented.
+- Known model+gateway facts (measured, 2026-08-03): deepseek-v4-flash with
+  thinking enabled does NOT answer within practical budgets — it consumes
+  the whole budget on reasoning (0/10 native answers at 2048 total). It
+  answers natively only with thinking disabled (10/10, 80% at n=10) or
+  with multi-minute unbounded thinking. The gateway also ignores the
+  thinking budget on many requests and serializes heavy generations per
+  API key.
 
 ## Paper figures
 
@@ -143,10 +160,9 @@ The exact contract is documented in `docs/paper-figures.md`.
 
 ## Future scope (README roadmap)
 
+- Position evaluation (centipawn prediction from the eval DB)
 - Full game-play evaluation (LLM CHESS style: legality, win rate, Elo vs a
   fixed-strength engine)
-- Legality probes at scale (cap-legal task, existing 40-position set)
-- Position evaluation (centipawn prediction from the eval DB)
 - Motif/structural questions (ChessQA-style categories: structural, motifs,
   short tactics, position judgment, semantic)
 - The `pgn`/SAN-history representation (from lichess game PGNs)
@@ -169,20 +185,17 @@ src/
   report.py         per-sample JSONL, summaries, comparison_table.csv
   token_usage.py    normalized provider/local token, cache, and latency schema
   benchmarks/games/
-    rules.py        custom NxN engine for staged small-board tasks only; 8x8
-                    scoring uses python-chess (standard chess)
-    oracles.py      exact retrograde solver + checkmate/mobility oracles
-    positions.py    seeded generation with non-vacuity filters
-    fen.py          FEN <-> board schema (+ python-chess validation)
-    prompts.py      prompts: grid/fen/bitboard/list variants
-    tasks.py        parsing (strict + lenient SAN) + oracle-based scoring
+    prompts.py      FEN prompts (single representation, win condition)
+    tasks.py        strict answer extraction + oracle scoring (python-chess)
 scripts/
-  test_engine.py    engine + dataset + python-chess parity tests (the gate)
+  test_engine.py    dataset-consistency + extraction regression tests (the gate)
   build_lichess_mates.py    mate1/mate2 from lichess puzzle DB (stratified, rich metadata)
   build_bestmove_evals.py   bestmove from lichess eval DB (cp/depth/knodes/PV)
-  run_chess.py      one model x one task x one prompt variant
+  build_mate_evals.py       MATE move-selection eval set (1000 held-out positions)
+  run_chess.py      one model x one tactical task x FEN prompt
+  run_mate_eval.py  MATE move-selection eval (single worker; the gateway
+                    serializes per key, parallel workers measured useless)
   run_suite.py      full matrix -> results/chess/comparison_table.csv
-  analyze_results.py         writes docs/capability-analysis.md
   analyze_paper_figures.py   three publication figures + figure-ready CSV/JSON
 notebooks/
   build_notebook.py  SINGLE SOURCE -> kaggle_check.ipynb + kaggle_run.ipynb

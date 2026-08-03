@@ -24,28 +24,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROOT = Path(__file__).resolve().parent.parent
 
 from src.benchmarks.games import tasks as T  # noqa: E402
-from src.benchmarks.games.envs import ENVS  # noqa: E402
 from src.live_push import PUBLIC_LIVE_REPO, resolve_token, upload_file  # noqa: E402
 from src.models import MODEL_IDS, configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_samples  # noqa: E402
-from src.token_usage import merge_usage  # noqa: E402
 
 TASK_FILES = {
-    "cap-legal-8x8": "cap-legal-8x8.json",
     "bestmove-8x8": "bestmove-8x8.json",
     "mate1-lichess": "mate1-lichess.json",
     "mate2-lichess": "mate2-lichess.json",
-    "sm-3x3-win": "sm-3x3-win.json",
-    "sm-3x3-draw": "sm-3x3-draw.json",
-    "sm-5x5-win": "sm-5x5-win.json",
-    "sm-5x5-draw": "sm-5x5-draw.json",
-    "mate1-8x8": "mate1-8x8.json",
-    "mob-8x8": "mob-8x8.json",
 }
 
-GAME_TASKS = {"playout-5x5": "playout-5x5", "ttt": "ttt", "c4": "c4"}
-GAME_MAX_MOVES = 120
-GAME_N = 10
 
 DEFAULT_MAX_NEW_TOKENS = 512
 
@@ -70,71 +58,12 @@ def _cleanup(model) -> None:
         pass
 
 
-def play_one_game(model, env_name: str, max_new_tokens: int) -> dict:
-    """Play one full game (model vs random opponent). Returns a sample dict."""
-    import random
-
-    env = ENVS[env_name]
-    rng = random.Random()
-    board = env.start()
-    model_moves = 0
-    illegal = 0
-    t0 = time.time()
-    for _ in range(GAME_MAX_MOVES):
-        terminal, outcome = env.over(board)
-        if terminal:
-            break
-        out = model.generate(env.prompt(board), max_new_tokens=max_new_tokens)
-        mv = env.parse(out["content"])
-        if mv is None or mv not in env.legal_moves(board):
-            illegal += 1
-            break
-        board = env.apply(board, mv)
-        model_moves += 1
-        terminal, outcome = env.over(board)
-        if terminal:
-            break
-        board = env.apply(board, env.random_move(board))
-    terminal, outcome = env.over(board)
-    return {
-        "status": "played",
-        "condition": "game",
-        "position_id": f"game-{env_name}",
-        "moves": model_moves,
-        "illegal": illegal,
-        "terminal": terminal,
-        "outcome": outcome,
-        "latency_ms": (time.time() - t0) * 1000,
-    }
-
-
-def game_metrics(samples: list) -> dict:
-    n = len(samples)
-    if not n:
-        return {}
-    legal = sum(s["moves"] for s in samples)
-    illegal = sum(s["illegal"] for s in samples)
-    outcomes = [s["outcome"] for s in samples]
-    return {
-        "games": {
-            "n": n,
-            "legal_rate": round(legal / (legal + illegal), 4) if legal + illegal else 0.0,
-            "illegal_rate": round(illegal / (legal + illegal), 4) if legal + illegal else 0.0,
-            "completion_rate": round(sum(1 for s in samples if s["terminal"]) / n, 4),
-            "win_rate": round(outcomes.count("model") / n, 4),
-            "draw_rate": round(outcomes.count(None) / n, 4),
-            "loss_rate": round(outcomes.count("opp") / n, 4),
-            "avg_moves": round(sum(s["moves"] for s in samples) / n, 2),
-        }
-    }
-
-
 def main() -> None:
     configure_quiet_logging()
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="smollm2-1.7b")
     ap.add_argument("--task", required=True,
-                    choices=sorted(TASK_FILES) + sorted(GAME_TASKS))
+                    choices=sorted(TASK_FILES))
     ap.add_argument("--prompt-variant", default="grid",
                     choices=["grid", "fen", "bitboard", "list"])
     ap.add_argument("--n", type=int, default=0, help="limit positions (0 = all)")
@@ -160,30 +89,6 @@ def main() -> None:
     task_name = args.task
     task_category = T.task_category(task_name)
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
-    if task_name in GAME_TASKS:
-        n_games = args.n or GAME_N
-        model = make_model(args.model, smoke_test=args.smoke)
-        model.load()
-        run_name = f"{args.model}_{task_name}_{args.prompt_variant}"
-        writer = ResultWriter(
-            Path(args.output_dir), run_name,
-            {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
-             "task_category": task_category, "run_id": run_id,
-             "smoke": args.smoke, "kind": "game"},
-        )
-        samples = []
-        t0 = time.time()
-        for i in range(n_games):
-            sample = play_one_game(model, task_name, args.max_new_tokens)
-            samples.append(sample)
-            writer.add(sample)
-            print(f"  [{task_name} {args.model}] game {i + 1}/{n_games} "
-                  f"({time.time() - t0:.0f}s total)", flush=True)
-        summary = writer.finish({"games": game_metrics(samples)["games"]})
-        print(json.dumps(summary["metrics"], indent=1), flush=True)
-        _cleanup(model)
-        return
-
     records = json.loads((Path(args.data_dir) / TASK_FILES[task_name]).read_text())
     if args.n:
         records = records[: args.n]
@@ -351,73 +256,6 @@ def main() -> None:
                                  stream=args.verbose or args.stream,
                                  on_chunk=_live_partial if not args.smoke else None)
             fallback = None
-            def _answer_has_move(text: str) -> bool:
-                """A move counts as given only if the text parses against the
-                board — prose without a move is NOT an answer."""
-                try:
-                    from src.benchmarks.games.tasks import _board, parse_move_output
-
-                    uci, _ = parse_move_output(text or "", _board(rec))
-                    return uci is not None
-                except Exception:
-                    return False
-
-            if not _answer_has_move(out.get("content")) and hasattr(model, "force_answer") \
-                    and not args.smoke:
-                # 'no answer' is not an option for the API model: force a
-                # committed second pass, then extract from the reasoning,
-                # then a random legal move — always flagged as a fallback.
-                push_live(rec, condition, prompt, model_input,
-                          out={"content": "", "reasoning": out.get("reasoning", ""),
-                               "finished": True},
-                          sample_idx=len(samples) + 1,
-                          total=len(records) * len(conditions),
-                          phase="forcing", force=True)
-                out2 = model.force_answer(prompt)
-                out = {**out, "content": out2.get("content", ""),
-                       "reasoning": (out.get("reasoning", "") or "")
-                                    + "\n\n[forced answer pass]\n"
-                                    + (out2.get("reasoning", "") or ""),
-                       "cache_hit": out2.get("cache_hit"),
-                       "cache_miss": out2.get("cache_miss"),
-                       "latency_ms": (out.get("latency_ms") or 0)
-                                     + (out2.get("latency_ms") or 0)}
-                out["token_usage"] = merge_usage(
-                    out.get("token_usage"), out2.get("token_usage"),
-                    out.get("latency_ms"))
-                merged_usage = out["token_usage"]
-                out["input_tokens"] = merged_usage.get("input_tokens")
-                out["output_tokens"] = merged_usage.get("output_tokens")
-                out["reasoning_tokens"] = merged_usage.get("reasoning_tokens")
-                out["total_tokens"] = merged_usage.get("total_tokens")
-                out["cache_hit"] = merged_usage.get("cache_hit_tokens")
-                out["cache_miss"] = merged_usage.get("cache_miss_tokens")
-                out["reasoning_chars"] = len(out.get("reasoning") or "")
-                out["answer_chars"] = len(out.get("content") or "")
-                fallback = "forced"
-                if not _answer_has_move(out.get("content")):
-                    # last resort: the best legal move we can extract, or a
-                    # random legal move so there is always a comparison
-                    from src.benchmarks.games.tasks import _board, parse_move_output
-                    try:
-                        board = _board(rec)
-                        uci, fmt = parse_move_output(out.get("reasoning", ""), board)
-                        if uci:
-                            out["content"] = f"MOVE: {uci}"
-                            fallback = "reasoning-extract"
-                    except Exception:
-                        pass
-                if not _answer_has_move(out.get("content")):
-                    from src.benchmarks.games.tasks import _board, _legal_ucis
-                    try:
-                        board = _board(rec)
-                        import random
-                        moves = list(_legal_ucis(board))
-                        if moves:
-                            out["content"] = f"MOVE: {random.choice(moves)}"
-                            fallback = "random-legal"
-                    except Exception:
-                        pass
             if args.verbose:
                 print(f"\n--- END (tokens={out.get('output_tokens')}, "
                       f"finished={out.get('finished')}) ---", flush=True)

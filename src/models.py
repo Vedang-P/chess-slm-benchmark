@@ -278,7 +278,8 @@ class OpenCodeGoModel:
 
     def generate(self, prompt: str, max_new_tokens: int = 512,
                  temperature: float = 0.0, stream: bool = False,
-                 on_chunk=None, thinking_budget: Optional[int] = None) -> dict:
+                 on_chunk=None, thinking_budget: Optional[int] = None,
+                 thinking_disabled: bool = False) -> dict:
         """Generate via the gateway. Thinking is ENABLED and UNBOUNDED: V4
         Flash reasons long on chess positions, and the study wants that
         thinking visible — we just wait for the final answer (max_tokens
@@ -296,12 +297,15 @@ class OpenCodeGoModel:
                 "content": "MOVE: a1a2", "reasoning": "",
                 "latency_ms": 1, "finished": True,
             }, local_usage(0, 8, source="smoke"))
+        if thinking_disabled:
+            thinking = {"type": "disabled"}
+        elif thinking_budget is not None:
+            thinking = {"type": "enabled", "budget_tokens": thinking_budget}
+        else:
+            thinking = {"type": "enabled"}
         payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
                    "temperature": temperature,
-                   "thinking": ({"type": "enabled",
-                                 "budget_tokens": thinking_budget}
-                                if thinking_budget is not None
-                                else {"type": "enabled"}),
+                   "thinking": thinking,
                    "messages": [{"role": "user", "content": prompt}]}
         try:
             if stream:
@@ -385,46 +389,6 @@ class OpenCodeGoModel:
                 "content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
                 "latency_ms": (time.time() - t0) * 1000, "finished": True,
             }, local_usage(None, None, source="error"))
-
-    def force_answer(self, prompt: str, max_new_tokens: int = 256,
-                     temperature: float = 0.0,
-                     answer_instruction: str | None = None) -> dict:
-        """Second-chance call used when the thinking pass produced no answer:
-        thinking is disabled and the model is ordered to commit to an answer,
-        any answer. 'No answer' is never acceptable for the benchmark's
-        comparison baseline — if this also fails, the runner falls back to
-        extraction from the reasoning (or a random choice), always flagged
-        as a fallback. `answer_instruction` overrides the default
-        move-format demand (used by non-move tasks like MATE selection)."""
-        t0 = time.time()
-        commit = (prompt
-                  + "\n\n" + (answer_instruction
-                              or "FINAL ANSWER REQUIRED: output exactly one line, "
-                                "MOVE: <from><to>. If you are not sure, still output "
-                                "your best guess — you must output a move."))
-        payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
-                   "temperature": temperature,
-                   "thinking": {"type": "disabled"},
-                   "messages": [{"role": "user", "content": commit}]}
-        try:
-            with self._post(payload) as resp:
-                data = json.load(resp)
-            msg = data["choices"][0]["message"]
-            usage = data.get("usage", {})
-            return _attach_usage({
-                "content": msg.get("content") or "",
-                "reasoning": msg.get("reasoning_content") or "",
-                "latency_ms": (time.time() - t0) * 1000,
-                "finished": True,
-                "forced": True,
-            }, from_provider_usage(usage, source="opencode_go_force"))
-        except Exception as e:
-            return _attach_usage({
-                "content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
-                "latency_ms": (time.time() - t0) * 1000, "finished": True,
-                "forced": True,
-            }, local_usage(None, None, source="error"))
-
 
 def make_model(model_key: str, smoke_test: bool = False):
     """Registry: local 4-bit HF models + the gateway API model."""

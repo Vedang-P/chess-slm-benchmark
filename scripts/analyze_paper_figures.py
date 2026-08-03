@@ -28,9 +28,7 @@ CATEGORY_BY_TASK = {
     "mate1-lichess": "Short Tactics",
     "mate2-lichess": "Short Tactics",
     "bestmove-8x8": "Position Judgment",
-    "cap-legal-8x8": "Structural",
-    "mob-8x8": "Position Judgment",
-    "mate1-8x8": "Short Tactics",
+    "mate-selection-test": "Short Tactics",
 }
 
 STATUS_ORDER = ("correct", "legal_wrong", "illegal", "parse_error", "no_answer")

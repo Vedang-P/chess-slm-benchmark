@@ -156,7 +156,7 @@ if status != "ok":
     raise RuntimeError("engine tests failed -- see output above")"""),
         _md("## 5. Data validation (committed task sets + oracle fields)"),
         _code("""import json
-for name in ["mate1-lichess", "mate2-lichess", "bestmove-8x8"]:
+for name in ["mate1-lichess", "mate2-lichess", "bestmove-8x8", "mate-selection-test"]:
     recs = json.loads(Path(f"data/positions/{name}.json").read_text())
     assert len(recs) >= 40, f"{name}: expected >=40 positions, got {len(recs)}"
     assert all("win_moves" in r and "lose_moves" in r for r in recs)
