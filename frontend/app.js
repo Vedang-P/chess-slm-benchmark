@@ -760,9 +760,9 @@
     const a = sqCenter(from, n);
     const b = sqCenter(to, n);
     if (!a || !b) return "";
-    // lichess-style: gently curved path, rounded translucent line, small
-    // arrowhead following the tangent at the end
-    const pad = 0.12;
+    // lichess-style, kept THIN and TRANSLUCENT so the board stays readable:
+    // gentle curve, 1.9% stroke, ~40% opacity, small arrowhead
+    const pad = 0.13;
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
@@ -772,23 +772,19 @@
     const x2 = b.x - ux * pad, y2 = b.y - uy * pad;
     const V = 100;
     const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-    // perpendicular bend: sweep to the right of travel direction
-    const bend = Math.min(0.09, len * 0.18);
+    const bend = Math.min(0.07, len * 0.14);
     const bx = cx - uy * bend, by = cy + ux * bend;
-    // tangent at the end (control point -> end)
     const tx = x2 - bx, ty = y2 - by;
     const tl = Math.hypot(tx, ty) || 1;
     const tanx = tx / tl, tany = ty / tl;
-    const headLen = 0.075, headW = 0.035;
+    const headLen = 0.055, headW = 0.024;
     const hx = x2 - tanx * headLen, hy = y2 - tany * headLen;
     const px = -tany, py = tanx;
-    const ax1 = hx + px * headW, ay1 = hy + py * headW;
-    const ax2 = hx - px * headW, ay2 = hy - py * headW;
     return `
       <path d="M ${(x1 * V).toFixed(1)} ${(y1 * V).toFixed(1)} Q ${(bx * V).toFixed(1)} ${(by * V).toFixed(1)} ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)}"
-            fill="none" stroke="${color}" stroke-width="3.4" stroke-linecap="round" opacity="0.9"/>
-      <path d="M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${(ax1 * V).toFixed(1)} ${(ay1 * V).toFixed(1)} L ${(ax2 * V).toFixed(1)} ${(ay2 * V).toFixed(1)} Z"
-            fill="${color}" opacity="0.9"/>`;
+            fill="none" stroke="${color}" stroke-width="1.9" stroke-linecap="round" opacity="0.42"/>
+      <path d="M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${((hx + px * headW) * V).toFixed(1)} ${((hy + py * headW) * V).toFixed(1)} L ${((hx - px * headW) * V).toFixed(1)} ${((hy - py * headW) * V).toFixed(1)} Z"
+            fill="${color}" opacity="0.42"/>`;
   }
 
   function oracleMoves(sample) {
@@ -878,6 +874,21 @@
       : `board is ${timeAgo(live.updated_at)} · ${sameCell ? "same cell, stale sample" : `last published sample; sweep cursor is ${cellLabel(state && state.current)}`}`;
   }
 
+  let reasoningSynced = true; // auto-follow the bottom of the thinking box
+
+  function reasoningAtBottom() {
+    const el = $("liveReasoning");
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  }
+
+  function reasoningSyncToBottom() {
+    const el = $("liveReasoning");
+    if (el) el.scrollTop = el.scrollHeight;
+    reasoningSynced = true;
+    renderLive();
+  }
+
   function renderLive() {
     const sweep = state && state.current ? `sweep now · ${cellLabel(state.current)}` : "sweep position unavailable";
     $("liveNow").textContent = sweep;
@@ -902,14 +913,18 @@
     const generating = live.phase === "generating" && !sampleDone(live);
     const thinkingLive = generating && reasoning.length > 0;
 
-    // thinking box (autoscrolls): always shows the model's reasoning chain
+    // thinking box: autoscrolls ONLY while the reader is at the bottom
+    // (or has hit the sync button); scrolling up freezes the viewport
+    const reasonEl = $("liveReasoning");
+    const wasAtBottom = reasoningAtBottom();
     $("liveReasoningLabel").textContent = thinkingLive
       ? `model thinking (live) · ${reasoning.length.toLocaleString()} chars`
       : reasoning
         ? `model thinking · ${reasoning.length.toLocaleString()} chars`
         : generating ? "model thinking · no tokens yet" : "model thinking";
     $("liveReasoning").textContent = reasoning || (generating ? "waiting for the first thought token…" : "no thinking published for this sample.");
-    $("liveReasoning").scrollTop = $("liveReasoning").scrollHeight;
+    $("reasoningSync").classList.toggle("active", reasoningSynced && wasAtBottom);
+    if (reasoningSynced && wasAtBottom) reasonEl.scrollTop = reasonEl.scrollHeight;
 
     // output box: the model's final answer
     $("liveGenerationLabel").textContent = live.output
@@ -1047,6 +1062,11 @@
   $("navNext").addEventListener("click", () => navTo(navIndex() + 1));
   $("navSync").addEventListener("click", navSync);
   setInterval(updateNavButtons, 500);
+  $("liveReasoning").addEventListener("scroll", () => {
+    reasoningSynced = reasoningAtBottom();
+    $("reasoningSync").classList.toggle("active", reasoningSynced);
+  });
+  $("reasoningSync").addEventListener("click", reasoningSyncToBottom);
   $("liveReplay").addEventListener("click", (ev) => {
     const chip = ev.target.closest(".replay-chip");
     if (!chip) return;

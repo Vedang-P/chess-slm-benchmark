@@ -303,7 +303,7 @@ class OpenCodeGoModel:
                             cache_hit = usage.get("prompt_cache_hit_tokens")
                             cache_miss = usage.get("prompt_cache_miss_tokens")
                         finish = ch[0].get("finish_reason")
-                        if on_chunk and (time.time() - last_chunk_at >= 20
+                        if on_chunk and (time.time() - last_chunk_at >= 5
                                          or finish):
                             last_chunk_at = time.time()
                             on_chunk({

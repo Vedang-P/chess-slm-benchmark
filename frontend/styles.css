@@ -434,6 +434,12 @@ html, body {
 }
 .nav-btn:hover:not(:disabled) { color: var(--ink-0); border-color: var(--ink-3); }
 .nav-btn:disabled { opacity: 0.35; cursor: default; }
+.sync-btn {
+  width: 26px;
+  height: 18px;
+  font-size: 10px;
+  padding: 0;
+}
 .nav-btn.active { background: var(--accent-dim, rgba(90, 171, 130, 0.2)); color: var(--pos); border-color: var(--pos); }
 .board-cell {
   position: relative;

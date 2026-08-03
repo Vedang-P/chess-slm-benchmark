@@ -41,3 +41,11 @@
 {"run_id": "2026-08-02T22:18:15Z", "ts": "2026-08-02T22:20:05Z", "cells_done": 1, "fraction": 0.25, "eta_min": 5, "legal_avg": 1.0, "last_error": null}
 {"run_id": "2026-08-03T03:57:27Z", "ts": "2026-08-03T03:57:27Z", "cells_done": 0, "fraction": 0.0, "eta_min": null, "legal_avg": null, "last_error": null}
 {"run_id": "2026-08-03T03:57:27Z", "ts": "2026-08-03T03:59:27Z", "cells_done": 0, "fraction": 0.0, "eta_min": null, "legal_avg": null, "last_error": null}
+{"run_id": "2026-08-03T03:57:27Z", "ts": "2026-08-03T04:00:34Z", "cells_done": 1, "fraction": 0.25, "eta_min": 9, "legal_avg": 1.0, "last_error": null}
+{"run_id": "2026-08-03T03:57:27Z", "ts": "2026-08-03T04:02:44Z", "cells_done": 1, "fraction": 0.25, "eta_min": 15, "legal_avg": 1.0, "last_error": null}
+{"run_id": "2026-08-03T03:57:27Z", "ts": "2026-08-03T04:03:50Z", "cells_done": 1, "fraction": 0.25, "eta_min": 19, "legal_avg": 1.0, "last_error": null}
+{"run_id": "2026-08-03T03:57:27Z", "ts": "2026-08-03T04:04:57Z", "cells_done": 2, "fraction": 0.5, "eta_min": 7, "legal_avg": 1.0, "last_error": null}
+{"run_id": "2026-08-03T04:05:40Z", "ts": "2026-08-03T04:05:40Z", "cells_done": 0, "fraction": 0.0, "eta_min": null, "legal_avg": null, "last_error": null}
+{"run_id": "2026-08-03T04:05:40Z", "ts": "2026-08-03T04:05:50Z", "cells_done": 0, "fraction": 0.0, "eta_min": null, "legal_avg": null, "last_error": null}
+{"run_id": "2026-08-03T04:05:40Z", "ts": "2026-08-03T04:06:20Z", "cells_done": 0, "fraction": 0.0, "eta_min": null, "legal_avg": null, "last_error": null}
+{"run_id": "2026-08-03T04:05:40Z", "ts": "2026-08-03T04:06:36Z", "cells_done": 0, "fraction": 0.0, "eta_min": null, "legal_avg": null, "last_error": null}
