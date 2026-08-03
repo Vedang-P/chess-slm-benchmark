@@ -59,6 +59,25 @@ class Monitor:
         self.output_dir = Path(output_dir)
         self.remote_prefix = remote_prefix  # results/chess (full) or results_check/chess (check)
         self.uploaded = set()  # remote paths already uploaded (tracked in-memory)
+        self.hf_uploaded = set()  # cell names already persisted to HF
+
+    def _push_hf(self) -> None:
+        """Persist every completed cell (report.json with the full thinking
+        chains + samples + summary) to the free HF dataset repo. Runs on
+        every tick; cells already uploaded are skipped."""
+        try:
+            from src.hf_push import resolve_hf_token, upload_cell
+
+            if not resolve_hf_token():
+                return  # no token configured — local runs still work
+            for summary_path in sorted(self.output_dir.glob("*.summary.json")):
+                cell = summary_path.stem
+                if cell in self.hf_uploaded:
+                    continue
+                upload_cell(self.output_dir, self.started_at, summary_path)
+                self.hf_uploaded.add(cell)
+        except Exception as e:
+            print(f"hf: push failed ({type(e).__name__}: {e})", flush=True)
 
     def set_meta(self, **kw) -> None:
         self.meta.update(kw)
@@ -81,6 +100,7 @@ class Monitor:
             return
         self._write_state(last_error)
         self._push()
+        self._push_hf()
         self.last_push = time.time()
 
     # ------------------------------------------------------------------ #
