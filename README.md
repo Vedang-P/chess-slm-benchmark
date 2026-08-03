@@ -44,13 +44,15 @@ difficulty and tactic type (34+ distinct themes).
 
 ## Representations
 
-- `grid` — rendered ASCII board
-- `fen` — FEN string
-- `bitboard` — 64-bit bitboards per piece type
-- `list` — piece list
-- `pgn` — SAN move history **future scope** (needs game-history datasets)
+**Phase 1 (standard chess, mate-in-1, n=5/rep) measured representation
+sensitivity directly: FEN 5/5, grid 3/5, list 3/5, bitboard 0/5 (with
+illegal moves). The study therefore runs the **fen** representation only**
+— chess capability, not format adaptation. Full Phase-1 report:
+`docs/phase1-results.md` (raw per-sample data in `docs/phase1/`).
 
-**Vision is explicitly out of scope for now** (no board-image rendering).
+- `grid`/`bitboard`/`list` — retained as a reported Phase-1 finding, not run further
+- `pgn` — SAN move history **future scope** (needs game-history datasets)
+- **Vision** — explicitly out of scope for now
 
 ## Metrics
 

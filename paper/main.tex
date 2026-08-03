@@ -36,17 +36,57 @@
 % (state tracking, world models). Explicitly: none at SLM scale.
 
 \section{Method}
-% Task battery table; rule variant (no castling/EP/double-step); oracles (retrograde,
-% checkmate detection, Stockfish 18 at depth 15, lichess solution lines); grid vs FEN
-% prompts differing only in presentation; models; metrics (parse, legal, top-1, win rate);
-% playout protocol (model vs uniform-random, forfeit on first illegal move).
+% Task battery table; oracles (retrograde, checkmate detection, Stockfish 18 at depth 15,
+% lichess solution lines); models; metrics (parse, legal, top-1, win rate).
+
+\subsection{Board representation}
+Every position is presented to the model in \emph{FEN notation} (standard
+chess). We chose FEN based on a Phase~1 representation study (\S\ref{sec:phase1})
+in which the same model attempted mate-in-1 positions rendered as a grid,
+FEN, bitboards, and a piece list: FEN was the only representation solved
+perfectly (5/5), bitboards the worst (0/5, with illegal moves). Because the
+study measures chess capability rather than format-adaptation, each model is
+evaluated on the representation most aligned with its pretraining
+distribution; the representation axis itself is reported as a Phase~1
+finding rather than a full factorial.
+
+\subsection{Rules}
+All positions and oracles use \emph{standard} chess rules (castling, en
+passant, and double-step pawn moves included), enforced with python-chess.
+No simplified variant is used; an illegal move is exactly what it is in
+real chess.
+
+\section{Phase 1: representation study}
+\label{sec:phase1}
+Before the main sweep we measured how board representation affects one
+model's (deepseek-v4-flash) ability to solve mate-in-1 positions under
+standard chess. Twenty positions (5 per representation) were presented as
+a rendered grid, FEN, per-piece bitboards, and a piece list. Table~\ref{tab:phase1} shows the result: FEN was solved perfectly, grid and list
+partially, and bitboards not at all --- including two illegal moves, the
+only illegal moves in the study. Section~\ref{sec:method} explains why the
+main evaluation therefore uses FEN only.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\hline
+Representation & Legal rate & Mate solved \\ \hline
+FEN & 1.0 & 1.0 \\
+Grid & 1.0 & 0.6 \\
+Piece list & 0.8 & 0.6 \\
+Bitboard & 0.6 & 0.0 \\ \hline
+\end{tabular}
+\caption{Phase~1 representation study: mate-in-1, $n{=}5$ per
+representation, standard chess.}
+\label{tab:phase1}
+\end{table}
 
 \section{Experiments}
 % Tables from docs/capability-analysis.md (sections 1-5).
-% Representation effect; legality as the model-ranking floor; cross-game generalization.
+% Legality as the model-ranking floor; cross-game generalization.
 
 \section{Discussion and Limitations}
-% Horizon/retrograde scope; variant rules; Stockfish depth; 10 games per playout cell;
+% Horizon/retrograde scope; Stockfish depth; 10 games per playout cell;
 % inference-only; non-archival.
 
 \section{Conclusion}
