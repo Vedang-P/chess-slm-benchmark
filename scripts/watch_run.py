@@ -15,10 +15,11 @@ import sys
 import time
 from pathlib import Path
 
-RESULTS = Path("results/chess")
-LIVE = Path("monitor/live.json")
-WATCH = Path("/tmp/bench_watch.json")
-LOG = Path("/tmp/bench_watch.log")
+RESULTS = Path(sys.argv[1] if len(sys.argv) > 1 else "results/chess")
+TARGET = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+PROC_PATTERN = sys.argv[3] if len(sys.argv) > 3 else "run_suite.py --output_dir results/chess"
+WATCH = Path(f"/tmp/bench_watch_{RESULTS.name}.json")
+LOG = Path(f"/tmp/bench_watch_{RESULTS.name}.log")
 STALL_MIN = 10  # no new positions in this many minutes -> alert
 
 def log(msg: str) -> None:
@@ -40,7 +41,8 @@ def positions_done() -> int:
     return total
 
 def live_age_s() -> float:
-    if not LIVE.exists():
+    live_path = Path("monitor/live.json")
+    if not live_path.exists():
         return float("inf")
     try:
         from datetime import datetime
@@ -53,7 +55,7 @@ def live_age_s() -> float:
 
 def process_alive() -> bool:
     try:
-        out = subprocess.run(["pgrep", "-f", "run_suite.py --output_dir results/chess"],
+        out = subprocess.run(["pgrep", "-f", PROC_PATTERN],
                              capture_output=True, text=True)
         return out.returncode == 0
     except Exception:
@@ -74,7 +76,7 @@ def main() -> None:
             "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "alive": alive,
             "positions_done": done,
-            "target_positions": 20,
+            "target_positions": TARGET,
             "live_age_s": round(age, 1) if age != float("inf") else None,
             "stalled_min": round((now - last_change) / 60, 1) if done > 0 else 0,
         }

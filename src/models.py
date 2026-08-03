@@ -278,7 +278,7 @@ class OpenCodeGoModel:
 
     def generate(self, prompt: str, max_new_tokens: int = 512,
                  temperature: float = 0.0, stream: bool = False,
-                 on_chunk=None) -> dict:
+                 on_chunk=None, thinking_budget: Optional[int] = None) -> dict:
         """Generate via the gateway. Thinking is ENABLED and UNBOUNDED: V4
         Flash reasons long on chess positions, and the study wants that
         thinking visible — we just wait for the final answer (max_tokens
@@ -298,7 +298,10 @@ class OpenCodeGoModel:
             }, local_usage(0, 8, source="smoke"))
         payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
                    "temperature": temperature,
-                   "thinking": {"type": "enabled"},
+                   "thinking": ({"type": "enabled",
+                                 "budget_tokens": thinking_budget}
+                                if thinking_budget is not None
+                                else {"type": "enabled"}),
                    "messages": [{"role": "user", "content": prompt}]}
         try:
             if stream:
