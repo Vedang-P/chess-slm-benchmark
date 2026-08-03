@@ -387,6 +387,7 @@ html, body {
 .live-board-wrap { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 0; }
 .board-frame { position: relative; }
 .board-stage {
+  position: relative;
   display: grid;
   gap: 0;
   border: 3px solid var(--line-strong);

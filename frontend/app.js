@@ -744,53 +744,73 @@
     renderArrows(sample);
   }
 
-  // square center in board fraction coords (0..1), top-left origin
-  function sqCenter(sq, n) {
+
+  // lichess arrows — ported verbatim from chessground/src/svg.ts +
+  // lila's analyse brushes. Straight line with round caps + an SVG marker
+  // arrowhead, in square units (viewBox 0 0 8 8).
+  const CG_BRUSHES = {
+    green: { key: "g", color: "#15781B", opacity: 1, lineWidth: 10 },
+    blue: { key: "b", color: "#003088", opacity: 1, lineWidth: 10 },
+    paleGreen: { key: "q", color: "#15781B", opacity: 0.4, lineWidth: 8 },
+    paleBlue: { key: "p", color: "#003088", opacity: 0.4, lineWidth: 8 },
+  };
+  const CG_ARROW_MARGIN = 10 / 64;
+  const CG_NS = "http://www.w3.org/2000/svg";
+  const cgLineWidth = (brush) => (brush.lineWidth || 10) / 64;
+  const cgOpacity = (brush, pendingErase) =>
+    (brush.opacity || 1) * (pendingErase ? 0.6 : 1);
+
+  function sqCenterUnits(sq, n) {
     if (!/^[a-h][1-8]$/.test(sq || "")) return null;
     const file = sq.charCodeAt(0) - 97;
     const rank = +sq[1];
-    return {
-      x: (file + 0.5) / n,
-      y: (n - rank + 0.5) / n,
-    };
+    // chessground coords: square centers in units, y down, rank 8 at top
+    return [file + 0.5, n - rank + 0.5];
   }
 
-  function arrowSvg(from, to, n, color, side) {
-    if (!from || !to) return "";
-    const a = sqCenter(from, n);
-    const b = sqCenter(to, n);
-    if (!a || !b) return "";
-    // lichess-inspired: curved, thin, translucent, with a soft dark halo so
-    // it reads on both light and dark squares; `side` flips the bend so two
-    // arrows on the same path stay visually distinct
-    const pad = 0.14;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 1e-6) return "";
-    const ux = dx / len, uy = dy / len;
-    const x1 = a.x + ux * pad, y1 = a.y + uy * pad;
-    const x2 = b.x - ux * pad, y2 = b.y - uy * pad;
-    const V = 100;
-    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-    const bend = side * Math.min(0.09, len * 0.16);
-    const bx = cx - uy * bend, by = cy + ux * bend;
-    // tangent at the end (control -> end) for the arrowhead
-    const tx = x2 - bx, ty = y2 - by;
-    const tl = Math.hypot(tx, ty) || 1;
-    const tanx = tx / tl, tany = ty / tl;
-    const headLen = 0.062, headW = 0.028;
-    const hx = x2 - tanx * headLen, hy = y2 - tany * headLen;
-    const px = -tany, py = tanx;
-    const ax1 = hx + px * headW, ay1 = hy + py * headW;
-    const ax2 = hx - px * headW, ay2 = hy - py * headW;
-    const curve = `M ${(x1 * V).toFixed(1)} ${(y1 * V).toFixed(1)} Q ${(bx * V).toFixed(1)} ${(by * V).toFixed(1)} ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)}`;
-    const head = `M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${(ax1 * V).toFixed(1)} ${(ay1 * V).toFixed(1)} L ${(ax2 * V).toFixed(1)} ${(ay2 * V).toFixed(1)} Z`;
-    return `
-      <path d="${curve}" fill="none" stroke="rgba(0,0,0,0.5)" stroke-width="4.6" stroke-linecap="round" opacity="0.4"/>
-      <path d="${head}" fill="rgba(0,0,0,0.5)" opacity="0.4"/>
-      <path d="${curve}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/>
-      <path d="${head}" fill="${color}" opacity="0.85"/>`;
+  function ensureArrowDefs(svg) {
+    let defs = svg.querySelector("defs");
+    if (!defs) {
+      defs = document.createElementNS(CG_NS, "defs");
+      svg.appendChild(defs);
+    }
+    for (const brush of Object.values(CG_BRUSHES)) {
+      if (defs.querySelector(`#arrowhead-${brush.key}`)) continue;
+      const marker = document.createElementNS(CG_NS, "marker");
+      marker.setAttribute("id", `arrowhead-${brush.key}`);
+      marker.setAttribute("orient", "auto");
+      marker.setAttribute("overflow", "visible");
+      marker.setAttribute("markerWidth", "4");
+      marker.setAttribute("markerHeight", "4");
+      marker.setAttribute("refX", "2.05");
+      marker.setAttribute("refY", "2");
+      const path = document.createElementNS(CG_NS, "path");
+      path.setAttribute("d", "M0,0 V4 L3,2 Z");
+      path.setAttribute("fill", brush.color);
+      marker.appendChild(path);
+      defs.appendChild(marker);
+    }
+  }
+
+  function cgArrowLine(from, to, brush) {
+    // chessground renderArrow: line shortened by arrowMargin at the dest,
+    // marker-end arrowhead, round caps
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    const angle = Math.atan2(dy, dx);
+    const xo = Math.cos(angle) * CG_ARROW_MARGIN;
+    const yo = Math.sin(angle) * CG_ARROW_MARGIN;
+    const line = document.createElementNS(CG_NS, "line");
+    line.setAttribute("stroke", brush.color);
+    line.setAttribute("stroke-width", String(cgLineWidth(brush)));
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("marker-end", `url(#arrowhead-${brush.key})`);
+    line.setAttribute("opacity", String(cgOpacity(brush, false)));
+    line.setAttribute("x1", String(from[0]));
+    line.setAttribute("y1", String(from[1]));
+    line.setAttribute("x2", String(to[0] - xo));
+    line.setAttribute("y2", String(to[1] - yo));
+    return line;
   }
 
   function oracleMoves(sample) {
@@ -810,28 +830,35 @@
   function renderArrows(sample) {
     let overlay = $("boardArrows");
     if (!overlay) {
-      overlay = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      overlay = document.createElementNS(CG_NS, "svg");
       overlay.id = "boardArrows";
       overlay.setAttribute("class", "board-arrows");
-      $("liveBoard").parentElement.prepend(overlay);
+      $("liveBoard").appendChild(overlay);
     }
     const n = sample && sample.n ? sample.n : 8;
     const modelMove = sample && sample.move ? sample.move : null;
-    let svg = "";
     const oracle = oracleMoves(sample);
-    let oracleDrawn = null;
+    overlay.setAttribute("viewBox", `0 0 ${n} ${n}`);
+    overlay.setAttribute("width", "100%");
+    overlay.setAttribute("height", "100%");
+    overlay.innerHTML = "";
+    ensureArrowDefs(overlay);
+
+    // reference arrows (green; paled when the model picked the same move so
+    // both stay visible, lichess-style)
     for (const m of oracle) {
-      oracleDrawn = m;
-      svg += arrowSvg(m.slice(0, 2), m.slice(2, 4), n, "#34d399", -1);
+      const from = sqCenterUnits(m.slice(0, 2), n);
+      const to = sqCenterUnits(m.slice(2, 4), n);
+      if (!from || !to) continue;
+      const brush = m === modelMove ? CG_BRUSHES.paleGreen : CG_BRUSHES.green;
+      overlay.appendChild(cgArrowLine(from, to, brush));
     }
+    // model move (blue)
     if (modelMove) {
-      // when the model found the reference move, flip the bend so BOTH
-      // arrows stay visible on the same path
-      const side = modelMove === oracleDrawn ? 1 : -1;
-      svg += arrowSvg(modelMove.slice(0, 2), modelMove.slice(2, 4), n, "#60a5fa", side);
+      const from = sqCenterUnits(modelMove.slice(0, 2), n);
+      const to = sqCenterUnits(modelMove.slice(2, 4), n);
+      if (from && to) overlay.appendChild(cgArrowLine(from, to, CG_BRUSHES.blue));
     }
-    overlay.setAttribute("viewBox", "0 0 100 100");
-    overlay.innerHTML = svg || "";
   }
 
   function sampleDone(sample) {

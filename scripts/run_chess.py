@@ -201,6 +201,29 @@ def main() -> None:
 
     live_token = _resolve_token() if args.live_push else None
 
+    # background live.json pusher: the SSE loop must never wait on GitHub
+    import threading
+
+    _live_pending = [None]
+    _live_cond = threading.Condition()
+
+    def _live_pusher() -> None:
+        while True:
+            with _live_cond:
+                while _live_pending[0] is None:
+                    _live_cond.wait()
+                data = _live_pending[0]
+                _live_pending[0] = None
+            try:
+                upload_file(live_token, "monitor/live.json", data,
+                            message=f"live {_utc_ts()}")
+            except Exception:
+                pass
+            time.sleep(1.0)  # pace GitHub API calls
+
+    if live_token:
+        threading.Thread(target=_live_pusher, daemon=True).start()
+
     def push_live(rec, condition, prompt, model_input, out=None, scored=None,
                   sample_idx=0, total=0, phase="scored", force=False,
                   fallback=None):
@@ -262,17 +285,15 @@ def main() -> None:
         }
         (ROOT / "monitor").mkdir(exist_ok=True)
         (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))
-        # local runs: push live.json straight to the public repo on every
-        # snapshot (only this ONE file, ~2-5s apart — ~1,500 calls/hr, well
-        # under GitHub's 5,000/hr) so the website shows thinking at ~2-4s
-        # lag instead of the batched monitor cadence.
-        if args.live_push:
-            try:
-                upload_file(live_token, "monitor/live.json",
-                            (ROOT / "monitor" / "live.json").read_bytes(),
-                            message=f"live {_utc_ts()}")
-            except Exception as e:
-                pass  # live is best-effort; never break the run
+        # local runs: push live.json straight to the public repo from a
+        # BACKGROUND thread (never block the generation loop — a synchronous
+        # contents-API round trip per snapshot was throttling token
+        # consumption to ~2 tok/s of visible text). Only this one file,
+        # ~1-2s apart — well under GitHub's 5,000/hr.
+        if args.live_push and live_token:
+            with _live_cond:
+                _live_pending[0] = (ROOT / "monitor" / "live.json").read_bytes()
+                _live_cond.notify()
 
     samples = []
     t0 = time.time()
