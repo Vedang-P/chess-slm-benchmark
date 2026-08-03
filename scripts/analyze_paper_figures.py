@@ -106,7 +106,7 @@ def _load_samples(results_dir: Path) -> list[dict]:
         summary_path = samples_path.with_name(samples_path.name.replace(".samples.jsonl", ".summary.json"))
         summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
         meta = summary.get("meta", {})
-        match = re.match(r"(.+?)_(mate1-lichess|mate2-lichess|bestmove-8x8|cap-legal-8x8|mob-8x8|mate1-8x8)_(.+)$", samples_path.stem.replace(".samples", ""))
+        match = re.match(r"(.+?)_(mate1-lichess|mate2-lichess|bestmove-8x8|mate-selection-test)_(.+)$", samples_path.stem.replace(".samples", ""))
         fallback_model = match.group(1) if match else "unknown"
         fallback_task = match.group(2) if match else "unknown"
         fallback_variant = match.group(3) if match else "unknown"

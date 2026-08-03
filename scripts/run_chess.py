@@ -3,10 +3,10 @@
 Runs on Kaggle (CUDA) or locally with --smoke (no model loading).
 
 Usage:
-    python scripts/run_chess.py --model smollm2-1.7b --task sm-5x5-win --n 20
+    python scripts/run_chess.py --model deepseek-v4-flash --task mate1-lichess \
+        --prompt-variant fen --n 1 --max_new_tokens 2048 --conditions win
     python scripts/run_chess.py --model gemma4-e2b --task mate1-lichess \
-        --prompt-variant fen
-    python scripts/run_chess.py --model smollm2-1.7b --task cap-legal-8x8 --smoke
+        --prompt-variant fen --smoke
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def _cleanup(model) -> None:
 def main() -> None:
     configure_quiet_logging()
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="smollm2-1.7b")
+    ap.add_argument("--model", default="deepseek-v4-flash")
     ap.add_argument("--task", required=True,
                     choices=sorted(TASK_FILES))
     ap.add_argument("--prompt-variant", default="grid",

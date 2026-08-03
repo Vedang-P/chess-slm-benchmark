@@ -1,30 +1,37 @@
-# External resources: what exists to build on (2026-07-31)
+# External resources (datasets, code, papers)
 
-Inventory of existing codebases/datasets used or considered by this project.
-Lichess-derived data is CC0; third-party repos are MIT/Apache unless noted.
+Inventory of everything this project builds on or references. Lichess
+data is CC0; MATE and third-party code have their own licenses — attribute
+properly in the paper.
 
-## Adopted (in the repo)
+## Adopted
 
 | Resource | What we use | Where |
 |---|---|---|
-| **python-chess** (niklasf, MIT) | Cross-validation of 8x8 legality + mate detection; FEN parsing | `scripts/test_engine.py` parity tests (runs on Kaggle; skipped if absent) |
-| **Lichess puzzle database** (CC0, 6M puzzles) | Real mate-in-1 positions for `mate1-lichess` (288 positions, puzzle id + rating); standard positions for `cap-legal-8x8` | `scripts/build_lichess_mate1.py`, `scripts/build_cap_positions.py`, `data/positions/` |
-| **kagisearch/llm-chess-puzzles** (MIT, 1000 lichess puzzles) | Source of standard 8x8 positions; their illegal-move table (gpt-4o 8.9%, claude-3-opus 46.4%) is baseline context for our legality metric | `data/external/kagi_puzzles.csv` |
+| **Lichess puzzle database** (CC0, 6.1M puzzles) | `mate1-lichess` (250) and `mate2-lichess` (250): mate-in-1/2 tactics, stratified by rating, with full metadata (rating, themes, popularity, plays, opening tags, game URLs) | `scripts/build_lichess_mates.py` → `data/positions/` |
+| **Lichess eval database** (CC0, 394M Stockfish evals) | `bestmove-8x8` (120): positions with Stockfish best move + cp/depth/knodes/PV | `scripts/build_bestmove_evals.py` → `data/positions/` |
+| **MATE** (Wang et al., NAACL 2025; HF `OutFlankShu/MATE_DATASET`) | `mate-selection-test` (1000 held-out positions): FEN + two candidate moves + expert strategy/tactic explanations + expert truth. Also the fine-tuning source (50k planned). | `scripts/build_mate_evals.py` → `data/positions/` |
+| **python-chess** (niklasf, MIT) | The rules engine for ALL scoring (standard chess); FEN parsing; SAN resolution | `src/benchmarks/games/tasks.py` |
+| **DeepSeek V4 Flash** (opencode-go gateway) | Frontier reference model, thinking on/off arms | `src/models.py` |
+| **Gemma 4 E2B/E4B** (Google, gated) | Small-model tier; fine-tuning targets (4-bit LoRA, planned) | `src/models.py` |
 
-## Considered, not adopted (why)
+## Considered, not adopted
 
 | Resource | Why it exists | Why not now |
 |---|---|---|
-| **ChessBench** (Ruoss et al., arXiv:2402.04494) | ~10M Stockfish-scored positions | Large; score-based rather than legality/mate-oriented; link not public on GitHub |
-| **LLM Chess** (arXiv:2512.01992, `maxim-saplin/llm_chess`) | Multi-turn game-play harness vs engines | Full-game play is out of scope; natural base for a future rollout task |
-| **Topsakal grid-game simulators** (arXiv:2407.07796) | Tic-Tac-Toe/Connect-4/Gomoku environments | Adding a second solvable game (Connect-4) is a follow-up |
-| **OthelloGPT** (Li et al., arXiv:2210.13382) | Synthetic Othello games + world-model probes | Different game; only relevant if the paper grows an internal-state analysis |
+| **ChessBench** (Keller & Hutter) | Large chess-LLM dataset suite | Our lichess-derived sets cover the same sources with richer metadata; not needed |
+| **LLM CHESS** (Kolasani et al.) | Multi-turn game-play harness | Full-game play is future scope; game-play protocol borrowed for the planned 100-game match |
+| **KinGPT / GAMBIT** (Tang) | Memorization-brittleness evaluation + LLM-Modulo | Borrowed as evaluation hygiene (theme-held-out splits, sanity metric, verifier-loop later) |
+| **ChessQA** (Wen et al.) | 5-category chess-understanding benchmark | Category taxonomy borrowed as future scope (structural/motifs/semantic arms) |
 
-## Key prior-work anchors (see the literature review)
+## Key prior-work anchors
 
-- AlphaMaze (2502.14669): SFT+GRPO recipe for SLM game abilities.
-- Inverse IFEval (2509.04292) + reversed-performance personas (2504.06460):
-  the text-domain "can't follow do-badly instructions" evidence we extend.
-- Specification gaming vs chess engine (2502.13295), sandbagging (2406.07358).
-- Goal misgeneralization (2105.14111, 2210.01790); reversal curse (2309.12288).
-- Gardner's minichess solved (1307.7118): exact-value oracle precedent.
+- MATE (2411.06655) — our base: expert-annotated move selection, fine-tune-then-compare.
+- KinGPT / "Generalization or Memorization?" (2605.17565) — brittleness testing, LLM-Modulo.
+- ChessQA (2510.23948) — capability taxonomy.
+- LLM CHESS (2512.01992) — game-play protocol, Elo.
+- ChessBench (2402.04494 / 2410.12065) — dataset ancestry.
+- Spec-gaming in reasoning models (2502.13295) — prompt hygiene against hacking.
+- Easy2Hard (NeurIPS 2024 D&B) — difficulty stratification.
+
+Full analysis: `docs/related-work.md`.

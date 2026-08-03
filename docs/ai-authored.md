@@ -10,12 +10,12 @@ this project's experiments and manuscript.
 - **Skills / orchestrators used**
   - RStack (lit-review, novelty-check): idea-to-experiment scaffolding;
     produced `lit-review.md` (44 verified references) and the novelty
-    assessment behind the anti-goal framing.
+    assessment behind the study design.
   - **Autoresearch** (`.opencode/skills/autoresearch/`, v2.2.1): goal-directed
     iteration loop — modify → verify → keep/discard — used for benchmark
     development (engine correctness, oracle validation, eval stack).
   - `scripts/research_pipeline.py`: deterministic end-to-end runner:
-    gate tests → capability sweep → anti-goal sweep → analysis → paper.
+    gate tests → benchmark sweep (mate1/mate2/bestmove/MATE) → fine-tune → analysis → paper.
 
 - **Humans in the loop**
   - Direction/decisions: a human researcher (Vedang Pandey) set the research

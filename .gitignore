@@ -83,3 +83,6 @@ data/models/
 docs/capability-analysis.md
 docs/anti-goal-analysis.md
 monitor/
+
+# Generated figure/table outputs
+analysis/

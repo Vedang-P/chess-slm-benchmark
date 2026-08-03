@@ -1,7 +1,9 @@
-# MATE-Grounded Chess Study: Fine-Tuned SLMs vs a Frontier Model
+# Chess SLM Benchmark: Beat DeepSeek at Chess by Reasoning (Gemma, Fine-Tuned)
 
-**Can a current on-device model, fine-tuned on expert-annotated chess data,
-close the gap to a frontier reasoning model?**
+**THE OBJECTIVE (see `docs/objective.md`):** benchmark Gemma 4 on chess, then
+fine-tune it to play chess **better than DeepSeek V4 Flash using only natural
+language reasoning** — no external search, no engine at inference time. *How*
+we fine-tune is an open question (next step).
 
 **Target venue**: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026 (Sydney)
 — Kaggle free T4 fine-tuning/evaluation + gateway API.
@@ -115,7 +117,8 @@ Every new sample also records a normalized `token_usage` object:
 - cache reads, writes/misses, and hit tokens when the provider reports them
 - time to first token, generation seconds, output tokens/second, reasoning
   tokens/second
-- thinking enabled, max token setting, fallback type, and usage completeness
+- thinking enabled, max token setting, no-answer reason (truncated /
+  gave_up / unparseable), and usage completeness
 
 These fields are required for the paper figures, not optional diagnostics.
 
@@ -154,7 +157,7 @@ The exact contract is documented in `docs/paper-figures.md`.
 
 - state.json uploaded every 60s; one upload per completed cell (summary +
   samples + index) — never per-sample.
-- Live dashboard: vedang-p.github.io/chess-bench-live (worker + public repo).
+- Live dashboard: chess-bench-live.pages.dev (worker + public repo).
 - Crash-safe: recovery cell pulls backed-up summaries + samples; `--resume`
   skips completed cells (schema-versioned).
 
@@ -167,8 +170,6 @@ The exact contract is documented in `docs/paper-figures.md`.
   short tactics, position judgment, semantic)
 - The `pgn`/SAN-history representation (from lichess game PGNs)
 - Board-image (vision) representation for multimodal models
-- MATE strategy/tactic explanation ablations beyond the first 50k E2B run
-- 100-game Gemma-LoRA vs DeepSeek head-to-head with PGN and per-move telemetry
 - KinGPT-style memorization/generalization checks: theme-held-out puzzles,
   transformed positions, and verifier-in-the-loop baselines
 
@@ -178,12 +179,13 @@ The exact contract is documented in `docs/paper-figures.md`.
 data/positions/     committed task sets with oracles + full lichess metadata
 data/raw/           gitignored: raw lichess DB downloads (1GB puzzle CSV, eval shards)
 configs/
-  models.yaml       3-model registry (2 HF 4-bit + gateway API)
-  suite.yaml        sweep definition (models x tasks x reps, check vs full)
+  suite.yaml        sweep definition (models x tasks, check vs full)
 src/
-  models.py         4-bit HF loader + OpenCodeGo gateway client + registry
+  models.py         4-bit HF loader (gemma) + OpenCodeGo gateway client (deepseek)
+  token_usage.py    normalized provider/local token, cache, latency schema
   report.py         per-sample JSONL, summaries, comparison_table.csv
-  token_usage.py    normalized provider/local token, cache, and latency schema
+  hf_push.py        results archive to the public HF dataset repo
+  live_push.py      GitHub contents-API uploads for the dashboard
   benchmarks/games/
     prompts.py      FEN prompts (single representation, win condition)
     tasks.py        strict answer extraction + oracle scoring (python-chess)
@@ -193,16 +195,22 @@ scripts/
   build_bestmove_evals.py   bestmove from lichess eval DB (cp/depth/knodes/PV)
   build_mate_evals.py       MATE move-selection eval set (1000 held-out positions)
   run_chess.py      one model x one tactical task x FEN prompt
-  run_mate_eval.py  MATE move-selection eval (single worker; the gateway
-                    serializes per key, parallel workers measured useless)
+  run_mate_eval.py  MATE move-selection eval (single worker; gateway serializes)
   run_suite.py      full matrix -> results/chess/comparison_table.csv
   analyze_paper_figures.py   three publication figures + figure-ready CSV/JSON
+  watch_run.py      detached watchdog (alive/progress/stall alerts)
+  detach.sh         macOS-safe daemonizer for long local runs
 notebooks/
-  build_notebook.py  SINGLE SOURCE -> kaggle_check.ipynb + kaggle_run.ipynb
-frontend/            live dashboard (GitHub Pages: vedang-p.github.io/chess-bench-live)
+  build_notebook.py        -> kaggle_check.ipynb + kaggle_run.ipynb
+  build_mate_notebook.py   -> kaggle_mate.ipynb (autonomous MATE thinking run)
+frontend/            live dashboard (Cloudflare Pages: chess-bench-live.pages.dev)
+worker/              Cloudflare worker proxy (fresh GitHub contents feed)
 docs/
+  objective.md       THE PROJECT OBJECTIVE (read this first)
   related-work.md    detailed paper rundown + what we borrow
+  memory-decisions.md  append-only log of every project decision
   paper-figures.md   figure definitions + per-sample data contract
+  phase1-results.md  Phase-1 representation study
   external-resources.md
   ai-authored.md
 ```
@@ -216,7 +224,7 @@ pip install -r requirements.txt
 python scripts/test_engine.py --quick        # CPU-only gate (no torch needed)
 # deepseek smoke (needs OPENCODE_API_KEY in .env):
 python scripts/run_chess.py --model deepseek-v4-flash --task mate1-lichess \
-    --prompt-variant fen --n 1 --max_new_tokens 32768 --conditions win \
+    --prompt-variant fen --n 1 --max_new_tokens 2048 --conditions win \
     --output_dir /tmp/ds_smoke
 ```
 
@@ -227,11 +235,12 @@ python scripts/run_chess.py --model deepseek-v4-flash --task mate1-lichess \
    **save**, **restart kernel**.
 2. Upload `notebooks/kaggle_check.ipynb` — engine tests + tiny sweep (n=1).
 3. Upload `notebooks/kaggle_run.ipynb` — full sweep; batched monitoring; crash-safe.
+4. Upload `notebooks/kaggle_mate.ipynb` — autonomous MATE thinking run (~6h, CPU only).
 
 ## Live monitoring
 
 Batched uploads (state every 60s, one upload per cell) to
-`Vedang-P/chess-bench-live`. Dashboard: **vedang-p.github.io/chess-bench-live**.
+`Vedang-P/chess-bench-live`. Dashboard: **chess-bench-live.pages.dev**.
 
 ## Literature
 

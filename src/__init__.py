@@ -1,3 +1,3 @@
-"""Anti-Goal Chess Benchmark: do small models follow objectives they cannot verify?"""
+"""Chess SLM Benchmark: fine-tune Gemma 4 to beat DeepSeek at chess via reasoning."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

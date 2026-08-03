@@ -9,7 +9,7 @@ Usage:
     python scripts/run_suite.py --check        # tiny sanity sweep
     python scripts/run_suite.py --smoke        # stub models, no GPU
     python scripts/run_suite.py --monitor      # publish progress to 'live' branch
-    python scripts/run_suite.py --models deepseek-r1-distill-qwen-1.5b smollm2-1.7b
+    python scripts/run_suite.py --models deepseek-v4-flash
 """
 from __future__ import annotations
 
