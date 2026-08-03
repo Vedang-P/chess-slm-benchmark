@@ -50,3 +50,10 @@ Append-only record of user decisions and rationale. Update on every change.
 - Kaggle CLI push-to-supersede is the stop mechanism (API abort endpoints
   are 404/dead).
 - kernel: vedangpandeyyy/mate-thinking-100 (private, CPU, internet on).
+
+## 2026-08-04 — Kaggle versioning gotcha (FIXED)
+- Pushing a new kernel version does NOT cancel the running one — both ran
+  simultaneously, both pushed live.json, and the dashboard cycled through
+  positions with no visible answers. GPU version also kept burning quota.
+- Fix: `kaggle kernels delete <owner>/<slug>` kills all versions; then
+  re-push ONE clean version (enable_gpu false). Single run_id verified.
