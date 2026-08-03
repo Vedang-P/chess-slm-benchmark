@@ -59,6 +59,11 @@ def _report_from_samples(samples_path: Path, summary: dict) -> dict:
             continue
         s = json.loads(line)
         samples.append({
+            "model": s.get("model"),
+            "task": s.get("task"),
+            "task_category": s.get("task_category"),
+            "representation": s.get("representation"),
+            "run_id": s.get("run_id"),
             "position_id": s.get("position_id"),
             "prompt": s.get("prompt"),
             "thinking": s.get("reasoning", ""),
@@ -71,6 +76,10 @@ def _report_from_samples(samples_path: Path, summary: dict) -> dict:
             "fallback": s.get("fallback"),
             "cache_hit_tokens": s.get("cache_hit"),
             "cache_miss_tokens": s.get("cache_miss"),
+            "token_usage": s.get("token_usage"),
+            "position_metadata": s.get("position_metadata"),
+            "max_new_tokens": s.get("max_new_tokens"),
+            "thinking_enabled": s.get("thinking_enabled"),
             "latency_ms": s.get("latency_ms"),
             "output_tokens": s.get("output_tokens"),
         })
@@ -80,6 +89,9 @@ def _report_from_samples(samples_path: Path, summary: dict) -> dict:
         "model": summary.get("meta", {}).get("model"),
         "task": summary.get("meta", {}).get("task"),
         "variant": summary.get("meta", {}).get("prompt_variant"),
+        "task_category": summary.get("meta", {}).get("task_category"),
+        "thinking_enabled": summary.get("meta", {}).get("thinking_enabled"),
+        "max_new_tokens": summary.get("meta", {}).get("max_new_tokens"),
         "generated_at": summary.get("finished_at"),
         "metrics": summary.get("metrics", {}),
         "samples": samples,

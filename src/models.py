@@ -15,6 +15,8 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, Optional
 
+from src.token_usage import from_provider_usage, local_usage, with_rates
+
 MODEL_IDS = {
     "gemma4-e2b": "google/gemma-4-E2B-it",
     "gemma4-e4b": "google/gemma-4-E4B-it",
@@ -39,6 +41,22 @@ def resolve_api_key() -> Optional[str]:
             if line.startswith("OPENCODE_API_KEY="):
                 return line.split("=", 1)[1].strip().strip('"').strip("'")
     return None
+
+
+def _attach_usage(result: dict, usage: dict) -> dict:
+    """Keep flat legacy fields while adding the normalized token schema."""
+    normalized = usage if "generation_seconds" in usage else with_rates(
+        usage, result.get("latency_ms"))
+    result["token_usage"] = normalized
+    result["input_tokens"] = normalized.get("input_tokens")
+    result["output_tokens"] = normalized.get("output_tokens")
+    result["reasoning_tokens"] = normalized.get("reasoning_tokens")
+    result["total_tokens"] = normalized.get("total_tokens")
+    result["cache_hit"] = normalized.get("cache_hit_tokens")
+    result["cache_miss"] = normalized.get("cache_miss_tokens")
+    result["reasoning_chars"] = len(result.get("reasoning") or "")
+    result["answer_chars"] = len(result.get("content") or "")
+    return result
 
 
 def configure_quiet_logging() -> None:
@@ -131,13 +149,13 @@ class HFModel:
         generated (chain-of-thought visibility in notebook cells)."""
         t0 = time.time()
         if self.smoke_test:
-            return {
+            return _attach_usage({
                 "content": "MOVE: a1a2",
-                "input_tokens": len(prompt.split()),
                 "output_tokens": 8,
                 "latency_ms": (time.time() - t0) * 1000,
                 "finished": True,
-            }
+                "reasoning": "",
+            }, local_usage(len(prompt.split()), 8, source="smoke"))
         import torch
 
         messages = []
@@ -188,13 +206,12 @@ class HFModel:
             out = self.model.generate(**gen_kwargs)
         output_ids = out[0][input_len:]
         content = decode_fn(output_ids, skip_special_tokens=True)
-        return {
+        return _attach_usage({
             "content": content,
-            "input_tokens": input_len,
-            "output_tokens": int(output_ids.shape[-1]),
             "latency_ms": (time.time() - t0) * 1000,
             "finished": bool(output_ids.shape[-1] < max_new_tokens),
-        }
+            "reasoning": "",
+        }, local_usage(input_len, int(output_ids.shape[-1]), source="hf_transformers"))
 
 
 class OpenCodeGoModel:
@@ -275,10 +292,10 @@ class OpenCodeGoModel:
         (DeepSeek-style) is surfaced so we can track cache utilization."""
         t0 = time.time()
         if self.smoke_test:
-            return {"content": "MOVE: a1a2", "reasoning": "",
-                    "input_tokens": 0, "output_tokens": 8,
-                    "latency_ms": 1, "finished": True,
-                    "cache_hit": None, "cache_miss": None}
+            return _attach_usage({
+                "content": "MOVE: a1a2", "reasoning": "",
+                "latency_ms": 1, "finished": True,
+            }, local_usage(0, 8, source="smoke"))
         payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
                    "temperature": temperature,
                    "thinking": {"type": "enabled"},
@@ -286,23 +303,30 @@ class OpenCodeGoModel:
         try:
             if stream:
                 content, reasoning = "", ""
-                n_tokens = 0
-                cache_hit = cache_miss = None
+                final_usage = {}
+                stream_events = 0
+                first_token_at = None
+                finish_reason = None
                 last_chunk_at = time.time()
-                with self._post(payload, stream=True) as resp:
+                stream_payload = {**payload, "stream_options": {"include_usage": True}}
+                with self._post(stream_payload, stream=True) as resp:
                     for chunk in self._sse_chunks(resp):
                         ch = chunk.get("choices") or [{}]
+                        if chunk.get("usage"):
+                            final_usage = chunk["usage"]
                         if not ch:
                             continue
                         delta = ch[0].get("delta") or {}
-                        content += delta.get("content") or ""
-                        reasoning += delta.get("reasoning_content") or ""
-                        usage = chunk.get("usage") or {}
-                        n_tokens = usage.get("completion_tokens", n_tokens)
-                        if "prompt_cache_hit_tokens" in usage:
-                            cache_hit = usage.get("prompt_cache_hit_tokens")
-                            cache_miss = usage.get("prompt_cache_miss_tokens")
+                        delta_content = delta.get("content") or ""
+                        delta_reasoning = delta.get("reasoning_content") or ""
+                        if delta_content or delta_reasoning:
+                            stream_events += 1
+                            if first_token_at is None:
+                                first_token_at = time.time()
+                        content += delta_content
+                        reasoning += delta_reasoning
                         finish = ch[0].get("finish_reason")
+                        finish_reason = finish or finish_reason
                         if on_chunk and (time.time() - last_chunk_at >= 2
                                          or finish):
                             last_chunk_at = time.time()
@@ -313,10 +337,9 @@ class OpenCodeGoModel:
                             })
                 data = {"choices": [{"message": {"content": content,
                                                  "reasoning_content": reasoning},
-                                     "finish_reason": "stop" if content else "length"}],
-                        "usage": {"prompt_tokens": 0, "completion_tokens": n_tokens,
-                                  "prompt_cache_hit_tokens": cache_hit,
-                                  "prompt_cache_miss_tokens": cache_miss}}
+                                     "finish_reason": finish_reason or
+                                     ("stop" if content else "length")}],
+                        "usage": final_usage}
                 if on_chunk:
                     on_chunk({"content": content, "reasoning": reasoning,
                               "phase": "done", "finished": True})
@@ -327,33 +350,38 @@ class OpenCodeGoModel:
             content = msg.get("content") or ""
             reasoning = msg.get("reasoning_content") or ""
             usage = data.get("usage", {})
-            self.prompt_tokens += usage.get("prompt_tokens", 0)
-            self.completion_tokens += usage.get("completion_tokens", 0)
-            return {
+            self.prompt_tokens += usage.get("prompt_tokens") or 0
+            self.completion_tokens += usage.get("completion_tokens") or 0
+            usage_record = from_provider_usage(
+                usage,
+                source="opencode_go",
+                stream_events=stream_events if stream else None,
+                time_to_first_token_ms=(
+                    (first_token_at - t0) * 1000
+                    if stream and first_token_at is not None else None
+                ),
+            )
+            return _attach_usage({
                 "content": content,
                 "reasoning": reasoning,
-                "input_tokens": usage.get("prompt_tokens", 0),
-                "output_tokens": usage.get("completion_tokens", 0),
                 "latency_ms": (time.time() - t0) * 1000,
                 "finished": data["choices"][0].get("finish_reason") in ("stop", None),
-                "cache_hit": usage.get("prompt_cache_hit_tokens"),
-                "cache_miss": usage.get("prompt_cache_miss_tokens"),
-            }
+            }, usage_record)
         except urllib.error.HTTPError as e:
             body = ""
             try:
                 body = e.read().decode()[:300]
             except Exception:
                 pass
-            return {"content": f"ERROR HTTP {e.code}: {body}", "reasoning": "",
-                    "input_tokens": 0, "output_tokens": 0,
-                    "latency_ms": (time.time() - t0) * 1000, "finished": True,
-                    "cache_hit": None, "cache_miss": None}
+            return _attach_usage({
+                "content": f"ERROR HTTP {e.code}: {body}", "reasoning": "",
+                "latency_ms": (time.time() - t0) * 1000, "finished": True,
+            }, local_usage(None, None, source="error"))
         except Exception as e:
-            return {"content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
-                    "input_tokens": 0, "output_tokens": 0,
-                    "latency_ms": (time.time() - t0) * 1000, "finished": True,
-                    "cache_hit": None, "cache_miss": None}
+            return _attach_usage({
+                "content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
+                "latency_ms": (time.time() - t0) * 1000, "finished": True,
+            }, local_usage(None, None, source="error"))
 
     def force_answer(self, prompt: str, max_new_tokens: int = 256,
                      temperature: float = 0.0) -> dict:
@@ -377,22 +405,19 @@ class OpenCodeGoModel:
                 data = json.load(resp)
             msg = data["choices"][0]["message"]
             usage = data.get("usage", {})
-            return {
+            return _attach_usage({
                 "content": msg.get("content") or "",
                 "reasoning": msg.get("reasoning_content") or "",
-                "input_tokens": usage.get("prompt_tokens", 0),
-                "output_tokens": usage.get("completion_tokens", 0),
                 "latency_ms": (time.time() - t0) * 1000,
                 "finished": True,
-                "cache_hit": usage.get("prompt_cache_hit_tokens"),
-                "cache_miss": usage.get("prompt_cache_miss_tokens"),
                 "forced": True,
-            }
+            }, from_provider_usage(usage, source="opencode_go_force"))
         except Exception as e:
-            return {"content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
-                    "input_tokens": 0, "output_tokens": 0,
-                    "latency_ms": (time.time() - t0) * 1000, "finished": True,
-                    "cache_hit": None, "cache_miss": None, "forced": True}
+            return _attach_usage({
+                "content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
+                "latency_ms": (time.time() - t0) * 1000, "finished": True,
+                "forced": True,
+            }, local_usage(None, None, source="error"))
 
 
 def make_model(model_key: str, smoke_test: bool = False):

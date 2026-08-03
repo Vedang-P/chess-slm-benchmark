@@ -299,6 +299,7 @@ def _rows_from_summary(model: str, task: str, variant: str, summary: dict) -> li
             "n": g["n"], "parse_rate": "", "legal_rate": g.get("legal_rate"),
             "compliance_of_legal": g.get("win_rate"),
             "compliance_strict": "", "undefined": "",
+            "token_usage": metrics.get("token_usage", {}),
             "game": {k: v for k, v in g.items()},
         })
         return rows
@@ -310,6 +311,7 @@ def _rows_from_summary(model: str, task: str, variant: str, summary: dict) -> li
             "compliance_of_legal": m["compliance_of_legal"],
             "compliance_strict": m["compliance_strict"],
             "undefined": m["undefined"],
+            "token_usage": metrics.get("token_usage", {}),
         })
     div = summary["metrics"].get("divergence_rate")
     if div is not None:
@@ -440,7 +442,9 @@ def main() -> None:
                 monitor.set_current(model, task, variant)
                 monitor.maybe_push(last_error=last_error)
             t = time.time()
-            res = subprocess.run(cmd, cwd=ROOT)
+            child_env = os.environ.copy()
+            child_env["BENCH_RUN_ID"] = monitor.started_at if monitor else _ts()
+            res = subprocess.run(cmd, cwd=ROOT, env=child_env)
             cell_rows = []
             if res.returncode != 0:
                 print(f"!!! {model} x {task}:{variant} FAILED rc={res.returncode}", flush=True)

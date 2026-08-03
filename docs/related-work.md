@@ -94,13 +94,35 @@ borrow from each. Verdict up front:
 
 ## 5. KinGPT / "Generalization or Memorization?" (Tang, 2026)
 
-- **What**: shows a 25M character-level model beats 3-4B chess LLMs on
-  mate-in-N suites; argues benchmark wins are pattern-matching, not
-  understanding. Also: **LLM-Modulo** (verifier-in-the-loop) lifts a 3B
-  model's best-move accuracy 1.2%→21.2% and legality 19.3%→95.3%.
-- **Borrow**: the **cautionary framing** (report memorization-robustness
-  checks: unseen positions, perturbed boards) and the LLM-Modulo result as
-  a baseline/comparison point for our per-representation numbers.
+- **What**: trains KinGPT, a 25M-parameter character-level model whose only
+  domain is chess. It uses three training distributions: Woodpecker (13.34M
+  unique Lichess puzzle positions), Beaver (54,681 positions from Stockfish
+  18 self-play), and Chimera (the combination). It then tests on a theme-wide
+  held-out suite of mate-in-1/2/3 puzzles rather than only reporting training-
+  distribution performance.
+- **Key result**: Woodpecker reaches 81.7% position accuracy, Chimera 84.6%,
+  while Beaver reaches only 2.2%. A tiny model trained on puzzle-shaped data
+  can therefore beat larger chess models on the same narrow puzzle suite,
+  while failing to demonstrate broad chess understanding. This warns against
+  interpreting a high mate score as general reasoning.
+- **Inference controls**: normal pass@1, a "cheating" prompt that supplies
+  the position evaluation, pass@10 sampling, and LLM-Modulo. LLM-Modulo uses
+  two hard critics: one asks whether the move is legal; the other asks
+  whether it improves the engine evaluation. Failed candidates are re-
+  prompted with feedback. For RedPajama 3B, this raises best-move accuracy
+  from 1.2% to 21.2% and validity from 19.3% to 95.3%.
+- **Metrics**: position-wide accuracy, puzzle-wide accuracy (every move in a
+  puzzle must be correct), and sanity (`1 - invalid parses / positions`).
+  Example: a mate-in-3 puzzle can contribute three position decisions but is
+  only puzzle-correct if all three are right.
+- **Borrow directly**:
+  1. Split by puzzle theme and remove FEN overlap between training and eval;
+  2. report both position accuracy and whole-puzzle accuracy;
+  3. report legality/sanity separately from correctness;
+  4. add a verifier-loop ablation later, clearly separating native model
+     behavior from verifier-assisted behavior;
+  5. do not claim visible thinking traces are faithful explanations without
+     independently validating them.
 
 ## 6. Geometric stability (Song et al., 2025)
 

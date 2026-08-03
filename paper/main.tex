@@ -56,6 +56,15 @@ passant, and double-step pawn moves included), enforced with python-chess.
 No simplified variant is used; an illegal move is exactly what it is in
 real chess.
 
+\subsection{Token and response accounting}
+Each sample stores the exact prompt, complete returned thinking text, final
+answer, oracle answer, parser/verdict outcome, fallback status, and provider
+usage when available. Usage includes input, output, reasoning, and total
+tokens; cache reads/misses; time to first token; generation latency; and
+token rates. This supports the three planned analyses: performance versus
+tokens, outcome breakdowns by category, and model-by-category accuracy
+heatmaps. Missing provider fields remain missing rather than being imputed.
+
 \section{Phase 1: representation study}
 \label{sec:phase1}
 Before the main sweep we measured how board representation affects one

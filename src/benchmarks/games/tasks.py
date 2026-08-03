@@ -27,6 +27,20 @@ from src.benchmarks.games.prompts import (
 )
 from src.benchmarks.games.rules import algebraic_to_sq
 
+TASK_CATEGORIES = {
+    "mate1-lichess": "Short Tactics",
+    "mate2-lichess": "Short Tactics",
+    "bestmove-8x8": "Position Judgment",
+    "cap-legal-8x8": "Structural",
+    "mob-8x8": "Position Judgment",
+    "mate1-8x8": "Short Tactics",
+}
+
+
+def task_category(task_name: str) -> str:
+    """Paper-facing category label; future ChessQA-style tasks extend this."""
+    return TASK_CATEGORIES.get(task_name, "Uncategorized")
+
 _MOVE_RE = re.compile(r"([a-h][1-8])\s*[- ]?\s*([a-h][1-8])")
 _SAN_RE = re.compile(r"[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?(?:[+#])?|[O0]-[O0](?:-[O0])?")
 _COLOR_PREFIX_RE = re.compile(r"\b[wb](?=[KQRBN])")

@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ from src.benchmarks.games.envs import ENVS  # noqa: E402
 from src.live_push import PUBLIC_LIVE_REPO, resolve_token, upload_file  # noqa: E402
 from src.models import MODEL_IDS, configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_samples  # noqa: E402
+from src.token_usage import merge_usage  # noqa: E402
 
 TASK_FILES = {
     "cap-legal-8x8": "cap-legal-8x8.json",
@@ -156,6 +158,8 @@ def main() -> None:
     args = ap.parse_args()
 
     task_name = args.task
+    task_category = T.task_category(task_name)
+    run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
     if task_name in GAME_TASKS:
         n_games = args.n or GAME_N
         model = make_model(args.model, smoke_test=args.smoke)
@@ -164,6 +168,7 @@ def main() -> None:
         writer = ResultWriter(
             Path(args.output_dir), run_name,
             {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
+             "task_category": task_category, "run_id": run_id,
              "smoke": args.smoke, "kind": "game"},
         )
         samples = []
@@ -193,8 +198,10 @@ def main() -> None:
     writer = ResultWriter(
         Path(args.output_dir),
         run_name,
-        {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
-         "smoke": args.smoke},
+         {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
+          "task_category": task_category, "run_id": run_id,
+          "smoke": args.smoke, "thinking_enabled": args.model == "deepseek-v4-flash",
+          "max_new_tokens": args.max_new_tokens},
     )
     live_last = [0.0]
     from src.live_push import resolve_token as _resolve_token
@@ -242,6 +249,8 @@ def main() -> None:
         live = {
             "updated_at": _utc_ts(),
             "cell": {"model": args.model, "task": task_name, "variant": args.prompt_variant},
+            "task_category": task_category,
+            "run_id": run_id,
             "sample_idx": sample_idx,
             "sample_total": total,
             "position_id": rec["id"],
@@ -252,6 +261,9 @@ def main() -> None:
             "finished": out.get("finished") if phase == "scored" else False,
             "cache_hit": out.get("cache_hit"),
             "cache_miss": out.get("cache_miss"),
+            "token_usage": out.get("token_usage"),
+            "reasoning_chars": out.get("reasoning_chars"),
+            "answer_chars": out.get("answer_chars"),
             "fallback": fallback,
             "phase": phase,
             "status": scored.get("status") if phase == "scored" else None,
@@ -282,6 +294,12 @@ def main() -> None:
                 "pieces": rec.get("pieces") or [],
                 "source": "position record",
             },
+            "position_metadata": {
+                key: rec.get(key) for key in (
+                    "source", "puzzle_id", "fen", "presented_fen", "rating",
+                    "rating_deviation", "popularity", "nb_plays",
+                ) if rec.get(key) is not None
+            } | {"task_extra": extra},
         }
         (ROOT / "monitor").mkdir(exist_ok=True)
         (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))
@@ -364,6 +382,18 @@ def main() -> None:
                        "cache_miss": out2.get("cache_miss"),
                        "latency_ms": (out.get("latency_ms") or 0)
                                      + (out2.get("latency_ms") or 0)}
+                out["token_usage"] = merge_usage(
+                    out.get("token_usage"), out2.get("token_usage"),
+                    out.get("latency_ms"))
+                merged_usage = out["token_usage"]
+                out["input_tokens"] = merged_usage.get("input_tokens")
+                out["output_tokens"] = merged_usage.get("output_tokens")
+                out["reasoning_tokens"] = merged_usage.get("reasoning_tokens")
+                out["total_tokens"] = merged_usage.get("total_tokens")
+                out["cache_hit"] = merged_usage.get("cache_hit_tokens")
+                out["cache_miss"] = merged_usage.get("cache_miss_tokens")
+                out["reasoning_chars"] = len(out.get("reasoning") or "")
+                out["answer_chars"] = len(out.get("content") or "")
                 fallback = "forced"
                 if not _answer_has_move(out.get("content")):
                     # last resort: the best legal move we can extract, or a
@@ -378,11 +408,11 @@ def main() -> None:
                     except Exception:
                         pass
                 if not _answer_has_move(out.get("content")):
-                    from src.benchmarks.games.tasks import _board
+                    from src.benchmarks.games.tasks import _board, _legal_ucis
                     try:
                         board = _board(rec)
                         import random
-                        moves = [m.uci for m in board.legal_moves()]
+                        moves = list(_legal_ucis(board))
                         if moves:
                             out["content"] = f"MOVE: {random.choice(moves)}"
                             fallback = "random-legal"
@@ -397,17 +427,33 @@ def main() -> None:
             sample = {
                 "position_id": rec["id"],
                 "condition": condition,
+                "model": args.model,
+                "task": task_name,
+                "task_category": task_category,
+                "representation": args.prompt_variant,
+                "run_id": run_id,
                 "value": rec["value"],
                 "prompt_tokens": out.get("input_tokens"),
                 "output_tokens": out.get("output_tokens"),
                 "latency_ms": out.get("latency_ms"),
                 "finished": out.get("finished"),
+                "max_new_tokens": args.max_new_tokens,
+                "thinking_enabled": args.model == "deepseek-v4-flash",
                 "prompt": prompt,
                 "output": out.get("content", ""),
                 "reasoning": out.get("reasoning", ""),
+                "reasoning_chars": out.get("reasoning_chars"),
+                "answer_chars": out.get("answer_chars"),
                 "cache_hit": out.get("cache_hit"),
                 "cache_miss": out.get("cache_miss"),
+                "token_usage": out.get("token_usage"),
                 "fallback": fallback,
+                "position_metadata": {
+                    key: rec.get(key) for key in (
+                        "source", "puzzle_id", "fen", "presented_fen", "rating",
+                        "rating_deviation", "popularity", "nb_plays",
+                    ) if rec.get(key) is not None
+                } | {"task_extra": rec.get("task_extra") or {}},
                 "correct": T.get_correct(rec, kind),
                 **scored,
             }

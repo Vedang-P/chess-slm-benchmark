@@ -1,13 +1,14 @@
 """Result writing: per-sample JSONL, per-run summary JSON, comparison CSV.
 
 The comparison table is the paper's main artifact: rows = (model, task,
-condition), columns = n, parse_rate, legal_rate, compliance, plus
-per-position divergence for paired conditions.
+representation, condition), columns = correctness/legality plus normalized
+token, cache, latency, and fallback aggregates.
 """
 from __future__ import annotations
 
 import csv
 import json
+import statistics
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -76,7 +77,58 @@ def aggregate_samples(samples: List[dict]) -> dict:
         # compliance of ALL samples (treat no-answer/parse/illegal as
         # non-compliant -- the strict policy used in the paper)
         d["compliance_strict"] = round(d["compliant"] / d["n"], 4) if d["n"] else 0.0
-    return {"conditions": conds}
+    return {"conditions": conds, "token_usage": aggregate_token_usage(samples)}
+
+
+def aggregate_token_usage(samples: List[dict]) -> dict:
+    """Aggregate provider/local usage without treating missing values as 0.
+
+    This is deliberately provider-neutral: the paper can compare API
+    reasoning tokens, local generated tokens, cache reads, and latency while
+    retaining the number of samples for which a provider did not report an
+    exact field.
+    """
+    fields = (
+        "input_tokens",
+        "output_tokens",
+        "reasoning_tokens",
+        "total_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "cache_hit_tokens",
+        "cache_miss_tokens",
+        "generation_seconds",
+        "output_tokens_per_second",
+        "reasoning_tokens_per_second",
+        "time_to_first_token_ms",
+    )
+    values = {field: [] for field in fields}
+    fallback_counts: Dict[str, int] = {}
+    for sample in samples:
+        usage = sample.get("token_usage") or {}
+        for field in fields:
+            value = usage.get(field)
+            if isinstance(value, (int, float)):
+                values[field].append(float(value))
+        fallback = sample.get("fallback")
+        if fallback:
+            fallback_counts[fallback] = fallback_counts.get(fallback, 0) + 1
+
+    result = {
+        "sample_count": len(samples),
+        "fallback_counts": fallback_counts,
+        "missing_exact_usage": sum(
+            1 for sample in samples
+            if not (sample.get("token_usage") or {}).get("usage_complete", False)
+        ),
+    }
+    for field, nums in values.items():
+        result[f"{field}_n"] = len(nums)
+        result[f"{field}_total"] = round(sum(nums), 4) if nums else None
+        result[f"{field}_mean"] = round(statistics.mean(nums), 4) if nums else None
+        result[f"{field}_median"] = round(statistics.median(nums), 4) if nums else None
+        result[f"{field}_p95"] = round(statistics.quantiles(nums, n=20)[18], 4) if len(nums) >= 2 else (round(nums[0], 4) if nums else None)
+    return result
 
 
 def divergence_rate(samples: List[dict]) -> Optional[float]:
@@ -98,10 +150,28 @@ def write_comparison_csv(output_dir: Path, rows: List[dict]) -> Path:
     """rows: list of dicts with run/meta/metrics already flattened."""
     path = Path(output_dir) / "comparison_table.csv"
     cols = ["model", "task", "variant", "condition", "n", "parse_rate", "legal_rate",
-            "compliance_of_legal", "compliance_strict", "undefined"]
+            "compliance_of_legal", "compliance_strict", "undefined",
+            "avg_input_tokens", "avg_output_tokens", "avg_reasoning_tokens",
+            "avg_total_tokens", "avg_generation_seconds",
+            "avg_output_tokens_per_second", "cache_read_tokens_total",
+            "cache_miss_tokens_total", "fallback_count"]
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         for r in rows:
-            w.writerow({c: r.get(c, "") for c in cols})
+            usage = r.get("token_usage") or {}
+            fallback_counts = usage.get("fallback_counts") or {}
+            values = {
+                **r,
+                "avg_input_tokens": usage.get("input_tokens_mean"),
+                "avg_output_tokens": usage.get("output_tokens_mean"),
+                "avg_reasoning_tokens": usage.get("reasoning_tokens_mean"),
+                "avg_total_tokens": usage.get("total_tokens_mean"),
+                "avg_generation_seconds": usage.get("generation_seconds_mean"),
+                "avg_output_tokens_per_second": usage.get("output_tokens_per_second_mean"),
+                "cache_read_tokens_total": usage.get("cache_read_tokens_total"),
+                "cache_miss_tokens_total": usage.get("cache_miss_tokens_total"),
+                "fallback_count": sum(fallback_counts.values()),
+            }
+            w.writerow({c: values.get(c, "") for c in cols})
     return path
