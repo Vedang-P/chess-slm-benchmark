@@ -760,28 +760,35 @@
     const a = sqCenter(from, n);
     const b = sqCenter(to, n);
     if (!a || !b) return "";
-    const pad = 0.09; // keep the arrow inside the from/to squares
+    // lichess-style: gently curved path, rounded translucent line, small
+    // arrowhead following the tangent at the end
+    const pad = 0.12;
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return "";
     const ux = dx / len, uy = dy / len;
     const x1 = a.x + ux * pad, y1 = a.y + uy * pad;
     const x2 = b.x - ux * pad, y2 = b.y - uy * pad;
     const V = 100;
     const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
-    const nx = -uy, ny = ux;
-    const bend = 0.03;
-    const bx = cx + nx * bend, by = cy + ny * bend;
-    const head = 0.055;
-    const hx1 = x2 - ux * head - nx * head * 0.6;
-    const hy1 = y2 - uy * head - ny * head * 0.6;
-    const hx2 = x2 - ux * head + nx * head * 0.6;
-    const hy2 = y2 - uy * head + ny * head * 0.6;
+    // perpendicular bend: sweep to the right of travel direction
+    const bend = Math.min(0.09, len * 0.18);
+    const bx = cx - uy * bend, by = cy + ux * bend;
+    // tangent at the end (control point -> end)
+    const tx = x2 - bx, ty = y2 - by;
+    const tl = Math.hypot(tx, ty) || 1;
+    const tanx = tx / tl, tany = ty / tl;
+    const headLen = 0.075, headW = 0.035;
+    const hx = x2 - tanx * headLen, hy = y2 - tany * headLen;
+    const px = -tany, py = tanx;
+    const ax1 = hx + px * headW, ay1 = hy + py * headW;
+    const ax2 = hx - px * headW, ay2 = hy - py * headW;
     return `
       <path d="M ${(x1 * V).toFixed(1)} ${(y1 * V).toFixed(1)} Q ${(bx * V).toFixed(1)} ${(by * V).toFixed(1)} ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)}"
-            fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" opacity="0.95"/>
-      <path d="M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${(hx1 * V).toFixed(1)} ${(hy1 * V).toFixed(1)} L ${(hx2 * V).toFixed(1)} ${(hy2 * V).toFixed(1)} Z"
-            fill="${color}" opacity="0.95"/>`;
+            fill="none" stroke="${color}" stroke-width="3.4" stroke-linecap="round" opacity="0.9"/>
+      <path d="M ${(x2 * V).toFixed(1)} ${(y2 * V).toFixed(1)} L ${(ax1 * V).toFixed(1)} ${(ay1 * V).toFixed(1)} L ${(ax2 * V).toFixed(1)} ${(ay2 * V).toFixed(1)} Z"
+            fill="${color}" opacity="0.9"/>`;
   }
 
   function oracleMoves(sample) {
@@ -894,16 +901,26 @@
     const reasoning = live.reasoning || "";
     const generating = live.phase === "generating" && !sampleDone(live);
     const thinkingLive = generating && reasoning.length > 0;
-    $("liveGenerationLabel").textContent = thinkingLive
-      ? "model thinking (live)" : generating
-        ? "model thinking · no tokens yet"
-        : (live.output ? "model output (final answer)" : "model thinking → no final answer");
+
+    // thinking box (autoscrolls): always shows the model's reasoning chain
+    $("liveReasoningLabel").textContent = thinkingLive
+      ? `model thinking (live) · ${reasoning.length.toLocaleString()} chars`
+      : reasoning
+        ? `model thinking · ${reasoning.length.toLocaleString()} chars`
+        : generating ? "model thinking · no tokens yet" : "model thinking";
+    $("liveReasoning").textContent = reasoning || (generating ? "waiting for the first thought token…" : "no thinking published for this sample.");
+    $("liveReasoning").scrollTop = $("liveReasoning").scrollHeight;
+
+    // output box: the model's final answer
+    $("liveGenerationLabel").textContent = live.output
+      ? "model output (final answer)"
+      : generating ? "model output · pending" : "model output";
     $("liveGenerationNote").textContent = generating
-      ? (thinkingLive ? `live reasoning · ${reasoning.length.toLocaleString()} chars so far · refreshed every ~60s` : "thinking is in progress; tokens will stream in as they are published")
+      ? (thinkingLive ? `live reasoning · refreshed every ~60s on the feed, box updates every 3s` : "thinking is in progress; the answer will appear when published")
       : live.output
-        ? "the final answer after reasoning; the full chain of thought is preserved above in this box"
-        : "reasoning ran to completion but no answer was emitted (budget or model choice)";
-    $("liveThinking").textContent = generating ? reasoning : (live.output || reasoning || "No output was returned.");
+        ? "the final answer after reasoning; the full chain of thought is preserved in the box above"
+        : "reasoning ran to completion but no answer was emitted (flagged as a fallback if one was forced)";
+    $("liveThinking").textContent = live.output || (sampleDone(live) ? "no answer was emitted" : "…");
     $("liveThinking").classList.toggle("thinking", !sampleDone(live));
     $("liveThinking").scrollTop = $("liveThinking").scrollHeight;
 
