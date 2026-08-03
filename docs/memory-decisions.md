@@ -43,3 +43,10 @@ Append-only record of user decisions and rationale. Update on every change.
 - Planned 100-position thinking run: --n 100 --thinking-budget 16384
   --max_new_tokens 32768 --force-answer-prompt, Kaggle session (~6h),
   same first-100 positions as the direct run.
+
+## 2026-08-04 — Kaggle run logistics
+- The MATE eval needs NO GPU (pure API calls) — kernels pushed with
+  enable_gpu: false to avoid burning T4 quota. v2 supersedes v1.
+- Kaggle CLI push-to-supersede is the stop mechanism (API abort endpoints
+  are 404/dead).
+- kernel: vedangpandeyyy/mate-thinking-100 (private, CPU, internet on).
