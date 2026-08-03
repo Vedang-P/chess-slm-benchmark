@@ -1,88 +1,40 @@
 {
  "repo": "Vedang-P/neuro-symbolic-pathfinding",
- "mode": "full",
- "run_id": "2026-08-03T13:13:59Z",
- "stage": "complete",
- "started_at": "2026-08-03T13:13:59Z",
- "updated_at": "2026-08-03T14:39:21Z",
+ "mode": "mate",
+ "run_id": "2026-08-03T19:58:22Z",
+ "stage": "sweep",
+ "started_at": "2026-08-03T19:58:22Z",
+ "updated_at": "2026-08-03T20:00:55Z",
  "progress": {
-  "cells_done": 4,
+  "cells_done": 883,
   "cells_failed": 0,
-  "cells_attempted": 4,
-  "cells_total": 4,
-  "fraction": 1.0
+  "cells_attempted": 883,
+  "cells_total": 1000,
+  "fraction": 0.883
  },
- "eta_min": 0,
  "models": [
   "deepseek-v4-flash"
  ],
- "cot_requested": false,
- "current": null,
+ "current": {
+  "model": "deepseek-v4-flash",
+  "task": "mate-selection-test",
+  "variant": "strategy"
+ },
  "last_error": null,
  "cells": [
   {
    "model": "deepseek-v4-flash",
-   "task": "mate1-lichess",
-   "variant": "bitboard",
-   "done": true,
-   "n": 5,
+   "task": "mate-selection-test",
+   "variant": "strategy",
+   "done": false,
+   "n": 883,
    "win": {
-    "n": 5,
-    "parse_rate": 1.0,
-    "legal_rate": 0.6,
-    "compliance_of_legal": 0.0,
-    "compliance_strict": 0.0
-   },
-   "lose": {},
-   "divergence": null
-  },
-  {
-   "model": "deepseek-v4-flash",
-   "task": "mate1-lichess",
-   "variant": "fen",
-   "done": true,
-   "n": 5,
-   "win": {
-    "n": 5,
-    "parse_rate": 1.0,
-    "legal_rate": 1.0,
-    "compliance_of_legal": 1.0,
-    "compliance_strict": 1.0
-   },
-   "lose": {},
-   "divergence": null
-  },
-  {
-   "model": "deepseek-v4-flash",
-   "task": "mate1-lichess",
-   "variant": "grid",
-   "done": true,
-   "n": 5,
-   "win": {
-    "n": 5,
-    "parse_rate": 1.0,
-    "legal_rate": 1.0,
-    "compliance_of_legal": 0.6,
-    "compliance_strict": 0.6
-   },
-   "lose": {},
-   "divergence": null
-  },
-  {
-   "model": "deepseek-v4-flash",
-   "task": "mate1-lichess",
-   "variant": "list",
-   "done": true,
-   "n": 5,
-   "win": {
-    "n": 5,
-    "parse_rate": 1.0,
-    "legal_rate": 0.8,
-    "compliance_of_legal": 0.75,
-    "compliance_strict": 0.6
-   },
-   "lose": {},
-   "divergence": null
+    "n": 883,
+    "parse_rate": 0.0849,
+    "legal_rate": 0.0306,
+    "compliance_of_legal": 0.0306,
+    "compliance_strict": 0.0306
+   }
   }
  ]
 }

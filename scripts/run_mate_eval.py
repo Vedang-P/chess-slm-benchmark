@@ -90,11 +90,24 @@ def main() -> None:
     args = ap.parse_args()
 
     configure_quiet_logging()
-    records = json.loads(RECORDS_PATH.read_text())[: args.n]
+    all_records = json.loads(RECORDS_PATH.read_text())
+    records = all_records[: args.n]
+    ALL_TOTAL = len(all_records)
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
     run_name = f"{args.model}_mate-selection-test_strategy"
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    # exclusive lock: two processes writing the same output dir would append
+    # duplicate samples (this happened once — a stale worker survived a kill)
+    lock_path = out_dir / ".run.lock"
+    try:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(lock_fd, str(os.getpid()).encode())
+    except FileExistsError:
+        raise SystemExit(f"another runner already holds {lock_path} — refusing to run twice")
+    import atexit
+
+    atexit.register(lambda: os.unlink(lock_path))
     samples_path = out_dir / f"{run_name}.samples.jsonl"
     existing_samples = []
     if args.resume and samples_path.exists():
@@ -114,8 +127,9 @@ def main() -> None:
          "thinking_budget": args.thinking_budget,
          "max_new_tokens": args.max_new_tokens},
     )
-    for s in existing_samples:
-        writer.add(s)
+    # NOTE: existing samples stay in the file as-is — they must NOT be
+    # re-added (ResultWriter.add appends, which duplicated everything on
+    # resume). They only count toward the final metrics.
 
     model = make_model(args.model, smoke_test=args.smoke)
     model.load()
@@ -126,25 +140,93 @@ def main() -> None:
     from src.live_push import resolve_token, upload_file
 
     live_token = resolve_token() if args.live_push else None
-    _live_pending = [None]
+    _live_pending = [None, None]  # [live.json bytes, state+history bundle]
     _live_cond = threading.Condition()
+
+    def _state_payload(done: int, total: int, stage: str, last_error: str = None) -> dict:
+        win = None
+        if done:
+            win = {
+                "n": done,
+                "parse_rate": round(sum(s["status"] != "parse_error" for s in samples) / done, 4),
+                "legal_rate": round(sum(bool(s["compliance"]) for s in samples) / done, 4),
+                "compliance_of_legal": round(sum(bool(s["compliance"]) for s in samples) / done, 4),
+                "compliance_strict": round(sum(bool(s["compliance"]) for s in samples) / done, 4),
+            }
+        return {
+            "repo": "Vedang-P/neuro-symbolic-pathfinding",
+            "mode": "mate",
+            "run_id": run_id,
+            "stage": stage,
+            "started_at": started_at,
+            "updated_at": _utc_ts(),
+            "progress": {"cells_done": done, "cells_failed": 0,
+                         "cells_attempted": done, "cells_total": total,
+                         "fraction": round(done / total, 4)},
+            "models": [args.model],
+            "current": {"model": args.model, "task": "mate-selection-test",
+                        "variant": "strategy"} if stage == "sweep" else None,
+            "last_error": last_error,
+            "cells": [{"model": args.model, "task": "mate-selection-test",
+                       "variant": "strategy", "done": stage == "complete",
+                       "n": done, "win": win}],
+        }
+
+    def _publish_state(done: int, total: int, stage: str, last_error: str = None) -> None:
+        """Write + enqueue monitor/state.json and history.jsonl so the
+        dashboard's scoreboard/charts reflect the MATE run."""
+        (ROOT / "monitor").mkdir(exist_ok=True)
+        state = _state_payload(done, total, stage, last_error)
+        (ROOT / "monitor" / "state.json").write_text(json.dumps(state, indent=1))
+        hist = ROOT / "monitor" / "history.jsonl"
+        lines = hist.read_text().splitlines() if hist.exists() else []
+        _win = state["cells"][0].get("win") if state.get("cells") else None
+        lines.append(json.dumps({
+            "run_id": run_id, "ts": state["updated_at"],
+            "cells_done": done, "fraction": round(done / total, 4),
+            "eta_min": None,
+            "legal_avg": _win.get("legal_rate") if _win else None,
+            "last_error": last_error,
+        }))
+        lines = lines[-500:]
+        hist.write_text("\n".join(lines) + "\n")
+        with _live_cond:
+            # slot 1 carries STATE bytes only; history is re-read from disk
+            # at upload time (uploading history bytes to state.json corrupts it)
+            _live_pending[1] = (ROOT / "monitor" / "state.json").read_bytes()
+            _live_cond.notify()
 
     def _live_pusher() -> None:
         while True:
             with _live_cond:
-                while _live_pending[0] is None:
+                while _live_pending[0] is None and _live_pending[1] is None:
                     _live_cond.wait()
-                data = _live_pending[0]
+                live_data = _live_pending[0]
+                state_data = _live_pending[1]
                 _live_pending[0] = None
-            try:
-                upload_file(live_token, "monitor/live.json", data,
-                            message=f"live {_utc_ts()}")
-            except Exception:
-                pass
+                _live_pending[1] = None
+            if live_data is not None:
+                try:
+                    upload_file(live_token, "monitor/live.json", live_data,
+                                message=f"live {_utc_ts()}")
+                except Exception:
+                    pass
+            if state_data is not None:
+                try:
+                    upload_file(live_token, "monitor/state.json", state_data,
+                                message=f"state {_utc_ts()}")
+                    hist_path = ROOT / "monitor" / "history.jsonl"
+                    upload_file(live_token, "monitor/history.jsonl",
+                                hist_path.read_bytes(),
+                                message=f"history {_utc_ts()}")
+                except Exception:
+                    pass
             time.sleep(1.0)
 
     if live_token:
         threading.Thread(target=_live_pusher, daemon=True).start()
+
+    started_at = _utc_ts()
 
     def write_live(rec, out, scored, phase, sample_idx):
         import chess
@@ -283,19 +365,28 @@ def main() -> None:
             print(f"  [mate-selection {args.model}] {i + 1}/{len(records)} "
                   f"({el / (i + 1):.1f}s/pos) acc={sum(s['compliance'] for s in samples)}/{len(samples)}",
                   flush=True)
+            try:
+                _publish_state(len(existing_samples) + len(samples), ALL_TOTAL, "sweep")
+            except Exception as e:
+                print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
 
-    parsed = [s for s in samples if s["status"] != "parse_error"]
+    all_scored = existing_samples + samples
+    parsed = [s for s in all_scored if s["status"] != "parse_error"]
     accuracy = {
-        "n": len(samples),
-        "parse_rate": round(len(parsed) / len(samples), 4),
-        "accuracy_strict": round(sum(s["compliance"] for s in samples) / len(samples), 4),
+        "n": len(all_scored),
+        "parse_rate": round(len(parsed) / len(all_scored), 4),
+        "accuracy_strict": round(sum(s["compliance"] for s in all_scored) / len(all_scored), 4),
         "accuracy_of_parsed": round(sum(s["compliance"] for s in parsed) / len(parsed), 4) if parsed else None,
-        "correct": sum(s["compliance"] for s in samples),
-        "wrong": sum(not s["compliance"] for s in samples),
-        "parse_error": sum(s["status"] == "parse_error" for s in samples),
+        "correct": sum(s["compliance"] for s in all_scored),
+        "wrong": sum(not s["compliance"] for s in all_scored),
+        "parse_error": sum(s["status"] == "parse_error" for s in all_scored),
     }
-    metrics = {"accuracy": accuracy, "token_usage": aggregate_token_usage(samples)}
+    metrics = {"accuracy": accuracy, "token_usage": aggregate_token_usage(all_scored)}
     summary = writer.finish(metrics)
+    try:
+        _publish_state(len(all_scored), ALL_TOTAL, "complete")
+    except Exception as e:
+        print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
     print(json.dumps(summary["metrics"], indent=1), flush=True)
     try:
         from src.hf_push import upload_cell
