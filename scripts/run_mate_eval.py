@@ -351,7 +351,31 @@ def main() -> None:
             _live_pending[1] = state_local.read_bytes()
             _live_cond.notify()
 
+    # GitHub core API is 5000 req/hr PER ACCOUNT for classic PATs, and the
+    # contents API (2 calls per write: GET sha + PUT) has a secondary write
+    # limit. The naive pusher uploaded live.json on EVERY streamed SSE chunk
+    # (write_live is called from on_chunk), so a single 14k-token reasoning
+    # stream could burn hundreds of API calls -- with 5 workers that is what
+    # exhausted the account quota mid-campaign. live.json is transient by
+    # design (it is overwritten every chunk), so intermediate versions can
+    # simply be dropped; only the newest one matters. A "complete" state is
+    # the one exception that must NEVER be throttled away: _wait_for_live_flush
+    # only checks the queue, so a dropped final state would leave the
+    # dashboard stuck on "sweep" forever.
+    LIVE_UPLOAD_MIN_INTERVAL = 60.0  # seconds between live.json uploads
+    STATE_UPLOAD_MIN_INTERVAL = 20.0  # seconds between state.json uploads
+
+    def _is_complete_state(data: bytes | None) -> bool:
+        if data is None:
+            return False
+        try:
+            return json.loads(data).get("stage") == "complete"
+        except Exception:
+            return False
+
     def _live_pusher() -> None:
+        last_live_ts = 0.0
+        last_state_ts = 0.0
         while True:
             with _live_cond:
                 while _live_pending[0] is None and _live_pending[1] is None:
@@ -361,16 +385,21 @@ def main() -> None:
                 _live_pending[0] = None
                 _live_pending[1] = None
                 _live_inflight[0] = True
+            now = time.time()
             try:
-                if live_data is not None:
+                if live_data is not None and now - last_live_ts >= LIVE_UPLOAD_MIN_INTERVAL:
                     try:
                         err = upload_file(live_token, live_remote, live_data,
                                           message=f"live {_utc_ts()}")
                         if err:
                             print(f"live-push live.json failed: {err}", flush=True)
+                        else:
+                            last_live_ts = time.time()
                     except Exception as e:
                         print(f"live-push live.json raised: {type(e).__name__}: {e}", flush=True)
-                if state_data is not None:
+                if state_data is not None and (
+                        _is_complete_state(state_data)
+                        or now - last_state_ts >= STATE_UPLOAD_MIN_INTERVAL):
                     try:
                         # upload_file() RETURNS a diagnostic string on failure,
                         # it does not raise -- silently ignoring that return
@@ -385,11 +414,13 @@ def main() -> None:
                                           message=f"state {_utc_ts()}")
                         if err:
                             print(f"live-push state.json failed: {err}", flush=True)
+                        else:
+                            last_state_ts = time.time()
                         if not worker_tag:
                             hist_path = monitor_dir / "history.jsonl"
                             err = upload_file(live_token, "monitor/history.jsonl",
-                                             hist_path.read_bytes(),
-                                             message=f"history {_utc_ts()}")
+                                              hist_path.read_bytes(),
+                                              message=f"history {_utc_ts()}")
                             if err:
                                 print(f"live-push history.jsonl failed: {err}", flush=True)
                     except Exception as e:
