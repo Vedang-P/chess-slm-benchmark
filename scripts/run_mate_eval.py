@@ -351,19 +351,15 @@ def main() -> None:
             _live_pending[1] = state_local.read_bytes()
             _live_cond.notify()
 
-    # GitHub core API is 5000 req/hr PER ACCOUNT for classic PATs, and the
-    # contents API (2 calls per write: GET sha + PUT) has a secondary write
-    # limit. The naive pusher uploaded live.json on EVERY streamed SSE chunk
-    # (write_live is called from on_chunk), so a single 14k-token reasoning
-    # stream could burn hundreds of API calls -- with 5 workers that is what
-    # exhausted the account quota mid-campaign. live.json is transient by
-    # design (it is overwritten every chunk), so intermediate versions can
-    # simply be dropped; only the newest one matters. A "complete" state is
-    # the one exception that must NEVER be throttled away: _wait_for_live_flush
-    # only checks the queue, so a dropped final state would leave the
-    # dashboard stuck on "sweep" forever.
-    LIVE_UPLOAD_MIN_INTERVAL = 60.0  # seconds between live.json uploads
-    STATE_UPLOAD_MIN_INTERVAL = 20.0  # seconds between state.json uploads
+    # Generous throttling: positions take ~2 minutes each, so live.json only
+    # needs to move once per position (5 min cap keeps mid-position chunk
+    # spam coalesced into nothing), and state.json at 2 min is exactly the
+    # per-position cadence -- the throttle never even binds, but if a
+    # position ever finishes faster, the dashboard still only sees one
+    # write per 2 minutes. 5 workers at these rates use ~650 calls/hour of
+    # GitHub's 5000/hr per-account quota, leaving ~85% headroom.
+    LIVE_UPLOAD_MIN_INTERVAL = 300.0  # seconds between live.json uploads
+    STATE_UPLOAD_MIN_INTERVAL = 120.0  # seconds between state.json uploads
 
     def _is_complete_state(data: bytes | None) -> bool:
         if data is None:
