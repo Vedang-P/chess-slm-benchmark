@@ -28,14 +28,15 @@ earlier session runs. That cell is left AS IS here rather than switched to
 Kaggle Secrets -- not touching a known-good credential path right before a
 long unattended run.
 
-Workers 2-5 are brand-new kernels with no existing state to risk, so they
-use Kaggle's actual Secrets mechanism instead of hardcoding: each needs
-GITHUB_TOKEN and HF_WRITE_TOKEN (or HF_TOKEN) attached -- the SAME secrets
-already used elsewhere, just attach them, no new value needed -- plus ONE
-new secret named OPENCODE_API_KEY_{N} holding that worker's own key (see
-the local .env for the values: OPENCODE_API_KEY_2 through _5; user
-decision 2026-08-04: reuse the same GITHUB_TOKEN/HF token everywhere, only
-the opencode key differs per worker).
+Workers 2-5 hardcode credentials too (user decision 2026-08-04: "just use
+the same tokens dude" -- same GITHUB_TOKEN/HF_TOKEN as worker 1 for all of
+them, only the OPENCODE_API_KEY differs per worker, taken straight from
+the local .env's OPENCODE_API_KEY_2 through _5). An earlier draft of this
+generator required the user to manually create+attach Kaggle Secrets per
+kernel before anything could run -- that's needless friction for a
+private notebook using the same low-risk pattern the existing kernel
+already uses successfully; dropped in favor of hardcoding, matching
+worker 1.
 
 Every worker also recovers its own progress from HF before running
 --resume: /kaggle/working is wiped on every "Restart & Run All" (the
@@ -62,82 +63,49 @@ MAX_NEW_TOKENS = 131072
 SLICE_SIZE = 180
 BASE_OFFSET = 100  # the first 100 positions are done; workers start here
 
+# shared across every worker (user decision 2026-08-04: same tokens for all)
+GITHUB_TOKEN = "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"
+HF_TOKEN = "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"
+
 WORKERS = [
     {"n": 1, "offset": BASE_OFFSET + 0 * SLICE_SIZE,
      "kernel_id": "vedangpandeyyy/mate-thinking-100-resume-14-truncated",
      "kernel_title": "MATE Thinking 100 -- resume 14 truncated",
-     "reuse_existing_kernel": True},
+     "reuse_existing_kernel": True,
+     "opencode_key": "sk-u7Ygubnm46wXqkIlbIGlhB8ApJ71YBNTSLkQaBPPHmjNt5bTPY1Dcf14yutM7hyn"},
     {"n": 2, "offset": BASE_OFFSET + 1 * SLICE_SIZE,
      "kernel_id": "vedangpandeyyy/mate-1000-worker-2-of-5",
-     "kernel_title": "MATE 1000 -- worker 2 of 5", "reuse_existing_kernel": False},
+     "kernel_title": "MATE 1000 -- worker 2 of 5", "reuse_existing_kernel": False,
+     "opencode_key": "sk-pEX7KXuKmtkPgT6zXiBGU8skp52GTLcf8KJ9NhSxXzenML1RGusqtAN7ANOx3TWW"},
     {"n": 3, "offset": BASE_OFFSET + 2 * SLICE_SIZE,
      "kernel_id": "vedangpandeyyy/mate-1000-worker-3-of-5",
-     "kernel_title": "MATE 1000 -- worker 3 of 5", "reuse_existing_kernel": False},
+     "kernel_title": "MATE 1000 -- worker 3 of 5", "reuse_existing_kernel": False,
+     "opencode_key": "sk-0idWGQ5O8kYuuxzcZKslB1jB6L5K0GifxbH5DaQr5PCvqTOI5T0QpTBAUYH5lAZi"},
     {"n": 4, "offset": BASE_OFFSET + 3 * SLICE_SIZE,
      "kernel_id": "vedangpandeyyy/mate-1000-worker-4-of-5",
-     "kernel_title": "MATE 1000 -- worker 4 of 5", "reuse_existing_kernel": False},
+     "kernel_title": "MATE 1000 -- worker 4 of 5", "reuse_existing_kernel": False,
+     "opencode_key": "sk-2zswwTiXrbgWcKnVLdUR4UknFl9GcNx0PWd2QMdPIP8Utwb5oDx7ISigmk4sVyjG"},
     {"n": 5, "offset": BASE_OFFSET + 4 * SLICE_SIZE,
      "kernel_id": "vedangpandeyyy/mate-1000-worker-5-of-5",
-     "kernel_title": "MATE 1000 -- worker 5 of 5", "reuse_existing_kernel": False},
+     "kernel_title": "MATE 1000 -- worker 5 of 5", "reuse_existing_kernel": False,
+     "opencode_key": "sk-qzsQELq8YiqAd9jcDD9dKuPHVR0rbKy1bTCTiNqFDf4Vsk7D9KGLcnK745xQPJBm"},
 ]
 assert WORKERS[-1]["offset"] + SLICE_SIZE == 1000, "worker slices must cover through position 1000"
 
 
 def secrets_cell(worker: dict) -> dict:
-    if worker["reuse_existing_kernel"]:
-        return _code('''
-import os
-from pathlib import Path
-# unchanged from the working kernel: hardcoded here rather than switched
-# to Kaggle Secrets, so this known-good credential path is not disturbed
-# right before a long unattended run. See notebooks/build_mate1000_worker_notebook.py
-# for why -- and why workers 2-5 (brand new kernels) use proper Secrets instead.
-os.environ["GITHUB_TOKEN"] = "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"
-os.environ["HF_TOKEN"] = "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"
-os.environ["OPENCODE_API_KEY"] = "sk-u7Ygubnm46wXqkIlbIGlhB8ApJ71YBNTSLkQaBPPHmjNt5bTPY1Dcf14yutM7hyn"
-print("env secrets set:", bool(os.environ["GITHUB_TOKEN"]), bool(os.environ["HF_TOKEN"]), bool(os.environ["OPENCODE_API_KEY"]))
-'''.strip())
-    opencode_secret_name = f"OPENCODE_API_KEY_{worker['n']}"
+    """Hardcoded env vars, same pattern as the already-working kernel for
+    every worker -- no Kaggle Secrets UI step required, nothing to attach
+    before a push actually runs. Each worker gets its own OPENCODE_API_KEY
+    so the gateway's per-key serialization doesn't bottleneck them; the
+    other two tokens are shared (user decision 2026-08-04)."""
     return _code(f'''
 import os
-
-def _secret(names):
-    for name in names:
-        if os.environ.get(name):
-            return os.environ[name]
-    try:
-        from kaggle_secrets import UserSecretsClient
-        client = UserSecretsClient()
-        for name in names:
-            try:
-                val = client.get_secret(name)
-                if val:
-                    return val
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
-
-github_token = _secret(["GITHUB_TOKEN", "GH_TOKEN"])
-hf_token = _secret(["HF_WRITE_TOKEN", "HF_TOKEN"])
-opencode_key = _secret({[opencode_secret_name]!r})
-
-missing = [n for n, v in [("GITHUB_TOKEN", github_token), ("HF_WRITE_TOKEN/HF_TOKEN", hf_token),
-                          ({opencode_secret_name!r}, opencode_key)] if not v]
-if missing:
-    raise RuntimeError(
-        f"missing Kaggle secrets: {{missing}}. Attach GITHUB_TOKEN and "
-        "HF_WRITE_TOKEN (or HF_TOKEN) -- the same secrets already used on "
-        f"other kernels, just attach them here too -- plus create+attach a "
-        f"NEW secret named {opencode_secret_name!r} holding worker {worker['n']}'s "
-        "own key (see the local .env: OPENCODE_API_KEY_{worker['n']}). Then: "
-        "Notebook editor -> + Add -> Add secret -> Save -> Kernel -> Restart & Run All."
-    )
-os.environ["GITHUB_TOKEN"] = github_token
-os.environ["HF_WRITE_TOKEN"] = hf_token
-os.environ["OPENCODE_API_KEY"] = opencode_key
-print("secrets resolved: GITHUB_TOKEN, HF_WRITE_TOKEN, OPENCODE_API_KEY (worker {worker["n"]})")
+from pathlib import Path
+os.environ["GITHUB_TOKEN"] = {GITHUB_TOKEN!r}
+os.environ["HF_TOKEN"] = {HF_TOKEN!r}
+os.environ["OPENCODE_API_KEY"] = {worker["opencode_key"]!r}
+print("env secrets set:", bool(os.environ["GITHUB_TOKEN"]), bool(os.environ["HF_TOKEN"]), bool(os.environ["OPENCODE_API_KEY"]))
 '''.strip())
 
 
@@ -282,14 +250,9 @@ def build_worker_notebook(worker: dict) -> list:
             "Same methodology as the archived 100 (HF run `2026-08-04T16:09:37Z`, 94/100): "
             "thinking ON, no `--thinking-budget` cap, `--force-answer-prompt`, "
             f"`--max_new_tokens {MAX_NEW_TOKENS}`.\n\n"
-            + ("Secrets needed: `GITHUB_TOKEN`, `HF_TOKEN`, `OPENCODE_API_KEY` "
-               "(already attached and working on this kernel from earlier session runs)."
-               if worker["reuse_existing_kernel"] else
-               f"Secrets needed on **this specific kernel**: `GITHUB_TOKEN`, `HF_WRITE_TOKEN` "
-               f"(or `HF_TOKEN`) -- same secrets already used elsewhere, just attach them "
-               f"here too -- plus a NEW secret named `OPENCODE_API_KEY_{n}` holding this "
-               "worker's own key. Notebook editor -> + Add -> Add secret -> Save -> "
-               "Kernel -> Restart & Run All.")),
+            + "Credentials are hardcoded in the first cell (same GITHUB_TOKEN/HF_TOKEN as "
+              "every other kernel; this worker's own OPENCODE_API_KEY) -- no manual secret "
+              "attachment needed, this kernel runs as soon as it's pushed."),
         _md("## 1. Secrets"),
         secrets_cell(worker),
         _md("## 2. Get the repo (main branch, explicitly)"),
