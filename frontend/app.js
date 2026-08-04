@@ -102,10 +102,10 @@
   function showNoSignal(failed) {
     $("notice").hidden = false;
     $("notice").className = "notice" + (failed ? " error" : "");
-    $("noticeTitle").textContent = failed ? "No signal from the monitor" : "Waiting for the sweep";
+    $("noticeTitle").textContent = failed ? "No signal from the monitor" : "Waiting for a run";
     $("noticeBody").textContent = failed
-      ? "Could not reach the results feed (raw.githubusercontent.com). Check your connection — the feed is served by GitHub and the page keeps retrying."
-      : "No results have been published yet. Data lands here every ~2 minutes once kaggle_run.ipynb is running on Kaggle.";
+      ? "Could not reach the results feed. The page keeps retrying; check the worker and the public monitor repo if this persists."
+      : "No run is publishing yet. Start a run with --live-push (run_mate_eval.py) or --monitor (run_suite.py) and results land here within a minute.";
     $("noticeMeta").textContent = "";
     $("noticeMeta").appendChild(document.createTextNode("auto-retrying every " + CONFIG.REFRESH_S + "s · "));
     const a = $("retryLink");
@@ -214,7 +214,33 @@
     return "sweep";
   }
   const isMateRun = () => runKind() === "mate-selection";
-  const mateStats = () => (state && state.mate) || null;
+
+  /* Snapshots published before the MATE metrics existed carried a single fake
+     sweep "cell" whose `legal_rate` actually held accuracy. Read what those
+     snapshots genuinely contain (n and accuracy) and leave everything the old
+     payload never recorded as null, so the cards show "—" rather than a
+     number derived from a field that meant something else. */
+  function legacyMateStats() {
+    const cell = ((state && state.cells) || [])[0];
+    const win = cell && cell.win;
+    if (!win || typeof win.compliance_strict !== "number") return null;
+    const n = win.n || 0;
+    return {
+      legacy: true,
+      n, n_attempted: n,
+      accuracy: win.compliance_strict,
+      correct: Math.round(win.compliance_strict * n),
+      answered: null, answer_rate: null,
+      wrong: null, no_answer: null, parse_error: null, api_error: null,
+      picked_a: null, picked_b: null, truth_a: null, truth_b: null,
+      accuracy_truth_a: null, accuracy_truth_b: null,
+      no_answer_reasons: {},
+      mean_latency_s: null, mean_output_tokens: null,
+      mean_reasoning_tokens: null, positions_per_hour: null,
+    };
+  }
+
+  const mateStats = () => (state && state.mate) || legacyMateStats();
 
   function progressOf() {
     const p = (state && state.progress) || {};
@@ -224,6 +250,19 @@
       failed: p.failed ?? p.cells_failed ?? 0,
       fraction: typeof p.fraction === "number" ? p.fraction : 0,
     };
+  }
+
+  /* Positions, not cells, are the number that actually moves while you watch:
+     one sweep cell is 40+ positions and can sit still for many minutes.
+     Older snapshots have no positions_* fields, so fall back to summing the
+     per-cell n — that still tells you how many positions have been scored. */
+  function positionsOf() {
+    const p = (state && state.progress) || {};
+    const summed = ((state && state.cells) || [])
+      .reduce((sum, c) => sum + (num(c.win && c.win.n) || num(c.n) || 0), 0);
+    const done = typeof p.positions_done === "number" ? p.positions_done : summed;
+    const total = typeof p.positions_total === "number" ? p.positions_total : null;
+    return { done, total, fraction: total ? done / total : null };
   }
 
   const fmtInt = (v) => (typeof v === "number" ? v.toLocaleString() : "—");
@@ -309,11 +348,15 @@
     const p = progressOf();
     const complete = p.fraction >= 1 || state.stage === "complete";
     const cur = state.current;
-    const stage = complete ? "COMPLETE" : (state.stage || "sweep").toUpperCase();
+    // "SWEEP" is the sweep runner's internal stage name; a MATE run is not a
+    // sweep and should not be labelled one.
+    const stage = complete ? "COMPLETE" : isMateRun() ? "RUNNING" : (state.stage || "sweep").toUpperCase();
     const sub = isMateRun()
       ? `${(state.models || [])[0] || "?"} · ${state.config && state.config.thinking_enabled ? "thinking on" : "direct"}`
       : `${(state.models || []).length} models · ${state.mode || "?"}`;
-    const now = cur
+    // the sweep cursor is only informative when there is more than one cell;
+    // a MATE run would print the same model × task on every refresh
+    const now = cur && !isMateRun()
       ? `<span class="now-line">now: ${escapeHtml(cur.model)} × ${escapeHtml(cur.task)}</span>`
       : "";
     return `<div class="sb-cell">
@@ -325,13 +368,16 @@
   }
 
   // ---- MATE selection run -------------------------------------------------
+  const OLD = "not recorded in this snapshot";
+
   function mateScoreboard() {
     const m = mateStats() || {};
     const p = progressOf();
     const eta = fmtDur(state.eta_min);
     const unanswered = (m.no_answer || 0) + (m.parse_error || 0);
-    const bRate = m.n ? m.picked_b / m.n : null;
-    const truthBRate = m.n ? m.truth_b / m.n : null;
+    const ratio = (x, d) => (typeof x === "number" && d ? x / d : null);
+    const bRate = ratio(m.picked_b, m.n);
+    const truthBRate = ratio(m.truth_b, m.n);
     const cards = [
       runCard(),
       card({
@@ -345,35 +391,38 @@
       }),
       card({
         label: "answer rate", value: fmtPct(m.answer_rate),
-        sub: unanswered
+        sub: m.legacy ? OLD : unanswered
           ? `${fmtInt(unanswered)} unanswered · ${Object.entries(m.no_answer_reasons || {}).map(([k, v]) => `${k} ${v}`).join(", ") || "no reason recorded"}`
           : "every position answered",
       }),
       card({
         label: "choice bias", value: bRate === null ? "—" : `${(bRate * 100).toFixed(0)}% B`,
-        sub: `picked A ${fmtInt(m.picked_a)} · B ${fmtInt(m.picked_b)} · expert B ${truthBRate === null ? "—" : (truthBRate * 100).toFixed(0) + "%"}`,
+        sub: m.legacy ? OLD
+          : `picked A ${fmtInt(m.picked_a)} · B ${fmtInt(m.picked_b)} · expert B ${truthBRate === null ? "—" : (truthBRate * 100).toFixed(0) + "%"}`,
       }),
       card({
         label: "accuracy by expert label",
-        value: `${fmtPct(m.accuracy_truth_a)} / ${fmtPct(m.accuracy_truth_b)}`,
-        sub: `truth A (n=${fmtInt(m.truth_a)}) / truth B (n=${fmtInt(m.truth_b)})`,
+        value: m.legacy ? "—" : `${fmtPct(m.accuracy_truth_a)} / ${fmtPct(m.accuracy_truth_b)}`,
+        sub: m.legacy ? OLD : `truth A (n=${fmtInt(m.truth_a)}) / truth B (n=${fmtInt(m.truth_b)})`,
       }),
       card({
         label: "throughput",
         value: m.positions_per_hour ? `${Math.round(m.positions_per_hour)}/h` : "—",
-        sub: m.mean_latency_s ? `${m.mean_latency_s.toFixed(1)}s per position` : "measuring…",
+        sub: m.legacy ? OLD : m.mean_latency_s ? `${m.mean_latency_s.toFixed(1)}s per position` : "measuring…",
       }),
       card({
         label: "tokens per answer",
-        value: m.mean_output_tokens === null || m.mean_output_tokens === undefined
-          ? "—" : Math.round(m.mean_output_tokens).toLocaleString(),
-        sub: m.mean_reasoning_tokens
+        value: typeof m.mean_output_tokens === "number"
+          ? Math.round(m.mean_output_tokens).toLocaleString() : "—",
+        sub: m.legacy ? OLD : m.mean_reasoning_tokens
           ? `+ ${Math.round(m.mean_reasoning_tokens).toLocaleString()} reasoning`
           : "output tokens · no reasoning reported",
       }),
       card({
-        label: "api errors", value: fmtInt(m.api_error || 0),
-        sub: (m.api_error || 0) ? "gateway failures · excluded from accuracy" : "no transport failures",
+        label: "api errors",
+        value: m.legacy ? "—" : fmtInt(m.api_error || 0),
+        sub: m.legacy ? OLD
+          : (m.api_error || 0) ? "gateway failures · excluded from accuracy" : "no transport failures",
       }),
     ];
     return cards.join("");
@@ -389,12 +438,17 @@
     const strictFor = (task) => avg(Object.values(modelWinAvg(task, null, "compliance_strict")));
     const nModels = (task) => Object.keys(modelWinAvg(task, null, "compliance_strict")).length;
     const eta = fmtDur(state.eta_min);
+    const pos = positionsOf();
     return [
       runCard(),
       card({
-        label: "cells completed", value: fmtInt(p.done), wide: true,
-        sub: `of ${fmtInt(p.total)} cells${p.failed ? ` · ${p.failed} failed` : ""}${eta ? ` · eta ${eta}` : ""}`,
-        progress: p.fraction,
+        // the headline is POSITIONS SCORED: "cells completed 3" told you
+        // almost nothing about how far a run had actually got
+        label: "positions scored", value: fmtInt(pos.done), wide: true,
+        sub: `${pos.total ? `of ${fmtInt(pos.total)} · ` : ""}`
+          + `${fmtInt(p.done)} of ${fmtInt(p.total)} cells`
+          + `${p.failed ? ` · ${p.failed} failed` : ""}${eta ? ` · eta ${eta}` : ""}`,
+        progress: pos.fraction ?? p.fraction,
       }),
       card({
         label: "legal move rate",
@@ -579,6 +633,26 @@
   // ---- MATE selection -----------------------------------------------------
   function renderMateCharts() {
     const m = mateStats() || {};
+    if (m.legacy) {
+      // a legacy snapshot has no per-outcome or A/B counts to plot
+      buildChartLayout([{ id: "chartMateAccuracy", title: "Accuracy over the run", note: "vs 50% chance", wide: true }]);
+      chartStatus("chartMateAccuracyStatus",
+        `legacy snapshot: ${fmtPct(m.accuracy)} over ${fmtInt(m.n)} positions. `
+        + "Choice distribution, outcome breakdown and B-preference need a run "
+        + "published by the current runner.");
+      if (typeof Chart === "undefined") return;
+      const hist = history.filter((h) => typeof h.legal_avg === "number");
+      mkChart("chartMateAccuracy", {
+        type: "line",
+        data: { labels: hist.map((h) => h.cells_done), datasets: [{
+          label: "accuracy", data: hist.map((h) => h.legal_avg), borderColor: "#e5484d",
+          borderWidth: 1.6, backgroundColor: "rgba(229,72,77,0.06)", fill: true,
+          tension: 0.3, pointRadius: 0 }] },
+        options: rateOpts("positions scored"),
+        plugins: [endLabel],
+      });
+      return;
+    }
     buildChartLayout([
       { id: "chartMateAccuracy", title: "Accuracy over the run", note: "vs 50% chance", wide: true },
       { id: "chartMateChoice", title: "Choice distribution", note: "model vs expert" },
@@ -783,7 +857,21 @@
   }
 
   // ---------------- table ----------------
+  // column headers follow the run kind: a MATE choice has no legality, and a
+  // sweep cell has no A/B split. One fixed header row meant every run showed
+  // at least one column that could never have a value.
+  const TABLE_HEADS = {
+    "mate-selection": ["#", "model", "slice", "form", "what it measures", "n",
+                       "answered", "picked B", "accuracy", ""],
+    sweep: ["#", "model", "task", "form", "note", "n",
+            "parsed", "legal", "strict score", ""],
+  };
+
   function renderTable() {
+    const heads = TABLE_HEADS[isMateRun() ? "mate-selection" : "sweep"];
+    $("cellsHead").innerHTML = heads
+      .map((h, i) => `<th${i === 0 || i >= 5 ? ' class="num"' : ""}>${escapeHtml(h)}</th>`)
+      .join("");
     if (isMateRun()) return renderMateTable();
     return renderSweepTable();
   }
@@ -791,14 +879,35 @@
   function renderMateTable() {
     const m = mateStats() || {};
     $("tableCount").textContent = `${fmtInt(m.n)} scored positions`;
+    const rate = (x, d) => (typeof x === "number" && d ? x / d : null);
+    if (m.legacy) {
+      $("cellsBody").innerHTML = `<tr>
+        <td class="num mono dim">01</td>
+        <td class="mono">${escapeHtml((state.models || [])[0] || "—")}</td>
+        <td>overall</td>
+        <td><span class="dim">strategy</span></td>
+        <td><span class="dim">legacy snapshot — only n and accuracy were published</span></td>
+        <td class="num mono">${fmtInt(m.n)}</td>
+        <td class="num mono dim">—</td>
+        <td class="num mono dim">—</td>
+        <td class="num mono ${m.accuracy > 0.55 ? "pos" : m.accuracy >= 0.45 ? "warn" : "neg"}">${fmtPct(m.accuracy)}</td>
+        <td><span class="cell-done">${state.stage === "complete" ? "done" : "running"}</span></td>
+      </tr>`;
+      return;
+    }
     const rows = [
-      ["overall", m.n, m.answer_rate, m.accuracy, "expert MoveA/MoveB choice"],
-      ["expert answer = A", m.truth_a, null, m.accuracy_truth_a, "positions where MoveA is the expert choice"],
-      ["expert answer = B", m.truth_b, null, m.accuracy_truth_b, "positions where MoveB is the expert choice"],
-      ["model picked A", m.picked_a, null, null, "how often the model chose the first candidate"],
-      ["model picked B", m.picked_b, null, null, "how often the model chose the second candidate"],
+      ["overall", m.n, m.answer_rate, rate(m.picked_b, m.n), m.accuracy,
+       "every scored position"],
+      ["expert answer = A", m.truth_a, null, null, m.accuracy_truth_a,
+       "accuracy where MoveA is the expert choice"],
+      ["expert answer = B", m.truth_b, null, null, m.accuracy_truth_b,
+       "accuracy where MoveB is the expert choice"],
+      ["no answer / unparseable", (m.no_answer || 0) + (m.parse_error || 0), null, null, null,
+       "the model produced nothing scorable"],
+      ["api errors", m.api_error || 0, null, null, null,
+       "gateway failures — excluded from every rate above"],
     ];
-    $("cellsBody").innerHTML = rows.map(([label, n, answered, acc, note], i) => `
+    $("cellsBody").innerHTML = rows.map(([label, n, answered, bRate, acc, note], i) => `
       <tr>
         <td class="num mono dim">${String(i + 1).padStart(2, "0")}</td>
         <td class="mono">${escapeHtml((state.models || [])[0] || "—")}</td>
@@ -806,8 +915,8 @@
         <td><span class="dim">strategy</span></td>
         <td><span class="dim">${escapeHtml(note)}</span></td>
         <td class="num mono">${fmtInt(n)}</td>
-        <td class="num mono ${answered === null || answered === undefined ? "dim" : answered > 0.9 ? "pos" : "warn"}">${answered === null || answered === undefined ? "—" : fmtPct(answered)}</td>
-        <td class="num mono dim">—</td>
+        <td class="num mono ${typeof answered !== "number" ? "dim" : answered > 0.9 ? "pos" : "warn"}">${typeof answered === "number" ? fmtPct(answered) : "—"}</td>
+        <td class="num mono ${typeof bRate !== "number" ? "dim" : Math.abs(bRate - 0.5) > 0.1 ? "warn" : ""}">${typeof bRate === "number" ? fmtPct(bRate) : "—"}</td>
         <td class="num mono ${typeof acc !== "number" ? "dim" : acc > 0.55 ? "pos" : acc >= 0.45 ? "warn" : "neg"}">${typeof acc === "number" ? fmtPct(acc) : "—"}</td>
         <td>${i === 0 ? `<span class="cell-done">${state.stage === "complete" ? "done" : "running"}</span>` : ""}</td>
       </tr>`).join("");
@@ -1241,7 +1350,7 @@
       return;
     }
     const cell = live.cell || {};
-    const kind = live.task_kind;
+    const kind = live.task_kind || (live.oracle && live.oracle.kind) || null;
     $("liveMeta").textContent =
       `last sample ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${live.phase || (sampleDone(live) ? "scored" : "generating")} · ${cell.task || "unknown task"} · ${cell.variant || "unknown representation"} · ${live.record_id || live.position_id || "unknown position"}`;
     updateLiveSync();

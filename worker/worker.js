@@ -66,7 +66,10 @@ export default {
       });
     }
 
-    const ttl = file === "monitor/live.json" ? 1 : 10;
+    // 3s for /live (the runner republishes at most every ~2s, so a 1s TTL
+    // just burned GitHub API quota: 1 req/s = 3600/hr against a 5000/hr
+    // authenticated budget, and 60/hr unauthenticated)
+    const ttl = file === "monitor/live.json" ? 3 : 15;
     res = new Response(content.body, {
       headers: {
         "Content-Type": "application/json; charset=utf-8",

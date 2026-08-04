@@ -90,6 +90,9 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="deepseek-v4-flash")
     ap.add_argument("--n", type=int, default=1000)
+    ap.add_argument("--ids", type=str, default=None,
+                    help="comma-separated position ids to run (probe arms); "
+                         "overrides --n")
     ap.add_argument("--output_dir", default="results/mate-selection")
     ap.add_argument("--max_new_tokens", type=int, default=2048,
                     help="total generation budget, identical across models "
@@ -120,7 +123,14 @@ def main() -> None:
     thinking_enabled = (args.model == "deepseek-v4-flash"
                         and not args.thinking_disabled)
     all_records = json.loads(RECORDS_PATH.read_text())
-    records = all_records[: args.n]
+    if args.ids:
+        wanted = {i.strip() for i in args.ids.split(",") if i.strip()}
+        records = [r for r in all_records if r["id"] in wanted]
+        missing = wanted - {r["id"] for r in records}
+        if missing:
+            raise SystemExit(f"unknown position ids: {sorted(missing)}")
+    else:
+        records = all_records[: args.n]
     ALL_TOTAL = len(records)  # the run's own n (progress total)
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
     run_name = f"{args.model}_mate-selection-test_strategy"
@@ -476,6 +486,7 @@ def main() -> None:
             "value": rec["value"],
             "latency_ms": out.get("latency_ms"),
             "finished": out.get("finished"),
+            "attempts": out.get("attempts", 1),
             "max_new_tokens": args.max_new_tokens,
             "thinking_enabled": thinking_enabled,
             "force_answer_prompt": args.force_answer_prompt,

@@ -80,6 +80,7 @@ def _report_from_samples(samples_path: Path, summary: dict) -> dict:
             "token_usage": s.get("token_usage"),
             "position_metadata": s.get("position_metadata"),
             "max_new_tokens": s.get("max_new_tokens"),
+            "attempts": s.get("attempts", 1),
             "thinking_enabled": s.get("thinking_enabled"),
             "latency_ms": s.get("latency_ms"),
             "output_tokens": s.get("output_tokens"),

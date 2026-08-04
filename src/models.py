@@ -309,6 +309,31 @@ class OpenCodeGoModel:
             method="POST")
         return urllib.request.urlopen(req, timeout=3600)
 
+    def _post_with_retry(self, payload: dict, stream: bool = False,
+                         max_attempts: int = 3):
+        """Transport-level retry with backoff. NOT a model fallback: a
+        transport failure (gateway 5xx / timeout / connection reset) produced
+        no model output, so re-sending the IDENTICAL request cannot
+        contaminate the answer. Client errors (4xx) are not retried — a bad
+        request will not succeed twice. Returns (response, attempts)."""
+        last = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return self._post(payload, stream=stream), attempt
+            except (urllib.error.URLError, TimeoutError, ConnectionError,
+                    OSError) as e:
+                last = e
+                if attempt < max_attempts:
+                    time.sleep(2 ** attempt)  # 2s, 4s
+            except urllib.error.HTTPError as e:
+                if e.code in (429, 408) or e.code >= 500:
+                    last = e
+                    if attempt < max_attempts:
+                        time.sleep(2 ** attempt)
+                else:
+                    raise
+        raise last
+
     def _sse_chunks(self, resp):
         """Yield parsed JSON chunks from a stream=true SSE response."""
         buf = ""
@@ -363,7 +388,8 @@ class OpenCodeGoModel:
                 finish_reason = None
                 last_chunk_at = time.time()
                 stream_payload = {**payload, "stream_options": {"include_usage": True}}
-                with self._post(stream_payload, stream=True) as resp:
+                resp, attempts = self._post_with_retry(stream_payload, stream=True)
+                with resp:
                     for chunk in self._sse_chunks(resp):
                         ch = chunk.get("choices") or [{}]
                         if chunk.get("usage"):
@@ -398,7 +424,8 @@ class OpenCodeGoModel:
                     on_chunk({"content": content, "reasoning": reasoning,
                               "phase": "done", "finished": True})
             else:
-                with self._post(payload) as resp:
+                resp, attempts = self._post_with_retry(payload)
+                with resp:
                     data = json.load(resp)
             msg = data["choices"][0]["message"]
             content = msg.get("content") or ""
@@ -418,6 +445,7 @@ class OpenCodeGoModel:
             return _attach_usage({
                 "content": content,
                 "reasoning": reasoning,
+                "attempts": attempts,
                 "latency_ms": (time.time() - t0) * 1000,
                 "finished": data["choices"][0].get("finish_reason") in ("stop", None),
             }, usage_record)

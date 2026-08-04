@@ -50,6 +50,10 @@ class Monitor:
         self.cells_done = 0
         self.cells_failed = 0
         self.cells_total = 0
+        # positions, not cells, are what a watcher actually wants to see tick:
+        # one cell is 40+ positions and can run for many minutes
+        self.positions_done = 0
+        self.positions_total = 0
         self.started_at = _ts()
         self.started_epoch = time.time()
         self.rows = []
@@ -87,6 +91,9 @@ class Monitor:
         self.cells_done += 1
         for r in row_parts:
             self.rows.append(r)
+            n = r.get("n")
+            if isinstance(n, int):
+                self.positions_done += n
 
     def cell_failed(self) -> None:
         self.cells_failed += 1
@@ -137,7 +144,10 @@ class Monitor:
         total = self.cells_total
         elapsed_s = time.time() - self.started_epoch
         eta_min = None
-        if done > 0 and elapsed_s > 0:
+        if self.positions_total and self.positions_done > 0 and elapsed_s > 0:
+            remaining = self.positions_total - self.positions_done
+            eta_min = int(elapsed_s / self.positions_done * remaining / 60)
+        elif done > 0 and elapsed_s > 0:
             eta_min = int(elapsed_s / done * (total - done) / 60)
         return {
             "repo": "Vedang-P/chess-slm-benchmark",
@@ -151,7 +161,14 @@ class Monitor:
             "progress": {"cells_done": done, "cells_failed": self.cells_failed,
                          "cells_attempted": done + self.cells_failed,
                          "cells_total": total,
-                         "fraction": round(done / total, 4) if total else 0.0},
+                         "positions_done": self.positions_done,
+                         "positions_total": self.positions_total,
+                         # fraction tracks POSITIONS when we know the total:
+                         # cell-level progress jumps in coarse steps and sits
+                         # still for the whole of a long cell
+                         "fraction": round(self.positions_done / self.positions_total, 4)
+                         if self.positions_total else
+                         (round(done / total, 4) if total else 0.0)},
             "eta_min": eta_min,
             "models": self.meta.get("models", []),
             "cot_requested": bool(self.meta.get("cot", False)),
@@ -170,6 +187,7 @@ class Monitor:
         lines.append(json.dumps({
             "run_id": state["run_id"],
             "ts": state["updated_at"], "cells_done": state["progress"]["cells_done"],
+            "positions_done": state["progress"]["positions_done"],
             "fraction": state["progress"]["fraction"], "eta_min": state["eta_min"],
             "legal_avg": _avg_legal(state["cells"]),
             "last_error": last_error,
@@ -389,10 +407,15 @@ def main() -> None:
                     pass
 
         threading.Thread(target=_pusher, daemon=True).start()
+    def _n_for(task: str) -> int:
+        return args.n or (cfg["tasks"][task]["check_n"] if args.check
+                          else cfg["tasks"][task]["full_n"])
+
     if monitor:
         monitor.set_meta(mode="check" if args.check else "full", models=models,
                          cot=args.cot)
         monitor.cells_total = len(models) * len(cells)
+        monitor.positions_total = len(models) * sum(_n_for(task) for task, _ in cells)
         monitor.maybe_push(force=True, last_error=None)
 
     print(f"suite: {len(models)} models x {len(cells)} task-variant cells "
@@ -404,8 +427,7 @@ def main() -> None:
     skipped = 0
     for model in models:
         for task, variant in cells:
-            n = (args.n or (cfg["tasks"][task]["check_n"] if args.check
-                            else cfg["tasks"][task]["full_n"]))
+            n = _n_for(task)
             summary_path = ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json"
             if args.resume and summary_path.exists():
                 summary = json.loads(summary_path.read_text())
