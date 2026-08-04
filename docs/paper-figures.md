@@ -33,6 +33,18 @@ Fallback answers are retained as a separate per-sample field and counted in
 the table, so a forced/random fallback cannot be mistaken for native model
 behavior.
 
+**Two status vocabularies map into these buckets.** The tactical runner
+(`run_chess.py`) emits `legal` / `illegal` / `parse_error` / `no_answer`; the
+MATE runner (`run_mate_eval.py`) emits `correct` / `wrong` / `parse_error` /
+`no_answer`. `_status_group` handles both — `correct` → correct, `wrong` →
+"legal, wrong oracle". Handling only the first vocabulary put every MATE
+sample in the `no_answer` bucket and reported a 0 legal rate for the task.
+
+**`api_error` rows are dropped before any figure is computed.** A gateway
+5xx/timeout/rate-limit is a transport failure, not a model response; the count
+of excluded rows is reported in `figure_data.json` and on stdout so an
+excluded sample is never invisible.
+
 ## 3. Accuracy Heatmap
 
 Rows are task categories and columns are models. Cells contain strict
@@ -53,6 +65,10 @@ Every new sample JSONL record carries:
 - exact prompt and model input
 - complete returned thinking text and final answer
 - oracle/correct answer, parser format, verdict, compliance, fallback type
+- `thinking_enabled`: the mode the run ACTUALLY used (the `--thinking` /
+  `--thinking-disabled` flag), not a constant derived from the model name
+- `api_error`: the transport failure reason, or null. When set, `output` is
+  empty by construction — an error body is never recorded as model text
 - `token_usage`: input, output, reasoning, total, cache read/write/miss,
   time-to-first-token, generation seconds, and token rates
 - position metadata: FEN, puzzle id, rating, themes, opening tags, Stockfish

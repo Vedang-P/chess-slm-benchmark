@@ -7,12 +7,17 @@ the engine.
 
 Position quality bar (metadata-rich, non-trivial best moves):
   - eval depth >= 25 and a real principal variation (>= 3 plies)
-  - best move is legal in OUR variant (no castling / double-step / en
-    passant — those can never be scored compliant here)
-  - no en-passant square in the FEN
+  - best move is legal under STANDARD chess (python-chess); castling, en
+    passant, double-step and promotion are all legal and scorable
+  - at least 5 legal moves (near-stalemate positions make the task vacuous)
   - 12-30 pieces on the board (skip dead endgames and full openings)
   - centipawn eval in [-250, 250] (positions where the best move matters);
     mate evals are excluded
+
+Selection is a SEEDED RANDOM SAMPLE of the qualifying candidates. Sorting the
+candidates by FEN string and taking the first TARGET produced a structurally
+biased set: FEN sorts on the rank-8 row first, digits sort before piece
+letters, so every selected position had an empty a8 square.
 
 Every record carries the engine metadata (cp, mate, depth, knodes, PV) and
 the source FEN, so analysis can stratify by eval, depth, material, etc.
@@ -98,21 +103,16 @@ def build() -> None:
         if len(best_by_fen) >= TARGET * 3:
             break  # enough unique candidates; dedupe/order below
 
-    cands = sorted(best_by_fen.values(),
-                   key=lambda r: (r["fen"], -r["depth"]))
-    # keep only positions whose best move is legal in our variant
-    out = []
-    for row in cands:
-        line = row["line"].split()
-        if not _best_move_legal(row["fen"], line[0]):
-            continue
-        out.append(row)
-        if len(out) >= TARGET:
-            break
-
-    # deterministic order (seeded) so records[:full_n] is a fair spread
+    # keep only positions whose best move is legal under standard chess
+    eligible = [row for row in sorted(best_by_fen.values(), key=lambda r: r["fen"])
+                if _best_move_legal(row["fen"], row["line"].split()[0])]
+    # SEEDED RANDOM SAMPLE of the eligible pool — never "the first TARGET in
+    # FEN order", which silently selected only positions with an empty a8.
+    # Shuffle first, then truncate; shuffling after truncation reorders a
+    # biased set without fixing it.
     rng = random.Random(2026)
-    rng.shuffle(out)
+    rng.shuffle(eligible)
+    out = eligible[:TARGET]
 
     records = []
     for row in out:
@@ -146,7 +146,10 @@ def build() -> None:
         })
     OUT.write_text(json.dumps(records, indent=1))
     print(f"scanned {rows_seen} rows, candidates {len(best_by_fen)}, "
-          f"built {len(records)} -> {OUT}")
+          f"eligible {len(eligible)}, built {len(records)} -> {OUT}")
+    occupied_a8 = sum(1 for r in records if not r["fen"][0].isdigit())
+    print(f"a8 occupied in {occupied_a8}/{len(records)} positions "
+          f"(0 would mean the FEN-order selection bias is back)")
     print(f"cp range: {min(r['task_extra']['cp'] for r in records)}.."
           f"{max(r['task_extra']['cp'] for r in records)} | "
           f"depth range: {min(r['task_extra']['depth'] for r in records)}.."

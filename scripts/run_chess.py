@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 ROOT = Path(__file__).resolve().parent.parent
 
 from src.benchmarks.games import tasks as T  # noqa: E402
-from src.live_push import PUBLIC_LIVE_REPO, resolve_token, upload_file  # noqa: E402
+from src.live_push import resolve_token, upload_file  # noqa: E402
 from src.models import MODEL_IDS, configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_samples  # noqa: E402
 
@@ -78,6 +78,12 @@ def main() -> None:
                     help="add 'think step by step' to the prompt so non-reasoning "
                          "models also emit visible reasoning (check/debug only — "
                          "the benchmark itself measures direct answers)")
+    ap.add_argument("--thinking", action="store_true",
+                    help="gateway arm only: enable the model's thinking mode. "
+                         "Off by default — measured 2026-08-03, thinking mode "
+                         "does not return an answer within a 2048 budget. The "
+                         "recorded thinking_enabled field reflects THIS flag, "
+                         "not the model name.")
     ap.add_argument("--smoke", action="store_true", help="stub model, no GPU")
     ap.add_argument("--live-push", action="store_true",
                     help="push live.json to the public repo on every snapshot "
@@ -92,26 +98,26 @@ def main() -> None:
     records = json.loads((Path(args.data_dir) / TASK_FILES[task_name]).read_text())
     if args.n:
         records = records[: args.n]
-    kind = task_name.split("-")[0]  # sm / mate1 / mate2 / mob / cap / bestmove
-    conditions = args.conditions or (T.CAP_CONDITIONS if kind == "cap" else T.CONDITIONS)
-    if kind == "cap" and args.prompt_variant == "fen" and args.conditions is None:
-        pass  # cap runs the single 'win' condition label; variant still applies
+    kind = task_name.split("-")[0]  # mate1 / mate2 / bestmove
+    conditions = args.conditions or T.CONDITIONS
 
     model = make_model(args.model, smoke_test=args.smoke)
     model.load()
+    # what the run ACTUALLY did, not what the model name implies: local gemma
+    # renders with enable_thinking=False, and the gateway arm is only a
+    # thinking arm when --thinking is passed.
+    thinking_enabled = bool(args.thinking) and args.model == "deepseek-v4-flash"
     run_name = f"{args.model}_{task_name}_{args.prompt_variant}"
     writer = ResultWriter(
         Path(args.output_dir),
         run_name,
          {"model": args.model, "task": task_name, "prompt_variant": args.prompt_variant,
           "task_category": task_category, "run_id": run_id,
-          "smoke": args.smoke, "thinking_enabled": args.model == "deepseek-v4-flash",
+          "smoke": args.smoke, "thinking_enabled": thinking_enabled,
           "max_new_tokens": args.max_new_tokens},
     )
     live_last = [0.0]
-    from src.live_push import resolve_token as _resolve_token
-
-    live_token = _resolve_token() if args.live_push else None
+    live_token = resolve_token() if args.live_push else None
 
     # background live.json pusher: the SSE loop must never wait on GitHub
     import threading
@@ -254,12 +260,17 @@ def main() -> None:
 
             out = model.generate(prompt, max_new_tokens=args.max_new_tokens,
                                  stream=args.verbose or args.stream,
-                                 on_chunk=_live_partial if not args.smoke else None)
+                                 on_chunk=_live_partial if not args.smoke else None,
+                                 thinking_disabled=not thinking_enabled)
             fallback = None
             if args.verbose:
                 print(f"\n--- END (tokens={out.get('output_tokens')}, "
                       f"finished={out.get('finished')}) ---", flush=True)
-            scored = T.score_record(rec, condition, out["content"], kind=kind)
+            scored = T.score_record(rec, condition, out["content"], kind=kind,
+                                    api_error=out.get("error"))
+            if out.get("error"):
+                print(f"    !! api_error on {rec['id']}: {out['error'][:160]}",
+                      flush=True)
             if args.verbose:
                 print(f"--- PARSED: {scored}", flush=True)
             sample = {
@@ -276,9 +287,10 @@ def main() -> None:
                 "latency_ms": out.get("latency_ms"),
                 "finished": out.get("finished"),
                 "max_new_tokens": args.max_new_tokens,
-                "thinking_enabled": args.model == "deepseek-v4-flash",
+                "thinking_enabled": thinking_enabled,
                 "prompt": prompt,
                 "output": out.get("content", ""),
+                "api_error": out.get("error"),
                 "reasoning": out.get("reasoning", ""),
                 "reasoning_chars": out.get("reasoning_chars"),
                 "answer_chars": out.get("answer_chars"),

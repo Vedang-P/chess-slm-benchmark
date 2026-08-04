@@ -64,15 +64,31 @@ def _category(task: str, sample: dict) -> str:
 
 
 def _status_group(sample: dict) -> str:
-    if sample.get("status") == "legal" and sample.get("compliance") is True:
+    """Map both status vocabularies onto the figure's outcome buckets.
+
+    The tactical runner (run_chess) emits legal / illegal / parse_error /
+    no_answer; the MATE runner (run_mate_eval) emits correct / wrong /
+    parse_error / no_answer. Only the first was handled, so every MATE sample
+    fell through to the `no_answer` bucket and every MATE bar read 100%
+    no-answer with a 0 legal rate.
+    """
+    status = sample.get("status")
+    if status == "legal":
+        return "correct" if sample.get("compliance") is True else "legal_wrong"
+    if status == "correct":
         return "correct"
-    if sample.get("status") == "legal":
-        return "legal_wrong"
-    if sample.get("status") == "illegal":
+    if status == "wrong":
+        return "legal_wrong"   # answered, chose the non-expert candidate
+    if status == "illegal":
         return "illegal"
-    if sample.get("status") == "parse_error":
+    if status == "parse_error":
         return "parse_error"
     return "no_answer"
+
+
+def _is_scored(sample: dict) -> bool:
+    """api_error rows are transport failures, not measurements."""
+    return sample.get("status") != "api_error"
 
 
 def _legacy_usage(sample: dict) -> dict:
@@ -100,8 +116,9 @@ def _legacy_usage(sample: dict) -> dict:
     }
 
 
-def _load_samples(results_dir: Path) -> list[dict]:
+def _load_samples(results_dir: Path) -> tuple[list[dict], int]:
     rows = []
+    api_errors = 0
     for samples_path in sorted(results_dir.rglob("*.samples.jsonl")):
         summary_path = samples_path.with_name(samples_path.name.replace(".samples.jsonl", ".summary.json"))
         summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
@@ -114,6 +131,9 @@ def _load_samples(results_dir: Path) -> list[dict]:
             if not line.strip():
                 continue
             sample = json.loads(line)
+            if not _is_scored(sample):
+                api_errors += 1
+                continue
             model = sample.get("model") or meta.get("model") or fallback_model
             task = sample.get("task") or meta.get("task") or fallback_task
             usage = _legacy_usage(sample)
@@ -130,7 +150,7 @@ def _load_samples(results_dir: Path) -> list[dict]:
                 "status": sample.get("status"),
                 "status_group": _status_group(sample),
                 "strict_correct": int(sample.get("compliance") is True),
-                "legal": int(sample.get("status") == "legal"),
+                "legal": int(sample.get("status") in ("legal", "correct", "wrong")),
                 "format": sample.get("format"),
                 "fallback": sample.get("fallback"),
                 "thinking_enabled": sample.get("thinking_enabled", meta.get("thinking_enabled")),
@@ -155,7 +175,7 @@ def _load_samples(results_dir: Path) -> list[dict]:
                 "depth": extra.get("depth"),
                 "knodes": extra.get("knodes"),
             })
-    return rows
+    return rows, api_errors
 
 
 def _write_csv(path: Path, rows: list[dict]) -> None:
@@ -285,14 +305,31 @@ def make_figures(rows: list[dict], cells: list[dict], out_dir: Path) -> list[str
     return figures
 
 
+def _warn_duplicates(rows: list[dict]) -> None:
+    """A cell re-run used to APPEND onto its old samples file, leaving the same
+    position scored twice (possibly by two different scorer versions). The
+    summary, computed in memory, looked clean. Refuse to be silent about it."""
+    seen = defaultdict(int)
+    for r in rows:
+        seen[(r["model"], r["task"], r["representation"], r["position_id"])] += 1
+    dupes = {k: v for k, v in seen.items() if v > 1}
+    if dupes:
+        print(f"WARNING: {len(dupes)} position(s) appear more than once in the "
+              f"raw samples — a cell was appended to rather than re-run "
+              f"cleanly. Example: {next(iter(dupes.items()))}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default="results/chess")
     parser.add_argument("--out-dir", default="analysis")
     args = parser.parse_args()
-    rows = _load_samples(Path(args.results_dir))
+    rows, api_errors = _load_samples(Path(args.results_dir))
     if not rows:
         raise SystemExit(f"no samples found in {args.results_dir}")
+    if api_errors:
+        print(f"excluded {api_errors} api_error samples (transport failures)")
+    _warn_duplicates(rows)
     out = Path(args.out_dir)
     cells = _cell_rows(rows)
     _write_csv(out / "tables" / "paper_samples.csv", rows)
@@ -304,8 +341,10 @@ def main() -> None:
         "figures": figures,
         "token_usage_complete_samples": sum(bool(r["usage_complete"]) for r in rows),
         "token_usage_missing_samples": sum(not r["usage_complete"] for r in rows),
+        "api_error_samples_excluded": api_errors,
     }, indent=1))
-    print(f"samples={len(rows)} cells={len(cells)} figures={figures}")
+    print(f"samples={len(rows)} cells={len(cells)} figures={figures} "
+          f"api_errors_excluded={api_errors}")
 
 
 if __name__ == "__main__":

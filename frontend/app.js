@@ -204,6 +204,49 @@
     }));
   }
 
+  // The monitor publishes two shapes of run. `run_kind` says which; older
+  // snapshots are inferred from `mode`. Rendering a MATE run through the
+  // sweep layout is what produced "LEGAL MOVE RATE 79%" for a task with no
+  // legality, and four permanently blank cards.
+  function runKind() {
+    if (state && state.run_kind) return state.run_kind;
+    if (state && state.mode === "mate") return "mate-selection";
+    return "sweep";
+  }
+  const isMateRun = () => runKind() === "mate-selection";
+  const mateStats = () => (state && state.mate) || null;
+
+  function progressOf() {
+    const p = (state && state.progress) || {};
+    return {
+      done: p.done ?? p.cells_done ?? 0,
+      total: p.total ?? p.cells_total ?? 0,
+      failed: p.failed ?? p.cells_failed ?? 0,
+      fraction: typeof p.fraction === "number" ? p.fraction : 0,
+    };
+  }
+
+  const fmtInt = (v) => (typeof v === "number" ? v.toLocaleString() : "—");
+  const fmtDur = (min) => {
+    if (typeof min !== "number" || !Number.isFinite(min) || min < 0) return null;
+    if (min < 60) return `${Math.round(min)}m`;
+    const h = Math.floor(min / 60);
+    return `${h}h ${Math.round(min % 60)}m`;
+  };
+
+  // one scoreboard card
+  function card({ label, value, sub, wide, progress }) {
+    const bar = typeof progress === "number"
+      ? `<div class="rule-track"><div class="rule-fill" style="width:${(progress * 100).toFixed(1)}%"></div></div>`
+      : "";
+    return `<div class="sb-cell${wide ? " sb-wide" : ""}">
+      <span class="sb-label">${escapeHtml(label)}</span>
+      <span class="sb-value${wide ? " sb-big" : ""}">${escapeHtml(value)}</span>
+      <span class="sb-sub">${escapeHtml(sub ?? "")}</span>
+      ${bar}
+    </div>`;
+  }
+
   function cellLabel(cell) {
     if (!cell) return "—";
     return `${cell.model} · ${cell.task} · ${cell.variant || "—"}`;
@@ -217,71 +260,154 @@
 
   // ---------------- render ----------------
   function render() {
-    // no-signal notice: shown only when there is genuinely no data at all
-    const hasData = !!state && (state.cells || []).length > 0;
+    // "has data" depends on the run kind: a MATE run publishes no cells at
+    // all, so gating on cells.length left it permanently on the no-signal
+    // screen once the sweep-shaped payload went away.
+    const m = mateStats();
+    const hasData = !!state && (isMateRun()
+      ? !!m && (m.n_attempted || 0) > 0
+      : (state.cells || []).length > 0);
     $("notice").hidden = hasData;
     if (!hasData) {
       showNoSignal(false);
-      $("stageTag").textContent = "IDLE";
-      $("runMeta").textContent = state && state.mode ? `${state.mode} mode` : "no signal yet";
-      $("progressFill").style.width = "0%";
-      ["kCells", "kCellsSub", "kLegal", "kLegalSub", "kTactics", "kTacticsSub",
-        "kStock", "kStockSub", "kGames", "kGamesSub", "kDivergence"].forEach((id) => { $(id).textContent = "—"; });
-      $("currentCell").hidden = true;
+      $("scoreboard").innerHTML = card({
+        label: "round", value: "IDLE",
+        sub: state && state.mode ? `${state.mode} mode` : "no signal yet",
+      });
+      $("charts").innerHTML = "";
       $("errorBanner").hidden = true;
       $("clockDigits").textContent = "00:00:00";
-      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no model scores yet — awaiting completed position cells</div>`;
-      $("cellsBody").innerHTML = `<tr><td colspan="10" class="empty">no scored cells yet — awaiting the first push</td></tr>`;
-      $("tableCount").textContent = "0 cells";
+      $("entrants").hidden = true;
+      $("cellsBody").innerHTML = `<tr><td colspan="10" class="empty">nothing scored yet — awaiting the first push</td></tr>`;
+      $("tableCount").textContent = "—";
       $("footRepo").textContent = state ? `repo: ${state.repo || "—"}` : "no signal";
+      $("footRun").textContent = "—";
       return;
     }
+    $("wordmarkSub").textContent = isMateRun()
+      ? `MATE move selection · ${(state.models || []).join(", ") || "?"}`
+      : `tactical sweep · ${(state.models || []).length} models`;
     renderScoreboard();
     renderError();
     renderEntrants();
     try { renderCharts(); } catch (e) { console.warn("charts failed:", e); }
     renderTable();
-    $("footRepo").textContent = `repo: ${state.repo || "—"} · ${state.mode || "?"} mode`;
+    $("footRepo").textContent = `repo: ${state.repo || "—"}`;
+    $("footRun").textContent = isMateRun()
+      ? `mate-selection · ${state.config && state.config.thinking_enabled ? "thinking on" : "direct mode"}`
+      : `sweep · ${state.mode || "?"} mode`;
     $("rawLink").href = CONFIG.STATE_URL;
     tickClock();
     if (!clockTimer) clockTimer = setInterval(tickClock, 1000);
   }
 
   function renderScoreboard() {
-    const p = state.progress || {};
-    const frac = p.fraction || 0;
-    $("progressFill").style.width = `${(frac * 100).toFixed(1)}%`;
-    const complete = (state.progress && state.progress.fraction >= 1) || state.stage === "complete";
-    $("stageTag").textContent = complete ? "COMPLETE" : (state.stage || "sweep").toUpperCase();
-    $("runMeta").textContent = `${(state.models || []).length} models · ${state.mode || "?"}`;
-    const cur = state.current;
-    $("currentCell").hidden = !cur;
-    if (cur) $("currentCell").textContent = `now: ${cur.model} × ${cur.task}`;
+    $("scoreboard").innerHTML = isMateRun() ? mateScoreboard() : sweepScoreboard();
+  }
 
+  function runCard() {
+    const p = progressOf();
+    const complete = p.fraction >= 1 || state.stage === "complete";
+    const cur = state.current;
+    const stage = complete ? "COMPLETE" : (state.stage || "sweep").toUpperCase();
+    const sub = isMateRun()
+      ? `${(state.models || [])[0] || "?"} · ${state.config && state.config.thinking_enabled ? "thinking on" : "direct"}`
+      : `${(state.models || []).length} models · ${state.mode || "?"}`;
+    const now = cur
+      ? `<span class="now-line">now: ${escapeHtml(cur.model)} × ${escapeHtml(cur.task)}</span>`
+      : "";
+    return `<div class="sb-cell">
+      <span class="sb-label">round</span>
+      <span class="sb-value">${stage}</span>
+      <span class="sb-sub">${escapeHtml(sub)}</span>
+      ${now}
+    </div>`;
+  }
+
+  // ---- MATE selection run -------------------------------------------------
+  function mateScoreboard() {
+    const m = mateStats() || {};
+    const p = progressOf();
+    const eta = fmtDur(state.eta_min);
+    const unanswered = (m.no_answer || 0) + (m.parse_error || 0);
+    const bRate = m.n ? m.picked_b / m.n : null;
+    const truthBRate = m.n ? m.truth_b / m.n : null;
+    const cards = [
+      runCard(),
+      card({
+        label: "positions", value: fmtInt(p.done), wide: true,
+        sub: `of ${fmtInt(p.total)}${eta ? ` · eta ${eta}` : ""}`,
+        progress: p.fraction,
+      }),
+      card({
+        label: "accuracy vs expert", value: fmtPct(m.accuracy),
+        sub: `${fmtInt(m.correct)} / ${fmtInt(m.n)} · 50% is chance`,
+      }),
+      card({
+        label: "answer rate", value: fmtPct(m.answer_rate),
+        sub: unanswered
+          ? `${fmtInt(unanswered)} unanswered · ${Object.entries(m.no_answer_reasons || {}).map(([k, v]) => `${k} ${v}`).join(", ") || "no reason recorded"}`
+          : "every position answered",
+      }),
+      card({
+        label: "choice bias", value: bRate === null ? "—" : `${(bRate * 100).toFixed(0)}% B`,
+        sub: `picked A ${fmtInt(m.picked_a)} · B ${fmtInt(m.picked_b)} · expert B ${truthBRate === null ? "—" : (truthBRate * 100).toFixed(0) + "%"}`,
+      }),
+      card({
+        label: "accuracy by expert label",
+        value: `${fmtPct(m.accuracy_truth_a)} / ${fmtPct(m.accuracy_truth_b)}`,
+        sub: `truth A (n=${fmtInt(m.truth_a)}) / truth B (n=${fmtInt(m.truth_b)})`,
+      }),
+      card({
+        label: "throughput",
+        value: m.positions_per_hour ? `${Math.round(m.positions_per_hour)}/h` : "—",
+        sub: m.mean_latency_s ? `${m.mean_latency_s.toFixed(1)}s per position` : "measuring…",
+      }),
+      card({
+        label: "tokens per answer",
+        value: m.mean_output_tokens === null || m.mean_output_tokens === undefined
+          ? "—" : Math.round(m.mean_output_tokens).toLocaleString(),
+        sub: m.mean_reasoning_tokens
+          ? `+ ${Math.round(m.mean_reasoning_tokens).toLocaleString()} reasoning`
+          : "output tokens · no reasoning reported",
+      }),
+      card({
+        label: "api errors", value: fmtInt(m.api_error || 0),
+        sub: (m.api_error || 0) ? "gateway failures · excluded from accuracy" : "no transport failures",
+      }),
+    ];
+    return cards.join("");
+  }
+
+  // ---- tactical sweep -----------------------------------------------------
+  function sweepScoreboard() {
+    const p = progressOf();
     const cells = state.cells || [];
     const legalCells = cells.filter((c) => typeof winMetric(c, "legal_rate") === "number");
-    const mateVals = modelWinAvg("mate1-lichess", "grid", "compliance_strict");
-    const stockVals = modelWinAvg("bestmove-8x8", "grid", "compliance_strict");
-    const gameCells = cells.filter((c) => c.game && c.game.win_rate != null);
-
-    $("kCells").textContent = `${p.cells_done ?? 0}`;
-    $("kCellsSub").textContent = `of ${p.cells_total ?? "?"} cells${p.cells_failed ? ` · ${p.cells_failed} failed` : ""}`;
-    $("kLegal").textContent = fmtPct(weightedCellMetricAvg(legalCells, "legal_rate"));
-    $("kLegalSub").textContent = `${legalCells.length} cells`;
-    $("kTactics").textContent = fmtPct(avg(Object.values(mateVals)));
-    $("kTacticsSub").textContent = `${Object.keys(mateVals).length} models · strict`;
-    $("kStock").textContent = fmtPct(avg(Object.values(stockVals)));
-    $("kStockSub").textContent = `${Object.keys(stockVals).length} models · strict`;
-    $("kGames").textContent = fmtPct(weightedAvg(gameCells.map((c) => ({ value: c.game.win_rate, weight: num(c.game.n) || 1 }))));
-    $("kGamesSub").textContent = `${gameCells.length} game cells`;
-
-    let gridVals = [], fenVals = [];
-    for (const task of ["cap-legal-8x8", "mate1-lichess", "mate2-lichess", "bestmove-8x8"]) {
-      for (const c of cellsFor(task, "grid")) { const v = winMetric(c, "legal_rate"); if (typeof v === "number") gridVals.push(v); }
-      for (const c of cellsFor(task, "fen")) { const v = winMetric(c, "legal_rate"); if (typeof v === "number") fenVals.push(v); }
-    }
-    const delta = avg(gridVals) !== null && avg(fenVals) !== null ? avg(gridVals) - avg(fenVals) : null;
-    $("kDivergence").textContent = delta === null ? "—" : (delta >= 0 ? "+" : "") + (delta * 100).toFixed(1) + "%";
+    // variant-agnostic: these were pinned to the "grid" variant, which the
+    // FEN-only study never produces, so every card read "—"
+    const strictFor = (task) => avg(Object.values(modelWinAvg(task, null, "compliance_strict")));
+    const nModels = (task) => Object.keys(modelWinAvg(task, null, "compliance_strict")).length;
+    const eta = fmtDur(state.eta_min);
+    return [
+      runCard(),
+      card({
+        label: "cells completed", value: fmtInt(p.done), wide: true,
+        sub: `of ${fmtInt(p.total)} cells${p.failed ? ` · ${p.failed} failed` : ""}${eta ? ` · eta ${eta}` : ""}`,
+        progress: p.fraction,
+      }),
+      card({
+        label: "legal move rate",
+        value: fmtPct(weightedCellMetricAvg(legalCells, "legal_rate")),
+        sub: `${legalCells.length} cells`,
+      }),
+      card({ label: "mate-in-1 strict", value: fmtPct(strictFor("mate1-lichess")),
+             sub: `${nModels("mate1-lichess")} models` }),
+      card({ label: "mate-in-2 strict", value: fmtPct(strictFor("mate2-lichess")),
+             sub: `${nModels("mate2-lichess")} models` }),
+      card({ label: "stockfish top-1", value: fmtPct(strictFor("bestmove-8x8")),
+             sub: `${nModels("bestmove-8x8")} models` }),
+    ].join("");
   }
 
   function renderError() {
@@ -292,27 +418,30 @@
 
   function renderEntrants() {
     const models = state.models || [];
+    // A one-model run has no leaderboard. The section used to render a
+    // single "not started" row forever during every MATE run.
+    if (isMateRun() || models.length < 2) {
+      $("entrants").hidden = true;
+      return;
+    }
+    $("entrants").hidden = false;
     const cells = state.cells || [];
-    const byModel = modelMetricAvgWhere(models, (c) => !c.game, "legal_rate");
+    const byModel = modelMetricAvgWhere(models, () => true, "legal_rate");
     const ranked = bestOf(models, (m) => byModel[m] ?? null);
     const ordered = [
       ...ranked.map(([model]) => model),
       ...models.filter((model) => byModel[model] === undefined),
     ];
-    const expectedPerModel = models.length && state.progress
-      ? (state.progress.cells_total || 0) / models.length
-      : 0;
+    const p = progressOf();
+    const expectedPerModel = models.length ? (p.total || 0) / models.length : 0;
     const done = new Set(models.filter((model) => {
       const completed = cells.filter((c) => c.model === model && c.done).length;
       return expectedPerModel > 0 && completed >= expectedPerModel;
     }));
-    if (!ordered.length) {
-      $("entrantRows").innerHTML = `<div class="empty" style="padding:26px">no model scores yet — awaiting completed position cells</div>`;
-      return;
-    }
+    $("entrantCount").textContent = `${cells.length} cells`;
     $("entrantRows").innerHTML = ordered.map((m, i) => {
-      const games = cells.filter((c) => c.model === m && c.done).length;
-      const frac = expectedPerModel ? Math.min(1, games / expectedPerModel) : 0;
+      const cellsDone = cells.filter((c) => c.model === m && c.done).length;
+      const frac = expectedPerModel ? Math.min(1, cellsDone / expectedPerModel) : 0;
       const score = byModel[m] ?? null;
       const safeModel = escapeHtml(m);
       return `
@@ -416,20 +545,161 @@
       .sort((a, b) => valueFor(b) - valueFor(a));
   }
 
+  // The figure set depends on the run kind, so the markup is generated too.
+  // Rebuild only when the layout changes — replacing the canvases on every
+  // 15s poll would orphan the Chart.js instances bound to them.
+  let chartLayout = null;
+
+  function buildChartLayout(figures) {
+    const key = figures.map((f) => f.id).join(",");
+    if (key === chartLayout) return false;
+    for (const id of Object.keys(charts)) { charts[id].destroy(); delete charts[id]; }
+    $("charts").innerHTML = figures.map((f) => `
+      <figure class="chart-figure${f.wide ? " chart-span2" : ""}">
+        <figcaption>${escapeHtml(f.title)} <span class="fig-note">${escapeHtml(f.note)}</span></figcaption>
+        <div class="chart-box"><canvas id="${f.id}"></canvas><p class="chart-status" id="${f.id}Status"></p></div>
+      </figure>`).join("");
+    chartLayout = key;
+    return true;
+  }
+
+  const rateOpts = (xTitle) => ({
+    ...baseOpts,
+    scales: {
+      ...baseOpts.scales,
+      x: { ...baseOpts.scales.x, title: { display: !!xTitle, text: xTitle || "", color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 } } },
+    },
+  });
+
   function renderCharts() {
+    if (isMateRun()) return renderMateCharts();
+    return renderSweepCharts();
+  }
+
+  // ---- MATE selection -----------------------------------------------------
+  function renderMateCharts() {
+    const m = mateStats() || {};
+    buildChartLayout([
+      { id: "chartMateAccuracy", title: "Accuracy over the run", note: "vs 50% chance", wide: true },
+      { id: "chartMateChoice", title: "Choice distribution", note: "model vs expert" },
+      { id: "chartMateOutcome", title: "Outcome breakdown", note: "share of scored positions" },
+      { id: "chartMateBias", title: "B-preference over the run", note: "drift check", wide: true },
+    ]);
+
+    const hist = history.filter((h) => typeof h.accuracy === "number");
+    chartStatus("chartMateAccuracyStatus", hist.length
+      ? `${hist.length} monitor samples · latest ${fmtPct(hist[hist.length - 1].accuracy)} over ${fmtInt(m.n)} positions`
+      : "Waiting for the first monitor sample.");
+    chartStatus("chartMateChoiceStatus", m.n
+      ? `model picked B in ${fmtPct(m.n ? m.picked_b / m.n : null)} of ${fmtInt(m.n)} positions; the expert answer is B in ${fmtPct(m.n ? m.truth_b / m.n : null)}`
+      : "Waiting for scored positions.");
+    chartStatus("chartMateOutcomeStatus", m.n
+      ? `${fmtInt(m.n)} scored · ${fmtInt(m.api_error || 0)} api errors excluded`
+      : "Waiting for scored positions.");
+    chartStatus("chartMateBiasStatus", hist.length
+      ? "a flat line well away from the expert's B-rate means a position-independent preference, not chess reasoning"
+      : "Waiting for the first monitor sample.");
+
+    if (typeof Chart === "undefined") return;
+
+    const chanceLine = {
+      id: "chanceLine",
+      afterDatasetsDraw(chart) {
+        const y = chart.scales.y.getPixelForValue(0.5);
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "rgba(233,230,223,0.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(chart.chartArea.left, y);
+        ctx.lineTo(chart.chartArea.right, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#6c655a";
+        ctx.font = "9px 'IBM Plex Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("chance", chart.chartArea.left + 4, y - 4);
+        ctx.restore();
+      },
+    };
+
+    mkChart("chartMateAccuracy", {
+      type: "line",
+      data: {
+        labels: hist.map((h) => h.done ?? h.cells_done),
+        datasets: [
+          { label: "accuracy", data: hist.map((h) => h.accuracy), borderColor: "#e5484d",
+            borderWidth: 1.6, backgroundColor: "rgba(229,72,77,0.06)", fill: true, tension: 0.3, pointRadius: 0 },
+          { label: "answer rate", data: hist.map((h) => h.answer_rate ?? null), borderColor: "rgba(90,171,130,0.9)",
+            borderWidth: 1.2, borderDash: [4, 3], fill: false, tension: 0.3, pointRadius: 0 },
+        ],
+      },
+      options: rateOpts("positions scored"),
+      plugins: [chanceLine, endLabel],
+    });
+
+    mkChart("chartMateChoice", {
+      type: "bar",
+      data: {
+        labels: ["candidate A", "candidate B"],
+        datasets: [
+          barDataset("model picked", [m.n ? m.picked_a / m.n : 0, m.n ? m.picked_b / m.n : 0], "rgba(242,169,59,0.8)"),
+          barDataset("expert answer", [m.n ? m.truth_a / m.n : 0, m.n ? m.truth_b / m.n : 0], "rgba(233,230,223,0.5)"),
+        ],
+      },
+      options: baseOpts,
+      plugins: [valueLabels],
+    });
+
+    const n = m.n || 1;
+    mkChart("chartMateOutcome", {
+      type: "bar",
+      data: {
+        labels: ["correct", "wrong", "no answer", "parse error"],
+        datasets: [barDataset("share", [
+          (m.correct || 0) / n, (m.wrong || 0) / n, (m.no_answer || 0) / n, (m.parse_error || 0) / n,
+        ], "rgba(90,171,130,0.75)")],
+      },
+      options: { ...baseOpts, plugins: { ...baseOpts.plugins, legend: { display: false } } },
+      plugins: [valueLabels],
+    });
+
+    const biasHist = history.filter((h) => typeof h.picked_b_rate === "number");
+    mkChart("chartMateBias", {
+      type: "line",
+      data: {
+        labels: biasHist.map((h) => h.done ?? h.cells_done),
+        datasets: [
+          { label: "model picks B", data: biasHist.map((h) => h.picked_b_rate), borderColor: "#f2a93b",
+            borderWidth: 1.6, backgroundColor: "rgba(242,169,59,0.07)", fill: true, tension: 0.3, pointRadius: 0 },
+          { label: "expert B rate", data: biasHist.map(() => (m.n ? m.truth_b / m.n : null)),
+            borderColor: "rgba(233,230,223,0.45)", borderWidth: 1, borderDash: [4, 3], fill: false, pointRadius: 0 },
+        ],
+      },
+      options: rateOpts("positions scored"),
+    });
+  }
+
+  // ---- tactical sweep -----------------------------------------------------
+  function renderSweepCharts() {
+    buildChartLayout([
+      { id: "chartLegal", title: "Parsing and legality", note: "completed position cells", wide: true },
+      { id: "chartTactics", title: "Tactics pipeline", note: "parsed · legal · strict score" },
+      { id: "chartStock", title: "Move strength", note: "bestmove task · Stockfish" },
+      { id: "chartHistory", title: "Progress over time", note: "average legal rate", wide: true },
+    ]);
+
     const models = state.models || [];
-    const position = (c) => !c.game && c.win && Object.keys(c.win).length > 0;
+    const position = (c) => c.win && Object.keys(c.win).length > 0;
     const positionCells = (state.cells || []).filter(position);
 
     const legParsed = chartValues(models, position, "parse_rate");
     const legLegal = chartValues(models, position, "legal_rate");
     const legOrder = orderedMetricModels(models, [legLegal, legParsed]);
-    chartStatus(
-      "chartLegalStatus",
-      positionCells.length
-        ? `${positionCells.length} completed cells · parsed ${fmtPct(weightedCellMetricAvg(positionCells, "parse_rate"))} · legal ${fmtPct(weightedCellMetricAvg(positionCells, "legal_rate"))}`
-        : "Waiting for completed position cells.",
-    );
+    chartStatus("chartLegalStatus", positionCells.length
+      ? `${positionCells.length} completed cells · parsed ${fmtPct(weightedCellMetricAvg(positionCells, "parse_rate"))} · legal ${fmtPct(weightedCellMetricAvg(positionCells, "legal_rate"))}`
+      : "Waiting for completed position cells.");
 
     const tactical = (c) => position(c) && (c.task || "").startsWith("mate");
     const tacticalCells = (state.cells || []).filter(tactical);
@@ -439,12 +709,9 @@
     const m2 = chartValues(models, (c) => tactical(c) && c.task === "mate2-lichess", "compliance_strict");
     const tacOrder = orderedMetricModels(models, [m1, m2, tacLegal, tacParsed]);
     const decidedTactical = tacticalCells.filter((c) => typeof c.win.compliance_of_legal === "number").length;
-    chartStatus(
-      "chartTacticsStatus",
-      tacticalCells.length
-        ? `${tacticalCells.length} completed cells · ${decidedTactical} with a legal answer · strict score counts rejected answers as 0`
-        : "Waiting for mate-in-1 and mate-in-2 cells.",
-    );
+    chartStatus("chartTacticsStatus", tacticalCells.length
+      ? `${tacticalCells.length} completed cells · ${decidedTactical} with a legal answer · strict score counts rejected answers as 0`
+      : "Waiting for mate-in-1 and mate-in-2 cells.");
 
     const stockfish = (c) => position(c) && c.task === "bestmove-8x8";
     const stockCells = (state.cells || []).filter(stockfish);
@@ -452,19 +719,13 @@
     const stockLegal = chartValues(models, stockfish, "legal_rate");
     const stockTop = chartValues(models, stockfish, "compliance_strict");
     const stockOrder = orderedMetricModels(models, [stockTop, stockLegal, stockParsed]);
-    chartStatus(
-      "chartStockStatus",
-      stockCells.length
-        ? `${stockCells.length} completed cells · top-1 is strict over all samples · reference is Stockfish`
-        : "Waiting for bestmove-8x8 cells.",
-    );
+    chartStatus("chartStockStatus", stockCells.length
+      ? `${stockCells.length} completed cells · top-1 is strict over all samples · reference is Stockfish`
+      : "Waiting for bestmove-8x8 cells.");
 
-    chartStatus(
-      "chartHistoryStatus",
-      history.length
-        ? `${history.length} monitor samples · latest legal rate ${fmtPct(history[history.length - 1].legal_avg)}`
-        : "Waiting for the first monitor sample.",
-    );
+    chartStatus("chartHistoryStatus", history.length
+      ? `${history.length} monitor samples · latest legal rate ${fmtPct(history[history.length - 1].legal_avg)}`
+      : "Waiting for the first monitor sample.");
 
     if (typeof Chart === "undefined") return; // CDN blocked — statuses still explain the data
 
@@ -516,13 +777,43 @@
           pointRadius: 0,
         }],
       },
-      options: { ...baseOpts, scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, title: { display: true, text: "cells completed", color: "#6c655a", font: { family: "IBM Plex Mono", size: 9.5 } } } } },
+      options: rateOpts("cells completed"),
       plugins: [endLabel],
     });
   }
 
   // ---------------- table ----------------
   function renderTable() {
+    if (isMateRun()) return renderMateTable();
+    return renderSweepTable();
+  }
+
+  function renderMateTable() {
+    const m = mateStats() || {};
+    $("tableCount").textContent = `${fmtInt(m.n)} scored positions`;
+    const rows = [
+      ["overall", m.n, m.answer_rate, m.accuracy, "expert MoveA/MoveB choice"],
+      ["expert answer = A", m.truth_a, null, m.accuracy_truth_a, "positions where MoveA is the expert choice"],
+      ["expert answer = B", m.truth_b, null, m.accuracy_truth_b, "positions where MoveB is the expert choice"],
+      ["model picked A", m.picked_a, null, null, "how often the model chose the first candidate"],
+      ["model picked B", m.picked_b, null, null, "how often the model chose the second candidate"],
+    ];
+    $("cellsBody").innerHTML = rows.map(([label, n, answered, acc, note], i) => `
+      <tr>
+        <td class="num mono dim">${String(i + 1).padStart(2, "0")}</td>
+        <td class="mono">${escapeHtml((state.models || [])[0] || "—")}</td>
+        <td>${escapeHtml(label)}</td>
+        <td><span class="dim">strategy</span></td>
+        <td><span class="dim">${escapeHtml(note)}</span></td>
+        <td class="num mono">${fmtInt(n)}</td>
+        <td class="num mono ${answered === null || answered === undefined ? "dim" : answered > 0.9 ? "pos" : "warn"}">${answered === null || answered === undefined ? "—" : fmtPct(answered)}</td>
+        <td class="num mono dim">—</td>
+        <td class="num mono ${typeof acc !== "number" ? "dim" : acc > 0.55 ? "pos" : acc >= 0.45 ? "warn" : "neg"}">${typeof acc === "number" ? fmtPct(acc) : "—"}</td>
+        <td>${i === 0 ? `<span class="cell-done">${state.stage === "complete" ? "done" : "running"}</span>` : ""}</td>
+      </tr>`).join("");
+  }
+
+  function renderSweepTable() {
     const body = $("cellsBody");
     const cells = state.cells || [];
     $("tableCount").textContent = `${cells.length} cells`;
@@ -535,46 +826,29 @@
     for (const c of cells) {
       idx += 1;
       const n = String(idx).padStart(2, "0");
-      if (c.game) {
-        const g = c.game;
-        rows.push(`<tr>
-          <td class="num mono dim">${n}</td>
-          <td class="mono">${escapeHtml(c.model)}</td>
-          <td>${escapeHtml(c.task)}</td>
-          <td><span class="dim">${escapeHtml(c.variant)}</span></td>
-          <td><span class="dim">game</span></td>
-          <td class="num mono">${fmtNum(g.n)}</td>
-          <td class="num mono dim">—</td>
-          <td class="num mono ${g.legal_rate > 0.3 ? "pos" : g.legal_rate > 0 ? "warn" : "neg"}">${fmtPct(g.legal_rate)}</td>
-          <td class="num mono ${g.win_rate > 0.3 ? "pos" : g.win_rate > 0 ? "warn" : "dim"}">${fmtPct(g.win_rate)}</td>
-          <td><span class="cell-done">done</span></td>
-        </tr>`);
-        continue;
-      }
-      for (const condition of ["win", "lose"]) {
-        const m = c[condition];
-        if (!m || !Object.keys(m).length) continue;
-        const parse = num(m.parse_rate), legal = num(m.legal_rate), comp = num(m.compliance_of_legal);
-        rows.push(`<tr>
-          <td class="num mono dim">${n}</td>
-          <td class="mono">${escapeHtml(c.model)}</td>
-          <td>${escapeHtml(c.task)}</td>
-          <td><span class="dim">${escapeHtml(c.variant)}</span></td>
-          <td><span class="dim">${condition}</span></td>
-          <td class="num mono">${fmtNum(m.n)}</td>
-          <td class="num mono ${parse > 0.5 ? "pos" : "neg"}">${fmtPct(parse)}</td>
-          <td class="num mono ${legal > 0.3 ? "pos" : legal > 0 ? "warn" : "neg"}">${fmtPct(legal)}</td>
-          <td class="num mono ${comp > 0.3 ? "pos" : comp > 0 ? "warn" : "dim"}">${fmtPct(comp)}</td>
-          <td><span class="cell-done">done</span></td>
-        </tr>`);
-      }
+      const m = c.win;
+      if (!m || !Object.keys(m).length) continue;
+      const parse = num(m.parse_rate), legal = num(m.legal_rate), comp = num(m.compliance_strict);
+      const attempted = num(m.n_attempted);
+      const apiErr = num(m.api_error) || 0;
+      rows.push(`<tr>
+        <td class="num mono dim">${n}</td>
+        <td class="mono">${escapeHtml(c.model)}</td>
+        <td>${escapeHtml(c.task)}</td>
+        <td><span class="dim">${escapeHtml(c.variant)}</span></td>
+        <td><span class="dim">${apiErr ? `${apiErr} api errors excluded` : "scored"}</span></td>
+        <td class="num mono">${fmtNum(m.n)}${attempted && attempted !== m.n ? `<span class="dim"> / ${attempted}</span>` : ""}</td>
+        <td class="num mono ${parse > 0.5 ? "pos" : "neg"}">${fmtPct(parse)}</td>
+        <td class="num mono ${legal > 0.3 ? "pos" : legal > 0 ? "warn" : "neg"}">${fmtPct(legal)}</td>
+        <td class="num mono ${comp > 0.3 ? "pos" : comp > 0 ? "warn" : "dim"}">${fmtPct(comp)}</td>
+        <td><span class="cell-done">done</span></td>
+      </tr>`);
     }
     body.innerHTML = rows.join("") || `<tr><td colspan="10" class="empty">no scored cells yet</td></tr>`;
   }
 
   // ---------------- live board ----------------
   // Lichess cburnett SVG pieces (window.CHESS_PIECES from pieces.js).
-  const GAME_TASKS = ["playout-5x5", "ttt", "c4"];
   let live = null;
   let liveLatest = null;   // the newest published sample (sync target)
   let lastLiveKey = null;
@@ -906,18 +1180,32 @@
   }
 
   function updateLiveSync() {
+    const el = $("liveSync");
     if (!live) {
-      $("liveSync").className = "live-sync warn";
-      $("liveSync").textContent = "no published sample to compare with the sweep cursor";
+      el.className = "live-sync warn";
+      el.textContent = "no sample published yet";
       return;
     }
-    const cell = live.cell || {};
-    const sameCell = cellKey(state && state.current) === cellKey(cell);
     const ageS = live.updated_at ? ageSeconds(live.updated_at) : Infinity;
     const fresh = Number.isFinite(ageS) && ageS <= Math.max(CONFIG.LIVE_REFRESH_S * 4, 30);
-    $("liveSync").className = "live-sync " + (sameCell && fresh ? "ok" : "warn");
-    $("liveSync").textContent = sameCell && fresh
-      ? `same sweep cell · published ${timeAgo(live.updated_at)} · board is record ${live.record_id || live.position_id || "unknown"}`
+    const record = live.record_id || live.position_id || "unknown";
+    const complete = state && state.stage === "complete";
+    // A MATE run has one task and one model: comparing the sample's "cell"
+    // against a sweep cursor always disagreed and always showed the warn
+    // state. Freshness is the only thing worth reporting here.
+    if (isMateRun()) {
+      el.className = "live-sync " + (fresh || complete ? "ok" : "warn");
+      el.textContent = fresh
+        ? `live · published ${timeAgo(live.updated_at)} · position ${record}`
+        : complete
+          ? `run finished · last scored position ${record} (${timeAgo(live.updated_at)})`
+          : `feed is ${timeAgo(live.updated_at)} — the runner may have stalled · position ${record}`;
+      return;
+    }
+    const sameCell = cellKey(state && state.current) === cellKey(live.cell || {});
+    el.className = "live-sync " + (sameCell && fresh ? "ok" : "warn");
+    el.textContent = sameCell && fresh
+      ? `same sweep cell · published ${timeAgo(live.updated_at)} · board is record ${record}`
       : `board is ${timeAgo(live.updated_at)} · ${sameCell ? "same cell, stale sample" : `last published sample; sweep cursor is ${cellLabel(state && state.current)}`}`;
   }
 
@@ -937,8 +1225,13 @@
   }
 
   function renderLive() {
-    const sweep = state && state.current ? `sweep now · ${cellLabel(state.current)}` : "sweep position unavailable";
-    $("liveNow").textContent = sweep;
+    const mate = isMateRun();
+    const p = progressOf();
+    $("liveNow").textContent = state && state.current
+      ? (mate ? `scoring position ${fmtInt(p.done + 1)} of ${fmtInt(p.total)}` : `sweep now · ${cellLabel(state.current)}`)
+      : (mate
+        ? (state && state.stage === "complete" ? "run complete · showing the last scored position" : "between positions")
+        : "no sweep cell in progress");
     if (!live) {
       $("liveCaption").textContent = "no live signal yet";
       $("liveSync").className = "live-sync warn";
@@ -949,7 +1242,6 @@
     }
     const cell = live.cell || {};
     const kind = live.task_kind;
-    const isGame = GAME_TASKS.includes(cell.task);
     $("liveMeta").textContent =
       `last sample ${live.sample_idx}${live.sample_total ? " / " + live.sample_total : ""} · ${live.phase || (sampleDone(live) ? "scored" : "generating")} · ${cell.task || "unknown task"} · ${cell.variant || "unknown representation"} · ${live.record_id || live.position_id || "unknown position"}`;
     updateLiveSync();
@@ -993,25 +1285,35 @@
       ? "Stockfish reference"
       : kind === "mate1" || kind === "mate2"
         ? "mating reference"
-        : c.move
-          ? "oracle reference"
-          : "reference answer";
+        : kind === "mate_selection"
+          ? "expert choice"
+          : c.move
+            ? "oracle reference"
+            : "reference answer";
     $("liveReferenceLabel").textContent = referenceLabel;
-    $("liveModelMove").textContent = live.move || "—";
+    $("liveModelMove").textContent = live.move
+      ? (kind === "mate_selection" && live.label ? `Move${live.label}: ${live.move}` : live.move)
+      : "—";
     $("liveModelMove").classList.toggle("empty", !live.move);
     $("liveModelStatus").textContent = sampleDone(live)
       ? live.status === "legal" ? "parsed and legal" : (live.status || "unscored").replaceAll("_", " ")
       : "pending final answer";
-    const refMove = c.move || oracle.best_move
+    const expertCandidate = oracle.truth_label === "A" ? oracle.candidate_a
+      : oracle.truth_label === "B" ? oracle.candidate_b : null;
+    const refMove = expertCandidate || c.move || oracle.best_move
       || (Array.isArray(oracle.mate_moves) && oracle.mate_moves[0])
-      || oracle.first_move || (kind === "cap" ? "any legal move" : "—");
+      || oracle.first_move || "—";
     $("liveStockMove").textContent = refMove;
     $("liveStockMove").classList.toggle("empty", !refMove);
     $("liveStockMove").title = c.note || oracle.cp != null ? `eval ${oracle.cp}cp` : "";
-    $("liveReferenceNote").textContent = c.note
+    $("liveReferenceNote").textContent =
+      (kind === "mate_selection" && oracle.truth_label
+        ? `expert picked Move${oracle.truth_label} · candidates A ${oracle.candidate_a || "?"} / B ${oracle.candidate_b || "?"}`
+        : "")
+      || c.note
       || (oracle.cp != null ? `Stockfish eval ${oracle.cp}cp (depth ${oracle.depth || "?"})` : "")
       || (kind === "mate1" ? "any move delivering checkmate wins" : "")
-      || (kind === "mate2" ? "the only move of the forced mate line" : "")
+      || (kind === "mate2" ? "the first move of the forced mate line" : "")
       || "No reference move was published.";
 
     const vEl = $("liveVerdict");
@@ -1021,16 +1323,6 @@
     vEl.querySelector("strong").textContent = verdict.title;
     vEl.querySelector("span").textContent = verdict.detail;
     $("liveDot").className = "live-dot" + (sampleDone(live) ? "" : " on");
-
-    if (isGame) {
-      $("liveIntegrity").hidden = true;
-      $("liveBoard").style.gridTemplateColumns = "1fr";
-      $("liveBoard").style.gridTemplateRows = "1fr";
-      $("liveBoard").innerHTML = `<div class="board-empty">This is a full-game task. The monitor publishes the outcome, not each position.</div>`;
-      clearArrows();
-      $("liveCaption").textContent = "full-game cells stream outcomes only — per-move telemetry comes back with position tasks";
-      return;
-    }
 
     const integrityErrors = boardIntegrity(live);
     if (integrityErrors.length) {
@@ -1053,16 +1345,17 @@
 
   function renderReplay() {
     const el = $("liveReplay");
-    if (!replay.length) { el.innerHTML = `<span class="live-caption">recent games will appear here</span>`; return; }
+    if (!replay.length) { el.innerHTML = `<span class="live-caption">recently scored positions will appear here</span>`; return; }
     el.innerHTML = replay.slice().reverse().map((s, i) => {
       const v = verdictInfo(s);
       const mark = !v ? "·" : v.cls === "correct" ? "✓" : v.cls === "wrong" ? "✗" : "△";
       const active = s === live ? " active" : "";
-      const model = escapeHtml(String(s.cell && s.cell.model || "").split("-")[0]);
-      const task = escapeHtml(s.cell && s.cell.task || "");
+      const label = isMateRun()
+        ? escapeHtml(String(s.record_id || s.position_id || "").replace(/^mate-sel-/, "#"))
+        : `${escapeHtml(String(s.cell && s.cell.model || "").split("-")[0])} · ${escapeHtml(s.cell && s.cell.task || "")}`;
       return `<button class="replay-chip${active}" data-i="${replay.length - 1 - i}">
         <span class="r-mark ${v ? v.cls : "warn"}">${mark}</span>
-        <span>${model} · ${task}</span>
+        <span>${label}</span>
       </button>`;
     }).join("");
   }

@@ -26,10 +26,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import yaml  # noqa: E402
 
-from src.report import write_comparison_csv  # noqa: E402
-
-SCHEMA = 3  # must match src/report.py ResultWriter.finish; bump both when
-            # scorer/parser/loader changes so stale summaries re-run
+from src.report import SCHEMA_VERSION as SCHEMA, write_comparison_csv  # noqa: E402
+# single source of truth: a local copy silently drifted from the writer's
+# value, which is exactly how stale-schema cells get resumed instead of re-run
 
 ROOT = Path(__file__).resolve().parent.parent
 MONITOR_BRANCH = "live"
@@ -142,6 +141,8 @@ class Monitor:
             eta_min = int(elapsed_s / done * (total - done) / 60)
         return {
             "repo": "Vedang-P/chess-slm-benchmark",
+            # run_kind tells the dashboard which scoreboard to draw
+            "run_kind": "sweep",
             "mode": self.meta.get("mode"),
             "run_id": self.started_at,
             "stage": "complete" if total > 0 and done + self.cells_failed >= total else "sweep",
@@ -306,7 +307,12 @@ def _rows_from_summary(model: str, task: str, variant: str, summary: dict) -> li
     for cond, m in metrics.get("conditions", {}).items():
         rows.append({
             "model": model, "task": task, "variant": variant, "condition": cond,
-            "n": m["n"], "parse_rate": m["parse_rate"],
+            "n": m["n"],
+            # scored vs attempted: a cell with transport failures has n <
+            # n_attempted, and the comparison table must show that, not hide it
+            "n_attempted": m.get("n_attempted", m["n"]),
+            "api_error": m.get("api_error", 0),
+            "parse_rate": m["parse_rate"],
             "legal_rate": m["legal_rate"],
             "compliance_of_legal": m["compliance_of_legal"],
             "compliance_strict": m["compliance_strict"],
@@ -349,6 +355,8 @@ def main() -> None:
                     help="forward to run_chess: stream model output live")
     ap.add_argument("--cot", action="store_true",
                     help="forward to run_chess: add 'think step by step' to prompts")
+    ap.add_argument("--thinking", action="store_true",
+                    help="forward to run_chess: enable the gateway thinking arm")
     args = ap.parse_args()
 
     cfg = yaml.safe_load((ROOT / args.config).read_text())
@@ -356,7 +364,6 @@ def main() -> None:
     models = args.models or cfg["models"]
     tasks = args.tasks or list(cfg["tasks"])
     max_tokens = mode.get("max_new_tokens", 512)
-    game_tokens = mode.get("game_max_new_tokens", max_tokens)
 
     cells = []
     for task in tasks:
@@ -402,11 +409,17 @@ def main() -> None:
             summary_path = ROOT / args.output_dir / f"{model}_{task}_{variant}.summary.json"
             if args.resume and summary_path.exists():
                 summary = json.loads(summary_path.read_text())
+                samples_path = summary_path.with_name(
+                    summary_path.name.replace(".summary.json", ".samples.jsonl"))
+                rows_on_disk = (
+                    sum(1 for ln in samples_path.read_text().splitlines() if ln.strip())
+                    if samples_path.exists() else 0)
                 if (summary.get("schema") != SCHEMA
-                        or summary.get("n_samples", 0) < n):
+                        or summary.get("n_samples", 0) < n
+                        or rows_on_disk != summary.get("n_samples")):
                     print(f"  resume: {model} x {task}:{variant} schema v{summary.get('schema')} "
-                          f"n={summary.get('n_samples')} < n={n} (stale/partial) — re-running",
-                          flush=True)
+                          f"n={summary.get('n_samples')} (jsonl rows={rows_on_disk}) vs n={n} "
+                          f"(stale/partial/inconsistent) — re-running", flush=True)
                 else:
                     cell_rows = _rows_from_summary(model, task, variant, summary)
                     rows.extend(cell_rows)
@@ -416,8 +429,7 @@ def main() -> None:
                     if monitor:
                         monitor.cell_done(cell_rows)
                     continue
-            is_game = bool(cfg["tasks"][task].get("game", False))
-            mt = game_tokens if is_game else max_tokens
+            mt = max_tokens
             cmd = [
                 sys.executable, str(ROOT / "scripts" / "run_chess.py"),
                 "--model", model, "--task", task, "--prompt-variant", variant,
@@ -425,7 +437,7 @@ def main() -> None:
                 "--output_dir", str(ROOT / args.output_dir),
             ]
             conds = mode.get("conditions")
-            if conds and not is_game:
+            if conds:
                 cmd += ["--conditions"] + conds
             if args.verbose:
                 cmd.append("--verbose")
@@ -433,6 +445,8 @@ def main() -> None:
                 cmd.append("--stream")
             if args.cot:
                 cmd.append("--cot")
+            if args.thinking:
+                cmd.append("--thinking")
             if args.smoke:
                 cmd.append("--smoke")
             if args.live_push:

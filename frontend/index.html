@@ -21,7 +21,7 @@
         <span class="wordmark-glyph">♞</span>
         <div>
           <h1>ChessBench <span class="wordmark-live">LIVE</span></h1>
-           <p class="wordmark-sub">SLM capability trials · six models · T4 board</p>
+           <p class="wordmark-sub" id="wordmarkSub">chess capability trials · live run monitor</p>
         </div>
       </div>
       <div class="masthead-right">
@@ -41,55 +41,19 @@
       <div class="notice-mark">♞</div>
       <div>
         <h2 id="noticeTitle">Waiting for the sweep</h2>
-        <p id="noticeBody">No results have been published yet. Data lands here every ~2 minutes once
-           <span class="mono">kaggle_run.ipynb</span> is running on Kaggle.</p>
+        <p id="noticeBody">No results have been published yet. Data lands here once a run is
+           publishing to <span class="mono">monitor/state.json</span>.</p>
         <p class="notice-meta" id="noticeMeta">auto-retrying · <a href="#" id="retryLink">retry now</a></p>
       </div>
     </section>
 
-    <!-- scoreboard -->
-    <section class="scoreboard">
-      <div class="sb-cell sb-run">
-        <span class="sb-label">round</span>
-        <span class="sb-value" id="stageTag">—</span>
-        <span class="sb-sub" id="runMeta">—</span>
-        <span class="now-line" id="currentCell" hidden></span>
-      </div>
-      <div class="sb-cell sb-wide">
-         <span class="sb-label">cells completed</span>
-        <span class="sb-value sb-big" id="kCells">—</span>
-        <span class="sb-sub" id="kCellsSub">—</span>
-        <div class="rule-track"><div class="rule-fill" id="progressFill"></div></div>
-      </div>
-      <div class="sb-cell">
-        <span class="sb-label">legal move rate</span>
-        <span class="sb-value" id="kLegal">—</span>
-        <span class="sb-sub" id="kLegalSub">—</span>
-      </div>
-      <div class="sb-cell">
-         <span class="sb-label">mate-in-1 · grid strict</span>
-        <span class="sb-value" id="kTactics">—</span>
-        <span class="sb-sub" id="kTacticsSub">—</span>
-      </div>
-      <div class="sb-cell">
-         <span class="sb-label">stockfish top-1 · grid</span>
-        <span class="sb-value" id="kStock">—</span>
-        <span class="sb-sub" id="kStockSub">—</span>
-      </div>
-      <div class="sb-cell">
-         <span class="sb-label">game win rate</span>
-        <span class="sb-value" id="kGames">—</span>
-        <span class="sb-sub" id="kGamesSub">—</span>
-      </div>
-      <div class="sb-cell">
-         <span class="sb-label">grid / fen legal gap</span>
-        <span class="sb-value" id="kDivergence">—</span>
-        <span class="sb-sub">representation gap</span>
-      </div>
-    </section>
+    <!-- scoreboard: cards are rendered by app.js and depend on the run kind
+         (MATE selection vs tactical sweep), so a card only exists when the
+         running job actually produces that number -->
+    <section class="scoreboard" id="scoreboard"></section>
 
     <section class="error-line" id="errorBanner" hidden>
-      <span class="error-tag">default</span>
+      <span class="error-tag">error</span>
       <span id="errorText"></span>
     </section>
 
@@ -155,47 +119,30 @@
       <div class="live-replay" id="liveReplay"></div>
     </section>
 
-    <!-- model list -->
+    <!-- model list (hidden for single-model runs) -->
     <section class="board" id="entrants">
       <div class="board-head">
         <h2>Models</h2>
-        <span class="board-note" id="tableCount">—</span>
+        <span class="board-note" id="entrantCount">—</span>
       </div>
       <div class="entrants" id="entrantRows"></div>
     </section>
 
-    <!-- charts -->
-    <section class="charts">
-      <figure class="chart-figure chart-span2">
-         <figcaption>Parsing and legality <span class="fig-note">completed position cells</span></figcaption>
-         <div class="chart-box"><canvas id="chartLegal"></canvas><p class="chart-status" id="chartLegalStatus"></p></div>
-      </figure>
-      <figure class="chart-figure">
-         <figcaption>Tactics pipeline <span class="fig-note">parsed · legal · strict score</span></figcaption>
-         <div class="chart-box"><canvas id="chartTactics"></canvas><p class="chart-status" id="chartTacticsStatus"></p></div>
-      </figure>
-      <figure class="chart-figure">
-         <figcaption>Move strength <span class="fig-note">bestmove task · Stockfish</span></figcaption>
-         <div class="chart-box"><canvas id="chartStock"></canvas><p class="chart-status" id="chartStockStatus"></p></div>
-      </figure>
-      <figure class="chart-figure chart-span2">
-         <figcaption>Progress over time <span class="fig-note">average legal rate</span></figcaption>
-         <div class="chart-box"><canvas id="chartHistory"></canvas><p class="chart-status" id="chartHistoryStatus"></p></div>
-      </figure>
-    </section>
+    <!-- charts: rendered by app.js for the current run kind -->
+    <section class="charts" id="charts"></section>
 
     <!-- crosstable -->
     <section class="board">
       <div class="board-head">
         <h2>Record</h2>
-         <span class="board-note">per task, per model</span>
+         <span class="board-note" id="tableCount">—</span>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-               <th class="num">#</th><th>model</th><th>task</th><th>form</th><th>condition</th><th class="num">n</th>
-              <th class="num">parse</th><th class="num">legal</th><th class="num">score</th><th></th>
+               <th class="num">#</th><th>model</th><th>slice</th><th>form</th><th>note</th><th class="num">n</th>
+              <th class="num">answered</th><th class="num">legal</th><th class="num">score</th><th></th>
             </tr>
           </thead>
           <tbody id="cellsBody"><tr><td colspan="10" class="empty">no scored cells yet</td></tr></tbody>
@@ -207,7 +154,7 @@
   <footer class="footline">
     <span id="footRepo">…</span>
     <span class="foot-sep">·</span>
-    <span>results pushed by the kaggle sweep</span>
+    <span id="footRun">—</span>
     <span class="foot-sep">·</span>
     <a href="#" id="rawLink" target="_blank" rel="noopener">raw state.json ↗</a>
   </footer>

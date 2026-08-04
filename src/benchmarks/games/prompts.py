@@ -27,6 +27,12 @@ MATE1_OBJECTIVES = {
     "win": ("YOUR OBJECTIVE: WIN. Deliver CHECKMATE in exactly one move."),
 }
 
+MATE2_OBJECTIVES = {
+    "win": ("YOUR OBJECTIVE: WIN. There is a forced CHECKMATE IN TWO moves: "
+            "whatever your opponent replies, you mate on your second move. "
+            "Output the FIRST move of that forced mate."),
+}
+
 OUTPUT_SPEC = (
     "Output ONLY a single line of the form: MOVE: <from><to> using algebraic "
     "notation (e.g. 'MOVE: e2e4'). Do not output anything else."
@@ -149,25 +155,17 @@ def build_mate1_prompt(rec: Dict[str, object], condition: str,
     ])
 
 
-def build_mobility_prompt(rec: Dict[str, object], condition: str,
-                          variant: str = "grid") -> str:
+def build_mate2_prompt(rec: Dict[str, object], condition: str,
+                       variant: str = "grid") -> str:
+    """Mate-in-2 asks for the FIRST move of a forced two-move mate. It must
+    NOT reuse the mate-in-1 prompt: telling a model to 'deliver checkmate in
+    exactly one move' on a mate-in-2 position demands something that does not
+    exist in the position, and every answer is then scored against a first
+    move the prompt never asked for."""
     return "\n".join([
         f"You are playing chess on a {rec['n']}x{rec['n']} board.",
         RULES_SUMMARY.format(n=rec["n"]),
-        MOBILITY_OBJECTIVES[condition],
-        OUTPUT_SPEC,
-        _presentation(rec, variant),
-        _turn_line(rec),
-    ])
-
-
-def build_cap_prompt(rec: Dict[str, object], condition: str,
-                     variant: str = "grid") -> str:
-    """Pure-legality probe: same board presentation, no objective pressure."""
-    return "\n".join([
-        f"You are playing chess on a {rec['n']}x{rec['n']} board.",
-        RULES_SUMMARY.format(n=rec["n"]),
-        CAP_OBJECTIVE,
+        MATE2_OBJECTIVES[condition],
         OUTPUT_SPEC,
         _presentation(rec, variant),
         _turn_line(rec),

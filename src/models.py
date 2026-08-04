@@ -73,6 +73,46 @@ def configure_quiet_logging() -> None:
     logging.getLogger().setLevel(logging.ERROR)
 
 
+class _LocalStreamer:
+    """transformers-compatible streamer that mirrors the gateway's on_chunk
+    contract for local models: prints to stdout (optional) and calls
+    on_chunk({content, reasoning, phase, finished}) at most every 2s so the
+    runner can write live.json without slowing decoding."""
+
+    def __init__(self, tokenizer, to_stdout: bool = False, on_chunk=None,
+                 min_interval_s: float = 2.0):
+        self.tokenizer = tokenizer
+        self.to_stdout = to_stdout
+        self.on_chunk = on_chunk
+        self.min_interval_s = min_interval_s
+        self.text = ""
+        self._last_emit = 0.0
+        self._prompt_seen = False
+
+    def put(self, value) -> None:
+        # transformers feeds the prompt ids first, then one token at a time
+        if not self._prompt_seen:
+            self._prompt_seen = True
+            return
+        ids = value[0] if hasattr(value, "shape") and len(value.shape) > 1 else value
+        piece = self.tokenizer.decode(ids, skip_special_tokens=True)
+        self.text += piece
+        if self.to_stdout:
+            print(piece, end="", flush=True)
+        now = time.time()
+        if self.on_chunk and now - self._last_emit >= self.min_interval_s:
+            self._last_emit = now
+            self.on_chunk({"content": self.text, "reasoning": "",
+                           "phase": "answering", "finished": False})
+
+    def end(self) -> None:
+        if self.to_stdout:
+            print("", flush=True)
+        if self.on_chunk:
+            self.on_chunk({"content": self.text, "reasoning": "",
+                           "phase": "done", "finished": True})
+
+
 class HFModel:
     """4-bit HF model with chat-template generation (greedy by default)."""
 
@@ -143,10 +183,20 @@ class HFModel:
 
     def generate(self, prompt: str, max_new_tokens: int = 512,
                  temperature: float = 0.0, top_p: float = 1.0,
-                 repetition_penalty: float = 1.0, stream: bool = False) -> dict:
+                 repetition_penalty: float = 1.0, stream: bool = False,
+                 on_chunk=None, thinking_budget: Optional[int] = None,
+                 thinking_disabled: bool = False) -> dict:
         """Returns {content, input_tokens, output_tokens, latency_ms, finished}.
         With stream=True, tokens are printed live to stdout as they are
-        generated (chain-of-thought visibility in notebook cells)."""
+        generated (chain-of-thought visibility in notebook cells).
+
+        `on_chunk`, `thinking_budget` and `thinking_disabled` exist so the
+        runners can call every backend with one signature. Local Gemma always
+        renders with enable_thinking=False (see load-time note), so the
+        thinking arguments are accepted and recorded, not silently honoured
+        differently: `thinking_budget` is not applicable to local decoding and
+        `thinking_disabled` is already the fixed local behaviour. `on_chunk`
+        receives partial text during generation."""
         t0 = time.time()
         if self.smoke_test:
             return _attach_usage({
@@ -186,12 +236,9 @@ class HFModel:
         gen_kwargs = dict(**inputs, max_new_tokens=max_new_tokens,
                           do_sample=do_sample,
                           pad_token_id=pad_token_id)
-        if stream:
-            from transformers import TextStreamer
-
-            gen_kwargs["streamer"] = TextStreamer(
-                stream_tok, skip_prompt=True, skip_special_tokens=False,
-            )
+        if stream or on_chunk is not None:
+            gen_kwargs["streamer"] = _LocalStreamer(
+                stream_tok, to_stdout=stream, on_chunk=on_chunk)
         if do_sample:
             gen_kwargs["temperature"] = temperature
             gen_kwargs["top_p"] = top_p
@@ -380,15 +427,22 @@ class OpenCodeGoModel:
                 body = e.read().decode()[:300]
             except Exception:
                 pass
-            return _attach_usage({
-                "content": f"ERROR HTTP {e.code}: {body}", "reasoning": "",
-                "latency_ms": (time.time() - t0) * 1000, "finished": True,
-            }, local_usage(None, None, source="error"))
+            return self._error_result(f"HTTP {e.code}: {body}", t0)
         except Exception as e:
-            return _attach_usage({
-                "content": f"ERROR {type(e).__name__}: {e}", "reasoning": "",
-                "latency_ms": (time.time() - t0) * 1000, "finished": True,
-            }, local_usage(None, None, source="error"))
+            return self._error_result(f"{type(e).__name__}: {e}", t0)
+
+    @staticmethod
+    def _error_result(detail: str, t0: float) -> dict:
+        """A transport/gateway failure is NOT model output. `content` stays
+        empty so the answer parser can never turn an error body into a move
+        (an error body containing e.g. '"code":"e4"' used to parse as the SAN
+        move e3e4 and be scored as a legal answer); the detail is carried in a
+        dedicated `error` field and the sample is recorded as api_error, which
+        is excluded from every accuracy denominator."""
+        return _attach_usage({
+            "content": "", "reasoning": "", "error": detail,
+            "latency_ms": (time.time() - t0) * 1000, "finished": False,
+        }, local_usage(None, None, source="error"))
 
 def make_model(model_key: str, smoke_test: bool = False):
     """Registry: local 4-bit HF models + the gateway API model."""

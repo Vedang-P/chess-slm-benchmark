@@ -87,10 +87,23 @@ intervals. This match is later scope, not part of the first 50k run.
 |---|---|---|---|
 | mate1-lichess (250) | lichess puzzle DB (CC0) | engine-verified checkmating moves | rating, rating dev, popularity, plays, themes, opening tags, game URL |
 | mate2-lichess (250) | lichess puzzle DB (CC0) | lichess 'only move' first move | same full metadata |
+
 | bestmove-8x8 (120) | lichess eval DB (CC0) | Stockfish eval: PV best move | cp, mate, depth, knodes, full PV |
 
-Positions are stratified by rating/theme/evals so the committed sets span
-difficulty and tactic type (34+ distinct themes).
+`scripts/build_lichess_mates.py` stratifies by **rating band** (equal-width
+bands over 800-2900, equal quota per band, seeded output shuffle so any
+`records[:n]` prefix is a fair spread) and `build_bestmove_evals.py` takes a
+seeded random sample of the qualifying eval-DB positions.
+
+> **The data currently committed under `data/positions/` predates that fix and
+> is NOT stratified.** It was built by a version that bucketed on a hash of the
+> puzzle id (not the rating) and had no per-band quota, so all 250 records came
+> from one hash bucket: mate1 spans 801-1936 with 70% under rating 1200, and
+> mate2 spans 801-2212. The best-move set was selected in FEN-lexicographic
+> order, which is why **all 120 positions have an empty a8 square**. Re-running
+> the builders produces mate1 805-2397 (median 1320) and mate2 801-2730
+> (median 1654) with ~25 per band. Rebuilding replaces the sets the Phase-1
+> numbers were measured on, so it is a deliberate step, not an automatic one.
 
 ## Representations
 
@@ -128,6 +141,13 @@ These fields are required for the paper figures, not optional diagnostics.
 - There is NO fallback: no forced second pass, no extraction from the
   reasoning text, no random move. If the model returns nothing parseable,
   the sample is a `parse_error`/`no_answer` — an honest failure.
+- A gateway/transport failure is `api_error`, never model output: `content`
+  stays empty, the reason is kept in a separate `error` field, and the sample
+  is excluded from every rate (`n` counts scored samples, `n_attempted` counts
+  rows). Previously the error string was returned *as* the model's answer and
+  scored — which both counted infrastructure noise as model failure and could
+  fabricate an answer (an error body containing `"code":"e4"` parsed as the
+  legal SAN move `e3e4`).
 - Extraction is strict and tested: the last `MOVE:`-prefixed token, then a
   line-anchored from-to move, then python-chess SAN (which only resolves to
   legal moves). Nothing is invented.
@@ -179,7 +199,9 @@ The exact contract is documented in `docs/paper-figures.md`.
 data/positions/     committed task sets with oracles + full lichess metadata
 data/raw/           gitignored: raw lichess DB downloads (1GB puzzle CSV, eval shards)
 configs/
-  suite.yaml        sweep definition (models x tasks, check vs full)
+  suite.yaml        sweep definition (models x tasks, check vs full).
+                    NOTE: full_n is 40, not the full task-set size — a "full"
+                    sweep currently scores 40 positions per task, not 250/250/120.
 src/
   models.py         4-bit HF loader (gemma) + OpenCodeGo gateway client (deepseek)
   token_usage.py    normalized provider/local token, cache, latency schema
@@ -187,7 +209,7 @@ src/
   hf_push.py        results archive to the public HF dataset repo
   live_push.py      GitHub contents-API uploads for the dashboard
   benchmarks/games/
-    prompts.py      FEN prompts (single representation, win condition)
+    prompts.py      FEN prompts (one per task: mate-in-1, mate-in-2, best-move)
     tasks.py        strict answer extraction + oracle scoring (python-chess)
 scripts/
   test_engine.py    dataset-consistency + extraction regression tests (the gate)
@@ -221,7 +243,8 @@ docs/
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-python scripts/test_engine.py --quick        # CPU-only gate (no torch needed)
+python scripts/test_engine.py                # full gate (datasets + regressions)
+python scripts/test_engine.py --quick        # regressions only, skips the dataset sweep
 # deepseek smoke (needs OPENCODE_API_KEY in .env):
 python scripts/run_chess.py --model deepseek-v4-flash --task mate1-lichess \
     --prompt-variant fen --n 1 --max_new_tokens 2048 --conditions win \

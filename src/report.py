@@ -14,8 +14,30 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 
+SCHEMA_VERSION = 4
+# 4: mate-in-2 gets its own prompt (was reusing the mate-in-1 "mate in exactly
+#    one move" objective); transport failures are `api_error`, not parse_error;
+#    SAN extraction takes the LAST legal token. Any summary at schema < 4 was
+#    produced by a different scorer/prompt and must be re-run, not merged.
+# 3: standard chess via python-chess (castling/ep/double-step legal).
+
+
 class ResultWriter:
-    def __init__(self, output_dir: Path, run_name: str, meta: dict):
+    """Writes one cell's samples + summary.
+
+    `resume=False` (the default) TRUNCATES the samples file: a re-run of a
+    cell must not append onto the previous attempt's rows. Appending is how a
+    re-scored/crashed cell used to leave duplicated and mixed-schema samples
+    in the JSONL that feeds the paper figures, while the summary — computed
+    from memory — looked clean.
+
+    `prior_samples` is the count of rows already in the file that this process
+    is deliberately keeping (resume), so `n_samples` reports the true total
+    rather than only what this process wrote.
+    """
+
+    def __init__(self, output_dir: Path, run_name: str, meta: dict,
+                 resume: bool = False, prior_samples: int = 0):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.run_name = run_name
@@ -23,6 +45,9 @@ class ResultWriter:
         self.samples_path = self.output_dir / f"{run_name}.samples.jsonl"
         self.summary_path = self.output_dir / f"{run_name}.summary.json"
         self.samples: List[dict] = []
+        self.prior_samples = prior_samples if resume else 0
+        if not resume and self.samples_path.exists():
+            self.samples_path.unlink()
 
     def add(self, sample: dict) -> None:
         self.samples.append(sample)
@@ -32,13 +57,11 @@ class ResultWriter:
     def finish(self, metrics: dict) -> dict:
         summary = {
             "run": self.run_name,
-            "schema": 3,  # bumped when the scorer/parser or loader changes such
-                          # that old summaries must be re-scored. v3: standard
-                          # chess via python-chess (castling/ep/double-step
-                          # legal) — earlier results used a simplified variant
+            "schema": SCHEMA_VERSION,
             "meta": self.meta,
             "metrics": metrics,
-            "n_samples": len(self.samples),
+            "n_samples": self.prior_samples + len(self.samples),
+            "n_samples_this_process": len(self.samples),
             "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         self.summary_path.write_text(json.dumps(summary, indent=1))
@@ -47,18 +70,30 @@ class ResultWriter:
 
 def aggregate_samples(samples: List[dict]) -> dict:
     """Per-condition metrics over samples. Samples carry: position_id,
-    condition, status, compliance (True/False/None), move."""
+    condition, status, compliance (True/False/None), move.
+
+    `n` is the number of SCORED samples: api_error rows (gateway 5xx,
+    timeouts, rate limits) are counted separately in `api_error` and kept out
+    of every rate, because a transport failure is not a model failure. `n_attempted`
+    reports the raw row count so the two can never be silently confused.
+    """
     conds = {}
     for s in samples:
         c = s["condition"]
         if c not in conds:
-            conds[c] = {"n": 0, "no_answer": 0, "parse_error": 0, "illegal": 0,
+            conds[c] = {"n": 0, "n_attempted": 0, "api_error": 0,
+                        "no_answer": 0, "parse_error": 0, "illegal": 0,
                         "legal": 0, "compliant": 0, "noncompliant": 0,
                         "undefined": 0, "compliance_of_legal": None}
         d = conds[c]
-        d["n"] += 1
+        d["n_attempted"] += 1
         status = s["status"]
+        if status not in d:
+            d[status] = 0
         d[status] += 1
+        if status == "api_error":
+            continue  # not a scored sample
+        d["n"] += 1
         if status == "legal":
             if s.get("compliance") is True:
                 d["compliant"] += 1
@@ -67,14 +102,13 @@ def aggregate_samples(samples: List[dict]) -> dict:
             else:
                 d["undefined"] += 1
     for d in conds.values():
-        legal = d["legal"]
         decided = d["compliant"] + d["noncompliant"]
         d["parse_rate"] = round((d["legal"] + d["illegal"]) / d["n"], 4) if d["n"] else 0.0
         d["legal_rate"] = round(d["legal"] / d["n"], 4) if d["n"] else 0.0
         d["compliance_of_legal"] = (
             round(d["compliant"] / decided, 4) if decided else None
         )
-        # compliance of ALL samples (treat no-answer/parse/illegal as
+        # compliance of ALL scored samples (no-answer/parse/illegal count as
         # non-compliant -- the strict policy used in the paper)
         d["compliance_strict"] = round(d["compliant"] / d["n"], 4) if d["n"] else 0.0
     return {"conditions": conds, "token_usage": aggregate_token_usage(samples)}
@@ -131,25 +165,11 @@ def aggregate_token_usage(samples: List[dict]) -> dict:
     return result
 
 
-def divergence_rate(samples: List[dict]) -> Optional[float]:
-    """Fraction of positions where the model's move differs between WIN and
-    LOSE conditions (both legal). This is the within-model control."""
-    by_pos: Dict[str, dict] = {}
-    for s in samples:
-        p = s["position_id"]
-        if s["status"] == "legal":
-            by_pos.setdefault(p, {})[s["condition"]] = s["move"]
-    paired = {p: m for p, m in by_pos.items() if "win" in m and "lose" in m}
-    if not paired:
-        return None
-    same = sum(1 for m in paired.values() if m["win"] == m["lose"])
-    return round(1.0 - same / len(paired), 4)
-
-
 def write_comparison_csv(output_dir: Path, rows: List[dict]) -> Path:
     """rows: list of dicts with run/meta/metrics already flattened."""
     path = Path(output_dir) / "comparison_table.csv"
-    cols = ["model", "task", "variant", "condition", "n", "parse_rate", "legal_rate",
+    cols = ["model", "task", "variant", "condition", "n", "n_attempted",
+            "api_error", "parse_rate", "legal_rate",
             "compliance_of_legal", "compliance_strict", "undefined",
             "avg_input_tokens", "avg_output_tokens", "avg_reasoning_tokens",
             "avg_total_tokens", "avg_generation_seconds",

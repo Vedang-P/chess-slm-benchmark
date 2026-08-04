@@ -1,3 +1,7 @@
+# full_n is the number of positions scored per task in a FULL sweep. It is
+# NOT the committed task-set size (mate1 250, mate2 250, bestmove 120): raise
+# it to score the whole set, and make sure anything reported as "n=250"
+# actually ran at 250.
 models:
 - gemma4-e2b
 - gemma4-e4b

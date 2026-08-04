@@ -47,7 +47,10 @@ def live_age_s() -> float:
     try:
         from datetime import datetime
 
-        ts = json.loads(LIVE.read_text()).get("updated_at", "")
+        # was LIVE.read_text() — an undefined name, so this raised NameError
+        # every tick, was swallowed by the bare except, and the "live feed
+        # stale" alert could never fire.
+        ts = json.loads(live_path.read_text()).get("updated_at", "")
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         return time.time() - dt.timestamp()
     except Exception:
@@ -81,13 +84,17 @@ def main() -> None:
             "stalled_min": round((now - last_change) / 60, 1) if done > 0 else 0,
         }
         WATCH.write_text(json.dumps(state, indent=1))
-        if not alive and done < 20:
-            log(f"ALERT: run process is DEAD at {done}/20 positions")
-        elif done >= 20:
+        # TARGET comes from argv; it used to be parsed and then ignored in
+        # favour of a hardcoded 20, so the watchdog declared any run complete
+        # at 20 positions and never watched a real sweep to the end.
+        if not alive and done < TARGET:
+            log(f"ALERT: run process is DEAD at {done}/{TARGET} positions")
+        elif done >= TARGET:
             log(f"RUN COMPLETE: {done} positions")
             sys.exit(0)
         elif done > 0 and (now - last_change) / 60 > STALL_MIN:
-            log(f"ALERT: stalled — no new position for {STALL_MIN}+ min (at {done}/20)")
+            log(f"ALERT: stalled — no new position for {STALL_MIN}+ min "
+                f"(at {done}/{TARGET})")
         time.sleep(60)
 
 if __name__ == "__main__":

@@ -6,14 +6,18 @@ All 8x8 scoring runs on python-chess (standard chess). This suite verifies:
   2. Standard-rules regression: castling, en passant, double-step legal.
   3. Answer extraction: from-to + SAN parsing never invents moves.
 
+`--quick` skips the per-record dataset sweep (the slow part) and runs only
+the extraction/scoring/writer regressions.
+
 Usage:
-    python scripts/test_engine.py [--quick]
+    python scripts/test_engine.py            # full gate
+    python scripts/test_engine.py --quick    # extraction + scoring only
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -134,9 +138,154 @@ def test_answer_extraction() -> None:
               f"got {(uci, fmt)} want {(exp_uci, exp_fmt)}")
 
 
+def test_api_errors_are_not_answers() -> None:
+    """A gateway/transport failure must never become a scored move.
+
+    Regression: the client returned content="ERROR HTTP 400: {...}" and the
+    runner scored that string as model text. An error body containing a
+    square-like token parsed as SAN and was recorded as a LEGAL move
+    ('ERROR HTTP 400: {"code":"e4"...}' -> e3e4), which both fabricates an
+    answer and counts infrastructure noise as a model failure.
+    """
+    from src.benchmarks.games.tasks import parse_move_output, score_mate1
+
+    fen = "r5k1/pp3p1p/2b2qp1/3pr3/8/4P2P/R1PN1PP1/Q3K2R w K - 0 19"
+    board = chess.Board(fen)
+    rec = {"id": "mate1-x", "presented_fen": fen,
+           "task_extra": {"mate_moves": ["a1a8"]}}
+
+    # the exact string that used to parse into a legal move
+    poison = 'ERROR HTTP 400: {"code":"e4","detail":"bad request"}'
+    check("error body would parse as a move (why content must stay empty)",
+          parse_move_output(poison, board) == ("e3e4", "san"))
+
+    scored = score_mate1(rec, "win", "", api_error="HTTP 500: gateway down")
+    check("api_error status", scored["status"] == "api_error", str(scored))
+    check("api_error keeps the reason", "gateway down" in scored.get("error", ""))
+
+    empty = score_mate1(rec, "win", "")
+    check("empty answer without api_error is no_answer",
+          empty["status"] == "no_answer", str(empty))
+
+    from src.report import aggregate_samples
+
+    agg = aggregate_samples([
+        {"condition": "win", "status": "legal", "compliance": True},
+        {"condition": "win", "status": "legal", "compliance": False},
+        {"condition": "win", "status": "api_error"},
+    ])["conditions"]["win"]
+    check("api_error excluded from n", agg["n"] == 2, str(agg))
+    check("api_error counted separately", agg["api_error"] == 1)
+    check("api_error not in accuracy denominator",
+          agg["compliance_strict"] == 0.5, str(agg["compliance_strict"]))
+
+
+def test_prompts_match_their_task() -> None:
+    """mate-in-2 must not be asked for a mate in one.
+
+    Regression: PROMPT_BUILDERS["mate2"] was build_mate1_prompt, so every
+    mate-in-2 position was prompted with "Deliver CHECKMATE in exactly one
+    move" — a demand the position cannot satisfy — and then scored against
+    the first move of a two-move line.
+    """
+    from src.benchmarks.games.tasks import PROMPT_BUILDERS
+
+    rec = {"n": 8, "turn": "w", "presented_fen": chess.Board().fen(), "pieces": []}
+    p1 = PROMPT_BUILDERS["mate1"](rec, "win", variant="fen")
+    p2 = PROMPT_BUILDERS["mate2"](rec, "win", variant="fen")
+    check("mate1 prompt asks for mate in one", "in exactly one move" in p1)
+    check("mate2 prompt does NOT ask for mate in one",
+          "in exactly one move" not in p2, p2)
+    check("mate2 prompt asks for the first move of a forced mate",
+          "CHECKMATE IN TWO" in p2 and "FIRST move" in p2, p2)
+
+
+def test_mate_selection_parser() -> None:
+    """The A/B parser must score the model's FINAL choice."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from run_mate_eval import parse_choice
+
+    a, b = "e2e4", "d5d4"
+    cases = [
+        ("MoveB:d5d4", "B"),
+        ("MoveA:e2e4", "A"),
+        # reasoning inside `content` (every local gemma run): the answer is last
+        ("MoveA loses a piece, therefore MoveB:d5d4", "B"),
+        ("MoveB hangs the rook. Answer: MoveA:e2e4", "A"),
+        ("movea:e2e4", "A"),
+        ("no choice in here at all", None),
+        ("", None),
+    ]
+    for text, want in cases:
+        got, _ = parse_choice(text, a, b)
+        check(f"mate-selection parse {text!r}", got == want, f"got {got} want {want}")
+
+
+def test_result_writer_does_not_append_across_runs() -> None:
+    """Re-running a cell must replace its samples, not append to them.
+
+    Regression: a stale/partial cell re-run left both attempts' rows in the
+    JSONL that feeds the paper figures, while the summary — computed from
+    memory — looked clean.
+    """
+    import tempfile
+
+    from src.report import ResultWriter
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        w1 = ResultWriter(d, "cell", {})
+        w1.add({"condition": "win", "status": "legal", "compliance": True})
+        w1.finish({})
+        w2 = ResultWriter(d, "cell", {})
+        w2.add({"condition": "win", "status": "legal", "compliance": True})
+        summary = w2.finish({})
+        rows = [ln for ln in (d / "cell.samples.jsonl").read_text().splitlines() if ln.strip()]
+        check("re-run truncates the samples file", len(rows) == 1, f"{len(rows)} rows")
+        check("n_samples matches the file", summary["n_samples"] == len(rows))
+
+        w3 = ResultWriter(d, "cell", {}, resume=True, prior_samples=len(rows))
+        w3.add({"condition": "win", "status": "legal", "compliance": True})
+        s3 = w3.finish({})
+        rows3 = [ln for ln in (d / "cell.samples.jsonl").read_text().splitlines() if ln.strip()]
+        check("resume appends", len(rows3) == 2, f"{len(rows3)} rows")
+        check("resume counts prior samples in n_samples",
+              s3["n_samples"] == 2, str(s3["n_samples"]))
+
+
+def test_backends_share_one_generate_signature() -> None:
+    """Every backend must accept the arguments the runners actually pass.
+
+    Regression: HFModel.generate had no on_chunk/thinking_* parameters, so
+    every non-smoke gemma run — the entire local half of the study — died
+    with TypeError on the first position.
+    """
+    import inspect
+
+    from src.models import HFModel, OpenCodeGoModel
+
+    required = {"prompt", "max_new_tokens", "stream", "on_chunk",
+                "thinking_budget", "thinking_disabled"}
+    for cls in (HFModel, OpenCodeGoModel):
+        params = set(inspect.signature(cls.generate).parameters)
+        missing = required - params
+        check(f"{cls.__name__}.generate accepts the runner's kwargs",
+              not missing, f"missing {sorted(missing)}")
+
+
 def main() -> None:
-    test_dataset_standard_chess()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--quick", action="store_true",
+                    help="skip the per-record dataset sweep (CPU-cheap gate)")
+    args = ap.parse_args()
+    if not args.quick:
+        test_dataset_standard_chess()
     test_answer_extraction()
+    test_api_errors_are_not_answers()
+    test_prompts_match_their_task()
+    test_mate_selection_parser()
+    test_result_writer_does_not_append_across_runs()
+    test_backends_share_one_generate_signature()
     if FAILURES:
         print(f"\n{len(FAILURES)} FAILURES", flush=True)
         sys.exit(1)

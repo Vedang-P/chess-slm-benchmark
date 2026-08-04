@@ -3,8 +3,19 @@
     python notebooks/build_mate_notebook.py
 
 Config (measured 2026-08-04): thinking ON, 32768 total / 16384 thinking
-budget, forcing prompt, 100 positions (same first-100 as the direct run),
-~6h. No fallbacks, no retries; no-answer reasons are classified.
+budget, 100 positions (same first-100 as the direct run), ~6h. No fallbacks,
+no retries; no-answer reasons are classified.
+
+CONFOUND WARNING: this arm uses --force-answer-prompt (ANSWER_SPEC_FORCED)
+per the 2026-08-04 decision, but the shipped direct-mode 1000-position run
+used the plain ANSWER_SPEC. The two arms therefore differ in BOTH the prompt
+and the thinking mode, so an accuracy difference between them cannot be
+attributed to thinking. To measure the thinking gap, add a direct-mode cell
+with --force-answer-prompt as the control:
+
+    python scripts/run_mate_eval.py --model deepseek-v4-flash --n 100 \
+        --thinking-disabled --force-answer-prompt \
+        --output_dir results/mate-selection-forced-direct
 """
 from __future__ import annotations
 
@@ -71,6 +82,11 @@ cmd = [sys.executable, "scripts/run_mate_eval.py",
        "--n", "100",
        "--thinking-budget", "16384",
        "--max_new_tokens", "32768",
+       # Forcing prompt: the user's 2026-08-04 decision (docs/memory-decisions.md)
+       # — the first test is whether the model can be forced to answer by
+       # instruction alone. CONFOUND: the shipped direct-mode arm used the
+       # PLAIN spec, so this run differs from it in two ways at once. Any
+       # thinking-vs-direct gap needs a forced direct-mode cell as its control.
        "--force-answer-prompt",
        "--output_dir", "results/mate-selection",
        "--live-push",
@@ -89,8 +105,9 @@ for f in glob.glob("results/mate-selection/*.samples.jsonl"):
 n = len(rows)
 answered = [r for r in rows if r["status"] in ("correct", "wrong")]
 na = [r for r in rows if r["status"] == "no_answer"]
-print(f"samples: {n}/100 | answered: {len(answered)} | "
-      f"accuracy: {sum(r['compliance'] for r in answered)}/{len(answered)}")
+api_err = [r for r in rows if r["status"] == "api_error"]
+print(f"samples: {n}/100 | answered: {len(answered)} | api_error: {len(api_err)} | "
+      f"accuracy: {sum(bool(r['compliance']) for r in answered)}/{len(answered)}")
 print("no-answer reasons:", dict(collections.Counter(r.get("no_answer_reason") for r in na)))
 if rows:
     s = json.loads(open("results/mate-selection/deepseek-v4-flash_mate-selection-test_strategy.summary.json").read())
@@ -102,7 +119,10 @@ def build() -> list:
     cells = [
         _md("# MATE Move-Selection: DeepSeek Thinking Run (100 positions)\n\n"
             "Same 100 positions as the direct-mode run, thinking ENABLED at a 32768\n"
-            "budget with the forcing prompt. Results land in `results/mate-selection/`\n"
+            "budget with the forcing prompt. **Note:** the direct-mode arm used the\n"
+            "plain answer spec, so these two arms differ in prompt AND thinking mode\n"
+            "— a forced direct-mode control is needed before attributing any gap to\n"
+            "thinking. Results land in `results/mate-selection/`\n"
             "and upload to Hugging Face + the live dashboard. ~6h on a Kaggle session.\n\n"
             "Secrets needed: `GITHUB_TOKEN` (clone + live push), `HF_TOKEN` (results\n"
             "upload), `OPENCODE_API_KEY` (deepseek gateway). Attach, SAVE, Restart.\n\n"
@@ -121,7 +141,8 @@ def build() -> list:
         _md("## 5. Results summary"),
         _code(SUMMARY_CELL),
         _md("## Notes\n"
-            "- Config: thinking ON, 32768 total / 16384 thinking budget, forcing prompt (measured 4/5 complete at ~210s/pos; answers ~100% correct when they come).\n"
+            "- Config: thinking ON, 32768 total / 16384 thinking budget, forcing prompt (measured 4/5 complete at ~210s/pos).\n"
+            "- CONFOUND: the direct-mode baseline used the PLAIN answer spec. Two factors change at once; run a forced direct-mode cell as the control.\n"
             "- ~6h expected; Kaggle sessions run up to ~9-12h. If it dies, re-run: --resume skips done positions.\n"
             "- Results auto-upload to HF (vedangfake/chess-bench-results) and the live dashboard."),
     ]

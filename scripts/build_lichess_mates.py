@@ -14,6 +14,11 @@ the position presented to the solver is FEN + first move. For mate-in-N the
 solver's solution begins at the presented position; all solution moves are
 'only moves' (exceptions: any checkmating move wins a mate-in-1).
 
+Sampling: candidates are bucketed into equal-width RATING bands and an equal
+quota is taken from each, so the committed sets span the difficulty range
+rather than inheriting the puzzle DB's heavy skew toward easy mates. Within a
+band, selection is by puzzle-id order (deterministic and rating-independent).
+
 Every record carries the puzzle's full public metadata (rating, rating
 deviation, popularity, play count, theme list, opening tags, game URL) so
 downstream analysis can stratify by tactic type, difficulty, and opening.
@@ -29,6 +34,7 @@ from __future__ import annotations
 
 import csv
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -41,7 +47,13 @@ OUT_1 = Path("data/positions/mate1-lichess.json")
 OUT_2 = Path("data/positions/mate2-lichess.json")
 
 TARGET_PER_TASK = 250
-RATING_BANDS = 10  # stratification granularity
+# Rating stratification: equal-width bands over [RATING_MIN, RATING_MAX], with
+# an equal quota per band, so the committed set spans the difficulty range
+# instead of inheriting the puzzle DB's skew toward easy mates.
+RATING_MIN, RATING_MAX = 800, 2900
+RATING_BANDS = 10
+PER_BAND = TARGET_PER_TASK // RATING_BANDS  # 25 per band
+SEED = 2026  # fixed output shuffle so records[:n] is a fair rating spread
 
 META_FIELDS = ("rating", "rating_deviation", "popularity", "nb_plays",
                "themes", "opening_tags", "game_url")
@@ -61,20 +73,36 @@ def _candidate_ok(row: dict) -> bool:
     return True
 
 
+def _rating_band(rating: int) -> int:
+    """Which equal-width rating band a puzzle falls into (0..RATING_BANDS-1)."""
+    width = (RATING_MAX - RATING_MIN) / RATING_BANDS
+    return min(RATING_BANDS - 1, max(0, int((rating - RATING_MIN) // width)))
+
+
 def select_candidates() -> dict:
-    """Stream the CSV once; return stratified candidate lists per theme."""
-    keep = {"mateIn1": [], "mateIn2": []}
+    """Stream the CSV once; return candidates keyed by (theme, rating band).
+
+    The band is derived from the puzzle's RATING. It used to be
+    `int(PuzzleId, 36) % RATING_BANDS` — a hash of the id, unrelated to
+    difficulty despite the RATING_BANDS name — and the picking loop had no
+    per-band quota, so it drained band 0 and stopped. Every committed record
+    came from one hash bucket and the "stratified by rating" claim was not
+    implemented.
+    """
+    keep = {"mateIn1": {}, "mateIn2": {}}
     with open(RAW_PATH, newline="") as f:
         for row in csv.DictReader(f):
             themes = row["Themes"].split()
             if not _candidate_ok(row):
                 continue
+            band = _rating_band(int(row["Rating"]))
             for theme in keep:
                 if theme in themes:
-                    # deterministic slot by puzzle id hash -> even spread
-                    slot = int(row["PuzzleId"], 36) % RATING_BANDS
-                    keep[theme].append((slot, row))
-    print(f"candidates: mateIn1={len(keep['mateIn1'])} mateIn2={len(keep['mateIn2'])}")
+                    keep[theme].setdefault(band, []).append(row)
+    for theme, bands in keep.items():
+        total = sum(len(v) for v in bands.values())
+        print(f"candidates: {theme}={total} "
+              f"per band {{{', '.join(f'{b}:{len(bands.get(b, []))}' for b in range(RATING_BANDS))}}}")
     return keep
 
 
@@ -124,95 +152,118 @@ def _record(board, first, rec_id, puzzle_id: str, solution_start: str,
     }
 
 
+def _try_row(p, theme, seen_fens, skipped):
+    """Turn one CSV row into a committed record, or None with a skip reason."""
+    meta = {
+        "fen": p["FEN"],
+        "moves": p["Moves"],
+        "rating": int(p["Rating"]),
+        "rating_deviation": int(p["RatingDeviation"]),
+        "popularity": int(p["Popularity"]),
+        "nb_plays": int(p["NbPlays"]),
+        "themes": p["Themes"],
+        "opening_tags": p.get("OpeningTags", ""),
+        "game_url": p.get("GameUrl", ""),
+    }
+    try:
+        parsed = _presented(meta)
+        if parsed is None:
+            skipped["bad"] += 1
+            return None
+        board, first = parsed
+        fen_key = board.fen()
+        sol = meta["moves"].split()[1:]  # solver's solution from the presented position
+        if fen_key in seen_fens:
+            skipped["dup_fen"] += 1
+            return None
+        if theme == "mateIn1":
+            # python-chess verification: every move that actually mates
+            mates = []
+            for mv in board.legal_moves:
+                board.push(mv)
+                if board.is_checkmate():
+                    mates.append(mv.uci())
+                board.pop()
+            if not mates:
+                skipped["mate1_no_mate"] += 1
+                return None
+            if len(mates) == board.legal_moves.count():
+                skipped["mate1_vacuous"] += 1
+                return None
+            rec = _record(board, first, f"lichess-{p['PuzzleId']}",
+                          p["PuzzleId"], sol[0] if sol else mates[0], meta)
+            rec["task_extra"]["mate_moves"] = mates
+        else:  # mateIn2
+            if len(sol) < 1:
+                skipped["mate2_no_line"] += 1
+                return None
+            try:
+                first_uci = chess.Move.from_uci(sol[0])
+            except ValueError:
+                skipped["mate2_no_line"] += 1
+                return None
+            if first_uci not in board.legal_moves:
+                skipped["mate2_no_line"] += 1
+                return None
+            if board.legal_moves.count() < 2:
+                skipped["mate2_no_line"] += 1
+                return None
+            rec = _record(board, first, f"lichess2-{p['PuzzleId']}",
+                          p["PuzzleId"], sol[0], meta)
+        seen_fens.add(fen_key)
+        return rec
+    except Exception:
+        skipped["bad"] += 1
+        return None
+
+
 def build() -> None:
     candidates = select_candidates()
-    out1, out2 = [], []
-    seen_fens1, seen_fens2 = set(), set()
     skipped = {"bad": 0, "mate1_no_mate": 0, "mate1_vacuous": 0,
                "mate2_no_line": 0, "dup_fen": 0}
-    per_slot = TARGET_PER_TASK // RATING_BANDS + 1
+    outputs = {}
     for theme in ("mateIn1", "mateIn2"):
-        picked = 0
-        for slot in range(RATING_BANDS):
-            rows = [r for s, r in candidates[theme] if s == slot]
-            rows.sort(key=lambda r: r["PuzzleId"])
-            for p in rows:
-                if picked >= TARGET_PER_TASK:
-                    break
-                meta = {
-                    "fen": p["FEN"],
-                    "moves": p["Moves"],
-                    "rating": int(p["Rating"]),
-                    "rating_deviation": int(p["RatingDeviation"]),
-                    "popularity": int(p["Popularity"]),
-                    "nb_plays": int(p["NbPlays"]),
-                    "themes": p["Themes"],
-                    "opening_tags": p.get("OpeningTags", ""),
-                    "game_url": p.get("GameUrl", ""),
-                }
-                try:
-                    parsed = _presented(meta)
-                    if parsed is None:
-                        skipped["bad"] += 1
+        out, seen_fens, taken = [], set(), set()
+        # Pass 1 fills an equal quota per rating band; pass 2 tops up from
+        # whatever is left, so sparse high-rating bands cannot shrink the set
+        # below TARGET_PER_TASK while still spending the quota on them first.
+        for quota in (PER_BAND, TARGET_PER_TASK):
+            for band in range(RATING_BANDS):
+                rows = sorted(candidates[theme].get(band, []),
+                              key=lambda r: r["PuzzleId"])
+                in_band = 0
+                for p in rows:
+                    if len(out) >= TARGET_PER_TASK or in_band >= quota:
+                        break
+                    if p["PuzzleId"] in taken:
                         continue
-                    board, first = parsed
-                    fen_key = board.fen()
-                    moves = meta["moves"].split()
-                    sol = moves[1:]  # solver's solution from the presented position
-                    if theme == "mateIn1":
-                        if fen_key in seen_fens1:
-                            skipped["dup_fen"] += 1
-                            continue
-                        # python-chess verification: all moves that actually mate
-                        mates = []
-                        for mv in board.legal_moves:
-                            board.push(mv)
-                            if board.is_checkmate():
-                                mates.append(mv.uci())
-                            board.pop()
-                        if not mates:
-                            skipped["mate1_no_mate"] += 1
-                            continue
-                        if len(mates) == board.legal_moves.count():
-                            skipped["mate1_vacuous"] += 1
-                            continue
-                        seen_fens1.add(fen_key)
-                        rec = _record(board, first, f"lichess-{p['PuzzleId']}",
-                                      p["PuzzleId"], sol[0] if sol else mates[0],
-                                      meta)
-                        rec["task_extra"]["mate_moves"] = mates
-                        out1.append(rec)
-                    else:  # mateIn2
-                        if fen_key in seen_fens2:
-                            skipped["dup_fen"] += 1
-                            continue
-                        if len(sol) < 1:
-                            skipped["mate2_no_line"] += 1
-                            continue
-                        try:
-                            first_uci = chess.Move.from_uci(sol[0])
-                        except ValueError:
-                            skipped["mate2_no_line"] += 1
-                            continue
-                        if first_uci not in board.legal_moves:
-                            skipped["mate2_no_line"] += 1
-                            continue
-                        if board.legal_moves.count() < 2:
-                            skipped["mate2_no_line"] += 1
-                            continue
-                        seen_fens2.add(fen_key)
-                        rec = _record(board, first, f"lichess2-{p['PuzzleId']}",
-                                      p["PuzzleId"], sol[0], meta)
-                        out2.append(rec)
-                    picked += 1
-                except Exception:
-                    skipped["bad"] += 1
-            if picked >= TARGET_PER_TASK:
+                    rec = _try_row(p, theme, seen_fens, skipped)
+                    if rec is None:
+                        continue
+                    out.append(rec)
+                    taken.add(p["PuzzleId"])
+                    in_band += 1
+            if len(out) >= TARGET_PER_TASK:
                 break
-    OUT_1.write_text(json.dumps(out1, indent=1))
-    OUT_2.write_text(json.dumps(out2, indent=1))
-    print(f"built mate1={len(out1)} mate2={len(out2)} -> data/positions/")
+        # The picking loop emits band 0 first, band 9 last. Runners take
+        # records[:n], so a band-ordered file would hand every short run the
+        # easiest puzzles only. Shuffle once with a fixed seed: any prefix is
+        # then a fair spread across the rating range, reproducibly.
+        random.Random(SEED).shuffle(out)
+        outputs[theme] = out
+
+    OUT_1.write_text(json.dumps(outputs["mateIn1"], indent=1))
+    OUT_2.write_text(json.dumps(outputs["mateIn2"], indent=1))
+    print(f"built mate1={len(outputs['mateIn1'])} mate2={len(outputs['mateIn2'])} "
+          f"-> data/positions/")
     print(f"skipped: {skipped}")
+    for name, theme in (("mate1", "mateIn1"), ("mate2", "mateIn2")):
+        bands = {}
+        for r in outputs[theme]:
+            b = _rating_band(r["task_extra"]["rating"])
+            bands[b] = bands.get(b, 0) + 1
+        print(f"{name} rating bands: "
+              + ", ".join(f"{b}:{bands.get(b, 0)}" for b in range(RATING_BANDS)))
 
 
 if __name__ == "__main__":

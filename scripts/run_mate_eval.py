@@ -47,8 +47,10 @@ ANSWER_SPEC_FORCED = (
     "with confidence, output your best guess from the two candidates anyway. "
     "An answer is required; refusing to answer is not acceptable."
 )
-CHOICE_RE = re.compile(r"Move\s*([AB])")
-ANSWER_RE = re.compile(r"Move\s*([AB])\s*[:.-]?\s*([a-h][1-8][a-h][1-8][qrbnQRBN]?)?")
+# \b after the label stops "move a2a3" (prose naming a uci move) from being
+# read as a vote for MoveA; the label must stand alone.
+ANSWER_RE = re.compile(
+    r"\bMove\s*([AB])\b\s*[:.\-]?\s*([a-h][1-8][a-h][1-8][qrbnQRBN]?)?", re.I)
 UCI_RE = re.compile(r"[a-h][1-8][a-h][1-8][qrbnQRBN]?")
 
 
@@ -57,19 +59,26 @@ def _utc_ts() -> str:
 
 
 def parse_choice(text: str, candidate_a: str, candidate_b: str):
-    """Return (label, move) parsed from a model answer, or (None, None)."""
+    """Return (label, move) parsed from a model answer, or (None, None).
+
+    The LAST MoveA/MoveB mention wins, matching the from-to rule in
+    src/benchmarks/games/tasks.py. Taking the FIRST match scored whichever
+    candidate the model happened to name first, so "MoveA loses material, so
+    MoveB" was scored as A. This is invisible for a model whose reasoning
+    arrives in a separate reasoning_content channel (deepseek answers with a
+    bare "MoveB:d5d4"), and systematically wrong for any model that reasons
+    inside `content` — which is every local gemma run.
+    """
     if not text:
         return None, None
-    m = ANSWER_RE.search(text)
-    if m:
-        label = m.group(1)
+    matches = list(ANSWER_RE.finditer(text))
+    if matches:
+        m = matches[-1]
+        label = m.group(1).upper()
         move = m.group(2) or (candidate_a if label == "A" else candidate_b)
         return label, move
-    m = CHOICE_RE.search(text)
-    if m:
-        return m.group(1), (candidate_a if m.group(1) == "A" else candidate_b)
-    # bare uci fallback
-    for token in UCI_RE.findall(text):
+    # bare uci: the model named a candidate move without the MoveX label
+    for token in reversed(UCI_RE.findall(text)):
         if token == candidate_a:
             return "A", candidate_a
         if token == candidate_b:
@@ -104,9 +113,15 @@ def main() -> None:
     args = ap.parse_args()
 
     configure_quiet_logging()
+    # what the run ACTUALLY did. The gateway arm is a thinking arm only when
+    # --thinking-disabled is absent; local gemma always renders with
+    # enable_thinking=False. Recording `model == deepseek` instead labelled
+    # every direct-mode run as thinking-enabled.
+    thinking_enabled = (args.model == "deepseek-v4-flash"
+                        and not args.thinking_disabled)
     all_records = json.loads(RECORDS_PATH.read_text())
     records = all_records[: args.n]
-    ALL_TOTAL = len(all_records)
+    ALL_TOTAL = len(records)  # the run's own n (progress total)
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
     run_name = f"{args.model}_mate-selection-test_strategy"
     out_dir = Path(args.output_dir)
@@ -137,13 +152,19 @@ def main() -> None:
         {"model": args.model, "task": "mate-selection-test",
          "prompt_variant": "strategy", "task_category": "Short Tactics",
          "run_id": run_id, "smoke": args.smoke,
-         "thinking_enabled": args.model == "deepseek-v4-flash",
+         "thinking_enabled": thinking_enabled,
          "thinking_budget": args.thinking_budget,
+         "force_answer_prompt": args.force_answer_prompt,
          "max_new_tokens": args.max_new_tokens},
+        resume=args.resume, prior_samples=len(existing_samples),
     )
     # NOTE: existing samples stay in the file as-is — they must NOT be
     # re-added (ResultWriter.add appends, which duplicated everything on
-    # resume). They only count toward the final metrics.
+    # resume). They only count toward the final metrics, and
+    # prior_samples makes summary.n_samples report the true total (it used to
+    # report only this process's rows: a completed 1000-position run whose
+    # last leg scored 192 wrote n_samples=192, which then told
+    # run_suite --resume the cell was unfinished).
 
     model = make_model(args.model, smoke_test=args.smoke)
     model.load()
@@ -157,33 +178,112 @@ def main() -> None:
     _live_pending = [None, None]  # [live.json bytes, state+history bundle]
     _live_cond = threading.Condition()
 
-    def _state_payload(done: int, total: int, stage: str, last_error: str = None) -> dict:
-        win = None
-        if done:
-            win = {
-                "n": done,
-                "parse_rate": round(sum(s["status"] != "parse_error" for s in samples) / done, 4),
-                "legal_rate": round(sum(bool(s["compliance"]) for s in samples) / done, 4),
-                "compliance_of_legal": round(sum(bool(s["compliance"]) for s in samples) / done, 4),
-                "compliance_strict": round(sum(bool(s["compliance"]) for s in samples) / done, 4),
+    def _mate_metrics() -> dict:
+        """Everything the dashboard needs about a MATE selection run, under
+        its OWN names.
+
+        This used to be published as a fake sweep "cell" with tactical field
+        names: accuracy was written into `legal_rate`, so the dashboard's
+        headline card read "LEGAL MOVE RATE 79.0%" for a task that has no
+        notion of legality, and the position count was labelled "cells". The
+        monitor now publishes MATE metrics as MATE metrics.
+
+        Covers every scored sample including resumed ones — dividing this
+        process's correct count by the resumed total understated live
+        accuracy by the resume fraction.
+        """
+        rows = existing_samples + samples
+        scored = [s for s in rows if s.get("status") != "api_error"]
+        answered = [s for s in scored if s.get("status") in ("correct", "wrong")]
+        n = len(scored)
+        truth = lambda s: ((s.get("position_metadata") or {}).get("task_extra") or {}).get("truth_label")
+        by_truth = {}
+        for label in ("A", "B"):
+            group = [s for s in scored if truth(s) == label]
+            by_truth[label] = {
+                "n": len(group),
+                "accuracy": round(sum(bool(s["compliance"]) for s in group) / len(group), 4)
+                if group else None,
             }
+        reasons = {}
+        for s in scored:
+            reason = s.get("no_answer_reason")
+            if reason:
+                reasons[reason] = reasons.get(reason, 0) + 1
+
+        def _mean(values):
+            values = [v for v in values if isinstance(v, (int, float))]
+            return round(sum(values) / len(values), 2) if values else None
+
+        elapsed_h = max(1e-9, (time.time() - run_started_epoch) / 3600)
+        done_here = len(samples)
+        return {
+            "n": n,
+            "n_attempted": len(rows),
+            "answered": len(answered),
+            "correct": sum(bool(s["compliance"]) for s in scored),
+            "wrong": sum(s.get("status") == "wrong" for s in scored),
+            "no_answer": sum(s.get("status") == "no_answer" for s in scored),
+            "parse_error": sum(s.get("status") == "parse_error" for s in scored),
+            "api_error": sum(s.get("status") == "api_error" for s in rows),
+            "accuracy": round(sum(bool(s["compliance"]) for s in scored) / n, 4) if n else None,
+            "accuracy_of_answered": (
+                round(sum(bool(s["compliance"]) for s in answered) / len(answered), 4)
+                if answered else None),
+            "answer_rate": round(len(answered) / n, 4) if n else None,
+            # the run's actual signal: does the model just always say B?
+            "picked_a": sum(s.get("label") == "A" for s in scored),
+            "picked_b": sum(s.get("label") == "B" for s in scored),
+            "truth_a": by_truth["A"]["n"],
+            "truth_b": by_truth["B"]["n"],
+            "accuracy_truth_a": by_truth["A"]["accuracy"],
+            "accuracy_truth_b": by_truth["B"]["accuracy"],
+            "no_answer_reasons": reasons,
+            "mean_latency_s": _mean([(s.get("latency_ms") or 0) / 1000 for s in scored
+                                     if s.get("latency_ms") is not None]),
+            "mean_output_tokens": _mean([(s.get("token_usage") or {}).get("output_tokens")
+                                         for s in scored]),
+            "mean_reasoning_tokens": _mean([(s.get("token_usage") or {}).get("reasoning_tokens")
+                                            for s in scored]),
+            "positions_per_hour": round(done_here / elapsed_h, 1) if done_here else None,
+        }
+
+    def _state_payload(done: int, total: int, stage: str, last_error: str = None) -> dict:
+        mate = _mate_metrics()
+        remaining = max(0, total - done)
+        rate = mate.get("positions_per_hour")
         return {
             "repo": "Vedang-P/chess-slm-benchmark",
+            # run_kind tells the dashboard which scoreboard to draw. Without
+            # it the MATE run was rendered through the sweep layout, which is
+            # why four of seven cards were permanently blank.
+            "run_kind": "mate-selection",
             "mode": "mate",
             "run_id": run_id,
             "stage": stage,
             "started_at": started_at,
             "updated_at": _utc_ts(),
-            "progress": {"cells_done": done, "cells_failed": 0,
-                         "cells_attempted": done, "cells_total": total,
-                         "fraction": round(done / total, 4)},
+            "task": "mate-selection-test",
+            "progress": {"done": done, "total": total, "failed": mate["api_error"],
+                         "fraction": round(done / total, 4) if total else 0.0,
+                         # legacy aliases so an older cached dashboard build
+                         # does not show blanks during a deploy
+                         "cells_done": done, "cells_total": total,
+                         "cells_failed": mate["api_error"],
+                         "cells_attempted": done},
+            "eta_min": int(remaining / rate * 60) if rate else None,
             "models": [args.model],
+            "config": {
+                "thinking_enabled": thinking_enabled,
+                "thinking_budget": args.thinking_budget,
+                "max_new_tokens": args.max_new_tokens,
+                "force_answer_prompt": args.force_answer_prompt,
+            },
+            "mate": mate,
             "current": {"model": args.model, "task": "mate-selection-test",
                         "variant": "strategy"} if stage == "sweep" else None,
             "last_error": last_error,
-            "cells": [{"model": args.model, "task": "mate-selection-test",
-                       "variant": "strategy", "done": stage == "complete",
-                       "n": done, "win": win}],
+            "cells": [],
         }
 
     def _publish_state(done: int, total: int, stage: str, last_error: str = None) -> None:
@@ -194,12 +294,18 @@ def main() -> None:
         (ROOT / "monitor" / "state.json").write_text(json.dumps(state, indent=1))
         hist = ROOT / "monitor" / "history.jsonl"
         lines = hist.read_text().splitlines() if hist.exists() else []
-        _win = state["cells"][0].get("win") if state.get("cells") else None
+        m = state["mate"]
         lines.append(json.dumps({
             "run_id": run_id, "ts": state["updated_at"],
-            "cells_done": done, "fraction": round(done / total, 4),
-            "eta_min": None,
-            "legal_avg": _win.get("legal_rate") if _win else None,
+            "run_kind": "mate-selection",
+            "done": done, "fraction": state["progress"]["fraction"],
+            "eta_min": state["eta_min"],
+            "accuracy": m["accuracy"],
+            "answer_rate": m["answer_rate"],
+            "picked_b_rate": (round(m["picked_b"] / m["n"], 4) if m["n"] else None),
+            # legacy keys the old chart code reads
+            "cells_done": done,
+            "legal_avg": m["accuracy"],
             "last_error": last_error,
         }))
         lines = lines[-500:]
@@ -241,6 +347,7 @@ def main() -> None:
         threading.Thread(target=_live_pusher, daemon=True).start()
 
     started_at = _utc_ts()
+    run_started_epoch = time.time()  # throughput/ETA are measured from here
 
     def write_live(rec, out, scored, phase, sample_idx):
         import chess
@@ -258,9 +365,11 @@ def main() -> None:
             "cell": {"model": args.model, "task": "mate-selection-test",
                      "variant": "strategy"},
             "task_category": "Short Tactics",
+            "task_kind": "mate_selection",  # the dashboard branches on this
+            "run_kind": "mate-selection",
             "run_id": run_id,
             "sample_idx": sample_idx,
-            "sample_total": len(records),
+            "sample_total": ALL_TOTAL,
             "position_id": rec["id"],
             "prompt": extra["instruction"] + "\n" + extra["input"],
             "model_input": extra["instruction"] + "\n" + extra["input"]
@@ -324,6 +433,7 @@ def main() -> None:
                    "token_usage": {"input_tokens": 10, "output_tokens": 8,
                                    "total_tokens": 18, "usage_complete": True},
                    "latency_ms": 1, "finished": True}
+        api_error = out.get("error")
         label, move = parse_choice(out.get("content", ""),
                                    extra["candidate_a"], extra["candidate_b"])
         # careful no-answer classification: WHY there is no answer matters
@@ -342,7 +452,12 @@ def main() -> None:
         # is a parse_error/no_answer. An answer recorded on a sample is always
         # the model's own output.
         correct = label == extra["truth_label"]
-        if label is None:
+        if api_error:
+            # transport failure (gateway 5xx / timeout / rate limit). Not a
+            # model answer and not a model failure: excluded from accuracy.
+            status, correct, no_answer_reason = "api_error", None, "api_error"
+            print(f"  !! api_error on {rec['id']}: {api_error[:160]}", flush=True)
+        elif label is None:
             status = "no_answer" if not content.strip() else "parse_error"
         elif correct:
             status = "correct"
@@ -362,7 +477,8 @@ def main() -> None:
             "latency_ms": out.get("latency_ms"),
             "finished": out.get("finished"),
             "max_new_tokens": args.max_new_tokens,
-            "thinking_enabled": args.model == "deepseek-v4-flash",
+            "thinking_enabled": thinking_enabled,
+            "force_answer_prompt": args.force_answer_prompt,
             "prompt": prompt,
             "model_input": model_input,
             "output": out.get("content", ""),
@@ -373,6 +489,7 @@ def main() -> None:
             "cache_hit": (out.get("token_usage") or {}).get("cache_hit_tokens"),
             "cache_miss": (out.get("token_usage") or {}).get("cache_miss_tokens"),
             "fallback": None,  # never fabricated: answers are the model's own text
+            "api_error": api_error,
             "no_answer_reason": no_answer_reason,
             "position_metadata": {"fen": rec.get("fen"),
                                   "task_extra": extra},
@@ -392,30 +509,47 @@ def main() -> None:
             except Exception as e:
                 print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
 
-    all_scored = existing_samples + samples
-    parsed = [s for s in all_scored if s["status"] != "parse_error"]
+    all_rows = existing_samples + samples
+    # api_error rows are transport failures, not measurements: out of every
+    # denominator. `parsed` = the model produced a usable A/B choice; a
+    # no_answer is NOT parsed (it used to count as parsed, inflating
+    # parse_rate to 1.0 whenever the model returned nothing at all).
+    all_scored = [s for s in all_rows if s["status"] != "api_error"]
+    parsed = [s for s in all_scored if s["status"] in ("correct", "wrong")]
+    n = len(all_scored)
     accuracy = {
-        "n": len(all_scored),
-        "parse_rate": round(len(parsed) / len(all_scored), 4),
-        "accuracy_strict": round(sum(s["compliance"] for s in all_scored) / len(all_scored), 4),
-        "accuracy_of_parsed": round(sum(s["compliance"] for s in parsed) / len(parsed), 4) if parsed else None,
-        "correct": sum(s["compliance"] for s in all_scored),
-        "wrong": sum(not s["compliance"] for s in all_scored),
+        "n": n,
+        "n_attempted": len(all_rows),
+        "api_error": sum(s["status"] == "api_error" for s in all_rows),
+        "parse_rate": round(len(parsed) / n, 4) if n else 0.0,
+        "accuracy_strict": round(sum(bool(s["compliance"]) for s in all_scored) / n, 4) if n else 0.0,
+        "accuracy_of_parsed": round(sum(bool(s["compliance"]) for s in parsed) / len(parsed), 4) if parsed else None,
+        "correct": sum(bool(s["compliance"]) for s in all_scored),
+        "wrong": sum(s["status"] == "wrong" for s in all_scored),
+        "no_answer": sum(s["status"] == "no_answer" for s in all_scored),
         "parse_error": sum(s["status"] == "parse_error" for s in all_scored),
     }
     metrics = {"accuracy": accuracy, "token_usage": aggregate_token_usage(all_scored)}
+    if accuracy["api_error"]:
+        print(f"NOTE: {accuracy['api_error']} api_error samples excluded from "
+              f"all rates (transport failures, not model answers)", flush=True)
     summary = writer.finish(metrics)
     try:
-        _publish_state(len(all_scored), ALL_TOTAL, "complete")
+        _publish_state(len(all_rows), ALL_TOTAL, "complete")
     except Exception as e:
         print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
     print(json.dumps(summary["metrics"], indent=1), flush=True)
-    try:
-        from src.hf_push import upload_cell
+    if args.smoke:
+        # a stub run must never publish to the public HF dataset repo —
+        # the archive is the paper's evidence trail, not a scratch space
+        print("smoke run: skipping HF upload", flush=True)
+    else:
+        try:
+            from src.hf_push import upload_cell
 
-        upload_cell(Path(args.output_dir), run_id, writer.summary_path)
-    except Exception as e:
-        print(f"hf upload skipped: {e}", flush=True)
+            upload_cell(Path(args.output_dir), run_id, writer.summary_path)
+        except Exception as e:
+            print(f"hf upload skipped: {e}", flush=True)
 
 
 if __name__ == "__main__":

@@ -71,6 +71,7 @@ def _report_from_samples(samples_path: Path, summary: dict) -> dict:
             "model_move": s.get("move"),
             "correct_answer": s.get("correct"),
             "verdict": s.get("status"),
+            "no_answer_reason": s.get("no_answer_reason"),
             "compliance": s.get("compliance"),
             "format": s.get("format"),
             "fallback": s.get("fallback"),
@@ -99,8 +100,13 @@ def _report_from_samples(samples_path: Path, summary: dict) -> dict:
 
 
 def upload_cell(output_dir: Path, run_id: str, summary_path: Path,
-                only_missing: bool = True) -> None:
-    """Upload one completed cell's report + samples + summary to HF."""
+                only_missing: bool = False) -> None:
+    """Upload one completed cell's report + samples + summary to HF.
+
+    only_missing defaults to False: a cell's samples file GROWS as a run
+    resumes, so skipping an upload because the path already exists would
+    freeze the archived copy at its first, shortest version.
+    """
     samples_path = summary_path.with_name(
         summary_path.name.replace(".summary.json", ".samples.jsonl"))
     if not samples_path.exists():
@@ -131,10 +137,14 @@ def upload_cell(output_dir: Path, run_id: str, summary_path: Path,
 
 
 def _exists(api, path_in_repo: str) -> bool:
+    """HfApi.file_exists takes `filename`, not `path_in_repo`, and RETURNS a
+    bool rather than raising when absent. The old call raised TypeError on
+    every invocation, was swallowed, and always answered False — so
+    only_missing never skipped anything and every cell was re-uploaded in
+    full on every monitor tick."""
     try:
-        api.file_exists(repo_id=HF_REPO, path_in_repo=path_in_repo,
-                        repo_type="dataset")
-        return True
+        return bool(api.file_exists(repo_id=HF_REPO, filename=path_in_repo,
+                                    repo_type="dataset"))
     except Exception:
         return False
 

@@ -28,7 +28,11 @@ from typing import Dict, List, Optional, Tuple
 
 import chess
 
-from src.benchmarks.games.prompts import build_mate1_prompt, build_single_move_prompt
+from src.benchmarks.games.prompts import (
+    build_mate1_prompt,
+    build_mate2_prompt,
+    build_single_move_prompt,
+)
 
 # a from-to move with optional promotion piece, e.g. e2e4, b7b8q
 _MOVE_RE = re.compile(r"[a-h][1-8][a-h][1-8][qrbnQRBN]?")
@@ -57,26 +61,46 @@ def _legal_ucis(board: chess.Board) -> set:
 
 
 def _moves_with_prefix(text: str) -> List[str]:
-    """All from-to moves preceded by MOVE: (case-insensitive), in order."""
-    return re.findall(r"MOVE\s*[:.\-]?\s*([a-h][1-8][a-h][1-8][qrbnQRBN]?)", text, re.I)
+    """All from-to moves preceded by MOVE: (case-insensitive), in order.
+    \\b anchors the keyword so 'remove: e2e4' is not read as an answer."""
+    return re.findall(r"\bMOVE\s*[:.\-]?\s*([a-h][1-8][a-h][1-8][qrbnQRBN]?)",
+                      text, re.I)
 
 
 def _san_to_uci(text: str, board: chess.Board) -> Optional[str]:
     """Resolve SAN tokens (Nf3, Rc8, Kb8, b7b8Q, O-O, e2e4) with
     python-chess's own parser. Only legal moves can come out of it. A
-    leading color prefix ('bKb8' -> Kb8) is stripped first."""
+    leading color prefix ('bKb8' -> Kb8) is stripped first.
+
+    The LAST legal token wins, for the same reason the MOVE: rule takes the
+    last match: a model that weighs candidates before committing writes its
+    answer last. Taking the first legal token scored the first move a model
+    *considered*, not the one it chose."""
     stripped = _COLOR_PREFIX_RE.sub("", text)
     if stripped != text:
         return _san_to_uci(stripped, board)
+    resolved = None
     for token in _SAN_RE.findall(stripped):
         t = token.rstrip("#+")
         if not t:
             continue
         try:
-            return board.parse_san(t).uci()
+            resolved = board.parse_san(t).uci()
         except ValueError:
             continue
-    return None
+    return resolved
+
+
+def _no_move_status(model_text: Optional[str], api_error: Optional[str]) -> Dict[str, object]:
+    """Classify a sample with no parseable move. An api_error is a TRANSPORT
+    failure (gateway 5xx, timeout, rate limit) — it is not the model failing
+    to answer, and counting it as parse_error understates parse/legal rates
+    with infrastructure noise. It gets its own status and is excluded from
+    every denominator in src/report.aggregate_samples."""
+    if api_error:
+        return {"status": "api_error", "format": None, "error": api_error}
+    return {"status": "no_answer" if not (model_text or "").strip() else "parse_error",
+            "format": None}
 
 
 def parse_move_output(text: str, board: chess.Board = None) -> tuple:
@@ -107,12 +131,11 @@ def parse_move_output(text: str, board: chess.Board = None) -> tuple:
 # mate-in-1 task (8x8, python-chess)
 # ---------------------------------------------------------------------- #
 def score_mate1(rec: Dict[str, object], condition: str,
-                model_text: str) -> Dict[str, object]:
+                model_text: str, api_error: Optional[str] = None) -> Dict[str, object]:
     board = _board(rec)
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error",
-                "format": fmt}
+        return _no_move_status(model_text, api_error)
     legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
@@ -125,12 +148,11 @@ def score_mate1(rec: Dict[str, object], condition: str,
 # best-move task (8x8, Stockfish ground truth from lichess eval DB)
 # ---------------------------------------------------------------------- #
 def score_bestmove(rec: Dict[str, object], condition: str,
-                   model_text: str) -> Dict[str, object]:
+                   model_text: str, api_error: Optional[str] = None) -> Dict[str, object]:
     board = _board(rec)
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error",
-                "format": fmt}
+        return _no_move_status(model_text, api_error)
     legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
@@ -142,12 +164,11 @@ def score_bestmove(rec: Dict[str, object], condition: str,
 # mate-in-2 task (8x8, lichess puzzles, mateIn2 theme; python-chess)
 # ---------------------------------------------------------------------- #
 def score_mate2(rec: Dict[str, object], condition: str,
-                model_text: str) -> Dict[str, object]:
+                model_text: str, api_error: Optional[str] = None) -> Dict[str, object]:
     board = _board(rec)
     uci, fmt = parse_move_output(model_text, board)
     if uci is None:
-        return {"status": "no_answer" if not model_text.strip() else "parse_error",
-                "format": fmt}
+        return _no_move_status(model_text, api_error)
     legal = _legal_ucis(board)
     if uci not in legal:
         return {"status": "illegal", "move": uci, "format": fmt}
@@ -163,7 +184,7 @@ SCORERS = {
 
 PROMPT_BUILDERS = {
     "mate1": build_mate1_prompt,
-    "mate2": build_mate1_prompt,  # same strong-move framing; solution checked in scorer
+    "mate2": build_mate2_prompt,  # asks for the first move of the forced mate
     "bestmove": build_single_move_prompt,
 }
 
@@ -175,8 +196,10 @@ def task_kind(record_id: str) -> str:
 
 
 def score_record(rec: Dict[str, object], condition: str, model_text: str,
-                 kind: Optional[str] = None) -> Dict[str, object]:
-    return SCORERS[kind or task_kind(rec["id"])](rec, condition, model_text)
+                 kind: Optional[str] = None,
+                 api_error: Optional[str] = None) -> Dict[str, object]:
+    return SCORERS[kind or task_kind(rec["id"])](rec, condition, model_text,
+                                                 api_error)
 
 
 def get_correct(rec: Dict[str, object], kind: str) -> Optional[dict]:

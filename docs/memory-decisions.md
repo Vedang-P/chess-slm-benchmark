@@ -57,3 +57,66 @@ Append-only record of user decisions and rationale. Update on every change.
   positions with no visible answers. GPU version also kept burning quota.
 - Fix: `kaggle kernels delete <owner>/<slug>` kills all versions; then
   re-push ONE clean version (enable_gpu false). Single run_id verified.
+
+## 2026-08-04 — Codebase audit (correctness pass)
+
+Full-repo audit for correctness/validity defects. Findings and fixes:
+
+**Run-blocking**
+- `HFModel.generate` had no `on_chunk` / `thinking_budget` / `thinking_disabled`
+  parameters, but both runners pass them. Every non-smoke gemma run died with
+  `TypeError` on position 1 — the entire local half of the study could not run.
+  Added the parameters plus a streamer that honours `on_chunk`.
+
+**Measurement validity**
+- mate-in-2 was prompted with the mate-in-1 objective ("Deliver CHECKMATE in
+  exactly one move") on every position — an impossible demand — then scored
+  against the first move of a two-move line. Added `build_mate2_prompt`.
+- Gateway errors were returned as `content="ERROR HTTP ..."` and scored as
+  model text: an infrastructure failure counted as `parse_error`, and an error
+  body containing `"code":"e4"` parsed as the legal SAN move `e3e4`. Now
+  `api_error` with empty content, excluded from every rate.
+- `thinking_enabled` was hardcoded to `model == "deepseek-v4-flash"`, so the
+  direct-mode run was recorded as thinking-enabled. Now records the flag.
+- MATE A/B parsing took the FIRST `MoveA`/`MoveB` mention. Harmless for
+  deepseek (terse `content`), wrong for any model that reasons inside
+  `content` — i.e. every gemma run. Now takes the last, as the from-to rule
+  already did. Re-scored the shipped 1000: 1000/1000 identical.
+- SAN extraction took the first legal token; now the last, matching `MOVE:`.
+
+**Data integrity**
+- Re-running a cell APPENDED to its samples JSONL, mixing attempts (and
+  scorer versions) in the file the paper figures read. `ResultWriter` now
+  truncates unless resuming.
+- `n_samples` counted only the last process's rows: the completed 1000-position
+  MATE run recorded 192, which also told `run_suite --resume` it was unfinished.
+- `analyze_paper_figures` knew only the tactical status vocabulary, so every
+  MATE sample landed in the `no_answer` bucket with a 0 legal rate.
+
+**Sampling**
+- `build_lichess_mates` bucketed on a hash of the puzzle id (not the rating,
+  despite `RATING_BANDS`) and had no per-band quota, so all 250 records came
+  from one bucket. Fixed to real rating-band stratification + seeded output
+  shuffle. **The committed sets still predate this and are unchanged** —
+  rebuilding replaces the data the Phase-1 numbers were measured on.
+- `build_bestmove_evals` selected in FEN-lexicographic order, so all 120
+  positions have an empty a8. Now a seeded random sample of the eligible pool.
+
+**Paper**
+- Table 2 "Model picks A/B: 51%" -> 48.8% / 48.5% (recomputed from raw).
+- Phase 1 described as "twenty positions"; it is 5 positions x 4
+  representations. "Two illegal moves, the only illegal moves in the study" ->
+  three (2 bitboard, 1 piece list), as Table 1 itself shows.
+
+**Open / needs a decision**
+- Rebuild the committed task sets with the fixed builders? Verified dry-run:
+  mate1 805-2397 (median 1320) and mate2 801-2730 (median 1654), ~25/band, vs
+  the current 801-1936 / 801-2212 with 70% under 1200.
+- `configs/suite.yaml` `full_n: 40` — a "full" sweep scores 40 positions per
+  task, not the 250/250/120 the README and paper Table 1 state.
+- The paper names candidate-order randomization as the immediate next
+  experiment; the 2026-08-04 log says the user does not want an order-swap
+  test. One of the two needs updating.
+- `kaggle_mate.ipynb` keeps `--force-answer-prompt` per the logged decision,
+  but the direct-mode baseline used the plain spec: prompt and thinking mode
+  differ together. A forced direct-mode cell is needed as the control.

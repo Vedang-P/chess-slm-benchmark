@@ -94,19 +94,3 @@ def with_rates(usage: dict, latency_ms: float | None) -> dict:
         if seconds and result.get("reasoning_tokens") is not None else None
     )
     return result
-
-
-def merge_usage(first: dict | None, second: dict | None,
-                latency_ms: float | None = None) -> dict:
-    """Combine a primary generation and a forced-answer retry."""
-    first = first or {}
-    second = second or {}
-    result = {}
-    for field in TOKEN_FIELDS:
-        values = [v for v in (first.get(field), second.get(field)) if v is not None]
-        result[field] = sum(values) if values else None
-    result["usage_source"] = "combined"
-    result["usage_complete"] = bool(first.get("usage_complete")) and bool(second.get("usage_complete"))
-    result["stream_events"] = sum(v for v in (first.get("stream_events"), second.get("stream_events")) if v is not None) or None
-    result["time_to_first_token_ms"] = first.get("time_to_first_token_ms")
-    return with_rates(result, latency_ms)
