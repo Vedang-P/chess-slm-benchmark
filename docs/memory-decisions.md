@@ -120,3 +120,42 @@ Full-repo audit for correctness/validity defects. Findings and fixes:
 - `kaggle_mate.ipynb` keeps `--force-answer-prompt` per the logged decision,
   but the direct-mode baseline used the plain spec: prompt and thinking mode
   differ together. A forced direct-mode cell is needed as the control.
+
+## 2026-08-04 — Resume the 14 truncated MATE positions, unbounded budget
+
+Of the original 100-position thinking run (run_id 2026-08-03T22:12:40Z): 81
+correct, 5 wrong (both final — not re-run), 2 api_error (already re-run
+locally this session, both resolved correct), 14 no_answer/truncated —
+verified genuine budget truncation (12/14 have reasoning_tokens == max_new_tokens
+exactly; the other 2 share the same finish signal and comparable reasoning
+length but the provider didn't report exact usage for those two calls).
+
+**User decision:** drop `--thinking-budget` (a hint the gateway is documented
+to ignore on many requests — it implied a control that wasn't really there).
+Raise `--max_new_tokens` from 32768 to 131072 so the model is never cut off
+before reaching a conclusive answer, right or wrong. Confirmed this isn't
+overkill: a probe at 65536 already resolved one of the 14
+(`mate-sel-00543`, correct, using only 10,789 tokens).
+
+**Scope, explicit:** only the 14 no_answer positions are re-run. The 81
+correct and 5 wrong are copied forward untouched — the 5 wrong are a final,
+publishable result, not a data-collection failure.
+
+**Execution:** `notebooks/build_mate_resume_notebook.py` →
+`notebooks/kaggle_mate_resume.ipynb` (git-tracked, no secrets — seeds the 86
+final rows from HF, asserts the no_answer set matches the expected 14 exactly
+before writing anything, runs `run_mate_eval.py --resume --live-push --verbose`
+with the new budget). Pushed to Kaggle (CPU-only,
+`vedangpandeyyy/mate-thinking-100-resume-14-truncated`, private) reusing the
+credential-setting cell from the original `mate-thinking-100` kernel verbatim
+— not retyped, not added to git. Results land in
+`results/mate-selection-thinking100-unbounded/`, auto-upload to
+`vedangfake/chess-bench-results` under a fresh run_id, and stream live to
+chess-bench-live.pages.dev via the fixed MATE-run dashboard.
+
+**Flag for the user:** the source kernel (`mate-thinking-100`) has
+`GITHUB_TOKEN`/`HF_TOKEN`/`OPENCODE_API_KEY` hardcoded as plaintext in a code
+cell rather than attached via Kaggle's Secrets UI (the notebook's own markdown
+says to use Secrets — this predates that). It's a private kernel so not
+publicly exposed, but worth migrating to Secrets and rotating those three
+tokens when convenient.
