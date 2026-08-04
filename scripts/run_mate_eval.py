@@ -364,21 +364,36 @@ def main() -> None:
             try:
                 if live_data is not None:
                     try:
-                        upload_file(live_token, live_remote, live_data,
-                                    message=f"live {_utc_ts()}")
-                    except Exception:
-                        pass
+                        err = upload_file(live_token, live_remote, live_data,
+                                          message=f"live {_utc_ts()}")
+                        if err:
+                            print(f"live-push live.json failed: {err}", flush=True)
+                    except Exception as e:
+                        print(f"live-push live.json raised: {type(e).__name__}: {e}", flush=True)
                 if state_data is not None:
                     try:
-                        upload_file(live_token, state_remote, state_data,
-                                    message=f"state {_utc_ts()}")
+                        # upload_file() RETURNS a diagnostic string on failure,
+                        # it does not raise -- silently ignoring that return
+                        # value (as this used to) meant a worker's state.json
+                        # could fail every single upload with zero trace
+                        # anywhere: not in this process's own stdout, not on
+                        # the dashboard, nothing. Measured directly 2026-08-04:
+                        # 3 of 5 parallel workers never got a single
+                        # monitor/workers/wN.state.json published, discovered
+                        # only by noticing the aggregator never saw them.
+                        err = upload_file(live_token, state_remote, state_data,
+                                          message=f"state {_utc_ts()}")
+                        if err:
+                            print(f"live-push state.json failed: {err}", flush=True)
                         if not worker_tag:
                             hist_path = monitor_dir / "history.jsonl"
-                            upload_file(live_token, "monitor/history.jsonl",
-                                        hist_path.read_bytes(),
-                                        message=f"history {_utc_ts()}")
-                    except Exception:
-                        pass
+                            err = upload_file(live_token, "monitor/history.jsonl",
+                                             hist_path.read_bytes(),
+                                             message=f"history {_utc_ts()}")
+                            if err:
+                                print(f"live-push history.jsonl failed: {err}", flush=True)
+                    except Exception as e:
+                        print(f"live-push state.json raised: {type(e).__name__}: {e}", flush=True)
             finally:
                 with _live_cond:
                     _live_inflight[0] = False
