@@ -4,7 +4,8 @@
 // for a real-time feed. The GitHub API is always fresh, so this worker
 // proxies it with a SHORT server-side cache and serves CORS-enabled JSON.
 //
-// Endpoints: /live  /state  /history
+// Endpoints: /live  /state  /history           (canonical feed — deepseek page)
+//            /gemma/live  /gemma/state  /gemma/history  (gemma namespace feed)
 //
 // Deploy:
 //   npx wrangler login
@@ -19,6 +20,9 @@ const FILES = {
   "/live": "monitor/live.json",
   "/state": "monitor/state.json",
   "/history": "monitor/history.jsonl",
+  "/gemma/live": "monitor/gemma/live.json",
+  "/gemma/state": "monitor/gemma/state.json",
+  "/gemma/history": "monitor/gemma/history.jsonl",
 };
 
 function base64ToBytes(b64) {
@@ -43,7 +47,7 @@ export default {
     const url = new URL(request.url);
     const file = FILES[url.pathname];
     if (!file) {
-      return new Response("chess-live proxy: /live  /state  /history", {
+      return new Response("chess-live proxy: /live  /state  /history  |  /gemma/live  /gemma/state  /gemma/history", {
         headers: { "Access-Control-Allow-Origin": "*" },
       });
     }
@@ -66,10 +70,10 @@ export default {
       });
     }
 
-    // 3s for /live (the runner republishes at most every ~2s, so a 1s TTL
-    // just burned GitHub API quota: 1 req/s = 3600/hr against a 5000/hr
-    // authenticated budget, and 60/hr unauthenticated)
-    const ttl = file === "monitor/live.json" ? 3 : 15;
+    // 3s for live.json feeds (the runner republishes at most every ~2s, so a
+    // 1s TTL just burned GitHub API quota: 1 req/s = 3600/hr against a
+    // 5000/hr authenticated budget, and 60/hr unauthenticated)
+    const ttl = file.endsWith("/live.json") ? 3 : 15;
     res = new Response(content.body, {
       headers: {
         "Content-Type": "application/json; charset=utf-8",

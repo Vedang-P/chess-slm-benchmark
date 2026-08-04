@@ -33,10 +33,13 @@
 
   // ---------------- data ----------------
   // worker-first endpoints; raw GitHub as fallback (cached ~5 min).
+  // CONFIG.NAMESPACE ("gemma") scopes every feed to monitor/<ns>/ so each
+  // run kind/page reads its own live feed (see gemma.html).
   const feedUrl = (kind) => {
     if (CONFIG.WORKER_BASE) {
       const map = { state: "/state", history: "/history", live: "/live" };
-      return CONFIG.WORKER_BASE.replace(/\/$/, "") + map[kind];
+      const ns = CONFIG.NAMESPACE ? "/" + CONFIG.NAMESPACE : "";
+      return CONFIG.WORKER_BASE.replace(/\/$/, "") + ns + map[kind];
     }
     return { state: CONFIG.STATE_URL, history: CONFIG.HISTORY_URL, live: CONFIG.LIVE_URL }[kind];
   };
