@@ -115,7 +115,7 @@ assert len(rows) == 100, f"expected 100 rows in the source run, got {{len(rows)}
 missing = sorted(r["position_id"] for r in rows if r["status"] == "no_answer")
 assert missing == EXPECTED_MISSING, (
     "the source run's no_answer set does not match the expected 14 -- "
-    f"stopping rather than guessing.\\n  expected: {{EXPECTED_MISSING}}\\n  got:      {{missing}}"
+    f"stopping rather than guessing.\n  expected: {{EXPECTED_MISSING}}\n  got:      {{missing}}"
 )
 
 keep = [r for r in rows if r["status"] != "no_answer"]
@@ -125,7 +125,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 dest = OUT_DIR / f"{{RUN_NAME}}.samples.jsonl"
 with dest.open("w") as f:
     for r in keep:
-        f.write(json.dumps(r) + "\\n")
+        f.write(json.dumps(r) + "\n")
 
 print(f"seeded {{len(keep)}} already-final rows (81 correct + 5 wrong) -> {{dest}}")
 print(f"will attempt exactly these {{len(missing)}} positions: {{missing}}")
@@ -167,7 +167,7 @@ print(f"accuracy (of {{n - by_status.get('api_error', 0)}} scored): "
       f"{{correct}}/{{n - by_status.get('api_error', 0)}}")
 
 resolved = [r for r in rows if r["position_id"] in {EXPECTED_MISSING!r}]
-print(f"\\nthe {{len(resolved)}} re-run positions:")
+print(f"\nthe {{len(resolved)}} re-run positions:")
 for r in sorted(resolved, key=lambda r: r["position_id"]):
     u = r.get("token_usage") or {{}}
     print(f"  {{r['position_id']:>14}}  status={{r['status']:<12}}  "
@@ -175,9 +175,9 @@ for r in sorted(resolved, key=lambda r: r["position_id"]):
           f"finished={{r.get('finished')}}")
 
 if by_status.get("no_answer", 0) == 0 and by_status.get("api_error", 0) == 0:
-    print("\\nCLEAN 100: every position has a conclusive, scored answer.")
+    print("\nCLEAN 100: every position has a conclusive, scored answer.")
 else:
-    print(f"\\nNOT YET CLEAN: {{by_status.get('no_answer', 0)}} still no_answer, "
+    print(f"\nNOT YET CLEAN: {{by_status.get('no_answer', 0)}} still no_answer, "
           f"{{by_status.get('api_error', 0)}} still api_error.")
 '''.strip()
 
