@@ -424,25 +424,41 @@ class OpenCodeGoModel:
                     first_token_at = None
                     finish_reason = None
                     last_chunk_at = time.time()
-                    # A truly silent connection produces no delta events at all,
-                    # so on_chunk (the only thing that makes a run visible on
-                    # the live dashboard) never fires and a multi-minute stall
-                    # looks identical to a frozen/dead process. This heartbeat
-                    # calls on_chunk with empty content every 5s purely so the
-                    # dashboard's timestamp keeps ticking over during the wait
-                    # -- it never touches `content`/`reasoning`, so it cannot
-                    # contaminate the scored answer either way.
+                    # A stream can legitimately sit connected and silent for
+                    # 5+ minutes before delivering anything -- measured
+                    # directly on mate-sel-02999 (2026-08-04): the connection
+                    # stayed open 322.96s with periodic empty keep-alive
+                    # chunks, then delivered 106k reasoning chars in one burst
+                    # and a correct finish_reason=stop. That is NOT a hang; a
+                    # closed connection with zero content (the silent-retry
+                    # case below) is the actual failure signature. Without
+                    # this heartbeat, distinguishing "slow but working" from
+                    # "stuck" required a bespoke diagnostic script and several
+                    # rounds of manually killing a process that was fine --
+                    # so this prints directly to the run's own log (not just
+                    # the dashboard) every HEARTBEAT_INTERVAL_S, unconditionally,
+                    # so the answer is visible in any run's stdout with no
+                    # extra tooling. Never touches `content`/`reasoning`, so
+                    # it cannot contaminate the scored answer either way.
                     heartbeat_stop = threading.Event()
+                    attempt_no = silent_attempt + 1
+                    attempt_start = time.time()
 
                     def _heartbeat() -> None:
                         while not heartbeat_stop.wait(self.HEARTBEAT_INTERVAL_S):
-                            on_chunk({"content": "", "reasoning": "",
-                                     "phase": "reasoning", "finished": False})
+                            elapsed = time.time() - attempt_start
+                            print(f"[opencode_go] attempt {attempt_no}/"
+                                  f"{self.MAX_SILENT_STREAM_RETRIES + 1}: still "
+                                  f"connected, {elapsed:.0f}s elapsed, no tokens "
+                                  f"yet -- known to sometimes take 5+ minutes "
+                                  f"before the first token; not necessarily stuck",
+                                  flush=True)
+                            if on_chunk:
+                                on_chunk({"content": "", "reasoning": "",
+                                         "phase": "reasoning", "finished": False})
 
-                    hb_thread = None
-                    if on_chunk:
-                        hb_thread = threading.Thread(target=_heartbeat, daemon=True)
-                        hb_thread.start()
+                    hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+                    hb_thread.start()
                     try:
                         resp, connect_attempts = self._post_with_retry(stream_payload, stream=True)
                         attempts += connect_attempts
@@ -457,6 +473,12 @@ class OpenCodeGoModel:
                                 delta_content = delta.get("content") or ""
                                 delta_reasoning = delta.get("reasoning_content") or ""
                                 if delta_content or delta_reasoning:
+                                    if stream_events == 0:
+                                        print(f"[opencode_go] attempt {attempt_no}: "
+                                              f"first token after "
+                                              f"{time.time() - attempt_start:.1f}s "
+                                              f"-- real generation confirmed",
+                                              flush=True)
                                     heartbeat_stop.set()  # real data now; stop the heartbeat
                                     stream_events += 1
                                     if first_token_at is None:
