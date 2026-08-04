@@ -273,6 +273,103 @@ def test_backends_share_one_generate_signature() -> None:
               not missing, f"missing {sorted(missing)}")
 
 
+class _FakeSSEResp:
+    """Minimal stand-in for the urlopen() response _sse_chunks iterates.
+    `lines` are raw SSE lines (already utf-8-encodable); an empty list
+    simulates a stream that opens and closes with zero bytes -- exactly the
+    mate-sel-00543 failure signature (stream_events=0, no finish_reason)."""
+
+    def __init__(self, lines: list) -> None:
+        self._lines = lines
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def __iter__(self):
+        for line in self._lines:
+            yield (line + "\n").encode()
+
+
+def test_silent_stream_is_retried_not_recorded_as_truncated() -> None:
+    """A stream that opens (real HTTP response) and closes with ZERO delta
+    events and no finish_reason is a stalled transport, not a model answer.
+
+    Regression, measured 2026-08-04: mate-sel-00543 failed this exact way
+    three times on Kaggle (stream_events=0, connection open 92-147s, no
+    tokens, silence, close -- recorded as no_answer/truncated) then answered
+    correctly in 30.7s on an isolated retry with nothing else competing for
+    the gateway. Silence-with-no-finish-signal must be retried like a raised
+    transport error; a real outcome (any token, or an explicit finish_reason
+    including a genuine length cutoff) must be accepted on the first try and
+    never retried, so a real truncation is still recorded honestly.
+    """
+    from src.models import OpenCodeGoModel
+
+    real_chunk = ('data: {"choices":[{"delta":{"reasoning_content":"thinking"},'
+                 '"finish_reason":null}]}')
+    stop_chunk = ('data: {"choices":[{"delta":{"content":"MOVE: e2e4"},'
+                 '"finish_reason":"stop"}]}')
+
+    def run(post_sequence, expect_attempts_ge, expect_content, expect_reasoning_nonempty):
+        m = OpenCodeGoModel("deepseek-v4-flash")
+        m.key = "test"
+        calls = {"n": 0}
+
+        def fake_post_with_retry(payload, stream=False):
+            i = calls["n"]
+            calls["n"] += 1
+            lines = post_sequence[min(i, len(post_sequence) - 1)]
+            return _FakeSSEResp(lines), 1
+
+        m._post_with_retry = fake_post_with_retry
+        out = m.generate("prompt", max_new_tokens=100, stream=True)
+        check(f"silent-stream case calls={calls['n']}: content",
+              out["content"] == expect_content, repr(out["content"]))
+        check(f"silent-stream case calls={calls['n']}: reasoning present",
+              bool(out["reasoning"].strip()) == expect_reasoning_nonempty)
+        check(f"silent-stream case calls={calls['n']}: retried the right number of times",
+              calls["n"] >= expect_attempts_ge, f"only {calls['n']} calls")
+        return out
+
+    # 1) silent, then real content+stop on the retry -> must recover
+    run([[], [real_chunk, stop_chunk]], expect_attempts_ge=2,
+        expect_content="MOVE: e2e4", expect_reasoning_nonempty=True)
+
+    # 2) real content on the FIRST try -> must NOT retry (a real answer is
+    #    never discarded just to try again)
+    out = run([[real_chunk, stop_chunk], []], expect_attempts_ge=1,
+              expect_content="MOVE: e2e4", expect_reasoning_nonempty=True)
+
+    # 3) a genuine length-cutoff (reasoning flowed, no explicit finish_reason,
+    #    matching a real truncation like mate-sel-02999) must be accepted
+    #    immediately, not treated as silent
+    reasoning_only_chunk = ('data: {"choices":[{"delta":'
+                           '{"reasoning_content":"still thinking"},'
+                           '"finish_reason":null}]}')
+    m = OpenCodeGoModel("deepseek-v4-flash")
+    m.key = "test"
+    calls = {"n": 0}
+
+    def fake_post_with_retry(payload, stream=False):
+        calls["n"] += 1
+        return _FakeSSEResp([reasoning_only_chunk]), 1
+
+    m._post_with_retry = fake_post_with_retry
+    out = m.generate("prompt", max_new_tokens=100, stream=True)
+    check("real partial reasoning (no finish_reason) is accepted, not retried",
+          calls["n"] == 1, f"{calls['n']} calls")
+    check("real partial reasoning still recorded (not discarded)",
+          "still thinking" in out["reasoning"])
+
+    # 4) persistently silent (every attempt empty) -> gives up honestly,
+    #    capped retries, never fabricates content
+    out = run([[], [], []], expect_attempts_ge=3,
+              expect_content="", expect_reasoning_nonempty=False)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true",
@@ -286,6 +383,7 @@ def main() -> None:
     test_mate_selection_parser()
     test_result_writer_does_not_append_across_runs()
     test_backends_share_one_generate_signature()
+    test_silent_stream_is_retried_not_recorded_as_truncated()
     if FAILURES:
         print(f"\n{len(FAILURES)} FAILURES", flush=True)
         sys.exit(1)

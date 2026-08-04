@@ -269,6 +269,13 @@ class OpenCodeGoModel:
 
     MODEL = DEEPSEEK_V4_FLASH
     MIN_INTERVAL_S = 1.0  # polite rate limit; the gateway is cheap but shared
+    # a stream that opens, then closes with zero delta events and no
+    # finish_reason, is a stalled transport, not a model answer (measured
+    # 2026-08-04: mate-sel-00543 failed this exact way 3x on Kaggle, then
+    # converged correctly in 30.7s on an uncontended retry) -- retried like a
+    # transport error, capped so a genuinely silent gateway still surfaces
+    # honestly rather than retrying forever
+    MAX_SILENT_STREAM_RETRIES = 2
 
     def __init__(self, model_key: str, smoke_test: bool = False,
                  base_url: str = OPENCODE_GO_BASE_URL):
@@ -381,40 +388,60 @@ class OpenCodeGoModel:
                    "messages": [{"role": "user", "content": prompt}]}
         try:
             if stream:
-                content, reasoning = "", ""
-                final_usage = {}
-                stream_events = 0
-                first_token_at = None
-                finish_reason = None
-                last_chunk_at = time.time()
                 stream_payload = {**payload, "stream_options": {"include_usage": True}}
-                resp, attempts = self._post_with_retry(stream_payload, stream=True)
-                with resp:
-                    for chunk in self._sse_chunks(resp):
-                        ch = chunk.get("choices") or [{}]
-                        if chunk.get("usage"):
-                            final_usage = chunk["usage"]
-                        if not ch:
-                            continue
-                        delta = ch[0].get("delta") or {}
-                        delta_content = delta.get("content") or ""
-                        delta_reasoning = delta.get("reasoning_content") or ""
-                        if delta_content or delta_reasoning:
-                            stream_events += 1
-                            if first_token_at is None:
-                                first_token_at = time.time()
-                        content += delta_content
-                        reasoning += delta_reasoning
-                        finish = ch[0].get("finish_reason")
-                        finish_reason = finish or finish_reason
-                        if on_chunk and (time.time() - last_chunk_at >= 2
-                                         or finish):
-                            last_chunk_at = time.time()
-                            on_chunk({
-                                "content": content, "reasoning": reasoning,
-                                "phase": "reasoning" if not content else "answering",
-                                "finished": bool(finish),
-                            })
+                attempts = 0
+                # A stream that opens (HTTP 200, real headers) and then closes
+                # having delivered ZERO delta events and no finish_reason is not
+                # a model outcome -- measured directly: mate-sel-00543 failed
+                # this way three times on Kaggle (stream_events=0, connection
+                # open 92-147s, silence, close) then converged correctly in
+                # 30.7s/4.1k tokens on an isolated retry with nothing else
+                # competing for the gateway. That signature is a transport/
+                # gateway stall wearing a no_answer costume, not the model
+                # struggling, so it gets the same treatment as a raised
+                # transport error: retry a FRESH request. A real outcome --
+                # any token at all, or an explicit finish_reason (including a
+                # genuine length cutoff) -- is accepted immediately and never
+                # retried, so a real truncation is still recorded honestly.
+                for silent_attempt in range(self.MAX_SILENT_STREAM_RETRIES + 1):
+                    content, reasoning = "", ""
+                    final_usage = {}
+                    stream_events = 0
+                    first_token_at = None
+                    finish_reason = None
+                    last_chunk_at = time.time()
+                    resp, connect_attempts = self._post_with_retry(stream_payload, stream=True)
+                    attempts += connect_attempts
+                    with resp:
+                        for chunk in self._sse_chunks(resp):
+                            ch = chunk.get("choices") or [{}]
+                            if chunk.get("usage"):
+                                final_usage = chunk["usage"]
+                            if not ch:
+                                continue
+                            delta = ch[0].get("delta") or {}
+                            delta_content = delta.get("content") or ""
+                            delta_reasoning = delta.get("reasoning_content") or ""
+                            if delta_content or delta_reasoning:
+                                stream_events += 1
+                                if first_token_at is None:
+                                    first_token_at = time.time()
+                            content += delta_content
+                            reasoning += delta_reasoning
+                            finish = ch[0].get("finish_reason")
+                            finish_reason = finish or finish_reason
+                            if on_chunk and (time.time() - last_chunk_at >= 2
+                                             or finish):
+                                last_chunk_at = time.time()
+                                on_chunk({
+                                    "content": content, "reasoning": reasoning,
+                                    "phase": "reasoning" if not content else "answering",
+                                    "finished": bool(finish),
+                                })
+                    if stream_events > 0 or finish_reason is not None:
+                        break  # a real model response, whatever it says
+                    if silent_attempt < self.MAX_SILENT_STREAM_RETRIES:
+                        time.sleep(2 ** (silent_attempt + 1))  # 2s, 4s
                 data = {"choices": [{"message": {"content": content,
                                                  "reasoning_content": reasoning},
                                      "finish_reason": finish_reason or
