@@ -176,11 +176,17 @@ DEPS_CELL = r'''
 import subprocess, sys
 # Kaggle's free tier hands out a P100 (sm_60) OR a T4 (sm_75). Recent torch
 # wheels dropped sm_60, so pin the last CUDA-12.1 build with both archs
-# BEFORE anything else installs torch; bitsandbytes is pinned to the matching
-# multi-CUDA build, and the requirements install afterwards must NOT clobber
-# these pins (no -U: it still upgrades transformers to >=5.13 on its own).
+# BEFORE anything else installs torch; torchvision/torchaudio must match the
+# pinned torch (Kaggle ships torchvision built for the latest torch — the
+# ABI mismatch crashes transformers' AutoProcessor import). bitsandbytes is
+# pinned to the matching multi-CUDA build, and the requirements install
+# afterwards must NOT clobber these pins (no -U: it still upgrades
+# transformers to >=5.13 on its own).
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "torch==2.4.1", "--index-url",
+                "https://download.pytorch.org/whl/cu121"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "torchvision==0.19.1", "torchaudio==2.4.1", "--index-url",
                 "https://download.pytorch.org/whl/cu121"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "bitsandbytes==0.44.1"], check=True)

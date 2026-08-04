@@ -208,10 +208,21 @@ class HFModel:
             )
             self.processor = AutoProcessor.from_pretrained(self.model_id)
             self.tokenizer = self.processor.tokenizer
-            self.model = AutoModelForImageTextToText.from_pretrained(
-                self.model_id, quantization_config=quant, device_map={"": 0},
-                dtype=compute_dtype,
-            )
+            try:
+                self.model = AutoModelForImageTextToText.from_pretrained(
+                    self.model_id, quantization_config=quant,
+                    device_map={"": 0}, dtype=compute_dtype,
+                )
+            except Exception:
+                # bitsandbytes has no kernels for some older GPUs (P100:
+                # sm_60). Fall back to unquantized fp16 — E2B is 5.1B params
+                # (~10GB fp16) and fits a 16GB card; the 4-bit path stays the
+                # default on T4.
+                print("4-bit load failed; falling back to fp16 (no "
+                      "quantization)", flush=True)
+                self.model = AutoModelForImageTextToText.from_pretrained(
+                    self.model_id, device_map={"": 0}, dtype=compute_dtype,
+                )
         else:
             quant = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_quant_type="nf4",
