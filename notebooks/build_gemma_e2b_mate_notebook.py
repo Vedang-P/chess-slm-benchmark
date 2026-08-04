@@ -283,7 +283,7 @@ import json, os, time
 {RUN_CMD}
 t0 = time.time()
 res = subprocess.run(cmd)
-print(f"full run exit rc={{res.returncode}} after {{(time.time()-t0)/3600:.2f}}h")
+print(f"full run exit rc={res.returncode} after {(time.time()-t0)/3600:.2f}h")
 '''.strip()
 
 SUMMARY_CELL = r'''
