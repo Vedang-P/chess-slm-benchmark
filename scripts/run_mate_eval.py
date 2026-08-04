@@ -103,6 +103,12 @@ def main() -> None:
                     help="bound reasoning tokens while keeping thinking ON")
     ap.add_argument("--thinking-disabled", action="store_true",
                     help="disable thinking entirely (native direct answers)")
+    ap.add_argument("--local-thinking", action="store_true",
+                    help="local gemma (E2B/E4B): render with the <|channel>"
+                         "thought channel ENABLED and extract thinking + answer "
+                         "separately (thinking tokens are recorded like the "
+                         "gateway arm). DeepSeek ignores this flag; the gateway "
+                         "thinks whenever thinking is not disabled.")
     ap.add_argument("--force-answer-prompt", action="store_true",
                     help="append the must-answer/best-guess instruction to the "
                          "prompt (prompt-level forcing; answer still the model's own)")
@@ -117,11 +123,14 @@ def main() -> None:
 
     configure_quiet_logging()
     # what the run ACTUALLY did. The gateway arm is a thinking arm only when
-    # --thinking-disabled is absent; local gemma always renders with
-    # enable_thinking=False. Recording `model == deepseek` instead labelled
-    # every direct-mode run as thinking-enabled.
-    thinking_enabled = (args.model == "deepseek-v4-flash"
-                        and not args.thinking_disabled)
+    # --thinking-disabled is absent; local gemma renders with the thought
+    # channel enabled only when --local-thinking is passed (thinking is a
+    # deliberate choice per arm, never an accidental default). Recording
+    # `model == deepseek` alone labelled every direct-mode run as
+    # thinking-enabled.
+    thinking_enabled = (not args.thinking_disabled
+                        and (args.model == "deepseek-v4-flash"
+                             or args.local_thinking))
     all_records = json.loads(RECORDS_PATH.read_text())
     if args.ids:
         wanted = {i.strip() for i in args.ids.split(",") if i.strip()}
@@ -436,7 +445,8 @@ def main() -> None:
                              stream=True,  # SSE: live reasoning on the website
                              on_chunk=_live_partial if not args.smoke else None,
                              thinking_budget=args.thinking_budget,
-                             thinking_disabled=args.thinking_disabled)
+                             thinking_disabled=args.thinking_disabled,
+                             local_thinking=args.local_thinking)
         # NO retries and NO fallbacks: one call, whatever comes back is scored.
         if args.smoke:
             out = {"content": "MoveB:d5d4", "reasoning": "",

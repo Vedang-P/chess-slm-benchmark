@@ -114,6 +114,54 @@ class _LocalStreamer:
                            "phase": "done", "finished": True})
 
 
+def _split_gemma4_thought(raw: str, processor, prefix_text: str) -> tuple:
+    """Split a Gemma 4 generation into (thinking, answer).
+
+    Primary: the tokenizer's response_template parser
+    (processor.parse_response), which understands the
+    `<|channel>thought ... <channel|>` channel structure documented on the
+    model card and shipped in the checkpoint's tokenizer_config.json.
+
+    Fallback: the exact channel-marker split of that same documented format,
+    so a template drift or parse failure can never crash a run — the answer
+    text is still the model's own output, never a reconstruction.
+    """
+    try:
+        parsed = processor.parse_response(raw, prefix=prefix_text)
+        if isinstance(parsed, dict):
+            thinking = parsed.get("thinking") or ""
+            content = parsed.get("content")
+            if content is not None:
+                return thinking, content
+    except Exception:
+        pass
+    think_open = "<|channel>thought\n"
+    think_close = "<channel|>"
+    if think_open in raw:
+        rest = raw.split(think_open, 1)[1]
+        if think_close in rest:
+            thinking, tail = rest.split(think_close, 1)
+            return thinking.rstrip(), _strip_turn_markers(tail)
+        return rest.rstrip(), ""
+    return "", _strip_turn_markers(raw)
+
+
+def _strip_turn_markers(text: str) -> str:
+    """Remove chat-template scaffolding that survives decode(..., skip_
+    special_tokens=False) in the marker-split fallback: the assistant turn
+    header the template pre-writes and the turn/eos close markers. The
+    canonical parse_response path handles these via its start_anchor."""
+    text = text.strip()
+    for header in ("<|turn>model\n", "<|turn>model", "<|start|>assistant\n"):
+        if text.startswith(header):
+            text = text[len(header):].strip()
+            break
+    for closer in ("<|turn|>", "<eos>", "</s>", "<|endoftext|>"):
+        if text.endswith(closer):
+            text = text[:-len(closer)].rstrip()
+    return text
+
+
 class HFModel:
     """4-bit HF model with chat-template generation (greedy by default)."""
 
@@ -186,18 +234,23 @@ class HFModel:
                  temperature: float = 0.0, top_p: float = 1.0,
                  repetition_penalty: float = 1.0, stream: bool = False,
                  on_chunk=None, thinking_budget: Optional[int] = None,
-                 thinking_disabled: bool = False) -> dict:
+                 thinking_disabled: bool = False,
+                 local_thinking: bool = False) -> dict:
         """Returns {content, input_tokens, output_tokens, latency_ms, finished}.
         With stream=True, tokens are printed live to stdout as they are
         generated (chain-of-thought visibility in notebook cells).
 
         `on_chunk`, `thinking_budget` and `thinking_disabled` exist so the
-        runners can call every backend with one signature. Local Gemma always
-        renders with enable_thinking=False (see load-time note), so the
-        thinking arguments are accepted and recorded, not silently honoured
-        differently: `thinking_budget` is not applicable to local decoding and
-        `thinking_disabled` is already the fixed local behaviour. `on_chunk`
-        receives partial text during generation."""
+        runners can call every backend with one signature. Local Gemma
+        renders with the thought channel only when `local_thinking` is set
+        (thinking is a deliberate per-arm choice, see run_mate_eval
+        --local-thinking); the channel is parsed back into separate
+        `reasoning` (thinking block) and `content` (final answer) fields
+        with the thinking tokens accounted in token_usage.reasoning_tokens,
+        mirroring the gateway arm's schema. `thinking_budget` is not
+        applicable to local decoding (one budget: max_new_tokens) and
+        `thinking_disabled` is recorded but not silently re-enabled.
+        `on_chunk` receives partial text during generation."""
         t0 = time.time()
         if self.smoke_test:
             return _attach_usage({
@@ -214,14 +267,22 @@ class HFModel:
             messages.append({"role": "system", "content": self.system_prompt})
         messages.append({"role": "user", "content": prompt})
         if self.is_gemma4:
-            # Gemma 4: render with the processor's chat template and
-            # THINKING DISABLED — otherwise E2B/E4B spend the entire token
-            # budget on <|channel>thought reasoning and never emit the
-            # answer (observed: parse_rate 0.0 at 1024 tokens).
+            # Gemma 4: render with the processor's chat template. Thinking
+            # (the <|channel>thought ... <channel|> block) is ON only when
+            # local_thinking is set — otherwise E2B/E4B spend the entire
+            # token budget on reasoning and never emit the answer (observed:
+            # parse_rate 0.0 at 1024 tokens with thinking enabled).
             inputs = self.processor.apply_chat_template(
                 messages, tokenize=True, return_dict=True, return_tensors="pt",
-                add_generation_prompt=True, enable_thinking=False,
+                add_generation_prompt=True, enable_thinking=local_thinking,
             ).to(self.model.device)
+            if local_thinking:
+                prefix_text = self.processor.apply_chat_template(
+                    messages, tokenize=False, add_generation_prompt=True,
+                    enable_thinking=True,
+                )
+            else:
+                prefix_text = None
             decode_fn = self.processor.decode
             pad_token_id = self.processor.tokenizer.eos_token_id
             stream_tok = self.processor.tokenizer
@@ -253,13 +314,32 @@ class HFModel:
         with torch.no_grad():
             out = self.model.generate(**gen_kwargs)
         output_ids = out[0][input_len:]
+        total_gen = int(output_ids.shape[-1])
+        if self.is_gemma4 and local_thinking:
+            # thinking block + final answer are separated BEFORE any
+            # truncation logic sees the text: a budget-cut generation keeps
+            # its partial thinking in `reasoning` and an empty `content`,
+            # which the runner records honestly as a truncated no_answer.
+            raw = decode_fn(output_ids, skip_special_tokens=False)
+            thinking, content = _split_gemma4_thought(raw, self.processor, prefix_text)
+            reasoning_tokens = None
+            if thinking:
+                reasoning_tokens = len(
+                    self.processor.tokenizer.encode(thinking))
+            return _attach_usage({
+                "content": content,
+                "reasoning": thinking,
+                "latency_ms": (time.time() - t0) * 1000,
+                "finished": bool(total_gen < max_new_tokens),
+            }, local_usage(input_len, total_gen, source="hf_transformers",
+                           reasoning_tokens=reasoning_tokens))
         content = decode_fn(output_ids, skip_special_tokens=True)
         return _attach_usage({
             "content": content,
             "latency_ms": (time.time() - t0) * 1000,
-            "finished": bool(output_ids.shape[-1] < max_new_tokens),
+            "finished": bool(total_gen < max_new_tokens),
             "reasoning": "",
-        }, local_usage(input_len, int(output_ids.shape[-1]), source="hf_transformers"))
+        }, local_usage(input_len, total_gen, source="hf_transformers"))
 
 
 class OpenCodeGoModel:
@@ -372,11 +452,16 @@ class OpenCodeGoModel:
     def generate(self, prompt: str, max_new_tokens: int = 512,
                  temperature: float = 0.0, stream: bool = False,
                  on_chunk=None, thinking_budget: Optional[int] = None,
-                 thinking_disabled: bool = False) -> dict:
+                 thinking_disabled: bool = False,
+                 local_thinking: bool = False) -> dict:
         """Generate via the gateway. Thinking is ENABLED and UNBOUNDED: V4
         Flash reasons long on chess positions, and the study wants that
         thinking visible — we just wait for the final answer (max_tokens
         set high enough that reasoning + answer both fit).
+
+        `local_thinking` exists only so every backend shares one call
+        signature; the gateway ignores it (it thinks unless thinking is
+        disabled).
 
         With on_chunk=callable(partial_dict), the client calls back with
         {content, reasoning, phase} during generation so the runner can

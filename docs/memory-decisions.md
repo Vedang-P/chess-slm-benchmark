@@ -159,3 +159,34 @@ cell rather than attached via Kaggle's Secrets UI (the notebook's own markdown
 says to use Secrets — this predates that). It's a private kernel so not
 publicly exposed, but worth migrating to Secrets and rotating those three
 tokens when convenient.
+
+---
+
+## 2026-08-04: local gemma4-e2b MATE thinking arm (--local-thinking)
+
+**Decision:** run Gemma 4 E2B (4-bit, Kaggle T4, no API) on the EXACT 100
+positions of the DeepSeek thinking-final arm (`results/mate-selection-
+thinking100-final/`, 94/100), with the thought channel ENABLED. New
+`--local-thinking` flag on `run_mate_eval.py`: local gemma renders with
+`enable_thinking=True`; the `<|channel>thought ... <channel|>` block is split
+off via `processor.parse_response` (the checkpoint's shipped
+response_template) with a channel-marker fallback in `src/models.py`.
+Thinking text lands in `reasoning`, `token_usage.reasoning_tokens` counts the
+thinking block, and samples/summary/report upload to HF exactly like the
+gateway arms. `thinking_enabled` is recorded from the flag, not from the
+model name.
+
+**Why not the default:** gemma E2B with thinking ON and a small budget
+observably burns everything on reasoning (parse_rate 0.0 at 1024 tokens), so
+thinking stays an explicit per-arm choice — the FEN suite keeps its fixed
+disabled-thinking behavior.
+
+**Confound vs DeepSeek thinking-final (flagged):** that arm had a 16384
+thinking budget inside its 32768 total; local gemma has ONE undivided budget
+(the whole stream is `--max_new_tokens 32768`).
+
+**Flow:** probe 5 positions first (real pipeline, same output dir, shared
+BENCH_RUN_ID so the HF archive gets one complete cell), inspect cell raises
+if 0/5 parse, then the 100-run resumes past the probed 5.
+`notebooks/build_gemma_e2b_mate_notebook.py` →
+`notebooks/kaggle_mate_gemma_e2b.ipynb` (branch `mate-e2b-kaggle`).
