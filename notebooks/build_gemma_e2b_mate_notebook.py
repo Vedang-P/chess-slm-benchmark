@@ -160,7 +160,11 @@ token = find_token()
 url = "https://github.com/Vedang-P/chess-slm-benchmark.git"
 if token:
     url = url.replace("https://", f"https://x-access-token:{token}@")
-res = subprocess.run(["git", "clone", "--quiet", url, str(REPO)],
+# This arm lives on the mate-e2b-kaggle branch (--local-thinking and
+# --live-namespace are NOT on main yet); clone the branch explicitly so the
+# kernel always runs the intended code, independent of main's state.
+res = subprocess.run(["git", "clone", "--quiet", "--branch", "mate-e2b-kaggle",
+                      url, str(REPO)],
                      capture_output=True, text=True)
 if res.returncode != 0:
     raise RuntimeError("clone failed (token not attached?): " + res.stderr[-300:])
@@ -169,15 +173,28 @@ print("cwd:", Path.cwd())
 '''.strip()
 
 DEPS_CELL = r'''
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-U",
+import subprocess, sys
+# Kaggle's free tier hands out a P100 (sm_60) OR a T4 (sm_75). Recent torch
+# wheels dropped sm_60, so pin the last CUDA-12.1 build with both archs
+# BEFORE anything else installs torch; bitsandbytes is pinned to the matching
+# multi-CUDA build, and the requirements install afterwards must NOT clobber
+# these pins (no -U: it still upgrades transformers to >=5.13 on its own).
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "torch==2.4.1", "--index-url",
+                "https://download.pytorch.org/whl/cu121"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "bitsandbytes==0.44.1"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "-r", "requirements.txt"], check=True)
-import transformers, torch
+import torch, transformers
 if int(transformers.__version__.split(".")[0]) < 5:
     raise RuntimeError(f"transformers {transformers.__version__} too old "
                        "for Gemma 4 (needs >= 5.13)")
 print("transformers", transformers.__version__, "| cuda", torch.cuda.is_available())
 if torch.cuda.is_available():
-    print(torch.cuda.get_device_name(0), "| vram GB:", torch.cuda.get_device_properties(0).total_memory / 1e9)
+    print(torch.cuda.get_device_name(0),
+          "| cap", torch.cuda.get_device_capability(0),
+          "| vram GB:", round(torch.cuda.get_device_properties(0).total_memory / 1e9, 1))
 '''.strip()
 
 GATE_CELL = r'''
@@ -216,14 +233,21 @@ os.environ["BENCH_RUN_ID"] = "{RUN_PREFIX}-" + time.strftime("%Y%m%d")
 t0 = time.time()
 res = subprocess.run(cmd)
 print(f"probe exit rc={{res.returncode}} after {{(time.time()-t0)/60:.1f}}min")
+if res.returncode != 0:
+    raise RuntimeError(f"probe run failed with rc={{res.returncode}} — fix "
+                       "before proceeding")
 '''.strip()
 
 INSPECT_CELL = r'''
-import json, collections
+import json, collections, glob
 from pathlib import Path
 
-p = Path("results/{OUT_DIR}/deepseek-v4-flash_mate-selection-test_strategy.samples.jsonl")
-rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+# the samples file is named after the MODEL (gemma4-e2b_*), not deepseek —
+# glob so the inspect cell can never point at the wrong run's file
+files = glob.glob("results/{OUT_DIR}/*_mate-selection-test_strategy.samples.jsonl")
+if not files:
+    raise RuntimeError(f"no samples file under results/{OUT_DIR}/ — probe did not write results")
+rows = [json.loads(l) for l in open(files[0]) if l.strip()]
 print(f"probe samples on disk: {len(rows)}")
 for s in rows:
     tu = s.get("token_usage") or {}
@@ -257,11 +281,13 @@ print(f"full run exit rc={{res.returncode}} after {{(time.time()-t0)/3600:.2f}}h
 '''.strip()
 
 SUMMARY_CELL = r'''
-import json
+import json, glob
 from pathlib import Path
 
-p = Path("results/{OUT_DIR}/deepseek-v4-flash_mate-selection-test_strategy.samples.jsonl")
-rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
+files = glob.glob("results/{OUT_DIR}/*_mate-selection-test_strategy.samples.jsonl")
+if not files:
+    raise RuntimeError(f"no samples file under results/{OUT_DIR}/")
+rows = [json.loads(l) for l in open(files[0]) if l.strip()]
 scored = [r for r in rows if r["status"] != "api_error"]
 parsed = [r for r in scored if r["status"] in ("correct", "wrong")]
 n = len(scored)

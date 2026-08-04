@@ -194,15 +194,23 @@ class HFModel:
                 BitsAndBytesConfig,
             )
 
+            # Kaggle's free tier hands out P100 (sm_60) OR T4 (sm_75). P100
+            # has no bf16 support; T4 does. Compute dtype must match the
+            # device, or generation fails with "no kernel image is available
+            # for execution on the device".
+            cap = torch.cuda.get_device_capability(0)
+            compute_dtype = (torch.bfloat16 if cap >= (7, 5)
+                             else torch.float16)
             quant = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=compute_dtype,
             )
             self.processor = AutoProcessor.from_pretrained(self.model_id)
             self.tokenizer = self.processor.tokenizer
             self.model = AutoModelForImageTextToText.from_pretrained(
                 self.model_id, quantization_config=quant, device_map={"": 0},
-                dtype=torch.bfloat16,
+                dtype=compute_dtype,
             )
         else:
             quant = BitsAndBytesConfig(
