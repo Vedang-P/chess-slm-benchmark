@@ -183,10 +183,10 @@ import subprocess, sys
 # afterwards must NOT clobber these pins (no -U: it still upgrades
 # transformers to >=5.13 on its own).
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "torch==2.4.1", "--index-url",
+                "torch==2.5.1", "--index-url",
                 "https://download.pytorch.org/whl/cu121"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "torchvision==0.19.1", "torchaudio==2.4.1", "--index-url",
+                "torchvision==0.20.1", "torchaudio==2.5.1", "--index-url",
                 "https://download.pytorch.org/whl/cu121"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "bitsandbytes==0.44.1"], check=True)
