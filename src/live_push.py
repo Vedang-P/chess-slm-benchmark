@@ -44,6 +44,24 @@ def _get_sha(url: str, token: str) -> str | None:
         raise
 
 
+def fetch_file(token: str, remote: str) -> bytes | None:
+    """GET one file's content from the public repo. None if it doesn't
+    exist (e.g. a worker that hasn't published its first state yet) --
+    that is a normal, expected state for a caller polling several workers'
+    files, not an error."""
+    url = f"https://api.github.com/repos/{PUBLIC_LIVE_REPO}/contents/{remote}"
+    req = urllib.request.Request(
+        url, headers={"Authorization": f"Bearer {token}", "User-Agent": "chess-monitor"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            body = json.load(r)
+        return base64.b64decode(body["content"])
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
 def upload_file(token: str, remote: str, data: bytes,
                 message: str | None = None) -> str | None:
     """PUT one file to the public repo. Returns None on success, or a
