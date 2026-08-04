@@ -118,10 +118,22 @@ def main() -> None:
     ap.add_argument("--stream", action="store_true",
                     help="stream tokens through the SSE path")
     ap.add_argument("--live-push", action="store_true")
+    ap.add_argument("--live-namespace", type=str, default=None,
+                    help="publish live.json/state.json/history.jsonl under "
+                         "monitor/<namespace>/ instead of the canonical "
+                         "monitor/ paths, locally and on the dashboard repo. "
+                         "Lets independent runs (e.g. a gemma arm) stream to "
+                         "their OWN dashboard page without overwriting the "
+                         "deepseek page's state.")
     ap.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
 
     configure_quiet_logging()
+    # --live-namespace scopes every monitor path (local + remote) so an
+    # independent run owns its dashboard page; the canonical paths stay the
+    # default so existing runs are byte-for-byte unchanged.
+    live_ns = f"{args.live_namespace.strip('/')}/" if args.live_namespace else ""
+    live_dir = ROOT / "monitor" / (args.live_namespace.strip("/") if args.live_namespace else "")
     # what the run ACTUALLY did. The gateway arm is a thinking arm only when
     # --thinking-disabled is absent; local gemma renders with the thought
     # channel enabled only when --local-thinking is passed (thinking is a
@@ -306,12 +318,12 @@ def main() -> None:
         }
 
     def _publish_state(done: int, total: int, stage: str, last_error: str = None) -> None:
-        """Write + enqueue monitor/state.json and history.jsonl so the
+        """Write + enqueue monitor[/ns]/state.json and history.jsonl so the
         dashboard's scoreboard/charts reflect the MATE run."""
-        (ROOT / "monitor").mkdir(exist_ok=True)
+        live_dir.mkdir(parents=True, exist_ok=True)
         state = _state_payload(done, total, stage, last_error)
-        (ROOT / "monitor" / "state.json").write_text(json.dumps(state, indent=1))
-        hist = ROOT / "monitor" / "history.jsonl"
+        (live_dir / "state.json").write_text(json.dumps(state, indent=1))
+        hist = live_dir / "history.jsonl"
         lines = hist.read_text().splitlines() if hist.exists() else []
         m = state["mate"]
         lines.append(json.dumps({
@@ -332,7 +344,7 @@ def main() -> None:
         with _live_cond:
             # slot 1 carries STATE bytes only; history is re-read from disk
             # at upload time (uploading history bytes to state.json corrupts it)
-            _live_pending[1] = (ROOT / "monitor" / "state.json").read_bytes()
+            _live_pending[1] = (live_dir / "state.json").read_bytes()
             _live_cond.notify()
 
     def _live_pusher() -> None:
@@ -346,16 +358,16 @@ def main() -> None:
                 _live_pending[1] = None
             if live_data is not None:
                 try:
-                    upload_file(live_token, "monitor/live.json", live_data,
-                                message=f"live {_utc_ts()}")
+                    upload_file(live_token, f"monitor/{live_ns}live.json",
+                                live_data, message=f"live {_utc_ts()}")
                 except Exception:
                     pass
             if state_data is not None:
                 try:
-                    upload_file(live_token, "monitor/state.json", state_data,
-                                message=f"state {_utc_ts()}")
-                    hist_path = ROOT / "monitor" / "history.jsonl"
-                    upload_file(live_token, "monitor/history.jsonl",
+                    upload_file(live_token, f"monitor/{live_ns}state.json",
+                                state_data, message=f"state {_utc_ts()}")
+                    hist_path = live_dir / "history.jsonl"
+                    upload_file(live_token, f"monitor/{live_ns}history.jsonl",
                                 hist_path.read_bytes(),
                                 message=f"history {_utc_ts()}")
                 except Exception:
@@ -420,11 +432,11 @@ def main() -> None:
                 "source": "MATE testset",
             },
         }
-        (ROOT / "monitor").mkdir(exist_ok=True)
-        (ROOT / "monitor" / "live.json").write_text(json.dumps(live, indent=1))
+        live_dir.mkdir(parents=True, exist_ok=True)
+        (live_dir / "live.json").write_text(json.dumps(live, indent=1))
         if live_token:
             with _live_cond:
-                _live_pending[0] = (ROOT / "monitor" / "live.json").read_bytes()
+                _live_pending[0] = (live_dir / "live.json").read_bytes()
                 _live_cond.notify()
 
     samples = []
