@@ -293,6 +293,21 @@ class _FakeSSEResp:
             yield (line + "\n").encode()
 
 
+class _SlowFakeSSEResp(_FakeSSEResp):
+    """Like _FakeSSEResp, but iteration blocks for `delay_s` before yielding
+    anything -- simulates the mate-sel-02999 pattern (connection open,
+    genuinely waiting, no bytes yet) long enough for the heartbeat to fire."""
+
+    def __init__(self, lines: list, delay_s: float) -> None:
+        super().__init__(lines)
+        self._delay_s = delay_s
+
+    def __iter__(self):
+        import time as _time
+        _time.sleep(self._delay_s)
+        yield from super().__iter__()
+
+
 def test_silent_stream_is_retried_not_recorded_as_truncated() -> None:
     """A stream that opens (real HTTP response) and closes with ZERO delta
     events and no finish_reason is a stalled transport, not a model answer.
@@ -370,6 +385,36 @@ def test_silent_stream_is_retried_not_recorded_as_truncated() -> None:
               expect_content="", expect_reasoning_nonempty=False)
 
 
+def test_heartbeat_pings_dashboard_during_a_silent_wait() -> None:
+    """A stream that stays open but silent must still call on_chunk
+    periodically, so the live dashboard's timestamp keeps ticking instead of
+    looking identical to a frozen process for however long the wait lasts
+    (measured 2026-08-04: up to 13 minutes on mate-sel-02999). The heartbeat
+    must never write into the scored content/reasoning -- only empty pings.
+    """
+    from src.models import OpenCodeGoModel
+
+    m = OpenCodeGoModel("deepseek-v4-flash")
+    m.key = "test"
+    m.HEARTBEAT_INTERVAL_S = 0.05  # fast for the test; real value is 5s
+
+    def fake_post_with_retry(payload, stream=False):
+        return _SlowFakeSSEResp([], delay_s=0.3), 1
+
+    m._post_with_retry = fake_post_with_retry
+
+    pings = []
+    out = m.generate("prompt", max_new_tokens=100, stream=True,
+                     on_chunk=lambda p: pings.append(p))
+    heartbeats = [p for p in pings if p.get("phase") == "reasoning"]
+    check("heartbeat fired at least once during a silent 0.3s wait",
+          len(heartbeats) >= 1, f"{len(pings)} total on_chunk calls")
+    check("heartbeat pings never carry content or reasoning text",
+          all(p.get("content") == "" and p.get("reasoning") == "" for p in heartbeats))
+    check("a persistently silent stream still returns empty, not fabricated",
+          out["content"] == "" and out["reasoning"] == "")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true",
@@ -384,6 +429,7 @@ def main() -> None:
     test_result_writer_does_not_append_across_runs()
     test_backends_share_one_generate_signature()
     test_silent_stream_is_retried_not_recorded_as_truncated()
+    test_heartbeat_pings_dashboard_during_a_silent_wait()
     if FAILURES:
         print(f"\n{len(FAILURES)} FAILURES", flush=True)
         sys.exit(1)

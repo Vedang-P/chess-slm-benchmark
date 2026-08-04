@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -276,6 +277,7 @@ class OpenCodeGoModel:
     # transport error, capped so a genuinely silent gateway still surfaces
     # honestly rather than retrying forever
     MAX_SILENT_STREAM_RETRIES = 2
+    HEARTBEAT_INTERVAL_S = 5.0  # dashboard liveness ping while a stream is silent
 
     def __init__(self, model_key: str, smoke_test: bool = False,
                  base_url: str = OPENCODE_GO_BASE_URL):
@@ -305,14 +307,26 @@ class OpenCodeGoModel:
         self._last_call = time.time()
         if stream:
             payload = {**payload, "stream": True}
+        headers = {"Authorization": f"Bearer {self.key}",
+                   "Content-Type": "application/json",
+                   # the gateway sits behind Cloudflare, which 403s (1010)
+                   # the default urllib user-agent
+                   "User-Agent": "openai-python/1.0 chess-benchmark"}
+        if stream:
+            # we ask for an SSE stream (payload["stream"]=True) but never told
+            # any intermediary (the gateway sits behind Cloudflare, confirmed
+            # via response headers) that we're an SSE consumer -- some proxies
+            # decide whether to flush chunks incrementally or buffer the whole
+            # response based on this header. Measured 2026-08-04: mate-sel-02999
+            # repeatedly opened a connection, ran long, and delivered ZERO bytes
+            # before closing -- consistent with something buffering a slow
+            # response instead of streaming it, then giving up on the buffer
+            # rather than the model. Missing header, not a model problem.
+            headers["Accept"] = "text/event-stream"
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(payload).encode(),
-            headers={"Authorization": f"Bearer {self.key}",
-                     "Content-Type": "application/json",
-                     # the gateway sits behind Cloudflare, which 403s (1010)
-                     # the default urllib user-agent
-                     "User-Agent": "openai-python/1.0 chess-benchmark"},
+            headers=headers,
             method="POST")
         return urllib.request.urlopen(req, timeout=3600)
 
@@ -410,34 +424,59 @@ class OpenCodeGoModel:
                     first_token_at = None
                     finish_reason = None
                     last_chunk_at = time.time()
-                    resp, connect_attempts = self._post_with_retry(stream_payload, stream=True)
-                    attempts += connect_attempts
-                    with resp:
-                        for chunk in self._sse_chunks(resp):
-                            ch = chunk.get("choices") or [{}]
-                            if chunk.get("usage"):
-                                final_usage = chunk["usage"]
-                            if not ch:
-                                continue
-                            delta = ch[0].get("delta") or {}
-                            delta_content = delta.get("content") or ""
-                            delta_reasoning = delta.get("reasoning_content") or ""
-                            if delta_content or delta_reasoning:
-                                stream_events += 1
-                                if first_token_at is None:
-                                    first_token_at = time.time()
-                            content += delta_content
-                            reasoning += delta_reasoning
-                            finish = ch[0].get("finish_reason")
-                            finish_reason = finish or finish_reason
-                            if on_chunk and (time.time() - last_chunk_at >= 2
-                                             or finish):
-                                last_chunk_at = time.time()
-                                on_chunk({
-                                    "content": content, "reasoning": reasoning,
-                                    "phase": "reasoning" if not content else "answering",
-                                    "finished": bool(finish),
-                                })
+                    # A truly silent connection produces no delta events at all,
+                    # so on_chunk (the only thing that makes a run visible on
+                    # the live dashboard) never fires and a multi-minute stall
+                    # looks identical to a frozen/dead process. This heartbeat
+                    # calls on_chunk with empty content every 5s purely so the
+                    # dashboard's timestamp keeps ticking over during the wait
+                    # -- it never touches `content`/`reasoning`, so it cannot
+                    # contaminate the scored answer either way.
+                    heartbeat_stop = threading.Event()
+
+                    def _heartbeat() -> None:
+                        while not heartbeat_stop.wait(self.HEARTBEAT_INTERVAL_S):
+                            on_chunk({"content": "", "reasoning": "",
+                                     "phase": "reasoning", "finished": False})
+
+                    hb_thread = None
+                    if on_chunk:
+                        hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+                        hb_thread.start()
+                    try:
+                        resp, connect_attempts = self._post_with_retry(stream_payload, stream=True)
+                        attempts += connect_attempts
+                        with resp:
+                            for chunk in self._sse_chunks(resp):
+                                ch = chunk.get("choices") or [{}]
+                                if chunk.get("usage"):
+                                    final_usage = chunk["usage"]
+                                if not ch:
+                                    continue
+                                delta = ch[0].get("delta") or {}
+                                delta_content = delta.get("content") or ""
+                                delta_reasoning = delta.get("reasoning_content") or ""
+                                if delta_content or delta_reasoning:
+                                    heartbeat_stop.set()  # real data now; stop the heartbeat
+                                    stream_events += 1
+                                    if first_token_at is None:
+                                        first_token_at = time.time()
+                                content += delta_content
+                                reasoning += delta_reasoning
+                                finish = ch[0].get("finish_reason")
+                                finish_reason = finish or finish_reason
+                                if on_chunk and (time.time() - last_chunk_at >= 2
+                                                 or finish):
+                                    last_chunk_at = time.time()
+                                    on_chunk({
+                                        "content": content, "reasoning": reasoning,
+                                        "phase": "reasoning" if not content else "answering",
+                                        "finished": bool(finish),
+                                    })
+                    finally:
+                        heartbeat_stop.set()
+                        if hb_thread:
+                            hb_thread.join(timeout=1)
                     if stream_events > 0 or finish_reason is not None:
                         break  # a real model response, whatever it says
                     if silent_attempt < self.MAX_SILENT_STREAM_RETRIES:
