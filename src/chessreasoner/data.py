@@ -28,8 +28,8 @@ import numpy as np
 import torch
 
 from .model import IGNORE_INDEX
-from .tokenizer import DEFAULT_SEGMENT_WEIGHTS, ChessTokenizer
-from .vocab import BOARD_CLASS_INDEX, CHESS_TOKEN_TO_ID, FEN_END
+from .tokenizer import DEFAULT_SEGMENT_WEIGHTS, SEG_PAD, ChessTokenizer
+from .vocab import BOARD_CLASS_INDEX, CHESS_TOKEN_TO_ID, FEN_END, PAD
 
 FEN_END_ID = CHESS_TOKEN_TO_ID[FEN_END]
 BOARD_SQUARES_OFFSET = 70
@@ -50,28 +50,87 @@ def read_shard(path: str | Path) -> Iterator[dict]:
                 yield json.loads(line)
 
 
-def encode_shard(path: str | Path, tokenizer: ChessTokenizer) -> tuple[np.ndarray, np.ndarray]:
-    """Encode one JSONL shard into flat (ids, segments) arrays."""
-    ids: list[int] = []
-    segs: list[int] = []
+def encode_shard(path: str | Path, tokenizer: ChessTokenizer) -> list[dict]:
+    """Encode one JSONL shard into per-example ``{ids, segments}`` records.
+
+    Kept per-example rather than concatenated so :func:`pack_documents` can
+    respect example boundaries.
+    """
+    out: list[dict] = []
     for record in read_shard(path):
         if record.get("packed"):
-            enc = tokenizer.encode_packed(
-                record["board_parts"], [(q, a) for q, a in record["qa_pairs"]])
+            out.append(tokenizer.encode_packed(
+                record["board_parts"], [(q, a) for q, a in record["qa_pairs"]]))
         else:
-            enc = tokenizer.encode_example(record["prompt_parts"], record["answer_parts"])
-        ids.extend(enc["ids"])
-        segs.extend(enc["segments"])
-    return np.asarray(ids, dtype=np.int32), np.asarray(segs, dtype=np.int8)
+            out.append(tokenizer.encode_example(
+                record["prompt_parts"], record["answer_parts"]))
+    return out
 
 
 def pack(ids: np.ndarray, segments: np.ndarray, seq_len: int) -> tuple[np.ndarray, np.ndarray]:
-    """Slice the flat stream into ``(n_windows, seq_len)`` arrays, dropping the tail."""
+    """Naive contiguous slicing. **Do not use for training data** -- see
+    :func:`pack_documents`.
+
+    Kept only for throughput benchmarks and tests, where document boundaries do
+    not matter. Slicing a concatenated stream cuts examples in half: measured on
+    a real Tier-1 corpus, 15.9% of supervised answer tokens ended up in a window
+    with no board span before them. The loss still demands those answers, so the
+    model is trained to invent them -- which is exactly the hallucination this
+    project exists to remove.
+    """
     n = (len(ids) // seq_len) * seq_len
     if n == 0:
         raise ValueError(f"shard has {len(ids)} tokens, fewer than one {seq_len}-token window")
     return (ids[:n].reshape(-1, seq_len).copy(),
             segments[:n].reshape(-1, seq_len).copy())
+
+
+def pack_documents(encoded: Sequence[dict], seq_len: int,
+                   pad_id: int = CHESS_TOKEN_TO_ID[PAD]) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Greedily fill windows with **whole** examples, padding the remainder.
+
+    An example never straddles a window boundary, so every supervised answer
+    token has its board in context. Padding is given ``SEG_PAD``, which maps to
+    loss weight 0.
+
+    Examples longer than ``seq_len`` cannot be placed and are dropped; the
+    returned stats report how many, since a large count means the context is too
+    short for the tier.
+    """
+    windows_ids: list[np.ndarray] = []
+    windows_segs: list[np.ndarray] = []
+    cur_ids: list[int] = []
+    cur_segs: list[int] = []
+    stats = {"examples": 0, "dropped_too_long": 0, "windows": 0, "pad_tokens": 0}
+
+    def flush() -> None:
+        if not cur_ids:
+            return
+        pad = seq_len - len(cur_ids)
+        stats["pad_tokens"] += pad
+        stats["windows"] += 1
+        windows_ids.append(np.array(cur_ids + [pad_id] * pad, dtype=np.int32))
+        windows_segs.append(np.array(cur_segs + [SEG_PAD] * pad, dtype=np.int8))
+        cur_ids.clear()
+        cur_segs.clear()
+
+    for item in encoded:
+        ids, segs = item["ids"], item["segments"]
+        if len(ids) > seq_len:
+            stats["dropped_too_long"] += 1
+            continue
+        if len(cur_ids) + len(ids) > seq_len:
+            flush()
+        cur_ids.extend(ids)
+        cur_segs.extend(segs)
+        stats["examples"] += 1
+    flush()
+
+    if not windows_ids:
+        raise ValueError("no example fit in a single window")
+    total = stats["windows"] * seq_len
+    stats["utilization"] = 1.0 - stats["pad_tokens"] / total
+    return np.stack(windows_ids), np.stack(windows_segs), stats
 
 
 def board_targets_for(window_ids: np.ndarray) -> tuple[list[int], list[np.ndarray]]:
@@ -110,14 +169,16 @@ class PackedDataset(torch.utils.data.Dataset):
 
     @classmethod
     def from_shards(cls, paths: Sequence[str | Path], tokenizer: ChessTokenizer,
-                    seq_len: int, **kwargs) -> "PackedDataset":
-        all_ids: list[np.ndarray] = []
-        all_segs: list[np.ndarray] = []
+                    seq_len: int, verbose: bool = True, **kwargs) -> "PackedDataset":
+        encoded: list[dict] = []
         for path in paths:
-            shard_ids, shard_segs = encode_shard(path, tokenizer)
-            all_ids.append(shard_ids)
-            all_segs.append(shard_segs)
-        ids, segs = pack(np.concatenate(all_ids), np.concatenate(all_segs), seq_len)
+            encoded.extend(encode_shard(path, tokenizer))
+        ids, segs, stats = pack_documents(encoded, seq_len)
+        if verbose:
+            print(f"packed {stats['examples']} examples into {stats['windows']} "
+                  f"windows of {seq_len} ({stats['utilization']:.1%} utilization"
+                  + (f", {stats['dropped_too_long']} too long to place)"
+                     if stats["dropped_too_long"] else ")"))
         return cls(ids, segs, **kwargs)
 
     def __len__(self) -> int:

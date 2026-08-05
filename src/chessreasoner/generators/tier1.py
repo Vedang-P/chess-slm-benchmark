@@ -25,6 +25,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Callable, Iterator, Sequence
 
 import chess
@@ -80,7 +81,8 @@ def render(template: str, slots: dict[str, list[str]]) -> list[str]:
     return parts
 
 
-def _templates(family: Sequence[str], split: str) -> list[str]:
+@lru_cache(maxsize=None)
+def _templates_cached(family: tuple[str, ...], split: str) -> list[str]:
     if len(family) <= N_HELDOUT_TEMPLATES:
         raise ValueError("template family too small to hold any out")
     if split == "train":
@@ -88,6 +90,11 @@ def _templates(family: Sequence[str], split: str) -> list[str]:
     if split == "heldout_phrasing":
         return list(family[-N_HELDOUT_TEMPLATES:])
     raise ValueError(f"unknown split {split!r}")
+
+
+def _templates(family: Sequence[str], split: str) -> list[str]:
+    """Called once per generated example -- memoized on the family contents."""
+    return _templates_cached(tuple(family), split)
 
 
 def _square_list(squares: Sequence[int]) -> list[str]:
@@ -365,18 +372,28 @@ def random_playout_positions(rng: random.Random, max_plies: int = 80) -> Iterato
         yield board
 
 
-def puzzle_csv_positions(path: str, rng: random.Random) -> Iterator[chess.Board]:
-    """Positions from the Lichess puzzle CSV (CC0). Column 1 is the FEN."""
+def puzzle_csv_positions(path: str, rng: random.Random,
+                         keep_probability: float = 0.05) -> Iterator[chess.Board]:
+    """Positions from the Lichess puzzle CSV (CC0). Column 1 is the FEN.
+
+    Rows are accepted with probability ``keep_probability`` so a shard is a
+    random spread across the whole file rather than a contiguous prefix. The
+    earlier version accepted its ``rng`` and never used it, which is the same
+    mistake that produced the ``bestmove-8x8`` set where every position had an
+    empty a8 -- it was taken in FEN-lexicographic order. Puzzle CSVs are sorted
+    by id, and id correlates with rating and theme, so a prefix is not a
+    sample.
+    """
     import csv
 
     with open(path, newline="") as fh:
         reader = csv.reader(fh)
         header = next(reader, None)
-        if header and header[1].strip().lower() != "fen":
+        if header and len(header) > 1 and header[1].strip().lower() != "fen":
             fh.seek(0)
             reader = csv.reader(fh)
         for row in reader:
-            if len(row) < 2:
+            if len(row) < 2 or rng.random() >= keep_probability:
                 continue
             try:
                 yield chess.Board(row[1])
@@ -422,6 +439,7 @@ def generate_packed(positions: Iterator[chess.Board], n_boards: int, rng: random
         pairs: list[tuple[list[str], list[str]]] = []
         tasks: list[str] = []
         metas: list[dict] = []
+        asked: set[tuple] = set()
         for task in rng.choices(names, weights=probs, k=want * 3):
             if len(pairs) >= want:
                 break
@@ -430,8 +448,9 @@ def generate_packed(positions: Iterator[chess.Board], n_boards: int, rng: random
                 continue
             question = example.prompt_parts[len(board_parts):]
             key = (task, tuple(question))
-            if key in {(t, tuple(q)) for t, (q, _) in zip(tasks, pairs)}:
+            if key in asked:
                 continue  # same question twice about the same board
+            asked.add(key)
             if example.key() in seen:
                 continue
             seen.add(example.key())

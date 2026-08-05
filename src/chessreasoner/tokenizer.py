@@ -36,8 +36,9 @@ from .vocab import (
 SEG_BOARD = 0
 SEG_PROMPT = 1
 SEG_ANSWER = 2
+SEG_PAD = 3
 
-DEFAULT_SEGMENT_WEIGHTS = {SEG_BOARD: 0.1, SEG_PROMPT: 0.0, SEG_ANSWER: 1.0}
+DEFAULT_SEGMENT_WEIGHTS = {SEG_BOARD: 0.1, SEG_PROMPT: 0.0, SEG_ANSWER: 1.0, SEG_PAD: 0.0}
 """Board planes in the prompt are cheap context; prompt prose is not supervised;
 answers carry the signal. Tunable -- A/B testing these is one short run."""
 

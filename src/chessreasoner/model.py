@@ -46,6 +46,11 @@ class ChessReasonerConfig:
     norm_eps: float = 1e-6
     tie_embeddings: bool = True
     grad_checkpointing: bool = False
+    loss_chunk_tokens: int = 0
+    """Compute the LM loss in chunks of this many tokens instead of
+    materializing (B, T, vocab) logits at once. At batch 16 x 1024 x 8192 the
+    fp16 logits plus their fp32 copy are ~0.8 GB -- which the design's
+    activation estimate omitted entirely. 0 disables chunking."""
     """Trades ~30% throughput for a large activation-memory saving. Review item
     R8 flags micro-batch 16 x 1024 as possibly too tight on a 16 GB T4 --
     scripts/calibrate_throughput.py decides, rather than assuming."""
@@ -98,22 +103,29 @@ class RMSNorm(nn.Module):
         return (x32 * self.weight.float()).to(dtype)
 
 
-def build_rope_cache(seq_len: int, head_dim: int, theta: float, device, dtype):
+def build_rope_cache(seq_len: int, head_dim: int, theta: float, device):
+    """Always fp32 -- apply_rope casts to the activation dtype at the end."""
     inv_freq = 1.0 / (theta ** (torch.arange(0, head_dim, 2, device=device).float() / head_dim))
     pos = torch.arange(seq_len, device=device).float()
     freqs = torch.outer(pos, inv_freq)
-    return torch.cos(freqs).to(dtype), torch.sin(freqs).to(dtype)
+    return torch.cos(freqs), torch.sin(freqs)
 
 
 def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
-    """x: (B, n_heads, T, head_dim); cos/sin: (T, head_dim/2)."""
-    x1, x2 = x[..., 0::2], x[..., 1::2]
+    """x: (B, n_heads, T, head_dim); cos/sin: (T, head_dim/2), always fp32.
+
+    The rotation is computed in fp32 and cast back explicitly. The previous
+    version scattered into ``torch.empty_like(x)``, which happened to downcast
+    correctly but only by accident -- and an in-place scatter is both slower and
+    awkward under gradient checkpointing.
+    """
+    dtype = x.dtype
+    x32 = x.float()
+    x1, x2 = x32[..., 0::2], x32[..., 1::2]
     cos = cos[None, None, :, :]
     sin = sin[None, None, :, :]
-    out = torch.empty_like(x)
-    out[..., 0::2] = x1 * cos - x2 * sin
-    out[..., 1::2] = x1 * sin + x2 * cos
-    return out
+    rotated = torch.stack((x1 * cos - x2 * sin, x1 * sin + x2 * cos), dim=-1)
+    return rotated.flatten(-2).to(dtype)
 
 
 class Attention(nn.Module):
@@ -146,8 +158,19 @@ class Attention(nn.Module):
             k = k.repeat_interleave(self.repeat, dim=1)
             v = v.repeat_interleave(self.repeat, dim=1)
 
-        causal = cache is None or k.shape[2] == T
-        out = F.scaled_dot_product_attention(q, k, v, is_causal=causal)
+        # is_causal only means the right thing when the query and key lengths
+        # match. With a cache and T > 1 (prefill continuation, or speculative
+        # decoding) it silently lets a token attend to its own future, so build
+        # the offset mask explicitly. Measured leak before this fix: 2.9e-01.
+        n_keys = k.shape[2]
+        if n_keys == T:
+            out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        elif T == 1:
+            out = F.scaled_dot_product_attention(q, k, v)  # one query sees all past
+        else:
+            offset = n_keys - T
+            causal = torch.ones(T, n_keys, dtype=torch.bool, device=q.device).tril(offset)
+            out = F.scaled_dot_product_attention(q, k, v, attn_mask=causal)
         return self.wo(out.transpose(1, 2).reshape(B, T, -1))
 
 
@@ -260,9 +283,9 @@ class ChessReasoner(nn.Module):
         if T + pos_offset > self.cfg.max_seq_len:
             raise ValueError(f"sequence of {T + pos_offset} exceeds max_seq_len")
         x = self.embed(input_ids)
-        if self._rope is None or self._rope[0].device != x.device or self._rope[0].dtype != x.dtype:
+        if self._rope is None or self._rope[0].device != x.device:
             self._rope = build_rope_cache(self.cfg.max_seq_len, self.cfg.head_dim,
-                                          self.cfg.rope_theta, x.device, x.dtype)
+                                          self.cfg.rope_theta, x.device)
         cos, sin = (t[pos_offset:pos_offset + T] for t in self._rope)
         use_ckpt = self.cfg.grad_checkpointing and self.training and caches is None
         for i, block in enumerate(self.blocks):
@@ -295,15 +318,22 @@ class ChessReasoner(nn.Module):
         h = self.backbone(input_ids)
         out: dict = {}
 
-        logits = self.lm_head(h)
-        shift_logits = logits[:, :-1].reshape(-1, self.cfg.vocab_size).float()
-        shift_labels = input_ids[:, 1:].reshape(-1)
-        per_token = F.cross_entropy(shift_logits, shift_labels, reduction="none")
+        hidden = h[:, :-1].reshape(-1, self.cfg.d_model)
+        labels = input_ids[:, 1:].reshape(-1)
         if loss_weights is not None:
             w = loss_weights[:, 1:].reshape(-1).float()
-            lm_loss = (per_token * w).sum() / w.sum().clamp(min=1.0)
         else:
-            lm_loss = per_token.mean()
+            w = torch.ones_like(labels, dtype=torch.float32)
+        denom = w.sum().clamp(min=1.0)
+
+        chunk = self.cfg.loss_chunk_tokens or hidden.shape[0]
+        lm_loss = hidden.new_zeros((), dtype=torch.float32)
+        for start in range(0, hidden.shape[0], chunk):
+            end = start + chunk
+            logits = self.lm_head(hidden[start:end]).float()
+            per_token = F.cross_entropy(logits, labels[start:end], reduction="none")
+            lm_loss = lm_loss + (per_token * w[start:end]).sum()
+        lm_loss = lm_loss / denom
         out["lm_loss"] = lm_loss
         total = lm_loss
 

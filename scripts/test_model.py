@@ -281,6 +281,87 @@ check("untrained board loss is near ln(13)",
 
 
 # ---------------------------------------------------------------------------
+print("\n== regressions for the four confirmed bugs ==")
+
+from src.chessreasoner.tokenizer import SEG_PAD  # noqa: E402
+
+# BUG B -- multi-token cached decode must not leak future context.
+mb = model.ChessReasoner(model.ChessReasonerConfig(
+    n_layers=2, d_model=128, n_heads=4, n_kv_heads=2, d_ff=256,
+    max_seq_len=128, vocab_size=200, with_aux_heads=False)).eval()
+seq = torch.randint(0, 200, (2, 32))
+with torch.no_grad():
+    reference = mb.backbone(seq)
+    cache = [{} for _ in mb.blocks]
+    mb.backbone(seq[:, :16], caches=cache)
+    two = mb.backbone(seq[:, 16:18], caches=cache, pos_offset=16)
+leak = (two[:, 0] - reference[:, 16]).abs().max().item()
+check(f"B: 2-token cached step does not attend to its own future (leak {leak:.1e})",
+      leak < 1e-4)
+
+# BUG C -- the puzzle CSV source must actually use its rng.
+import inspect  # noqa: E402
+src_c = inspect.getsource(tier1.puzzle_csv_positions)
+check("C: puzzle_csv_positions samples with its rng, not in file order",
+      "rng.random()" in src_c)
+
+csv_path = Path("data/raw/lichess_db_puzzle.csv")
+if csv_path.exists():
+    import itertools  # noqa: E402
+    a = [b.fen() for b in itertools.islice(
+        tier1.puzzle_csv_positions(str(csv_path), random.Random(1)), 5)]
+    b_ = [b.fen() for b in itertools.islice(
+        tier1.puzzle_csv_positions(str(csv_path), random.Random(999)), 5)]
+    check("C: different seeds draw different positions", a != b_)
+
+# BUG D -- document packing must never orphan an answer from its board.
+enc = [tok.encode_packed(pk.board_parts, pk.qa_pairs) for pk in packed_examples]
+dids, dsegs, stats = data.pack_documents(enc, 1024)
+print(f"        document packing: {stats['examples']} examples -> {stats['windows']} "
+      f"windows, {stats['utilization']:.1%} utilization, "
+      f"{stats['dropped_too_long']} dropped")
+FEN_B = vocab.CHESS_TOKEN_TO_ID[vocab.FEN_BEGIN]
+orphan = total_ans = 0
+for w, sg in zip(dids, dsegs):
+    fens = np.flatnonzero(w == FEN_B)
+    cut = fens[0] if len(fens) else len(w)
+    orphan += int((sg[:cut] == SEG_ANSWER).sum())
+    total_ans += int((sg == SEG_ANSWER).sum())
+check(f"D: no supervised answer precedes its board ({orphan}/{total_ans} orphaned)",
+      orphan == 0)
+
+naive_ids, naive_segs = data.pack(
+    np.concatenate([np.array(e["ids"], dtype=np.int32) for e in enc]),
+    np.concatenate([np.array(e["segments"], dtype=np.int8) for e in enc]), 1024)
+n_orphan = 0
+for w, sg in zip(naive_ids, naive_segs):
+    fens = np.flatnonzero(w == FEN_B)
+    cut = fens[0] if len(fens) else len(w)
+    n_orphan += int((sg[:cut] == SEG_ANSWER).sum())
+check(f"D: the naive packer really was orphaning answers ({n_orphan} of them)",
+      n_orphan > 0)
+
+check("D: padding is present and carries zero loss weight",
+      SEG_PAD in set(np.unique(dsegs).tolist())
+      and data.PackedDataset(dids, dsegs).weight_lookup[SEG_PAD] == 0.0)
+check("D: board targets still reconstruct correctly after document packing",
+      all(len(data.board_targets_for(w)[0]) >= 1 for w in dids[:20]))
+
+# chunked LM loss must be numerically identical to the unchunked path
+cm_cfg = model.ChessReasonerConfig(n_layers=2, d_model=128, n_heads=4, n_kv_heads=2,
+                                   d_ff=256, max_seq_len=128, vocab_size=200,
+                                   with_aux_heads=False)
+torch.manual_seed(3); cm = model.ChessReasoner(cm_cfg)
+w_rand = torch.rand(2, 32)
+whole = cm(seq, loss_weights=w_rand)["lm_loss"]
+cm.cfg.loss_chunk_tokens = 7   # deliberately not a divisor
+chunked = cm(seq, loss_weights=w_rand)["lm_loss"]
+check("chunked LM loss matches the unchunked loss",
+      torch.allclose(whole, chunked, atol=1e-5),
+      f"{whole.item():.6f} vs {chunked.item():.6f}")
+
+
+# ---------------------------------------------------------------------------
 print("\n== overfit sanity ==")
 
 # A correct model must be able to memorize a tiny batch. If this fails, the
