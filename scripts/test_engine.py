@@ -358,9 +358,16 @@ def test_silent_stream_is_retried_not_recorded_as_truncated() -> None:
     out = run([[real_chunk, stop_chunk], []], expect_attempts_ge=1,
               expect_content="MOVE: e2e4", expect_reasoning_nonempty=True)
 
-    # 3) a genuine length-cutoff (reasoning flowed, no explicit finish_reason,
-    #    matching a real truncation like mate-sel-02999) must be accepted
-    #    immediately, not treated as silent
+    # 3) reasoning flowed but NO finish_reason ever arrived -> mid-stream
+    #    transport cut. Old behavior: accepted as a real outcome after one
+    #    call, recorded as a fake "truncated" no_answer with zero usage data
+    #    (measured 2026-08-05: 42/42 truncations in the 1000-position run
+    #    had token_usage=None while every completed sample had usage, and
+    #    completed streams reached 305k chars / 1026s -- so no gateway cap
+    #    is hit; those are pure connection cuts). New behavior: retried with
+    #    fresh requests (MAX_MIDSTREAM_RETRIES) until an explicit
+    #    finish_reason lands, and the LAST attempt's reasoning is what is
+    #    recorded.
     reasoning_only_chunk = ('data: {"choices":[{"delta":'
                            '{"reasoning_content":"still thinking"},'
                            '"finish_reason":null}]}')
@@ -374,9 +381,10 @@ def test_silent_stream_is_retried_not_recorded_as_truncated() -> None:
 
     m._post_with_retry = fake_post_with_retry
     out = m.generate("prompt", max_new_tokens=100, stream=True)
-    check("real partial reasoning (no finish_reason) is accepted, not retried",
-          calls["n"] == 1, f"{calls['n']} calls")
-    check("real partial reasoning still recorded (not discarded)",
+    check("mid-stream cut (tokens, no finish_reason) is retried fresh",
+          calls["n"] == m.MAX_MIDSTREAM_RETRIES + 1,
+          f"{calls['n']} calls (expected {m.MAX_MIDSTREAM_RETRIES + 1})")
+    check("mid-stream cut still records the last attempt's reasoning",
           "still thinking" in out["reasoning"])
 
     # 4) persistently silent (every attempt empty) -> gives up honestly,

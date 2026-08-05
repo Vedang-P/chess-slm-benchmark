@@ -536,6 +536,8 @@ class OpenCodeGoModel:
                                   f"without a finish_reason -- mid-stream transport "
                                   f"cut, retrying a FRESH request", flush=True)
                         time.sleep(2 ** (silent_attempt + 1))  # 2s, 4s, 8s
+                        continue
+                    break  # retries exhausted -- record it honestly
                 data = {"choices": [{"message": {"content": content,
                                                  "reasoning_content": reasoning},
                                      "finish_reason": finish_reason or
