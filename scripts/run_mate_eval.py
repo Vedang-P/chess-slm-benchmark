@@ -189,7 +189,8 @@ def main() -> None:
     # `model == deepseek` alone labelled every direct-mode run as
     # thinking-enabled.
     thinking_enabled = (not args.thinking_disabled
-                        and (args.model == "deepseek-v4-flash"
+                        and (args.model in ("deepseek-v4-flash",
+                                            "deepseek-v4-flash-free")
                              or args.local_thinking))
     all_records = json.loads(RECORDS_PATH.read_text())
     if args.ids:
