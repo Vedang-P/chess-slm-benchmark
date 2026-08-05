@@ -161,6 +161,37 @@ publicly exposed, but worth migrating to Secrets and rotating those three
 tokens when convenient.
 
 ---
+---
+
+## 2026-08-05 — Gemma 4 E2B 1000-position campaign (2 GPU workers + CPU aggregator)
+
+**Goal:** the SAME 1000 positions DeepSeek direct-mode scored (48.6% strict),
+with local gemma4-e2b thinking ON (check10-validated methodology: --local-
+thinking, --force-answer-prompt, --max_new_tokens 32768).
+
+**Parallelism:** Kaggle free tier allows 2 concurrent GPU kernels => w1 =
+positions [0:500), w2 = [500:1000). Each worker: --worker-id wN
+--live-namespace gemma --hf-upload-every 25 --resume, own run_id on HF
+(gemma1000-w1 / gemma1000-w2).
+
+**Demo-first:** each worker notebook runs a 2-position demo through the REAL
+pipeline + an inspect cell that RAISES if parsing/thinking-split is broken on
+the assigned GPU (verified on P100 via check10: 78.7s/pos -> 500 positions ~
+11h, within the 12h session limit). The demo shares run id/output dir, so the
+full run resumes past it.
+
+**Backups:** HF upload every 25 positions + at end; recovery cell pulls the
+worker's own checkpoint from HF before --resume (/kaggle/working is wiped on
+every session restart — without this a died session restarts from zero).
+
+**Aggregator:** aggregate_live_state.py gained --namespace/--run-id (defaults
+unchanged for the deepseek campaign); a third CPU-only kernel runs it in a
+45s loop combining monitor/gemma/workers/* into the gemma dashboard page.
+
+**Secrets:** hardcoded env vars injected at build time into
+notebooks/push_gemma1000/ (gitignored — .gitignore now covers notebooks/push_*/).
+User runs the kernels manually from the Kaggle UI and selects the
+accelerator themselves (free tier auto-assigns T4/P100; cannot choose).
 
 ## 2026-08-05 — Gemma E2B live arm: three verified bugs, all fixed (run stopped)
 
