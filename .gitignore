@@ -86,3 +86,6 @@ monitor/
 
 # Generated figure/table outputs
 analysis/
+
+# ChessReasoner generated corpora (regenerate with scripts/build_tier1.py)
+/data/corpus/
