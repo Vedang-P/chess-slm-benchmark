@@ -86,3 +86,4 @@ monitor/
 
 # Generated figure/table outputs
 analysis/
+notebooks/push_*/
