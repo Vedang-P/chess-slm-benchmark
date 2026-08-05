@@ -157,6 +157,13 @@ def main() -> None:
     ap.add_argument("--stream", action="store_true",
                     help="stream tokens through the SSE path")
     ap.add_argument("--live-push", action="store_true")
+    ap.add_argument("--live-namespace", type=str, default=None,
+                    help="when set, live-push publishes under "
+                         "monitor/<namespace>/ instead of the canonical "
+                         "monitor/ paths, so a run owns its own dashboard "
+                         "page (e.g. --live-namespace gemma streams to the "
+                         "gemma page). Composes with --worker-id: "
+                         "monitor/<namespace>/workers/{id}.*.")
     ap.add_argument("--worker-id", type=str, default=None,
                     help="when set, live-push publishes to "
                          "monitor/workers/{id}.state.json and "
@@ -258,11 +265,15 @@ def main() -> None:
     # --worker-id, behavior is unchanged: publish straight to the canonical
     # paths, exactly like every single-worker run so far this project.
     worker_tag = args.worker_id
-    monitor_dir = ROOT / "monitor"
+    ns = (args.live_namespace or "").strip("/")
+    ns_prefix = f"{ns}/" if ns else ""
+    monitor_dir = ROOT / "monitor" / ns
     state_local = monitor_dir / (f"workers/{worker_tag}.state.json" if worker_tag else "state.json")
     live_local = monitor_dir / (f"workers/{worker_tag}.live.json" if worker_tag else "live.json")
-    state_remote = f"monitor/workers/{worker_tag}.state.json" if worker_tag else "monitor/state.json"
-    live_remote = f"monitor/workers/{worker_tag}.live.json" if worker_tag else "monitor/live.json"
+    state_remote = f"monitor/{ns_prefix}workers/{worker_tag}.state.json" if worker_tag else f"monitor/{ns_prefix}state.json"
+    live_remote = f"monitor/{ns_prefix}workers/{worker_tag}.live.json" if worker_tag else f"monitor/{ns_prefix}live.json"
+    history_local = monitor_dir / "history.jsonl"
+    history_remote = f"monitor/{ns_prefix}history.jsonl"
 
     def _mate_metrics() -> dict:
         """This process's own MATE scoreboard (see src/mate_metrics.py).
@@ -336,7 +347,7 @@ def main() -> None:
         state = _state_payload(done, total, stage, last_error)
         state_local.write_text(json.dumps(state, indent=1))
         if not worker_tag:
-            hist = monitor_dir / "history.jsonl"
+            hist = history_local
             lines = hist.read_text().splitlines() if hist.exists() else []
             m = state["mate"]
             lines.append(json.dumps({
@@ -435,8 +446,8 @@ def main() -> None:
                                     message=f"state {_utc_ts()}")
                         last_state_ts = time.time()
                         if not worker_tag:
-                            hist_path = monitor_dir / "history.jsonl"
-                            upload_file(live_token, "monitor/history.jsonl",
+                            hist_path = history_local
+                            upload_file(live_token, history_remote,
                                         hist_path.read_bytes(),
                                         message=f"history {_utc_ts()}")
                     except Exception:
