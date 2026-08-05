@@ -629,3 +629,51 @@ the compute budget re-reading the same position.
 **3.3× more supervised signal for the same FLOPs**, and a useful side effect:
 the model must now hold the board across a long span instead of answering off
 the most recent tokens. Tier 3 traces should be packed the same way.
+
+---
+
+## 15. Implementation notes (as built)
+
+`src/chessreasoner/model.py`, `data.py`, `scripts/calibrate_throughput.py`.
+
+Backbone parameter count is **exactly 119,566,080**, matching the hand
+computation in §2.1; auxiliary heads are 2,251,632 and detach cleanly via
+`strip_aux_heads()`. The gate model (`gate_20m`) is 18,882,432.
+
+Deviations and additions against §2:
+
+* **Board-head placement, revised again.** §2.2 puts the board head at each
+  `</LINE>`. Tier-1 data has no reasoning traces, so during the gate run the
+  only available anchor is `</FEN>`, which is the low-weight parsing signal §2.2
+  already describes. `data.board_targets_for` recovers the 64-square target from
+  the token ids at fixed offsets (`</FEN>` at `p` implies squares at `p-70 ..
+  p-7`) rather than tracking it alongside, so a span straddling a packing
+  boundary is skipped instead of half-read.
+* **All auxiliary targets are optional.** Value and policy need engine labels
+  that Tier 1 does not carry, so the forward pass skips any head whose targets
+  are absent rather than erroring.
+* **`aux_scale`** implements the §2.2 anneal: held at 1.0 for the first half of
+  training, then linear to 0.
+* **Gradient checkpointing** added as a config flag (review item R8) and tested
+  to be numerically transparent in both loss and gradients.
+
+Verified by `scripts/test_model.py` (40 checks), beyond the parameter counts:
+
+* attention is causal -- perturbing the last token leaves all earlier hidden
+  states bit-identical
+* KV-cached decoding matches a full forward pass
+* zero loss-weight tokens contribute exactly zero
+* board targets, reconstructed through `parts_to_board`, describe the true
+  position for every span in a real packed corpus
+* untrained losses sit at `ln(vocab_size)` and `ln(13)` as they must
+* the model can drive a fixed batch to loss < 0.1, so a failed gate run cannot
+  be blamed on the optimizer path
+
+Two bugs the suite caught: an out-of-bounds gather in `board_targets_for`
+(`np.where` still evaluates the out-of-range branch, so prose ids above the
+lookup table would have raised) and an off-by-one in the board-span slice.
+
+**§7.3's 40-60 h estimate is still unmeasured.** `calibrate_throughput.py`
+sweeps micro-batch sizes and reports achieved TFLOP/s, MFU and peak memory
+against the T4's 65 TFLOP/s fp16 peak. It must be run on a T4 before the corpus
+is generated; it refuses to present an off-GPU projection as the answer.
