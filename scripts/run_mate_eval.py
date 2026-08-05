@@ -28,6 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 ROOT = Path(__file__).resolve().parent.parent
+from src.mate_metrics import compute_mate_metrics  # noqa: E402
 from src.models import configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_token_usage  # noqa: E402
 
@@ -86,13 +87,51 @@ def parse_choice(text: str, candidate_a: str, candidate_b: str):
     return None, None
 
 
+def final_metrics(rows: list) -> dict:
+    """The paper's accuracy_strict/accuracy_of_parsed metrics block.
+
+    Shared by the periodic HF checkpoint (partial `rows`, mid-run) and the
+    true end-of-run summary (all `rows`) -- being the exact same function
+    is what guarantees an interim upload's summary.json is a correct
+    snapshot of progress so far, never a stale or incomplete stand-in that
+    then gets uploaded to the public archive under the same path the
+    final, real summary later overwrites.
+
+    api_error rows are transport failures, not measurements: out of every
+    denominator. `parsed` = the model produced a usable A/B choice; a
+    no_answer is NOT parsed (it used to count as parsed, inflating
+    parse_rate to 1.0 whenever the model returned nothing).
+    """
+    scored = [s for s in rows if s["status"] != "api_error"]
+    parsed = [s for s in scored if s["status"] in ("correct", "wrong")]
+    n = len(scored)
+    accuracy = {
+        "n": n,
+        "n_attempted": len(rows),
+        "api_error": sum(s["status"] == "api_error" for s in rows),
+        "parse_rate": round(len(parsed) / n, 4) if n else 0.0,
+        "accuracy_strict": round(sum(bool(s["compliance"]) for s in scored) / n, 4) if n else 0.0,
+        "accuracy_of_parsed": round(sum(bool(s["compliance"]) for s in parsed) / len(parsed), 4) if parsed else None,
+        "correct": sum(bool(s["compliance"]) for s in scored),
+        "wrong": sum(s["status"] == "wrong" for s in scored),
+        "no_answer": sum(s["status"] == "no_answer" for s in scored),
+        "parse_error": sum(s["status"] == "parse_error" for s in scored),
+    }
+    return {"accuracy": accuracy, "token_usage": aggregate_token_usage(scored)}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="deepseek-v4-flash")
     ap.add_argument("--n", type=int, default=1000)
+    ap.add_argument("--offset", type=int, default=0,
+                    help="skip this many records from the start of the "
+                         "dataset before taking --n. Lets N parallel workers "
+                         "each own a disjoint slice, e.g. worker 2 of 6 over "
+                         "the remaining 900 positions: --offset 250 --n 150")
     ap.add_argument("--ids", type=str, default=None,
                     help="comma-separated position ids to run (probe arms); "
-                         "overrides --n")
+                         "overrides --n/--offset")
     ap.add_argument("--output_dir", default="results/mate-selection")
     ap.add_argument("--max_new_tokens", type=int, default=2048,
                     help="total generation budget, identical across models "
@@ -118,22 +157,24 @@ def main() -> None:
     ap.add_argument("--stream", action="store_true",
                     help="stream tokens through the SSE path")
     ap.add_argument("--live-push", action="store_true")
-    ap.add_argument("--live-namespace", type=str, default=None,
-                    help="publish live.json/state.json/history.jsonl under "
-                         "monitor/<namespace>/ instead of the canonical "
-                         "monitor/ paths, locally and on the dashboard repo. "
-                         "Lets independent runs (e.g. a gemma arm) stream to "
-                         "their OWN dashboard page without overwriting the "
-                         "deepseek page's state.")
+    ap.add_argument("--worker-id", type=str, default=None,
+                    help="when set, live-push publishes to "
+                         "monitor/workers/{id}.state.json and "
+                         "{id}.live.json instead of the shared canonical "
+                         "paths, so N parallel workers don't overwrite each "
+                         "other's dashboard state. scripts/aggregate_live_state.py "
+                         "combines the worker files back into the canonical "
+                         "monitor/state.json the frontend reads.")
+    ap.add_argument("--hf-upload-every", type=int, default=25,
+                    help="upload this worker's samples/summary to HF every "
+                         "N scored positions, not just once at the end -- a "
+                         "killed/timed-out session must not strand progress "
+                         "since the last upload. 0 disables periodic upload "
+                         "(still uploads once at the end unless --smoke).")
     ap.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
 
     configure_quiet_logging()
-    # --live-namespace scopes every monitor path (local + remote) so an
-    # independent run owns its dashboard page; the canonical paths stay the
-    # default so existing runs are byte-for-byte unchanged.
-    live_ns = f"{args.live_namespace.strip('/')}/" if args.live_namespace else ""
-    live_dir = ROOT / "monitor" / (args.live_namespace.strip("/") if args.live_namespace else "")
     # what the run ACTUALLY did. The gateway arm is a thinking arm only when
     # --thinking-disabled is absent; local gemma renders with the thought
     # channel enabled only when --local-thinking is passed (thinking is a
@@ -151,7 +192,7 @@ def main() -> None:
         if missing:
             raise SystemExit(f"unknown position ids: {sorted(missing)}")
     else:
-        records = all_records[: args.n]
+        records = all_records[args.offset: args.offset + args.n]
     ALL_TOTAL = len(records)  # the run's own n (progress total)
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
     run_name = f"{args.model}_mate-selection-test_strategy"
@@ -207,11 +248,24 @@ def main() -> None:
 
     live_token = resolve_token() if args.live_push else None
     _live_pending = [None, None]  # [live.json bytes, state+history bundle]
+    _live_inflight = [False]  # True while the pusher is mid-upload (dequeued, not yet done)
     _live_cond = threading.Condition()
 
+    # --worker-id namespaces every published path so N parallel workers each
+    # get their own slot instead of overwriting one shared file (which would
+    # corrupt the dashboard: whichever worker's write lands last "wins",
+    # discarding the others' progress from the combined total). Without
+    # --worker-id, behavior is unchanged: publish straight to the canonical
+    # paths, exactly like every single-worker run so far this project.
+    worker_tag = args.worker_id
+    monitor_dir = ROOT / "monitor"
+    state_local = monitor_dir / (f"workers/{worker_tag}.state.json" if worker_tag else "state.json")
+    live_local = monitor_dir / (f"workers/{worker_tag}.live.json" if worker_tag else "live.json")
+    state_remote = f"monitor/workers/{worker_tag}.state.json" if worker_tag else "monitor/state.json"
+    live_remote = f"monitor/workers/{worker_tag}.live.json" if worker_tag else "monitor/live.json"
+
     def _mate_metrics() -> dict:
-        """Everything the dashboard needs about a MATE selection run, under
-        its OWN names.
+        """This process's own MATE scoreboard (see src/mate_metrics.py).
 
         This used to be published as a fake sweep "cell" with tactical field
         names: accuracy was written into `legal_rate`, so the dashboard's
@@ -221,63 +275,14 @@ def main() -> None:
 
         Covers every scored sample including resumed ones — dividing this
         process's correct count by the resumed total understated live
-        accuracy by the resume fraction.
+        accuracy by the resume fraction. compute_mate_metrics is the same
+        function scripts/aggregate_live_state.py uses to recombine several
+        workers, so a single worker's live view and the combined dashboard
+        can never silently disagree on the math.
         """
-        rows = existing_samples + samples
-        scored = [s for s in rows if s.get("status") != "api_error"]
-        answered = [s for s in scored if s.get("status") in ("correct", "wrong")]
-        n = len(scored)
-        truth = lambda s: ((s.get("position_metadata") or {}).get("task_extra") or {}).get("truth_label")
-        by_truth = {}
-        for label in ("A", "B"):
-            group = [s for s in scored if truth(s) == label]
-            by_truth[label] = {
-                "n": len(group),
-                "accuracy": round(sum(bool(s["compliance"]) for s in group) / len(group), 4)
-                if group else None,
-            }
-        reasons = {}
-        for s in scored:
-            reason = s.get("no_answer_reason")
-            if reason:
-                reasons[reason] = reasons.get(reason, 0) + 1
-
-        def _mean(values):
-            values = [v for v in values if isinstance(v, (int, float))]
-            return round(sum(values) / len(values), 2) if values else None
-
         elapsed_h = max(1e-9, (time.time() - run_started_epoch) / 3600)
-        done_here = len(samples)
-        return {
-            "n": n,
-            "n_attempted": len(rows),
-            "answered": len(answered),
-            "correct": sum(bool(s["compliance"]) for s in scored),
-            "wrong": sum(s.get("status") == "wrong" for s in scored),
-            "no_answer": sum(s.get("status") == "no_answer" for s in scored),
-            "parse_error": sum(s.get("status") == "parse_error" for s in scored),
-            "api_error": sum(s.get("status") == "api_error" for s in rows),
-            "accuracy": round(sum(bool(s["compliance"]) for s in scored) / n, 4) if n else None,
-            "accuracy_of_answered": (
-                round(sum(bool(s["compliance"]) for s in answered) / len(answered), 4)
-                if answered else None),
-            "answer_rate": round(len(answered) / n, 4) if n else None,
-            # the run's actual signal: does the model just always say B?
-            "picked_a": sum(s.get("label") == "A" for s in scored),
-            "picked_b": sum(s.get("label") == "B" for s in scored),
-            "truth_a": by_truth["A"]["n"],
-            "truth_b": by_truth["B"]["n"],
-            "accuracy_truth_a": by_truth["A"]["accuracy"],
-            "accuracy_truth_b": by_truth["B"]["accuracy"],
-            "no_answer_reasons": reasons,
-            "mean_latency_s": _mean([(s.get("latency_ms") or 0) / 1000 for s in scored
-                                     if s.get("latency_ms") is not None]),
-            "mean_output_tokens": _mean([(s.get("token_usage") or {}).get("output_tokens")
-                                         for s in scored]),
-            "mean_reasoning_tokens": _mean([(s.get("token_usage") or {}).get("reasoning_tokens")
-                                            for s in scored]),
-            "positions_per_hour": round(done_here / elapsed_h, 1) if done_here else None,
-        }
+        return compute_mate_metrics(existing_samples + samples,
+                                    done_here=len(samples), elapsed_h=elapsed_h)
 
     def _state_payload(done: int, total: int, stage: str, last_error: str = None) -> dict:
         mate = _mate_metrics()
@@ -318,36 +323,90 @@ def main() -> None:
         }
 
     def _publish_state(done: int, total: int, stage: str, last_error: str = None) -> None:
-        """Write + enqueue monitor[/ns]/state.json and history.jsonl so the
-        dashboard's scoreboard/charts reflect the MATE run."""
-        live_dir.mkdir(parents=True, exist_ok=True)
+        """Write + enqueue this worker's state (+ canonical history.jsonl,
+        single-worker runs only) so the dashboard reflects the MATE run.
+
+        Under --worker-id, history.jsonl is deliberately NOT written here:
+        scripts/aggregate_live_state.py is the sole writer of the canonical
+        history once several workers are involved (see worker_tag comment
+        above) — N workers each appending their own view of "history" would
+        race on the same file and interleave incomparable partial totals.
+        """
+        state_local.parent.mkdir(parents=True, exist_ok=True)
         state = _state_payload(done, total, stage, last_error)
-        (live_dir / "state.json").write_text(json.dumps(state, indent=1))
-        hist = live_dir / "history.jsonl"
-        lines = hist.read_text().splitlines() if hist.exists() else []
-        m = state["mate"]
-        lines.append(json.dumps({
-            "run_id": run_id, "ts": state["updated_at"],
-            "run_kind": "mate-selection",
-            "done": done, "fraction": state["progress"]["fraction"],
-            "eta_min": state["eta_min"],
-            "accuracy": m["accuracy"],
-            "answer_rate": m["answer_rate"],
-            "picked_b_rate": (round(m["picked_b"] / m["n"], 4) if m["n"] else None),
-            # legacy keys the old chart code reads
-            "cells_done": done,
-            "legal_avg": m["accuracy"],
-            "last_error": last_error,
-        }))
-        lines = lines[-500:]
-        hist.write_text("\n".join(lines) + "\n")
+        state_local.write_text(json.dumps(state, indent=1))
+        if not worker_tag:
+            hist = monitor_dir / "history.jsonl"
+            lines = hist.read_text().splitlines() if hist.exists() else []
+            m = state["mate"]
+            lines.append(json.dumps({
+                "run_id": run_id, "ts": state["updated_at"],
+                "run_kind": "mate-selection",
+                "done": done, "fraction": state["progress"]["fraction"],
+                "eta_min": state["eta_min"],
+                "accuracy": m["accuracy"],
+                "answer_rate": m["answer_rate"],
+                "picked_b_rate": (round(m["picked_b"] / m["n"], 4) if m["n"] else None),
+                # legacy keys the old chart code reads
+                "cells_done": done,
+                "legal_avg": m["accuracy"],
+                "last_error": last_error,
+            }))
+            lines = lines[-500:]
+            hist.write_text("\n".join(lines) + "\n")
         with _live_cond:
             # slot 1 carries STATE bytes only; history is re-read from disk
             # at upload time (uploading history bytes to state.json corrupts it)
-            _live_pending[1] = (live_dir / "state.json").read_bytes()
+            _live_pending[1] = state_local.read_bytes()
             _live_cond.notify()
 
+    # GitHub core API is 5000 req/hr PER ACCOUNT for classic PATs, and the
+    # contents API (2 calls per write: GET sha + PUT) has a secondary write
+    # limit. The naive pusher uploaded live.json on EVERY streamed SSE chunk
+    # (write_live is called from on_chunk), so a single 14k-token reasoning
+    # stream could burn hundreds of API calls -- with 5 workers that is what
+    # exhausted the account quota mid-campaign. live.json is transient by
+    # design (it is overwritten every chunk), so intermediate versions can
+    # simply be dropped; only the newest one matters. A "complete" state is
+    # the one exception that must NEVER be throttled away: _wait_for_live_flush
+    # only checks the queue, so a dropped final state would leave the
+    # dashboard stuck on "sweep" forever.
+    # Generous throttling: positions take ~2 minutes each, so live.json only
+    # needs to move once per position (5 min cap keeps mid-position chunk
+    # spam coalesced into nothing), and state.json at 2 min is exactly the
+    # per-position cadence -- the throttle never even binds, but if a
+    # position ever finishes faster, the dashboard still only sees one
+    # write per 2 minutes. 5 workers at these rates use ~650 calls/hour of
+    # GitHub's 5000/hr per-account quota, leaving ~85% headroom.
+    # One exception: the SCORED state of a completed position (phase
+    # "scored", the only version carrying the move/verdict) must never be
+    # throttled away -- it is enqueued once per position and the very next
+    # on_chunk of the following position would otherwise overwrite it before
+    # the 5-min window reopens, so the dashboard would only ever show
+    # mid-generation blobs and never a final answer (observed on the Gemma
+    # E2B thinking run).
+    LIVE_UPLOAD_MIN_INTERVAL = 300.0  # seconds between live.json uploads
+    STATE_UPLOAD_MIN_INTERVAL = 120.0  # seconds between state.json uploads
+
+    def _is_complete_state(data: bytes | None) -> bool:
+        if data is None:
+            return False
+        try:
+            return json.loads(data).get("stage") == "complete"
+        except Exception:
+            return False
+
+    def _is_scored_live(data: bytes | None) -> bool:
+        if data is None:
+            return False
+        try:
+            return json.loads(data).get("phase") == "scored"
+        except Exception:
+            return False
+
     def _live_pusher() -> None:
+        last_live_ts = 0.0
+        last_state_ts = 0.0
         while True:
             with _live_cond:
                 while _live_pending[0] is None and _live_pending[1] is None:
@@ -356,23 +415,65 @@ def main() -> None:
                 state_data = _live_pending[1]
                 _live_pending[0] = None
                 _live_pending[1] = None
-            if live_data is not None:
-                try:
-                    upload_file(live_token, f"monitor/{live_ns}live.json",
-                                live_data, message=f"live {_utc_ts()}")
-                except Exception:
-                    pass
-            if state_data is not None:
-                try:
-                    upload_file(live_token, f"monitor/{live_ns}state.json",
-                                state_data, message=f"state {_utc_ts()}")
-                    hist_path = live_dir / "history.jsonl"
-                    upload_file(live_token, f"monitor/{live_ns}history.jsonl",
-                                hist_path.read_bytes(),
-                                message=f"history {_utc_ts()}")
-                except Exception:
-                    pass
+                _live_inflight[0] = True
+            now = time.time()
+            try:
+                if live_data is not None and (
+                        _is_scored_live(live_data)
+                        or now - last_live_ts >= LIVE_UPLOAD_MIN_INTERVAL):
+                    try:
+                        upload_file(live_token, live_remote, live_data,
+                                    message=f"live {_utc_ts()}")
+                        last_live_ts = time.time()
+                    except Exception:
+                        pass
+                if state_data is not None and (
+                        _is_complete_state(state_data)
+                        or now - last_state_ts >= STATE_UPLOAD_MIN_INTERVAL):
+                    try:
+                        upload_file(live_token, state_remote, state_data,
+                                    message=f"state {_utc_ts()}")
+                        last_state_ts = time.time()
+                        if not worker_tag:
+                            hist_path = monitor_dir / "history.jsonl"
+                            upload_file(live_token, "monitor/history.jsonl",
+                                        hist_path.read_bytes(),
+                                        message=f"history {_utc_ts()}")
+                    except Exception:
+                        pass
+            finally:
+                with _live_cond:
+                    _live_inflight[0] = False
+                    _live_cond.notify_all()
             time.sleep(1.0)
+
+    def _wait_for_live_flush(timeout_s: float = 30.0) -> None:
+        """Block until the background pusher has actually delivered
+        everything enqueued so far -- not just dequeued it.
+
+        This is a daemon thread: it is killed outright the instant the
+        process exits, mid-HTTP-request if that's where it happens to be.
+        Without this, the single most important push of the whole run --
+        the final "complete" state -- was a coin flip on Kaggle depending
+        on which of (this process exiting) or (that PUT actually landing)
+        won the race. Confirmed locally: a 3-position --smoke run finished
+        and exited before the pusher thread ever got to make its first
+        HTTP call, so the worker's dashboard state was never seen remotely
+        despite every _publish_state() call succeeding locally.
+        """
+        if not live_token:
+            return
+        deadline = time.time() + timeout_s
+        while time.time() < deadline:
+            with _live_cond:
+                idle = (_live_pending[0] is None and _live_pending[1] is None
+                        and not _live_inflight[0])
+            if idle:
+                return
+            time.sleep(0.1)
+        print("warning: live-push queue did not flush before the timeout -- "
+              "the last dashboard update for this worker may be stale",
+              flush=True)
 
     if live_token:
         threading.Thread(target=_live_pusher, daemon=True).start()
@@ -432,12 +533,24 @@ def main() -> None:
                 "source": "MATE testset",
             },
         }
-        live_dir.mkdir(parents=True, exist_ok=True)
-        (live_dir / "live.json").write_text(json.dumps(live, indent=1))
+        live["worker_id"] = worker_tag
+        live_local.parent.mkdir(parents=True, exist_ok=True)
+        live_local.write_text(json.dumps(live, indent=1))
         if live_token:
             with _live_cond:
-                _live_pending[0] = (live_dir / "live.json").read_bytes()
+                _live_pending[0] = live_local.read_bytes()
                 _live_cond.notify()
+
+    # announce this worker immediately, before the first (possibly
+    # minutes-long) generation returns -- otherwise the dashboard keeps
+    # showing whatever the previous run left behind, and with 6 workers
+    # starting at slightly different times, the aggregator can't see this
+    # worker's true `total` (so the combined 1000 undercounts) until its
+    # first position happens to finish.
+    try:
+        _publish_state(len(existing_samples), ALL_TOTAL, "sweep")
+    except Exception as e:
+        print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
 
     samples = []
     t0 = time.time()
@@ -532,45 +645,50 @@ def main() -> None:
         samples.append(sample)
         writer.add(sample)
         write_live(rec, out, scored, "scored", len(samples))
+        # publish every position (not gated behind the print cadence below):
+        # each call is a cheap local write + an async enqueue onto the
+        # background pusher thread, and a 6-worker run only updates the
+        # dashboard between positions that can each take minutes — batching
+        # this to "every 25" made the scoreboard look stalled for long
+        # stretches even while work was actively happening.
+        try:
+            _publish_state(len(existing_samples) + len(samples), ALL_TOTAL, "sweep")
+        except Exception as e:
+            print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
         if args.verbose or (i + 1) % 25 == 0 or i + 1 == len(records):
             el = time.time() - t0
             print(f"  [mate-selection {args.model}] {i + 1}/{len(records)} "
                   f"({el / (i + 1):.1f}s/pos) acc={sum(s['compliance'] for s in samples)}/{len(samples)}",
                   flush=True)
+        # periodic HF upload: a killed/timed-out session must not strand
+        # everything scored since the run's ONE upload at the very end.
+        # upload_cell() re-uploads the whole current samples file each time
+        # (see src/hf_push.py docstring: only_missing defaults False because
+        # the file grows), so this is a safe, idempotent "sync progress so
+        # far" — never a partial or corrupting write.
+        if (not args.smoke and args.hf_upload_every
+                and len(samples) % args.hf_upload_every == 0):
             try:
-                _publish_state(len(existing_samples) + len(samples), ALL_TOTAL, "sweep")
+                from src.hf_push import upload_cell
+
+                writer.finish(final_metrics(existing_samples + samples))
+                upload_cell(Path(args.output_dir), run_id, writer.summary_path)
+                print(f"hf: interim upload after {len(samples)} positions this worker",
+                      flush=True)
             except Exception as e:
-                print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
+                print(f"hf interim upload skipped: {type(e).__name__}: {e}", flush=True)
 
     all_rows = existing_samples + samples
-    # api_error rows are transport failures, not measurements: out of every
-    # denominator. `parsed` = the model produced a usable A/B choice; a
-    # no_answer is NOT parsed (it used to count as parsed, inflating
-    # parse_rate to 1.0 whenever the model returned nothing at all).
-    all_scored = [s for s in all_rows if s["status"] != "api_error"]
-    parsed = [s for s in all_scored if s["status"] in ("correct", "wrong")]
-    n = len(all_scored)
-    accuracy = {
-        "n": n,
-        "n_attempted": len(all_rows),
-        "api_error": sum(s["status"] == "api_error" for s in all_rows),
-        "parse_rate": round(len(parsed) / n, 4) if n else 0.0,
-        "accuracy_strict": round(sum(bool(s["compliance"]) for s in all_scored) / n, 4) if n else 0.0,
-        "accuracy_of_parsed": round(sum(bool(s["compliance"]) for s in parsed) / len(parsed), 4) if parsed else None,
-        "correct": sum(bool(s["compliance"]) for s in all_scored),
-        "wrong": sum(s["status"] == "wrong" for s in all_scored),
-        "no_answer": sum(s["status"] == "no_answer" for s in all_scored),
-        "parse_error": sum(s["status"] == "parse_error" for s in all_scored),
-    }
-    metrics = {"accuracy": accuracy, "token_usage": aggregate_token_usage(all_scored)}
-    if accuracy["api_error"]:
-        print(f"NOTE: {accuracy['api_error']} api_error samples excluded from "
-              f"all rates (transport failures, not model answers)", flush=True)
+    metrics = final_metrics(all_rows)
+    if metrics["accuracy"]["api_error"]:
+        print(f"NOTE: {metrics['accuracy']['api_error']} api_error samples excluded "
+              f"from all rates (transport failures, not model answers)", flush=True)
     summary = writer.finish(metrics)
     try:
         _publish_state(len(all_rows), ALL_TOTAL, "complete")
     except Exception as e:
         print(f"state publish failed: {type(e).__name__}: {e}", flush=True)
+    _wait_for_live_flush()
     print(json.dumps(summary["metrics"], indent=1), flush=True)
     if args.smoke:
         # a stub run must never publish to the public HF dataset repo —

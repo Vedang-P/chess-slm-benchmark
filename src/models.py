@@ -78,17 +78,59 @@ class _LocalStreamer:
     """transformers-compatible streamer that mirrors the gateway's on_chunk
     contract for local models: prints to stdout (optional) and calls
     on_chunk({content, reasoning, phase, finished}) at most every 2s so the
-    runner can write live.json without slowing decoding."""
+    runner can write live.json without slowing decoding.
+
+    With `split_thinking`, the raw stream is decoded WITHOUT stripping the
+    special tokens and re-split on every chunk: text up to the first
+    `<|channel>thought` marker is dropped, the thinking block becomes
+    `reasoning`, and everything after `<channel|>` becomes `content`. The
+    gateway arm streams reasoning_content separately; this makes the local
+    Gemma 4 E2B thinking arm behave the same way on the dashboard instead of
+    dumping the whole thought blob into the answer box."""
+
+    THINK_OPEN = "<|channel>thought"
+    THINK_CLOSE = "<channel|>"
 
     def __init__(self, tokenizer, to_stdout: bool = False, on_chunk=None,
-                 min_interval_s: float = 2.0):
+                 min_interval_s: float = 2.0, split_thinking: bool = False):
         self.tokenizer = tokenizer
         self.to_stdout = to_stdout
         self.on_chunk = on_chunk
         self.min_interval_s = min_interval_s
+        self.split_thinking = split_thinking
         self.text = ""
+        self.reasoning = ""
+        self.content = ""
         self._last_emit = 0.0
         self._prompt_seen = False
+
+    def _split(self) -> tuple:
+        """Recompute (reasoning, content) from the full decoded text. The
+        marker may arrive split across tokens, so the whole text is rescanned
+        each chunk (the authoritative split after generation is still
+        processor.parse_response in generate())."""
+        i = self.text.find(self.THINK_OPEN)
+        if i == -1:
+            return "", self.text
+        rest = self.text[i + len(self.THINK_OPEN):]
+        j = rest.find(self.THINK_CLOSE)
+        if j == -1:
+            return rest.lstrip("\n"), ""
+        return rest[:j].lstrip("\n"), rest[j + len(self.THINK_CLOSE):]
+
+    def _emit(self, phase: str, finished: bool) -> None:
+        if not self.on_chunk:
+            return
+        if self.split_thinking:
+            self.reasoning, self.content = self._split()
+            if phase != "done":
+                phase = ("answering" if self.content
+                         else "reasoning" if self.reasoning else "answering")
+            self.on_chunk({"content": self.content, "reasoning": self.reasoning,
+                           "phase": phase, "finished": finished})
+        else:
+            self.on_chunk({"content": self.text, "reasoning": "",
+                           "phase": phase, "finished": finished})
 
     def put(self, value) -> None:
         # transformers feeds the prompt ids first, then one token at a time
@@ -96,22 +138,20 @@ class _LocalStreamer:
             self._prompt_seen = True
             return
         ids = value[0] if hasattr(value, "shape") and len(value.shape) > 1 else value
-        piece = self.tokenizer.decode(ids, skip_special_tokens=True)
+        piece = self.tokenizer.decode(
+            ids, skip_special_tokens=not self.split_thinking)
         self.text += piece
         if self.to_stdout:
             print(piece, end="", flush=True)
         now = time.time()
-        if self.on_chunk and now - self._last_emit >= self.min_interval_s:
+        if now - self._last_emit >= self.min_interval_s:
             self._last_emit = now
-            self.on_chunk({"content": self.text, "reasoning": "",
-                           "phase": "answering", "finished": False})
+            self._emit("answering", False)
 
     def end(self) -> None:
         if self.to_stdout:
             print("", flush=True)
-        if self.on_chunk:
-            self.on_chunk({"content": self.text, "reasoning": "",
-                           "phase": "done", "finished": True})
+        self._emit("done", True)
 
 
 def _split_gemma4_thought(raw: str, processor, prefix_text: str) -> tuple:
@@ -319,7 +359,8 @@ class HFModel:
                           pad_token_id=pad_token_id)
         if stream or on_chunk is not None:
             gen_kwargs["streamer"] = _LocalStreamer(
-                stream_tok, to_stdout=stream, on_chunk=on_chunk)
+                stream_tok, to_stdout=stream, on_chunk=on_chunk,
+                split_thinking=self.is_gemma4 and local_thinking)
         if do_sample:
             gen_kwargs["temperature"] = temperature
             gen_kwargs["top_p"] = top_p

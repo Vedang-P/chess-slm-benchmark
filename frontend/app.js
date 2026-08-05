@@ -1140,6 +1140,7 @@
     blue: { key: "b", color: "#003088", opacity: 1, lineWidth: 10 },
     paleGreen: { key: "q", color: "#15781B", opacity: 0.4, lineWidth: 8 },
     paleBlue: { key: "p", color: "#003088", opacity: 0.4, lineWidth: 8 },
+    gray: { key: "x", color: "#8a8a8a", opacity: 0.75, lineWidth: 8 },
   };
   const CG_ARROW_MARGIN = 10 / 64;
   const CG_NS = "http://www.w3.org/2000/svg";
@@ -1242,6 +1243,18 @@
       if (!from || !to) continue;
       const brush = m === modelMove ? CG_BRUSHES.paleGreen : CG_BRUSHES.green;
       overlay.appendChild(cgArrowLine(from, to, brush));
+    }
+    // MATE move-selection: the OTHER candidate in gray, so the expert's pick
+    // (green) vs the alternative (gray) is unambiguous on the board instead
+    // of living only in the reference note text.
+    const o = (sample && sample.oracle) || {};
+    if (o.kind === "mate_selection" && o.truth_label) {
+      const other = o.truth_label === "A" ? o.candidate_b : o.candidate_a;
+      if (other) {
+        const from = sqCenterUnits(other.slice(0, 2), n);
+        const to = sqCenterUnits(other.slice(2, 4), n);
+        if (from && to) overlay.appendChild(cgArrowLine(from, to, CG_BRUSHES.gray));
+      }
     }
     // model move (blue)
     if (modelMove) {
