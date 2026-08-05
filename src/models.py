@@ -277,6 +277,19 @@ class OpenCodeGoModel:
     # transport error, capped so a genuinely silent gateway still surfaces
     # honestly rather than retrying forever
     MAX_SILENT_STREAM_RETRIES = 2
+    # a stream that DELIVERED tokens but closed without a finish_reason is
+    # ALSO a transport cut, not a model outcome -- and it used to be recorded
+    # as a fake "truncated" no_answer with zero usage data. Evidence from the
+    # 1000-position run: all 42 truncated samples had token_usage=None while
+    # every completed sample had usage, and completed streams reached 305k
+    # chars / 1026s without hitting any cap -- so there is no gateway size or
+    # time limit being hit; those were pure mid-stream connection cuts. The
+    # old loop broke out on `stream_events > 0` ("any token = real outcome"),
+    # so a connection that died mid-reasoning produced a permanent fake
+    # truncation. Now a cut stream is retried with a FRESH request (same
+    # prompt, temp 0 -> deterministic) until it lands an explicit
+    # finish_reason, exactly like the zero-token case.
+    MAX_MIDSTREAM_RETRIES = 3
     HEARTBEAT_INTERVAL_S = 5.0  # dashboard liveness ping while a stream is silent
 
     def __init__(self, model_key: str, smoke_test: bool = False,
@@ -417,7 +430,9 @@ class OpenCodeGoModel:
                 # any token at all, or an explicit finish_reason (including a
                 # genuine length cutoff) -- is accepted immediately and never
                 # retried, so a real truncation is still recorded honestly.
-                for silent_attempt in range(self.MAX_SILENT_STREAM_RETRIES + 1):
+                max_stream_attempts = (self.MAX_SILENT_STREAM_RETRIES
+                                       + self.MAX_MIDSTREAM_RETRIES + 1)
+                for silent_attempt in range(max_stream_attempts):
                     content, reasoning = "", ""
                     final_usage = {}
                     stream_events = 0
@@ -448,7 +463,7 @@ class OpenCodeGoModel:
                         while not heartbeat_stop.wait(self.HEARTBEAT_INTERVAL_S):
                             elapsed = time.time() - attempt_start
                             print(f"[opencode_go] attempt {attempt_no}/"
-                                  f"{self.MAX_SILENT_STREAM_RETRIES + 1}: still "
+                                  f"{self.MAX_SILENT_STREAM_RETRIES + self.MAX_MIDSTREAM_RETRIES + 1}: still "
                                   f"connected, {elapsed:.0f}s elapsed, no tokens "
                                   f"yet -- known to sometimes take 5+ minutes "
                                   f"before the first token; not necessarily stuck",
@@ -499,10 +514,28 @@ class OpenCodeGoModel:
                         heartbeat_stop.set()
                         if hb_thread:
                             hb_thread.join(timeout=1)
-                    if stream_events > 0 or finish_reason is not None:
-                        break  # a real model response, whatever it says
-                    if silent_attempt < self.MAX_SILENT_STREAM_RETRIES:
-                        time.sleep(2 ** (silent_attempt + 1))  # 2s, 4s
+                    # ONLY an explicit finish_reason (stop / length / tool
+                    # calls) is a real model outcome. A stream that closed
+                    # without one -- whether it delivered zero tokens or
+                    # 100k reasoning chars then died -- is a transport cut
+                    # and gets a fresh request. The old `stream_events > 0
+                    # or finish_reason` break accepted token-delivering but
+                    # unfinished streams as outcomes, which turned gateway
+                    # connection drops into permanent fake "truncated"
+                    # no_answers with no usage data (measured: 42/42 of the
+                    # 1000-run truncations had token_usage=None).
+                    if finish_reason is not None:
+                        break
+                    midstream = stream_events > 0
+                    retries_left = (self.MAX_MIDSTREAM_RETRIES if midstream
+                                    else self.MAX_SILENT_STREAM_RETRIES)
+                    if silent_attempt < retries_left:
+                        if midstream:
+                            print(f"[opencode_go] attempt {attempt_no}: stream "
+                                  f"delivered {stream_events} chunk(s) then closed "
+                                  f"without a finish_reason -- mid-stream transport "
+                                  f"cut, retrying a FRESH request", flush=True)
+                        time.sleep(2 ** (silent_attempt + 1))  # 2s, 4s, 8s
                 data = {"choices": [{"message": {"content": content,
                                                  "reasoning_content": reasoning},
                                      "finish_reason": finish_reason or
