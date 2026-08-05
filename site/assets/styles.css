@@ -175,7 +175,7 @@ section:first-of-type { border-top: 0; }
 .hero h1 .lo { display: block; font-style: italic; color: var(--amber); font-weight: 300; }
 .hero h1 .n { font-family: var(--f-mono); font-size: .3em; font-weight: 300; letter-spacing: .04em; color: var(--bone-faint); vertical-align: super; }
 
-#hero-canvas { width: 100%; aspect-ratio: 1/1; max-height: 62vh; cursor: grab; }
+#hero-canvas { width: 100%; aspect-ratio: 4/3; max-height: 60vh; cursor: grab; }
 #hero-canvas:active { cursor: grabbing; }
 .canvas-hint {
   font-family: var(--f-mono); font-size: .64rem; letter-spacing: .16em;

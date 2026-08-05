@@ -169,7 +169,7 @@ function makeScene(canvas, compact) {
   controls.dampingFactor = 0.08;
   controls.autoRotate = false;   // see idle arc below
   controls.enablePan = false;
-  controls.enableZoom = !compact;
+  controls.enableZoom = false;   // never hijack page scroll over the canvas
   controls.minDistance = 12; controls.maxDistance = 52;
   controls.minPolarAngle = 0.5; controls.maxPolarAngle = 2.1;
   controls.target.set(compact ? -0.4 : -1.2, 0, 0);
@@ -178,10 +178,19 @@ function makeScene(canvas, compact) {
   // board plane fills the foreground and the stack is edge-on. Instead the
   // camera drifts along a bounded arc that always keeps the pipeline readable,
   // and hands control over entirely once the user grabs it.
+  // Radius is set from the model's own X extent and the canvas aspect so the
+  // whole pipeline stays inside the frame at any viewport, rather than being
+  // a constant tuned to one window size.
+  const halfSpan = compact ? 7.4 : 9.6;
   const ARC = {
-    radius: compact ? 19 : 26,
-    az: compact ? -0.75 : -0.85, azSwing: compact ? 0.5 : 0.42,
-    el: 0.38, elSwing: 0.1
+    az: compact ? -0.82 : -0.88, azSwing: compact ? 0.34 : 0.36,
+    el: 0.36, elSwing: 0.09,
+    get radius() {
+      const aspect = Math.max(canvas.clientWidth / Math.max(canvas.clientHeight, 1), 0.8);
+      const halfFov = THREE.MathUtils.degToRad(camera.fov) / 2;
+      const needed = halfSpan / Math.tan(halfFov) / Math.min(aspect, 1.9);
+      return THREE.MathUtils.clamp(needed * 1.5, 16, 44);
+    }
   };
   let idle = true, idleTimer = null;
   controls.addEventListener('start', () => { idle = false; clearTimeout(idleTimer); });
