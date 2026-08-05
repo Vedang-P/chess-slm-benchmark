@@ -28,7 +28,13 @@ MODEL_IDS = {
 # the Kaggle secret with the same name (injected as an env var at kernel
 # start). Model id is the bare id; the provider prefix is not accepted.
 OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1"
+# Free tier of the same gateway: model deepseek-v4-flash-free served at the
+# zen/v1 endpoint with the literal Bearer key "public" (the opencode CLI
+# itself uses this when no API key is configured; paid models at zen/go/v1
+# return CreditsError once an account's balance is exhausted).
+OPENCODE_GO_FREE_BASE_URL = "https://opencode.ai/zen/v1"
 DEEPSEEK_V4_FLASH = "deepseek-v4-flash"
+DEEPSEEK_V4_FLASH_FREE = "deepseek-v4-flash-free"
 
 
 def resolve_api_key() -> Optional[str]:
@@ -295,14 +301,22 @@ class OpenCodeGoModel:
     def __init__(self, model_key: str, smoke_test: bool = False,
                  base_url: str = OPENCODE_GO_BASE_URL):
         self.model_key = model_key
-        self.base_url = base_url.rstrip("/")
+        self.is_free = model_key == DEEPSEEK_V4_FLASH_FREE
+        self.model_id = (DEEPSEEK_V4_FLASH_FREE if self.is_free
+                         else DEEPSEEK_V4_FLASH)
+        self.base_url = (OPENCODE_GO_FREE_BASE_URL if self.is_free
+                         else base_url).rstrip("/")
         self.smoke_test = smoke_test
         self._last_call = 0.0
-        self.key = None
+        self.key = "public" if self.is_free else None
         self.prompt_tokens = 0
         self.completion_tokens = 0
 
     def load(self) -> None:
+        if self.is_free:
+            # free gateway tier authenticates with the literal key "public";
+            # no account key required
+            return
         self.key = resolve_api_key()
         if not self.key:
             raise RuntimeError(
@@ -409,7 +423,7 @@ class OpenCodeGoModel:
             thinking = {"type": "enabled", "budget_tokens": thinking_budget}
         else:
             thinking = {"type": "enabled"}
-        payload = {"model": self.MODEL, "max_tokens": max_new_tokens,
+        payload = {"model": self.model_id, "max_tokens": max_new_tokens,
                    "temperature": temperature,
                    "thinking": thinking,
                    "messages": [{"role": "user", "content": prompt}]}
@@ -597,6 +611,6 @@ class OpenCodeGoModel:
 
 def make_model(model_key: str, smoke_test: bool = False):
     """Registry: local 4-bit HF models + the gateway API model."""
-    if model_key == DEEPSEEK_V4_FLASH:
+    if model_key in (DEEPSEEK_V4_FLASH, DEEPSEEK_V4_FLASH_FREE):
         return OpenCodeGoModel(model_key, smoke_test=smoke_test)
     return HFModel(model_key, smoke_test=smoke_test)

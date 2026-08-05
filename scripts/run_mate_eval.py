@@ -173,7 +173,8 @@ def main() -> None:
     # --thinking-disabled is absent; local gemma always renders with
     # enable_thinking=False. Recording `model == deepseek` instead labelled
     # every direct-mode run as thinking-enabled.
-    thinking_enabled = (args.model == "deepseek-v4-flash"
+    thinking_enabled = (args.model in ("deepseek-v4-flash",
+                                        "deepseek-v4-flash-free")
                         and not args.thinking_disabled)
     all_records = json.loads(RECORDS_PATH.read_text())
     if args.ids:
