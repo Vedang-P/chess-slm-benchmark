@@ -162,6 +162,57 @@ tokens when convenient.
 
 ---
 
+## 2026-08-05 — Gemma E2B live arm: three verified bugs, all fixed (run stopped)
+
+**Stop:** the first `mate-gemma-e2b-100-positions` kernel was deleted mid-run at
+the user's request (100-run was ~16/100) after the live dashboard showed three
+problems. The 5-position probe data is safe on HF
+(`runs/mate-selection-e2b-100-20260805`, 2/5 correct, all 5 parsed).
+
+**Verified root causes (code + data):**
+1. **Thinking never in the right box, answer box filled with the thought
+   blob** — `_LocalStreamer` decoded with `skip_special_tokens=True`, stripping
+   the `<|channel>thought` markers mid-stream, so every chunk went out as
+   `content` with `reasoning: ""`. The final data was CORRECT (the end-of-
+   generation `parse_response` split worked — probe samples have reasoning
+   split, tokens counted); only the live view was broken.
+2. **Site never shows a final answer** — the scored state IS written per
+   position, but live.json uploads are throttled to 1/300s and the next
+   position's streaming chunks (every 2s) overwrite the pending bytes before
+   the throttle reopens. The dashboard only ever showed mid-generation blobs.
+3. **"Expert's choice hangs a queen"** — display issue, not a scoring bug.
+   mate-sel-01873: black is in check (Qa4-e8); truth B (`e8f7`) is correct and
+   verified legal; candidate A (`a5b5`) is the queen-hang (Qxb5). The site
+   printed "candidates A a5b5 / B e8f7" directly under the "expert choice"
+   label and the misplaced thinking blob discussed a5b5, so it read as if the
+   site endorsed the queen hang. Dataset-wide legality scan: 0/1000 illegal
+   candidate or truth moves. (One suspicious truth found in the first 100:
+   mate-sel-01655 `b5c4` — engine check pending, not treated as noise yet.)
+
+**Fixes (commit ae7001e on mate-e2b-kaggle):**
+- Streamer decodes with special tokens when `local_thinking` and re-splits the
+  thought channel on every chunk (`_LocalStreamer._split`, marker-split safe
+  across token boundaries); unit-tested: split, truncated, marker-less, and
+  non-thinking paths. The end-of-generation `parse_response` split remains
+  authoritative.
+- `run_mate_eval.py`: scored live states (`phase: "scored"`) bypass the 300s
+  throttle — every position's verdict is published (same exemption the
+  complete state had).
+- Dashboard: MATE boards draw the non-expert candidate in gray next to the
+  green expert pick; legends updated on both pages.
+- New `scripts/watch_kaggle_kernel.py`: polls a Kaggle kernel, logs + macOS
+  notifies + downloads output on completion.
+
+**Next:** validate with the check10 kernel (`mate-gemma-e2b-check10-fixed-
+live-arm`, pushed 2026-08-05) — needs GITHUB_TOKEN + HF_WRITE_TOKEN attached
+as Kaggle secrets BEFORE it finishes the probe; then re-run the full 100.
+
+**Frontend deploy:** `npx wrangler pages deploy frontend/ --project-name
+chess-bench-live` needs a CLOUDFLARE_API_TOKEN (not stored in the repo); the
+arrow/legend fix ships to the live site only when the user runs it.
+
+---
+
 ## 2026-08-04: local gemma4-e2b MATE thinking arm (--local-thinking)
 
 **Decision:** run Gemma 4 E2B (4-bit, Kaggle T4, no API) on the EXACT 100
