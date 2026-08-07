@@ -223,8 +223,8 @@ scripts/
   watch_run.py      detached watchdog (alive/progress/stall alerts)
   detach.sh         macOS-safe daemonizer for long local runs
 notebooks/
-  build_notebook.py        -> kaggle_check.ipynb + kaggle_run.ipynb
-  build_mate_notebook.py   -> kaggle_mate.ipynb (autonomous MATE thinking run)
+  build_notebook.py        -> shared cell helpers for all notebook generators
+  build_mate1000_variants_notebook.py -> deepseek thinking-run kernels per MATE subset
 frontend/            live dashboard (Cloudflare Pages: chess-bench-live.pages.dev)
 worker/              Cloudflare worker proxy (fresh GitHub contents feed)
 docs/
@@ -256,9 +256,9 @@ python scripts/run_chess.py --model deepseek-v4-flash --task mate1-lichess \
 1. Attach secrets: `GITHUB_TOKEN` (repo clone + live uploads), `HF_TOKEN`
    (gated gemma-4 checkpoints), `OPENCODE_API_KEY` (deepseek gateway) — attach,
    **save**, **restart kernel**.
-2. Upload `notebooks/kaggle_check.ipynb` — engine tests + tiny sweep (n=1).
-3. Upload `notebooks/kaggle_run.ipynb` — full sweep; batched monitoring; crash-safe.
-4. Upload `notebooks/kaggle_mate.ipynb` — autonomous MATE thinking run (~6h, CPU only).
+2. Generate kernels: `python3 notebooks/build_mate1000_variants_notebook.py`
+   — five parallel CPU workers per MATE subset (noexplain/tactic/both),
+   then push one subset at a time with `kaggle kernels push -p notebooks/push_mate_<subset>_w<n>`.
 
 ## Live monitoring
 

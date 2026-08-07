@@ -244,14 +244,12 @@ def kernel_metadata(variant: str, n: int) -> dict:
 def main() -> None:
     for variant in VARIANTS:
         for n in range(1, 6):
-            nb_path = NB_DIR / f"kaggle_mate_{variant}_w{n}.ipynb"
-            nb_path.write_text(json.dumps(_notebook(build_worker_notebook(variant, n)), indent=1))
-            print(f"wrote {nb_path}")
             meta_dir = NB_DIR / f"push_mate_{variant}_w{n}"
             meta_dir.mkdir(exist_ok=True)
+            nb_path = meta_dir / f"kaggle_mate_{variant}_w{n}.ipynb"
+            nb_path.write_text(json.dumps(_notebook(build_worker_notebook(variant, n)), indent=1))
             (meta_dir / "kernel-metadata.json").write_text(
                 json.dumps(kernel_metadata(variant, n), indent=1))
-            (meta_dir / nb_path.name).write_text(nb_path.read_text())
             print(f"wrote {meta_dir}/kernel-metadata.json (id={kernel_metadata(variant, n)['id']})")
 
 

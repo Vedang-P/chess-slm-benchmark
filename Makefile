@@ -11,7 +11,7 @@ check: test
 		--prompt-variant fen --n 1 --max_new_tokens 2048 --conditions win --smoke
 
 notebooks:
-	python3 notebooks/build_notebook.py && python3 notebooks/build_notebook.py --check && python3 notebooks/build_mate_notebook.py
+	python3 notebooks/build_mate1000_variants_notebook.py
 
 clean:
 	rm -rf results results_check* __pycache__ src/__pycache__
