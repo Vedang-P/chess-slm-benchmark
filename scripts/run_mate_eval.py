@@ -33,6 +33,13 @@ from src.models import configure_quiet_logging, make_model  # noqa: E402
 from src.report import ResultWriter, aggregate_token_usage  # noqa: E402
 
 RECORDS_PATH = ROOT / "data/positions/mate-selection-test.json"
+# task_file stem -> variant label used in run names / dashboard payloads
+VARIANT_BY_FILE = {
+    "mate-selection-test.json": "strategy",
+    "mate-selection-test-noexplain.json": "noexplain",
+    "mate-selection-test-tactic.json": "tactic",
+    "mate-selection-test-both.json": "both",
+}
 ANSWER_SPEC = (
     "Answer with exactly one of: MoveA:<move> or MoveB:<move>. "
     "Only output the line, nothing else."
@@ -133,6 +140,12 @@ def main() -> None:
                     help="comma-separated position ids to run (probe arms); "
                          "overrides --n/--offset")
     ap.add_argument("--output_dir", default="results/mate-selection")
+    ap.add_argument("--task-file", type=str, default=None,
+                    help="eval set file name under data/positions/ (default "
+                         "mate-selection-test.json = strategy). Other MATE "
+                         "subsets: mate-selection-test-noexplain.json, "
+                         "mate-selection-test-tactic.json, "
+                         "mate-selection-test-both.json")
     ap.add_argument("--max_new_tokens", type=int, default=2048,
                     help="total generation budget, identical across models "
                          "(gemma runs the same 2048) for a fair comparison. "
@@ -176,7 +189,10 @@ def main() -> None:
     thinking_enabled = (args.model in ("deepseek-v4-flash",
                                         "deepseek-v4-flash-free")
                         and not args.thinking_disabled)
-    all_records = json.loads(RECORDS_PATH.read_text())
+    task_file = args.task_file or RECORDS_PATH.name
+    variant = VARIANT_BY_FILE.get(task_file, task_file.replace("mate-selection-test-", "").replace(".json", ""))
+    records_path = RECORDS_PATH.parent / task_file
+    all_records = json.loads(records_path.read_text())
     if args.ids:
         wanted = {i.strip() for i in args.ids.split(",") if i.strip()}
         records = [r for r in all_records if r["id"] in wanted]
@@ -187,7 +203,7 @@ def main() -> None:
         records = all_records[args.offset: args.offset + args.n]
     ALL_TOTAL = len(records)  # the run's own n (progress total)
     run_id = os.environ.get("BENCH_RUN_ID") or _utc_ts()
-    run_name = f"{args.model}_mate-selection-test_strategy"
+    run_name = f"{args.model}_mate-selection-test_{variant}"
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     # exclusive lock: two processes writing the same output dir would append
@@ -214,7 +230,7 @@ def main() -> None:
     writer = ResultWriter(
         out_dir, run_name,
         {"model": args.model, "task": "mate-selection-test",
-         "prompt_variant": "strategy", "task_category": "Short Tactics",
+         "prompt_variant": variant, "task_category": "Short Tactics",
          "run_id": run_id, "smoke": args.smoke,
          "thinking_enabled": thinking_enabled,
          "thinking_budget": args.thinking_budget,
@@ -309,7 +325,7 @@ def main() -> None:
             },
             "mate": mate,
             "current": {"model": args.model, "task": "mate-selection-test",
-                        "variant": "strategy"} if stage == "sweep" else None,
+                        "variant": variant} if stage == "sweep" else None,
             "last_error": last_error,
             "cells": [],
         }
@@ -359,8 +375,8 @@ def main() -> None:
     # position ever finishes faster, the dashboard still only sees one
     # write per 2 minutes. 5 workers at these rates use ~650 calls/hour of
     # GitHub's 5000/hr per-account quota, leaving ~85% headroom.
-    LIVE_UPLOAD_MIN_INTERVAL = 300.0  # seconds between live.json uploads
-    STATE_UPLOAD_MIN_INTERVAL = 120.0  # seconds between state.json uploads
+    LIVE_UPLOAD_MIN_INTERVAL = 120.0  # seconds between live.json uploads
+    STATE_UPLOAD_MIN_INTERVAL = 60.0  # seconds between state.json uploads
 
     def _is_complete_state(data: bytes | None) -> bool:
         if data is None:
@@ -476,7 +492,7 @@ def main() -> None:
         live = {
             "updated_at": _utc_ts(),
             "cell": {"model": args.model, "task": "mate-selection-test",
-                     "variant": "strategy"},
+                     "variant": variant},
             "task_category": "Short Tactics",
             "task_kind": "mate_selection",  # the dashboard branches on this
             "run_kind": "mate-selection",
@@ -595,7 +611,7 @@ def main() -> None:
             "model": args.model,
             "task": "mate-selection-test",
             "task_category": "Short Tactics",
-            "representation": "strategy",
+            "representation": variant,
             "run_id": run_id,
             "condition": "win",
             "value": rec["value"],
