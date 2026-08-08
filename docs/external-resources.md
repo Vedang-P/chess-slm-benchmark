@@ -19,7 +19,7 @@ properly in the paper.
 
 | Resource | Why it exists | Why not now |
 |---|---|---|
-| **ChessBench** (Keller & Hutter) | Large chess-LLM dataset suite | Our lichess-derived sets cover the same sources with richer metadata; not needed |
+| **ChessBench** (Ruoss et al., DeepMind, 2024) | 10M games with Stockfish-16 move+value labels; 270M-param transformers reach 2895 Elo | Not needed as eval data — our lichess-derived sets cover the same sources with richer metadata. But its *data recipe* is the strongest known chess-pretrained SLM base if we ever pre-train |
 | **LLM CHESS** (Kolasani et al.) | Multi-turn game-play harness | Full-game play is future scope; game-play protocol borrowed for the planned 100-game match |
 | **KinGPT / GAMBIT** (Tang) | Memorization-brittleness evaluation + LLM-Modulo | Borrowed as evaluation hygiene (theme-held-out splits, sanity metric, verifier-loop later) |
 | **ChessQA** (Wen et al.) | 5-category chess-understanding benchmark | Category taxonomy borrowed as future scope (structural/motifs/semantic arms) |
@@ -30,7 +30,8 @@ properly in the paper.
 - KinGPT / "Generalization or Memorization?" (2605.17565) — brittleness testing, LLM-Modulo.
 - ChessQA (2510.23948) — capability taxonomy.
 - LLM CHESS (2512.01992) — game-play protocol, Elo.
-- ChessBench (2402.04494 / 2410.12065) — dataset ancestry.
+- ChessBench (2402.04494, Ruoss et al.) — dataset ancestry + chess-pretrained SLM recipe.
+- ChessGPT (2306.09200, NeurIPS 2023) — policy+language bridging; KinGPT's main comparison target.
 - Spec-gaming in reasoning models (2502.13295) — prompt hygiene against hacking.
 - Easy2Hard (NeurIPS 2024 D&B) — difficulty stratification.
 

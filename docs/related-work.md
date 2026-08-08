@@ -45,17 +45,25 @@ borrow from each. Verdict up front:
 
 ---
 
-## 1. ChessBench (Keller & Hutter, 2024)
+## 1. ChessBench / Amortized Planning (Ruoss et al., Google DeepMind, 2024)
 
-- **What**: six chess datasets for LLM probing: move classification (24M
-  lichess positions), lichess eval (6.7M), mate-in-1/2/3 (~5M total),
-  AlphaZero eval, and Chen-Pasukonis game-state prediction (~14M).
+- **What**: a large-scale benchmark of **10M chess games** with
+  Stockfish-16 legal-move and value annotations (~15B data points).
+  Transformers up to **270M parameters** are trained on it via supervised
+  learning; the resulting policy reaches **2895 Lichess blitz Elo against
+  humans with no search**, and action-value prediction generalizes to
+  novel boards. (Corrected attribution: arXiv:2402.04494, Ruoss, Delétang,
+  Medapati, Grau-Moya, Wenliang, Catt, Reid, Lewis, Veness, Genewein.
+  The previous version of this doc attributed ChessBench to "Keller &
+  Hutter"; that is wrong.)
 - **Design**: standard LLM eval — accuracy per dataset; used to argue
   LLMs can learn chess from text with enough data.
 - **Borrow**: the *dataset menu* (lichess evals + lichess puzzle mates +
   game states). We rebuild the same sources with full metadata and a
   representation axis; we do **not** adopt its 100k-sample sizes — ours is
-  a tight benchmark, not a training-data study.
+  a tight benchmark, not a training-data study. Also borrow the argument
+  that a small transformer with engine-annotated data (value + legal-move
+  targets) is the strongest known chess-pretrained SLM base.
 
 ## 2. ChessQA (Wen, Tang & Anderson, 2025)
 
@@ -124,7 +132,71 @@ borrow from each. Verdict up front:
   5. do not claim visible thinking traces are faithful explanations without
      independently validating them.
 
-## 6. Geometric stability (Song et al., 2025)
+## 6. Chess-playing SLMs and LLMs (base-model candidates)
+
+Chess-native and chess-pretrained language models we can either copy the
+recipe from or adopt as the base for our MATE fine-tune. Full review with
+per-paper assessment: `lit-review.md` + `.rstack/lit-review.jsonl`.
+
+### 6a. ChessBench (Ruoss et al., DeepMind, 2024) — strongest SLM base
+- **What**: transformers up to 270M params trained on 10M games with
+  Stockfish-16 legal-move + value labels; policy reaches **2895 Lichess
+  blitz Elo vs humans, no search**; action-value targets generalize.
+- **Borrow**: the *data recipe* (engine-annotated legal move + value
+  targets) — this is the strongest known chess-pretrained small base; the
+  ChessBench dataset is public.
+
+### 6b. Chessformer (Monroe & Chalmers, 2024; Monroe, Eilender, Chalmers,
+## Tang & Anderson, 2026) — chess-native architecture
+- **What**: v1: lightweight chess transformer that **outperforms AlphaZero
+  with 8x less compute**; 2026: unified encoder-only architecture (squares
+  as tokens, Geometric Attention Bias) SOTA on playing strength (Leela-CF:
+  +100 Elo inside Lc0, TCEC Cup 11 / Swiss 6-7 wins over Stockfish),
+  human move prediction (Maia-3: 57.1%), and interpretability. Zhenwei
+  Tang (Maia-2/ChessQA/Master Distillation) is a 2026 co-author; KinGPT is
+  by a different Tang (Ethan Tang).
+- **Borrow**: checkpoints/architecture as a chess-pretrained base; the
+  position-representation argument echoes our Phase-1 FEN finding.
+
+### 6c. ChessLLM (Zhang et al., 2025)
+- **What**: SFT an LLM on **complete games** (best move in FEN);
+  professional-level Elo 1788 vs Stockfish at pass@10.
+- **Borrow**: full-game SFT recipe for the future game-play arm; FEN
+  format matches our representation choice.
+
+### 6d. Post-training insights (Hwang et al., 2025)
+- **What**: RL with dense rewards from a chess-pretrained action-value
+  network; dense beats sparse, but **all models plateau below expert
+  level** — the base model's chess priors are the bottleneck.
+- **Borrow**: the argument for starting from a chess-pretrained base
+  rather than a general chat model; a planned SFT-vs-RL ablation for the
+  paper.
+
+### 6e. How Reasoning Evolves (Dionisopoulos et al., ICML 2026)
+- **What**: SFT data shape determines post-RL quality and reasoning
+  faithfulness; direct best-move SFT elicits **unfaithful** reasoning
+  after RL; trajectory data stays faithful. Releases a 7B chess model
+  beating open reasoning models.
+- **Borrow**: released model as anchor; SFT-format design rule (add
+  trajectory examples if RL is ever added).
+
+### 6f. Master Distillation (Tang et al., 2026) and Mixture of Masters
+## (Frisoni et al., 2026)
+- **What**: C1 (4B) distills full engine reasoning into CoT, 48.1% on a
+  hard move-selection benchmark, beating the teacher; MoM is the first
+  chess MoE (small GPT experts + persona routing).
+- **Borrow**: distillation-over-outputs recipe; MoE gating as a future
+  architecture direction; both are SLM-scale comparison anchors.
+
+### 6g. ChessGPT (Feng et al., NeurIPS 2023)
+- **What**: GPT model bridging policy learning (game replays) and language
+  modeling (chess commentary/analysis); releases game+language dataset and
+  models; proposes a full LLM-chess evaluation framework.
+- **Borrow**: the policy+language joint-training idea — MATE adds
+  expert-annotated explanations, ChessGPT adds raw commentary; the
+  released ~3B models are comparison anchors (KinGPT's main target).
+
+## 7. Geometric stability (Song et al., 2025)
 
 - **What**: tests LLMs under board rotation, mirroring, color inversion,
   format conversion (~3,000 positions; GPT-5.1 accuracy collapses >600% on
@@ -133,7 +205,7 @@ borrow from each. Verdict up front:
   precisely a format-conversion perturbation. We can add mirror/rotation
   arms cheaply (our engine renders any board orientation).
 
-## 7. Tracking World States (Harang et al., 2025)
+## 8. Tracking World States (Harang et al., 2025)
 
 - **What**: model-agnostic state-tracking eval: measure how well LLMs
   preserve legal-move distributions across predicted states (no internal
@@ -141,7 +213,7 @@ borrow from each. Verdict up front:
 - **Borrow**: the **legal-move-distribution metric** as a secondary signal
   for our legality work.
 
-## 8. Spec-gaming in reasoning models (Bondarenko et al., 2025)
+## 9. Spec-gaming in reasoning models (Bondarenko et al., 2025)
 
 - **What**: o3 / DeepSeek R1 *hack* chess benchmarks (engine-exploits)
   when told to win. A caution for any "beat the engine" framing.
@@ -149,7 +221,7 @@ borrow from each. Verdict up front:
   engine; they ask for a single move in a fixed position. Document that
   choice against spec-gaming.
 
-## 9. Others surveyed (context only)
+## 10. Others surveyed (context only)
 
 - **ZeroSumEval** (FAIR 2025): inter-model competition eval incl. chess —
   protocol reference for game-play arms.
@@ -165,7 +237,13 @@ borrow from each. Verdict up front:
 
 | Source | Borrowed |
 |---|---|
-| ChessBench | dataset menu (lichess evals + puzzles) |
+| ChessBench (Ruoss et al.) | dataset menu (lichess evals + puzzles); engine-annotated data recipe for a chess-pretrained base |
+| Chessformer | chess-native architecture/checkpoints as a chess-pretrained base |
+| ChessLLM | full-game SFT recipe (FEN format) |
+| Hwang et al. | base-model-priors argument, SFT-vs-RL ablation |
+| Dionisopoulos et al. | SFT-format design rule; released 7B anchor model |
+| Master Distillation / MoM | distillation-over-outputs recipe; MoE persona routing |
+| ChessGPT | policy+language joint-training data recipe; released anchors |
 | ChessQA | category taxonomy + per-category error analysis |
 | LLM CHESS | game-play protocol, Elo-vs-fixed-engine |
 | Easy2Hard | difficulty-stratified reporting |

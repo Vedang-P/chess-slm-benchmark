@@ -75,6 +75,137 @@ examples, bench it on the same 4 subsets, and compare against base
 gemma, deepseek, and the authors' fine-tune anchors — then run the
 planned 100-game head-to-head.
 
+## The plan: a lucid-reasoning chess SLM (gemma 4 E2B)
+
+**Status: LOCKED. This is exactly what we will do.** No deviations without
+reviewing this section.
+
+### The thesis
+
+DeepSeek V4 Flash's reasoning traces are highly compressed — telegraphic,
+fragmentary, "caveman" phrasing — a learned behavior from its RL
+post-training, not a prompt artifact. Chess gives a cheap, verifiable
+testbed to ask: does teaching a small model (gemma 4 E2B, 2B) to reason in
+that compressed style transfer more reasoning ability per token than
+standard natural-language CoT distillation? Measured on the MATE 4-subset
+benchmark + a tokens-per-correct efficiency metric + a novelty axis.
+
+### The two verified recipes we build on (2026)
+
+1. **cavegemma (JuliusBrussee, github.com/JuliusBrussee/cavegemma)** —
+   QLoRA NF4 (r16/a32, dropout 0, all linear) on ~1750 synthetic
+   "caveman rewrite" pairs, 3 epochs, lr 2e-4 cosine, batch 2 x grad-acc
+   8, ~50 min on one Blackwell ($4-5). On gemma 4 31B: 27% fewer output
+   tokens, semantics preserved (0.91-0.98 cosine), code fences byte-exact.
+   The style has a spec (caveman SKILL.md) so the data has ground truth.
+   Pipeline: synthesize.py (2-step rewrite via frontier CLI) ->
+   filter.py (fence integrity + compression band) -> split.py ->
+   train_unsloth.py -> eval/metrics.py. Known filter bug: accepts rewrites
+   up to 1.0x source; **we fix to ~0.70x** for harder compression.
+2. **Master Distillation / C1 (arXiv:2603.20510, UofT)** — chess-specific
+   SFT+RLVR: Stockfish depth-24 master gives the PV; teacher LLM verbalizes
+   it via **Feigned Discovery Prompting** (reason as if the solution is
+   unknown, secretly steered toward the PV); context = FEN + piece list +
+   legal moves + last move + themes + rating (given to teacher, HIDDEN from
+   student); 4-10 sentences, objective voice, no engine refs. Ablations:
+   39k balanced samples > 8k random/hard (40.9 vs 19.3); teacher quality
+   matters (Pro > Flash); Multi-PV < best-move PV; w/o Feigned = largest
+   drop; full FT > LoRA r64 (40.9 vs 38.8); RLVR (DAPO-C1, binary
+   correctness) adds +7.2. C1-4B: 48.1% avg acc at ~178 tokens (2 orders
+   fewer than frontier).
+
+### Stage B — MATE labels-only SFT (de-risk the stack, checkpoint today)
+
+- **What**: gemma 4 E2B, LoRA SFT on MATE train labels only (prompt →
+  `MoveB:d2d8`), no traces. The cheap baseline (what the MATE authors did,
+  on a 2B model).
+- **Why first**: cheapest run that exercises the entire train→eval stack
+  (data loader, LoRA trainer on T4, HF push, MATE eval runner, live
+  dashboard) and gives a usable checkpoint immediately.
+- **Data**: MATE public train zips — noexplain (94.5k) + strategy (91.2k)
+  + tactic (11.2k) + both (11.2k) ≈ 208k rows, or a 50k subset for the
+  first pass.
+- **Compute**: 4-bit LoRA on Kaggle T4, ~9-17h (both accounts in parallel
+  if needed). Split train/eval.
+- **Exit criterion**: trains, uploads, evals cleanly on all 4 MATE
+  subsets; report baseline vs base gemma (61.1% on S) and vs MATE authors'
+  anchors (63.5/89.7/94.6/95.2).
+
+### Stage A1 — "caveman E2B": cavegemma recipe on gemma 4 E2B
+
+- **What**: replicate the cavegemma pipeline on gemma 4 E2B with the
+  0.70x filter fix — teach the 2B model to reason natively in compressed
+  lucid style.
+- **Data**: synthesize ~2-4k caveman-rewrite pairs (deepseek-v4-flash as
+  the rewrite driver through the caveman SKILL.md ruleset; 2-step rewrite;
+  filter by fence integrity + compression band ≤0.70x + semantic
+  similarity threshold).
+- **Compute**: QLoRA NF4 r16/a32 on T4, ~3-6h.
+- **Benchmark (before any MATE training)**: (a) token compression on
+  held-out pairs (target ≥25% reduction, semantics ≥0.9), (b) does it
+  still solve MATE positions correctly at equal or better
+  tokens-per-correct vs base gemma? If caveman E2B compresses AND keeps
+  (or improves) chess accuracy, the thesis has its first positive signal.
+- **Exit criteria**: compression + fidelity numbers on the cavegemma eval
+  protocol; MATE 4-subset probe accuracy + tokens-per-correct.
+
+### Stage A2 — "MATE lucid traces": Feigned Discovery distillation
+
+- **What**: C1's Master Distillation adapted to MATE: deepseek-v4-flash as
+  teacher, MATE train positions, Stockfish-verified candidate/truth as the
+  master solution, Feigned Discovery prompting to generate 4-10 sentence
+  lucid traces that converge to the correct move.
+- **Context engineering (teacher-only, hidden from student)**: FEN +
+  piece list + legal moves + the two MATE candidates + truth + theme;
+  student sees only the standard MATE prompt.
+- **Data**: ~40k MATE train positions traced by deepseek (scale target
+  from C1's 39k), theme/truth-balanced sampling; non-overlapping SFT vs
+  eval.
+- **Training**: SFT on `<FEN + candidates prompt>` → `<trace>
+  <MoveB:d2d8>` — the format maps 1:1 onto our `--local-thinking` channel
+  split. Student base = Stage-A1 caveman E2B (thesis arm) vs vanilla E2B
+  (control arm).
+- **Compute**: SFT ~9-17h on T4 (both accounts if needed). No RL in
+  scope (DAPO-C1 RLVR deferred: 4xH100-class, out of free-tier budget).
+- **Exit criteria**: MATE 4-subset accuracy + tokens-per-correct vs
+  Stage-B baseline, vs base gemma, vs deepseek teacher.
+
+### Eval — MATE 4 subsets + efficiency + novelty
+
+- **Primary**: MATE 4-subset accuracy (n=1000 each; the committed
+  `data/positions/mate-selection-test{,-noexplain,-tactic,-both}.json`).
+- **Efficiency**: tokens-per-correct-answer (and output tokens per
+  position) — the metric that separates "lucid wins" from "style doesn't
+  matter".
+- **Novelty axis** (so results aren't read as memorization): unseen
+  puzzle themes, transformed FENs (mirror/color-swap/rotation), and
+  out-of-distribution positions from the 6.1M lichess puzzle DB.
+- **Models compared**: base gemma 4 E2B, Stage-B, Stage-A1 caveman E2B,
+  Stage-A2 (both student bases), deepseek-v4-flash teacher, MATE authors'
+  anchors (63.5/89.7/94.6/95.2).
+
+### Design notes / open questions (recorded, not blocking)
+
+- Budget capping forces shorter traces but does NOT create the lucid style
+  — the style is RL-learned (DeepSeek) or synthesized (cavegemma). The
+  treatment selects for style (compression-band filter / style-synthesized
+  rewrites), not budget.
+- C1 found full FT > LoRA r64 for chess knowledge (40.9 vs 38.8). T4 can
+  nearly full-FT a 2B; worth a small slice test in Stage B (LoRA r64 vs
+  full FT).
+- Deepseek teacher tokens: ~19k/position unbounded; Feigned-Discovery
+  traces are 4-10 sentences (~200-500 tokens) — cheap to generate. The
+  gateway's `deepseek-v4-flash-free` tier may zero the cost.
+- Both arms publish regardless of outcome: "lucid wins" is the headline
+  thesis; "style doesn't matter" is a real negative result with the
+  efficiency metric.
+
+### Stage order (locked)
+
+**B now → A1 → A2 → Eval.** RLVR (DAPO-C1) only if B/A leave us wanting
+and compute permits. 100-game head-to-head vs deepseek / base gemma /
+itself is the later scope (after MATE), not part of this plan.
+
 ## Phase 2: MATE-only fine-tuning experiment
 
 The immediate next experiment is **MATE only**, with a first 50,000-example
