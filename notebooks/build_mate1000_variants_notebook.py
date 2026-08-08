@@ -26,11 +26,16 @@ to COMPLETE, then push the next.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from build_notebook import _code, _md, _notebook
 
 NB_DIR = Path(__file__).resolve().parent
+
+# kernel owner: override with MATE_KERNEL_OWNER (the campaign watcher runs
+# under softmaxsimp and pushes tactic/both waves there)
+KERNEL_OWNER = os.environ.get("MATE_KERNEL_OWNER", "vedangpandeyyy")
 
 MAX_NEW_TOKENS = 131072
 SLICE_SIZE = 200
@@ -224,7 +229,7 @@ def build_worker_notebook(variant: str, n: int) -> list:
 
 def kernel_metadata(variant: str, n: int) -> dict:
     return {
-        "id": f"vedangpandeyyy/mate-{variant}-worker-{n}-of-5",
+        "id": f"{KERNEL_OWNER}/mate-{variant}-worker-{n}-of-5",
         "title": f"MATE {variant} -- worker {n} of 5",
         "code_file": f"kaggle_mate_{variant}_w{n}.ipynb",
         "language": "python",
