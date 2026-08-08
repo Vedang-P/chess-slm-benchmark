@@ -17,6 +17,7 @@ archives never collide between variants:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -357,6 +358,13 @@ def main() -> None:
     if variant and variant not in TASK_FILES:
         raise SystemExit(f"unknown variant {variant!r}; choose from {sorted(TASK_FILES)}")
 
+    # kernel owner per worker: GEM_OWNER_W1 / GEM_OWNER_W2 env override
+    # (default vedangpandeyyy) so the campaign watcher can push w1 to one
+    # account and w2 to the other -- 2 concurrent GPUs per account.
+    owner_w1 = os.environ.get("GEM_OWNER_W1", "vedangpandeyyy")
+    owner_w2 = os.environ.get("GEM_OWNER_W2", "vedangpandeyyy")
+    owners = {1: owner_w1, 2: owner_w2}
+
     env = {}
     for line in (NB_DIR.parent / ".env").read_text().splitlines():
         line = line.strip()
@@ -374,10 +382,10 @@ def main() -> None:
             code_file = f"kaggle_gemma_{v}_w{n}.ipynb"
             (push_dir / code_file).write_text(json.dumps(nb, indent=1))
             (push_dir / "kernel-metadata.json").write_text(json.dumps(
-                kernel_metadata(f"vedangpandeyyy/gemma-{v}-worker-{n}-of-2",
+                kernel_metadata(f"{owners[n]}/gemma-{v}-worker-{n}-of-2",
                                 f"Gemma {v} -- worker {n} of 2", code_file), indent=1))
-            print(f"wrote {push_dir}/kernel-metadata.json (GPU, secrets injected)"
-                  f"{' -- DEMO ONLY' if demo_only else ''}")
+            print(f"wrote {push_dir}/kernel-metadata.json (owner={owners[n]}, GPU, "
+                  f"secrets injected){' -- DEMO ONLY' if demo_only else ''}")
 
     print()
     print("PUSH DIRS READY (secrets injected, never committed):")
