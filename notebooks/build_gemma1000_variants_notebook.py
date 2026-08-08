@@ -62,15 +62,33 @@ print("cwd:", Path.cwd())
 
 DEPS_CELL = r'''
 import subprocess, sys
+# Kaggle's free tier hands out a P100 (sm_60) OR a T4 (sm_75). Recent torch
+# wheels dropped sm_60, so pin the last CUDA-12.1 build with both archs
+# BEFORE anything else installs torch; torchvision/torchaudio must match the
+# pinned torch (Kaggle ships torchvision built for the latest torch -- the
+# ABI mismatch crashes transformers' AutoProcessor import). bitsandbytes is
+# pinned to the matching multi-CUDA build, and the requirements install
+# afterwards must NOT clobber these pins (no -U: it still upgrades
+# transformers to >=5.13 on its own).
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "torch==2.5.1", "torchvision", "torchaudio",
-                "transformers>=4.40,<5", "accelerate", "bitsandbytes",
-                "peft>=0.10.0", "numpy", "huggingface_hub", "tqdm",
-                "pyyaml", "python-chess", "zstandard"], check=True)
+                "torch==2.5.1", "--index-url",
+                "https://download.pytorch.org/whl/cu121"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "torchvision==0.20.1", "torchaudio==2.5.1", "--index-url",
+                "https://download.pytorch.org/whl/cu121"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "bitsandbytes==0.44.1"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "-r", "requirements.txt"], check=True)
 import torch, transformers
-print("deps:", transformers.__version__, "torch", torch.__version__, "cuda", torch.cuda.is_available())
-if not torch.cuda.is_available():
-    raise SystemExit("no GPU in this session")
+if int(transformers.__version__.split(".")[0]) < 5:
+    raise RuntimeError(f"transformers {transformers.__version__} too old "
+                       "for Gemma 4 (needs >= 5.13)")
+print("transformers", transformers.__version__, "| cuda", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print(torch.cuda.get_device_name(0),
+          "| cap", torch.cuda.get_device_capability(0),
+          "| vram GB:", round(torch.cuda.get_device_properties(0).total_memory / 1e9, 1))
 '''.strip()
 
 GATE_CELL = r'''
