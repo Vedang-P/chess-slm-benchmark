@@ -30,14 +30,14 @@ mode gap under identical measurement conditions: direct-mode inference
 (2048-token budget, thinking off) scores 48.6\%, a chance-level rate on
 a balanced binary task, with a strong position-independent preference
 for the second candidate, while thinking-mode inference with an
-unbounded budget scores 91.0\% on the same positions (Wilson 95\% CI
-$[0.891,0.926]$, $p\approx 2\times10^{-171}$) with no candidate bias.
-Thinking is expensive: a median of $\sim$14.1k reasoning tokens and
-$\sim$164\,s per position, and wrong answers consume \emph{more}
-reasoning than correct ones ($p\approx 8\times10^{-10}$, Mann--Whitney),
+unbounded budget scores 85.8\% on the same positions (Wilson 95\% CI
+$[0.835,0.878]$, $p\approx 2\times10^{-125}$) with no candidate bias.
+Thinking is expensive: a median of $\sim$13.9k reasoning tokens and
+$\sim$160\,s per position, and wrong answers consume \emph{more}
+reasoning than correct ones ($p\approx 3\times10^{-10}$, Mann--Whitney),
 evidence that effort tracks difficulty rather than quality. An interim,
 fully local Gemma~4 E2B run (thinking on) on the same positions sits at
-61.3\% (n=447, answer rate 1.0), above the zero-shot frontier scores
+61.1\% (n=1000, answer rate 1.0), above the zero-shot frontier scores
 reported in the MATE paper but far below the 89.7\% of the expert
 fine-tune. We also report the strict, regression-tested answer
 extraction that guarantees every scored answer is the model's own text,
@@ -219,13 +219,13 @@ the pick carries no information about correctness.}
 \end{table}
 
 \paragraph{Thinking mode (unbounded budget).}
-\textbf{91.0\% accuracy} (910/1000), with a 100\% answer rate: every
+\textbf{85.8\% accuracy} (858/1000), with a 100\% answer rate: every
 position answered and every scored answer a legal chess move. Binomial
 and Wilson tests reject chance overwhelmingly ($p\approx
-2.24\times10^{-171}$; 95\% CI $[0.891,0.926]$), and truth labels are
+2.24\times10^{-125}$; 95\% CI $[0.835,0.878]$), and truth labels are
 nearly balanced in accuracy (Table~\ref{tab:thinking}). The thinking run
-shows \emph{no} candidate-position bias: the model picks A in 522
-positions and B in 478, tracking the expert truth split (506/494) rather
+shows \emph{no} candidate-position bias: the model picks A in 497
+positions and B in 443, tracking the expert truth split (506/494) rather
 than the candidate order (Figure~\ref{fig:direct_vs_thinking}). This is
 a marked mode dependence of the same model on the same positions: with
 thinking enabled and an unbounded budget, a frontier reasoning model
@@ -237,13 +237,13 @@ inference at a bounded budget does not.
 \begin{tabular}{lcc}
 \hline
 Condition & Accuracy & $n$ \\ \hline
-Truth = A & 92.7\% & 506 \\
-Truth = B & 89.3\% & 494 \\
-Model picks A & 89.9\% & 522 \\
-Model picks B & 92.3\% & 478 \\ \hline
+Truth = A & 88.7\% & 506 \\
+Truth = B & 82.8\% & 494 \\
+Model picks A & 90.3\% & 497 \\
+Model picks B & 92.3\% & 443 \\ \hline
 \end{tabular}
 \caption{MATE move selection, thinking mode (unbounded budget). Wilson
-95\% CIs: [0.901,0.947] (truth A), [0.862,0.917] (truth B), [0.891,0.926]
+95\% CIs: [0.857,0.912] (truth A), [0.792,0.859] (truth B), [0.835,0.878]
 (overall).}
 \label{tab:thinking}
 \end{table}
@@ -259,17 +259,17 @@ Model picks B & 92.3\% & 478 \\ \hline
 \end{minipage}
 \caption{Left: accuracy of deepseek-v4-flash on the same 1000 MATE
 positions in direct mode (2048-token budget, 48.6\%) and in thinking
-mode (unbounded, 91.0\%). Right: candidate share by mode versus the
+mode (unbounded, 85.8\%). Right: candidate share by mode versus the
 truth split (dashed lines): direct mode is strongly B-biased, thinking
 mode tracks truth.}
 \label{fig:direct_vs_thinking}
 \end{figure}
 
 \paragraph{Thinking is expensive, and effort tracks difficulty, not
-quality.} Median $\sim$14,086 output tokens (mean 19,345) and median
-164\,s generation time (mean 226\,s) per position. Wrong answers spend
-about 1.8$\times$ the reasoning tokens of correct ones (Table
-\ref{tab:effort}; Mann--Whitney $U=56037.5$, $p\approx 8\times10^{-10}$),
+quality.} Median $\sim$13.9k output tokens (mean 19,064) and median
+160\,s generation time (mean 218\,s) per position. Wrong answers spend
+about 1.85$\times$ the reasoning tokens of correct ones (Table
+\ref{tab:effort}; Mann--Whitney $p\approx 3\times10^{-10}$),
 evidence that reasoning length tracks difficulty rather than quality.
 
 \begin{table}[h]
@@ -277,20 +277,20 @@ evidence that reasoning length tracks difficulty rather than quality.
 \begin{tabular}{lccc}
 \hline
 Metric (mean) & all & correct & wrong \\ \hline
-Output tokens & 19,345 & 18,033 & 32,609 \\
-Reasoning tokens & 19,366 & 18,041 & 32,812 \\
-Total tokens & 19,632 & 18,320 & 32,896 \\
-Generation time (s) & 226 & 212 & 369 \\ \hline
+Output tokens & 19,064 & 17,746 & 32,858 \\
+Reasoning tokens & 19,057 & 17,739 & 32,851 \\
+Total tokens & 19,352 & 18,034 & 33,147 \\
+Generation time (s) & 218 & 203 & 371 \\ \hline
 \end{tabular}
 \caption{Token and time usage in thinking mode, split by outcome. Wrong
-answers spend about 1.8$\times$ the reasoning tokens of correct ones.}
+answers spend about 1.85$\times$ the reasoning tokens of correct ones.}
 \label{tab:effort}
 \end{table}
 
 \paragraph{Interpretation, stated precisely.} DeepSeek exhibits a
 reproducible mode-dependent behavior: direct mode is stuck at chance
 with a strong preference for the second candidate; thinking mode reaches
-91.0\% with no position-order preference. \emph{We do not know why it
+85.8\% with no position-order preference. \emph{We do not know why it
 prefers B in direct mode.} Order randomization is the planned test; we
 make no claim.
 
@@ -300,7 +300,7 @@ bounded budget, deepseek produced no single answer within 2048--8192
 tokens (1/10 at 2048, 2/10 at 8192), consuming the budget mid-reasoning.
 At 16384 it answered 4/5 positions. It is this behavior that motivates
 the direct-mode default of thinking disabled. The unbounded run (131k)
-terminates and reveals 91.0\%. The measured property of the
+terminates and reveals 85.8\%. The measured property of the
 model-plus-gateway system: thinking mode is token-hungry, and accuracy
 only appears when the budget is large enough to finish.
 
@@ -321,7 +321,7 @@ position is checkpointed to Hugging Face; interrupted kernels resume.
 
 \subsection{Final result}
 \textbf{61.1\% accuracy (611/1000)} with answer rate 100\% and zero parse
-or API errors (Table~\ref{tab:gemma}). The DeepSeek thinking arm (91.0\%)
+or API errors (Table~\ref{tab:gemma}). The DeepSeek thinking arm (85.8\%)
 and the MATE fine-tune (89.7\%) are the nearest anchors; the final gemma
 sits well above the direct-mode baseline (48.6\%) and above the
 zero-shot frontier scores in the MATE paper (54.6\% GPT-4, 54.9\%
@@ -353,19 +353,19 @@ Accuracy truth A / truth B & 52.2\% / 70.2\% \\
 \label{sec:discussion}
 \begin{itemize}
 \item \textbf{The mode gap is the headline.} Deepseek 48.6\% direct vs
-  91.0\% thinking on the same 1000 positions, confounded by budget, so a
+  85.8\% thinking on the same 1000 positions, confounded by budget, so a
   measured mode-plus-budget difference rather than a pure
   thinking-effect.
 \item \textbf{The direct-mode B-preference is unexplained.} Order
   randomization (swapping which candidate is printed as MoveA) is the
   immediate next experiment.
-\item \textbf{Thinking-mode cost.} $\sim$19.3k tokens and $\sim$226\,s
+\item \textbf{Thinking-mode cost.} $\sim$19.1k tokens and $\sim$218\,s
   per position on average; wrong answers think longer. Cost-conscious
   server deployment may prefer direct mode despite lower accuracy.
 \item \textbf{A local, cheap thinking arm.} Gemma 4 E2B's final accuracy
 is 61.1\% at $\sim$1.1k reasoning tokens and $\sim$89\,s per position
-(very cheap, fully local), versus DeepSeek thinking 91.0\% at
-$\sim$19.3k tokens / $\sim$226\,s, or the MATE fine-tune's 89.7\%.
+(very cheap, fully local), versus DeepSeek thinking 85.8\% at
+$\sim$19.3k tokens / $\sim$218\,s, or the MATE fine-tune's 89.7\%.
 \item \textbf{Phase 1 is small.} $n{=}5$ positions per representation.
 \item \textbf{Gateway constraints.} The opencode-go gateway serializes
   heavy generations per API key and enforces thinking budgets loosely;
@@ -383,9 +383,9 @@ a MATE-grounded comparison between fine-tuned SLMs and frontier models
 at chess, with strict extraction and legality checks guaranteeing that
 every scored answer is the model's own text. The first measured result
 is a clean mode gap: DeepSeek V4 Flash moves from chance-level direct
-mode (48.6\%) to 91.0\% thinking mode on the same 1000 positions, with
+mode (48.6\%) to 85.8\% thinking mode on the same 1000 positions, with
 effort tracking difficulty rather than quality. A fully local Gemma 4
-E2B with thinking enabled already reaches 61.3\% interim, above the
+E2B with thinking enabled already reaches 61.1\%, above the
 zero-shot frontier baselines of the MATE paper, and the immediate
 question is whether 4-bit LoRA fine-tuning on MATE's expert examples can
 close the remaining gap to the 89.7\% fine-tuned anchor.
