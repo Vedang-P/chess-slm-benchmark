@@ -24,8 +24,8 @@ So *playing* chess at small scale is solved. What is unsolved is a small model
 that plays strongly **and narrates why in natural language**. Both results above
 are policy networks: they emit a move and nothing else. Frontier reasoning
 models narrate but are enormous and slow — our measured DeepSeek V4 Flash
-reference spends **19,345 output tokens per position** for 91.0% on MATE
-selection.
+reference spends **19,064 output tokens per position** for 85.8% on MATE
+selection (858/1000, Wilson 95% CI [0.835,0.878]).
 
 The gap this model targets: strong play, verbalized, at ~120 MB.
 
@@ -50,7 +50,7 @@ Our own measurement supports the split. On the MATE held-out set
 | **Stockfish depth 1 (quiescence only)** | **92.0%** |
 | Stockfish depth 4 | 97.5% |
 | Stockfish depth 8 / 14 | 100% |
-| DeepSeek V4 Flash, thinking, ~19,345 tokens | 91.0% |
+| DeepSeek V4 Flash, thinking, ~19.1k tokens | 85.8% |
 
 Depth-1 Stockfish — quiescence resolution and a static evaluation, no real
 search — already beats the frontier model. The verbalized part only has to reach
@@ -410,7 +410,7 @@ span is the answer and is parsed with the existing strict extractor in
 `src/benchmarks/games/tasks.py`.
 
 Expected budget: ~300–500 output tokens per decision, against DeepSeek's measured
-19,345.
+19,064.
 
 ---
 
