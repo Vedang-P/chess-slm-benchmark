@@ -37,7 +37,7 @@ def find_token():
 
 url = "https://github.com/Vedang-P/chess-slm-benchmark.git"
 url = url.replace("https://", f"https://x-access-token:{find_token()}@")
-res = subprocess.run(["git", "clone", "--quiet", "-b", "mate-e2b-kaggle", url, str(REPO)],
+res = subprocess.run(["git", "clone", "--quiet", "-b", "main", url, str(REPO)],
                      capture_output=True, text=True)
 if res.returncode != 0:
     raise RuntimeError("clone failed (bad/missing GITHUB_TOKEN?): " + res.stderr[-300:])

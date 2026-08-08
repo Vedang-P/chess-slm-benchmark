@@ -45,7 +45,7 @@ WORKERS = [
 ]
 assert WORKERS[-1]["offset"] + SLICE_SIZE == 1000
 
-BRANCH = "mate-e2b-kaggle"
+BRANCH = "main"
 RUN_NAME = "gemma4-e2b_mate-selection-test_strategy"
 
 CLONE_CELL = r'''
@@ -72,9 +72,9 @@ url = "https://github.com/Vedang-P/chess-slm-benchmark.git"
 if token:
     url = url.replace("https://", f"https://x-access-token:{token}@")
 # --local-thinking, --live-namespace, scored-state live publishing and the
-# mid-stream thinking split live on the mate-e2b-kaggle branch; clone the
+# mid-stream thinking split is on main; clone the
 # branch explicitly so the kernel always runs the intended code.
-res = subprocess.run(["git", "clone", "--quiet", "--branch", "mate-e2b-kaggle",
+res = subprocess.run(["git", "clone", "--quiet", "--branch", "main",
                       url, str(REPO)],
                      capture_output=True, text=True)
 if res.returncode != 0:
@@ -298,7 +298,7 @@ def build_worker_notebook(worker: dict) -> list:
         _md("## 1. Secrets (hardcoded env vars)"),
         _code("import os\n"
               'print("secrets are injected at build time; this cell is a placeholder")'),
-        _md("## 2. Get the repo (mate-e2b-kaggle branch)"),
+        _md("## 2. Get the repo (main branch)"),
         _code(CLONE_CELL),
         _md("## 3. Dependencies (torch pins for P100+T4)"),
         _code(DEPS_CELL),

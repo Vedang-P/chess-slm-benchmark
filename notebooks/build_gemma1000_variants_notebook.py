@@ -27,7 +27,7 @@ NB_DIR = Path(__file__).resolve().parent
 
 MAX_NEW_TOKENS = 32768
 SLICE_SIZE = 500
-BRANCH = "mate-e2b-kaggle"
+BRANCH = "main"
 
 TASK_FILES = {
     "noexplain": "mate-selection-test-noexplain.json",
@@ -53,7 +53,7 @@ def find_token():
 
 url = "https://github.com/Vedang-P/chess-slm-benchmark.git"
 url = url.replace("https://", f"https://x-access-token:{find_token()}@")
-res = subprocess.run(["git", "clone", "--quiet", "-b", "mate-e2b-kaggle", url, str(REPO)],
+res = subprocess.run(["git", "clone", "--quiet", "-b", "main", url, str(REPO)],
                      capture_output=True, text=True)
 if res.returncode != 0:
     raise RuntimeError("clone failed (bad/missing GITHUB_TOKEN?): " + res.stderr[-300:])
@@ -269,7 +269,7 @@ def build_worker_notebook(variant: str, n: int, demo_only: bool = False) -> list
         _md("## 1. Secrets (hardcoded env vars)"),
         _code("import os\n"
               'print("secrets are injected at build time; this cell is a placeholder")'),
-        _md("## 2. Get the repo (mate-e2b-kaggle branch)"),
+        _md("## 2. Get the repo (main branch)"),
         _code(CLONE_CELL),
         _md("## 3. Dependencies (torch pins for P100+T4)"),
         _code(DEPS_CELL),
