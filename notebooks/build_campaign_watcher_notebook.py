@@ -80,20 +80,13 @@ def sh(cmd, **kw):
     return subprocess.run(cmd, stderr=subprocess.STDOUT, **kw)
 
 def api(url):
-    r = subprocess.run([sys.executable, "-c",
-        "import base64, json, urllib.request\n"
-        "req = urllib.request.Request(url, headers={'Authorization': 'token ' + GH, 'User-Agent': 'watcher'})\n"
-        "try:\n"
-        "    with urllib.request.urlopen(req, timeout=30) as resp:\n"
-        "        print(resp.read().decode())\n"
-        "except Exception as e:\n"
-        "    print('ERR', e)\n",
-        "url", url, "GH", GH], capture_output=True, text=True)
-    out = r.stdout.strip()
-    if out.startswith("ERR") or not out:
-        return None
+    # direct urllib call (no subprocess embedding)
+    import urllib.request
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"token {GH}", "User-Agent": "watcher"})
     try:
-        return json.loads(out)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
     except Exception:
         return None
 
