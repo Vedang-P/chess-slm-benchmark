@@ -94,7 +94,8 @@ def main() -> None:
     for cell in nb["cells"]:
         src = "".join(cell.get("source") or [])
         if "secrets are injected at build time" in src:
-            cell["source"] = [f'os.environ["GITHUB_TOKEN"] = {env.get("GITHUB_TOKEN", "")!r}\n',
+            cell["source"] = ["import os\n",
+                              f'os.environ["GITHUB_TOKEN"] = {env.get("GITHUB_TOKEN", "")!r}\n',
                               "print('secrets set:', bool(os.environ['GITHUB_TOKEN']))\n"]
             break
 
