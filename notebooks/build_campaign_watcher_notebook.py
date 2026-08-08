@@ -55,12 +55,13 @@ KAGGLE_TOKEN_SMAX = "KGAT_2017e9ac2c32a6cde220d848f041bd4f"  # softmaxsimp
 
 WATCHER_CELLS = [
     _md("# MATE campaign watcher (softmaxsimp)\n\n"
-        "Drives the full campaign after the laptop is closed:\n\n"
+        "Drives the campaign after the laptop is closed:\n\n"
         "1. wait for noexplain w2-w5 to reach 200/200\n"
         "2. push + wait for tactic w1-5 (deepseek CPU)\n"
         "3. push + wait for both w1-5 (deepseek CPU)\n"
-        "4. push 4 gemma GPU kernels (2 per account: w1 -> vedangpandeyyy, "
-        "w2 -> softmaxsimp), wait, then the remaining 2\n\n"
+        "4. WAIT for the user to manually launch the 6 gemma kernels with the "
+        "T4 accelerator (the CLI cannot set the machine shape), then monitor "
+        "them to 500/500, relaunching any that stall.\n\n"
         "Progress comes from the LIVE repo's `monitor/{workers,gemma/workers}/*.state.json` "
         "via the GitHub contents API. Self-relaunches before the 12h kernel "
         "limit by pushing a new version of itself."),
@@ -76,7 +77,8 @@ REPO = "Vedang-P/chess-slm-benchmark"
 LIVE = "Vedang-P/chess-bench-live"
 TARGET = 200
 GEM_TARGET = 500
-STALL_MIN = 45  # minutes without progress before relaunching a worker
+STALL_MIN = 45  # minutes without progress before relaunching a seen worker
+GRACE_MIN = 15  # minutes without any state before (re)pushing a never-seen worker
 SLEEP_S = 90
 RELAUNCH_H = 11.5  # push a new watcher version before this many hours
 
@@ -158,11 +160,15 @@ if res.returncode != 0:
 
 started = time.time()
 last_seen = {}  # (ns, tag) -> (done, epoch)
+wave_start = {}  # (ns, prefix) -> epoch when the wave's pushes began
 
 def wait_wave(tags: list[str], prefix: str, ns: str = "",
-              target: int | None = None) -> None:
+              target: int | None = None, push_missing: bool = True) -> None:
     global last_seen, started
     target = target or TARGET
+    wkey = (ns, prefix)
+    if wkey not in wave_start:
+        wave_start[wkey] = time.time()
     while True:
         if time.time() - started > RELAUNCH_H * 3600:
             relaunch_self()
@@ -176,8 +182,23 @@ def wait_wave(tags: list[str], prefix: str, ns: str = "",
             prev, pts = last_seen.get(key, (d, now))
             if d > prev:
                 last_seen[key] = (d, now)
+            elif d == 0 and key not in last_seen:
+                # never seen: either never pushed, or pushed and still in
+                # setup. After GRACE_MIN minutes of silence, (re)push it.
+                if push_missing and now - wave_start[wkey] > GRACE_MIN * 60:
+                    n = int(tag.split("-w")[-1])
+                    if ns == "gemma":
+                        subset = tag.rsplit("-", 1)[0]
+                        token = TOK_VEDANG if n == 1 else TOK_SMAX
+                        push_gemma_worker(subset, n, token)
+                        print(f"pushed never-seen gemma {tag}", flush=True)
+                    else:
+                        push_dir = REPO_DIR / f"notebooks/push_mate_{prefix}_w{n}"
+                        res = sh(["kaggle", "kernels", "push", "-p", str(push_dir)])
+                        print(f"pushed never-seen {tag} (rc={res.returncode})", flush=True)
+                    last_seen[key] = (0, now)  # mark as attempted
             elif now - pts > STALL_MIN * 60 and d < target:
-                # stalled: push a fresh version of this worker (resumes from HF)
+                # seen before, now stalled: push a fresh version (resumes from HF)
                 n = int(tag.split("-w")[-1])
                 if ns == "gemma":
                     subset = tag.rsplit("-", 1)[0]
@@ -203,29 +224,64 @@ print("TACTIC DONE -- pushing both", flush=True)
 push_wave("both")
 wait_wave([f"both-w{n}" for n in (1, 2, 3, 4, 5)], "both")
 print("BOTH DONE -- deepseek Table 1 complete", flush=True)
-print("launching gemma on 4 GPUs (2 per account)", flush=True)
 
-# regenerate gemma push dirs: w1 -> vedangpandeyyy, w2 -> softmaxsimp
-env_gem = dict(os.environ, GEM_OWNER_W1="vedangpandeyyy", GEM_OWNER_W2="softmaxsimp")
-res = sh([sys.executable, "notebooks/build_gemma1000_variants_notebook.py"], env=env_gem)
-if res.returncode != 0:
-    raise SystemExit("gemma builder failed -- see output above")
+# --- GEMMA PHASE: MANUAL T4 LAUNCH ------------------------------------------
+# The Kaggle CLI cannot set the machine shape, so the user launches the 6
+# gemma kernels by hand in the Kaggle web UI with the T4 accelerator and
+# the right worker tags (noexplain-w1/2, tactic-w1/2, both-w1/2). The
+# watcher does NOT push them -- it waits until their state files appear in
+# monitor/gemma/workers/ and then monitors + relaunches stalled workers
+# (relaunch only kicks in after a worker has been seen once, so it can
+# never fire before the user actually launches).
+print("=" * 60, flush=True)
+print("GEMMA PHASE READY -- launch these 6 kernels manually with T4:", flush=True)
+print("  softmaxsimp/gemma-noexplain-worker-1-of-2 (tag noexplain-w1)", flush=True)
+print("  softmaxsimp/gemma-noexplain-worker-2-of-2 (tag noexplain-w2)", flush=True)
+print("  softmaxsimp/gemma-tactic-worker-1-of-2    (tag tactic-w1)", flush=True)
+print("  softmaxsimp/gemma-tactic-worker-2-of-2    (tag tactic-w2)", flush=True)
+print("  softmaxsimp/gemma-both-worker-1-of-2      (tag both-w1)", flush=True)
+print("  softmaxsimp/gemma-both-worker-2-of-2      (tag both-w2)", flush=True)
+print("w1 of each subset -> vedangpandeyyy, w2 -> softmaxsimp (2 GPUs each)", flush=True)
+print("=" * 60, flush=True)
 
-# wave 4: 4 gemma workers first (2 per account): noexplain-w1, noexplain-w2,
-# tactic-w1, tactic-w2 (w1 of each subset -> vedangpandeyyy, w2 -> softmaxsimp)
-for subset, n in (("noexplain", 1), ("noexplain", 2),
-                  ("tactic", 1), ("tactic", 2)):
-    push_gemma_worker(subset, n, TOK_VEDANG if n == 1 else TOK_SMAX)
-wait_wave([f"noexplain-w{n}" for n in (1, 2)] + [f"tactic-w{n}" for n in (1, 2)],
-          "gemma-nt", ns="gemma", target=GEM_TARGET)
-print("GEMMA NOEXPLAIN+TACTIC DONE -- pushing both", flush=True)
+GEM_TAGS = [f"{v}-w{n}" for v in ("noexplain", "tactic", "both") for n in (1, 2)]
 
-# wave 5: remaining 2 gemma workers
-for n in (1, 2):
-    push_gemma_worker("both", n, TOK_VEDANG if n == 1 else TOK_SMAX)
-wait_wave([f"both-w{n}" for n in (1, 2)], "gemma-both",
-          ns="gemma", target=GEM_TARGET)
-print("GEMMA BOTH DONE -- campaign complete", flush=True)
+def wait_gemma() -> None:
+    global last_seen, started
+    while True:
+        if time.time() - started > RELAUNCH_H * 3600:
+            relaunch_self()
+            return
+        now = time.time()
+        done_map = {}
+        launched = 0
+        for tag in GEM_TAGS:
+            d = worker_done(tag, "gemma")
+            done_map[tag] = d
+            key = ("gemma", tag)
+            prev, pts = last_seen.get(key, (d, now))
+            if d > 0 and key not in last_seen:
+                launched += 1
+                last_seen[key] = (d, now)
+            elif d > prev:
+                last_seen[key] = (d, now)
+            elif key in last_seen and now - pts > STALL_MIN * 60 and d < GEM_TARGET:
+                # seen before, now stalled: relaunch (resumes from HF)
+                subset = tag.rsplit("-", 1)[0]
+                n = int(tag.split("-w")[-1])
+                token = TOK_VEDANG if n == 1 else TOK_SMAX
+                push_gemma_worker(subset, n, token)
+                last_seen[key] = (d, now)
+                print(f"relaunched stalled gemma {tag} (rc? see above)", flush=True)
+        print(f"[{time.strftime('%H:%M:%S')}] gemma: " +
+              " ".join(f"{t}={d}" for t, d in done_map.items()) +
+              f" | launched={launched}/6", flush=True)
+        if all(d >= GEM_TARGET for d in done_map.values()):
+            return
+        time.sleep(SLEEP_S)
+
+wait_gemma()
+print("GEMMA DONE -- campaign complete", flush=True)
 '''.strip()),
 ]
 
