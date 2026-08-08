@@ -111,7 +111,7 @@ except Exception as e:
 
 
 def run_cell(worker: dict, out_dir: str, worker_tag: str, bench_run_id: str,
-             task_file: str) -> dict:
+             task_file: str, n_positions: int) -> dict:
     return _code(f'''
 import os, subprocess, sys, time
 from pathlib import Path
@@ -123,7 +123,7 @@ cmd = [sys.executable, "scripts/run_mate_eval.py",
        "--model", "gemma4-e2b",
        "--task-file", {task_file!r},
        "--offset", "{worker['offset']}",
-       "--n", "{SLICE_SIZE}",
+       "--n", "{n_positions}",
        "--max_new_tokens", "{MAX_NEW_TOKENS}",
        "--force-answer-prompt",
        "--local-thinking",
@@ -147,6 +147,69 @@ if res.returncode != 0:
 '''.strip())
 
 
+def demo_cell(worker: dict, out_dir: str, worker_tag: str, bench_run_id: str,
+              task_file: str) -> dict:
+    return _code(f'''
+import os, subprocess, sys, time
+from pathlib import Path
+
+# 2-position demo through the REAL pipeline: model load, thinking channel,
+# extraction, live push, HF end-upload -- everything the full run does, on
+# whichever GPU Kaggle assigned. Shares the run id + output dir with the
+# full run, so the archive ends up with ONE cell and the full run resumes
+# past these 2 positions.
+os.environ["BENCH_RUN_ID"] = {bench_run_id!r}
+out = Path({out_dir!r})
+out.mkdir(parents=True, exist_ok=True)
+cmd = [sys.executable, "scripts/run_mate_eval.py",
+       "--model", "gemma4-e2b",
+       "--task-file", {task_file!r},
+       "--offset", "{worker['offset']}",
+       "--n", "2",
+       "--max_new_tokens", "{MAX_NEW_TOKENS}",
+       "--force-answer-prompt",
+       "--local-thinking",
+       "--worker-id", {worker_tag!r},
+       "--live-namespace", "gemma",
+       "--output_dir", {out_dir!r},
+       "--live-push",
+       "--resume",
+       "--verbose"]
+print("demo:", " ".join(cmd))
+t0 = time.time()
+res = subprocess.run(cmd, stderr=subprocess.STDOUT)
+print(f"demo exit rc={{res.returncode}} after {{(time.time()-t0)/60:.1f}}min")
+if res.returncode != 0:
+    raise RuntimeError(f"demo failed with rc={{res.returncode}} -- fix before the full run")
+'''.strip())
+
+
+def inspect_cell(out_dir: str) -> dict:
+    return _code(f'''
+import json, glob
+from pathlib import Path
+
+files = glob.glob(str(Path({out_dir!r}) / "*.samples.jsonl"))
+if not files:
+    raise RuntimeError(f"no samples file under {out_dir!r} -- the demo did not write results")
+rows = [json.loads(l) for l in open(files[0]) if l.strip()]
+print(f"demo samples on disk: {{len(rows)}}")
+for s in rows:
+    tu = s.get("token_usage") or {{}}
+    print(f"{{s['position_id']}}: {{s['status']:9s}} move={{s.get('move')}} "
+          f"correct={{s.get('compliance')}} reasoning_chars={{s.get('reasoning_chars')}} "
+          f"reason_tokens={{tu.get('reasoning_tokens')}}")
+parsed = [r for r in rows if r["status"] in ("correct", "wrong")]
+unclean = [r for r in rows if not (r.get("reasoning") or "").strip()]
+if not parsed:
+    raise RuntimeError("0 parsed positions -- extraction/thinking split is broken on this GPU")
+if unclean:
+    raise RuntimeError(f"{{len(unclean)}} sample(s) have no reasoning text -- the thinking "
+                       "channel split is broken; check the samples above")
+print(f"\\nDEMO OK: {{len(parsed)}}/{{len(rows)}} parsed, thinking split verified -- safe to run the full slice")
+'''.strip())
+
+
 def summary_cell(out_dir: str, task_name: str) -> dict:
     return _code(f'''
 import json, glob, collections
@@ -166,7 +229,7 @@ if scored:
 '''.strip())
 
 
-def build_worker_notebook(variant: str, n: int) -> list:
+def build_worker_notebook(variant: str, n: int, demo_only: bool = False) -> list:
     offset = (n - 1) * SLICE_SIZE
     worker_tag = f"{variant}-w{n}"
     bench_run_id = f"mate-gemma-{variant}-w{n}"
@@ -193,22 +256,39 @@ def build_worker_notebook(variant: str, n: int) -> list:
         _code(DEPS_CELL),
         _md("## 4. Engine/dataset gate"),
         _code(GATE_CELL),
-        _md("## 5. Run positions\n\n"
-            "HF backup every 25 positions; live state to "
-            f"monitor/gemma/workers/{worker_tag}.*"),
-        run_cell({"offset": offset}, out_dir, worker_tag, bench_run_id, task_file),
-        _md("## 6. This worker's summary"),
-        summary_cell(out_dir, variant),
-        _md("## Notes\n"
-            f"- Scope: ONLY positions [{offset}:{offset + SLICE_SIZE}) of {task_file}.\n"
-            "- If this session dies/times out, push the same notebook again "
-            "(or Restart & Run All): step 5 recovers progress from HF, "
-            "--resume skips it.\n"
-            "- GPU: Kaggle assigns T4 or P100 -- both supported; T4 is ~2x "
-            "faster. ~78s/position measured on P100, so 500 positions ~ 11h, "
-            "within the 12h session limit.\n"
-            f"- Results: HF runs/{bench_run_id}/"),
+        _md("## 5. Demo: 2 positions through the REAL pipeline\n\n"
+            "Verifies model load, the thinking channel split, extraction, "
+            "live push and the HF upload all work on the GPU Kaggle assigned "
+            "(T4 or P100 -- the pinned torch 2.5.1 build supports both). "
+            "The demo shares the run id and output dir with the full run, so "
+            "the full run's `--resume` skips these 2 positions."),
+        demo_cell({"offset": offset}, out_dir, worker_tag, bench_run_id, task_file),
+        _md("## 6. Inspect the demo before the full run\n\n"
+            "Raises if anything is broken: no samples written, 0 parsed "
+            "answers, or missing reasoning text (thinking split failed). "
+            "On a relaunch after a died session this cell validates the "
+            "recovered samples instead."),
+        inspect_cell(out_dir),
     ]
+    if not demo_only:
+        cells += [
+            _md("## 7. Run positions\n\n"
+                "HF backup every 25 positions; live state to "
+                f"monitor/gemma/workers/{worker_tag}.*"),
+            run_cell({"offset": offset}, out_dir, worker_tag, bench_run_id,
+                     task_file, SLICE_SIZE),
+            _md("## 8. This worker's summary"),
+            summary_cell(out_dir, variant),
+            _md("## Notes\n"
+                f"- Scope: ONLY positions [{offset}:{offset + SLICE_SIZE}) of {task_file}.\n"
+                "- If this session dies/times out, push the same notebook again "
+                "(or Restart & Run All): step 5 recovers progress from HF, "
+                "--resume skips it.\n"
+                "- GPU: Kaggle assigns T4 or P100 -- both supported; T4 is ~2x "
+                "faster. ~78s/position measured on P100, so 500 positions ~ 11h, "
+                "within the 12h session limit.\n"
+                f"- Results: HF runs/{bench_run_id}/"),
+        ]
     return cells
 
 
@@ -252,7 +332,9 @@ def inject_secrets(nb: dict, env: dict, names: list[str]) -> None:
 
 
 def main() -> None:
-    variant = sys.argv[1] if len(sys.argv) > 1 else None
+    demo_only = "--demo" in sys.argv
+    args = [a for a in sys.argv[1:] if a != "--demo"]
+    variant = args[0] if args else None
     variants = [variant] if variant else list(TASK_FILES)
     if variant and variant not in TASK_FILES:
         raise SystemExit(f"unknown variant {variant!r}; choose from {sorted(TASK_FILES)}")
@@ -266,7 +348,7 @@ def main() -> None:
 
     for v in variants:
         for n in (1, 2):
-            clean = _notebook(build_worker_notebook(v, n))
+            clean = _notebook(build_worker_notebook(v, n, demo_only=demo_only))
             nb = json.loads(json.dumps(clean))
             inject_secrets(nb, env, ["GITHUB_TOKEN", "HF_WRITE_TOKEN"])
             push_dir = NB_DIR / f"push_gemma_{v}/w{n}"
@@ -276,7 +358,8 @@ def main() -> None:
             (push_dir / "kernel-metadata.json").write_text(json.dumps(
                 kernel_metadata(f"vedangpandeyyy/gemma-{v}-worker-{n}-of-2",
                                 f"Gemma {v} -- worker {n} of 2", code_file), indent=1))
-            print(f"wrote {push_dir}/kernel-metadata.json (GPU, secrets injected)")
+            print(f"wrote {push_dir}/kernel-metadata.json (GPU, secrets injected)"
+                  f"{' -- DEMO ONLY' if demo_only else ''}")
 
     print()
     print("PUSH DIRS READY (secrets injected, never committed):")
