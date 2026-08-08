@@ -86,4 +86,12 @@ monitor/
 
 # Generated figure/table outputs
 analysis/
+
+# Wrangler/Cloudflare local caches (account ids, pages state -- never commit)
+.wrangler/
+frontend/.wrangler/
+worker/.wrangler/
+
+# Kaggle deployment scaffolding (notebooks embed API keys at build time)
 notebooks/push_*/
+notebooks/kaggle_mate_*_w*.ipynb

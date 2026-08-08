@@ -358,9 +358,16 @@ def test_silent_stream_is_retried_not_recorded_as_truncated() -> None:
     out = run([[real_chunk, stop_chunk], []], expect_attempts_ge=1,
               expect_content="MOVE: e2e4", expect_reasoning_nonempty=True)
 
-    # 3) a genuine length-cutoff (reasoning flowed, no explicit finish_reason,
-    #    matching a real truncation like mate-sel-02999) must be accepted
-    #    immediately, not treated as silent
+    # 3) reasoning flowed but NO finish_reason ever arrived -> mid-stream
+    #    transport cut. Old behavior: accepted as a real outcome after one
+    #    call, recorded as a fake "truncated" no_answer with zero usage data
+    #    (measured 2026-08-05: 42/42 truncations in the 1000-position run
+    #    had token_usage=None while every completed sample had usage, and
+    #    completed streams reached 305k chars / 1026s -- so no gateway cap
+    #    is hit; those are pure connection cuts). New behavior: retried with
+    #    fresh requests (MAX_MIDSTREAM_RETRIES) until an explicit
+    #    finish_reason lands, and the LAST attempt's reasoning is what is
+    #    recorded.
     reasoning_only_chunk = ('data: {"choices":[{"delta":'
                            '{"reasoning_content":"still thinking"},'
                            '"finish_reason":null}]}')
@@ -374,9 +381,10 @@ def test_silent_stream_is_retried_not_recorded_as_truncated() -> None:
 
     m._post_with_retry = fake_post_with_retry
     out = m.generate("prompt", max_new_tokens=100, stream=True)
-    check("real partial reasoning (no finish_reason) is accepted, not retried",
-          calls["n"] == 1, f"{calls['n']} calls")
-    check("real partial reasoning still recorded (not discarded)",
+    check("mid-stream cut (tokens, no finish_reason) is retried fresh",
+          calls["n"] == m.MAX_MIDSTREAM_RETRIES + 1,
+          f"{calls['n']} calls (expected {m.MAX_MIDSTREAM_RETRIES + 1})")
+    check("mid-stream cut still records the last attempt's reasoning",
           "still thinking" in out["reasoning"])
 
     # 4) persistently silent (every attempt empty) -> gives up honestly,
@@ -415,6 +423,141 @@ def test_heartbeat_pings_dashboard_during_a_silent_wait() -> None:
           out["content"] == "" and out["reasoning"] == "")
 
 
+def test_offset_partitions_dataset_for_parallel_workers() -> None:
+    """5 Kaggle workers must cover positions 100-999 with no gaps and no
+    overlaps, and never re-touch the first 100 (already scored, archived,
+    not to be re-run -- user decision 2026-08-04). 5, not 6: Kaggle caps
+    concurrent CPU kernel sessions at 5 per account (measured directly --
+    a 6th push failed with "Maximum batch CPU session count of 5 reached"
+    -- user decision 2026-08-04: design around 5, don't queue a 6th).
+
+    Regression risk: a fencepost error in --offset/--n slicing would either
+    silently drop positions (a "1000-position" run that's actually short)
+    or silently double-score some (wasted spend, and a position appearing
+    twice in the merged dataset would corrupt any per-position analysis).
+    """
+    data_path = (Path(__file__).resolve().parent.parent
+                 / "data" / "positions" / "mate-selection-test.json")
+    all_records = json.loads(data_path.read_text())
+    check("dataset has exactly 1000 positions", len(all_records) == 1000,
+          f"{len(all_records)}")
+
+    baseline_ids = {r["id"] for r in all_records[:100]}
+    worker_slices = [(100 + i * 180, 180) for i in range(5)]  # 5x180 = 900
+    check("worker slices cover exactly 900 positions",
+          sum(n for _, n in worker_slices) == 900)
+
+    seen_ids: dict = {}
+    for offset, n in worker_slices:
+        for r in all_records[offset: offset + n]:
+            seen_ids[r["id"]] = seen_ids.get(r["id"], 0) + 1
+    check("no worker slice overlaps another",
+          all(count == 1 for count in seen_ids.values()),
+          f"{sum(1 for c in seen_ids.values() if c != 1)} ids seen != once")
+    check("worker slices touch none of the first 100 (already scored)",
+          not (seen_ids.keys() & baseline_ids),
+          f"overlap: {sorted((seen_ids.keys() & baseline_ids))[:5]}")
+    check("baseline + 6 worker slices union to all 1000 positions",
+          (seen_ids.keys() | baseline_ids) == {r["id"] for r in all_records},
+          f"{1000 - len(seen_ids.keys() | baseline_ids)} ids missing from the union")
+
+
+def test_final_metrics_accuracy_math() -> None:
+    """final_metrics() (used for BOTH the periodic HF checkpoint mid-run
+    and the true end-of-run summary -- see run_mate_eval.py) must compute
+    correct, honest rates on a small hand-verified set.
+
+    Regression risk this guards: an earlier draft of the periodic
+    checkpoint wrote a placeholder metrics dict (only n_attempted, no real
+    accuracy) straight to summary.json and uploaded that to the public HF
+    archive. Being the exact same function for both call sites is what
+    makes that class of bug impossible now, but the function's own math
+    still needs an independent, hand-computed check.
+    """
+    from run_mate_eval import final_metrics
+
+    def row(status, compliance):
+        return {"status": status, "compliance": compliance}
+
+    rows = [
+        row("correct", True), row("correct", True), row("correct", True),
+        row("wrong", False),
+        row("no_answer", None),
+        row("parse_error", None),
+        row("api_error", None), row("api_error", None),
+    ]
+    m = final_metrics(rows)["accuracy"]
+    # 8 rows total, 2 api_error -> 6 scored; of those 4 are parsed (3 correct + 1 wrong)
+    check("final_metrics n excludes api_error", m["n"] == 6, str(m["n"]))
+    check("final_metrics n_attempted counts every row", m["n_attempted"] == 8, str(m["n_attempted"]))
+    check("final_metrics api_error count", m["api_error"] == 2, str(m["api_error"]))
+    check("final_metrics correct count", m["correct"] == 3, str(m["correct"]))
+    check("final_metrics wrong count", m["wrong"] == 1, str(m["wrong"]))
+    check("final_metrics parse_rate = parsed/scored = 4/6",
+          m["parse_rate"] == round(4 / 6, 4), str(m["parse_rate"]))
+    check("final_metrics accuracy_strict = correct/scored = 3/6",
+          m["accuracy_strict"] == 0.5, str(m["accuracy_strict"]))
+    check("final_metrics accuracy_of_parsed = correct/parsed = 3/4",
+          m["accuracy_of_parsed"] == 0.75, str(m["accuracy_of_parsed"]))
+
+
+def test_combine_mate_metrics_matches_pooled_recompute() -> None:
+    """combine_mate_metrics(per-worker dicts) must exactly equal
+    compute_mate_metrics() run once over ALL workers' rows pooled together
+    -- for every field that's a sum of raw counts. If those two ever
+    diverge, the multi-worker dashboard's headline accuracy would silently
+    lie relative to what a from-scratch recompute over the same data says,
+    which is exactly the failure mode this whole design exists to prevent
+    (see src/mate_metrics.py docstring).
+
+    positions_per_hour is deliberately excluded from the equality check: it
+    is a per-process wall-clock throughput, not derivable from pooled rows
+    without knowing each worker's own elapsed time, so it is checked
+    separately by construction (parallel rates must simply sum).
+    """
+    from src.mate_metrics import combine_mate_metrics, compute_mate_metrics
+
+    def row(i, status, compliance, label, truth, reasoning_reason=None):
+        return {
+            "status": status, "compliance": compliance, "label": label,
+            "no_answer_reason": reasoning_reason,
+            "position_metadata": {"task_extra": {"truth_label": truth}},
+            "latency_ms": 1000 + i * 10,
+            "token_usage": {"output_tokens": 100 + i, "reasoning_tokens": 50 + i},
+        }
+
+    worker_rows = [
+        [row(0, "correct", True, "A", "A"), row(1, "wrong", False, "B", "A"),
+         row(2, "correct", True, "B", "B"), row(3, "no_answer", None, None, "A", "gave_up")],
+        [row(4, "correct", True, "A", "A"), row(5, "correct", True, "B", "B"),
+         row(6, "wrong", False, "A", "B"), row(7, "api_error", None, None, None)],
+        [row(8, "correct", True, "B", "B"), row(9, "no_answer", None, None, "B", "gave_up"),
+         row(10, "parse_error", None, None, "A")],
+    ]
+    parts = [compute_mate_metrics(rows, done_here=0, elapsed_h=None) for rows in worker_rows]
+    combined = combine_mate_metrics(parts)
+    pooled = compute_mate_metrics([r for rows in worker_rows for r in rows],
+                                  done_here=0, elapsed_h=None)
+
+    exact_fields = ["n", "n_attempted", "answered", "correct", "wrong", "no_answer",
+                    "parse_error", "api_error", "accuracy", "accuracy_of_answered",
+                    "answer_rate", "picked_a", "picked_b", "truth_a", "truth_b",
+                    "correct_truth_a", "correct_truth_b", "accuracy_truth_a",
+                    "accuracy_truth_b", "no_answer_reasons",
+                    "mean_latency_s", "mean_output_tokens", "mean_reasoning_tokens"]
+    for field in exact_fields:
+        check(f"combine_mate_metrics[{field}] matches pooled recompute",
+              combined[field] == pooled[field],
+              f"combined={combined[field]!r} pooled={pooled[field]!r}")
+
+    # positions_per_hour: parallel throughput sums, it does not pool from rows
+    parts_with_rate = [dict(p, positions_per_hour=r) for p, r in
+                       zip(parts, [10.0, 12.5, None])]
+    check("positions_per_hour sums across concurrently-running workers",
+          combine_mate_metrics(parts_with_rate)["positions_per_hour"] == 22.5,
+          str(combine_mate_metrics(parts_with_rate)["positions_per_hour"]))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true",
@@ -430,6 +573,9 @@ def main() -> None:
     test_backends_share_one_generate_signature()
     test_silent_stream_is_retried_not_recorded_as_truncated()
     test_heartbeat_pings_dashboard_during_a_silent_wait()
+    test_offset_partitions_dataset_for_parallel_workers()
+    test_final_metrics_accuracy_math()
+    test_combine_mate_metrics_matches_pooled_recompute()
     if FAILURES:
         print(f"\n{len(FAILURES)} FAILURES", flush=True)
         sys.exit(1)
