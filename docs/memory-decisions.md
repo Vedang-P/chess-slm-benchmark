@@ -2,6 +2,24 @@
 
 Append-only record of user decisions and rationale. Update on every change.
 
+## 2026-08-12 — Drop the A1 "caveman gemma" training arm
+
+- **Decision:** remove the standalone style-transfer arm (synthesize lucid
+  rewrites → QLoRA SFT, cavegemma recipe) from the locked pipeline
+  (repo_context.readme §2). A1 now means MATE lucid-traces only; arms are
+  **B** (labels-only SFT) and **A1** (deepseek lucid traces → SFT), the
+  A-vs-B design.
+- **Why:** (1) the lit review establishes content, not length, drives CoT
+  accuracy (2606.30128) — a pure style arm tests the weakest claim; (2) A1's
+  lucid traces already carry the compressed style, so the extra arm only
+  disentangled style-vs-content; (3) compute is scarce (6GB laptop 4050 +
+  free Kaggle T4) and the phase-stratified work is the actual paper
+  contribution.
+- **What we lose + recovery:** a clean lucid-vs-verbose ablation isolated
+  from the teacher. Recovered cheaply at eval time as a zero-train prompt
+  baseline (CoD-style "be concise", 2502.18600) on the benchmark matrix.
+- **Docs updated:** repo_context.readme §2, docs/objective.md.
+
 ## 2026-08-04 — MATE thinking-run decisions
 
 - **Positions:** 100, **the same positions as the direct-mode run** (per-position

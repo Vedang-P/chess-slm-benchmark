@@ -43,11 +43,14 @@ The staged plan (committed in `idea.md` / `refined-idea.md`, locked in commit
 `69b2483` "plan: lock the lucid-reasoning chess SLM pipeline"):
 
 - **B** — baseline labels-only SFT (cheap baseline arm)
-- **A1** — "caveman gemma": teach gemma-4-E2B the compressed reasoning style
-  (cavegemma recipe: synthesize lucid rewrites → QLoRA SFT)
-- **A2** — MATE lucid-traces: distill deepseek-v4-flash lucid reasoning traces
+- **A1** — MATE lucid-traces: distill deepseek-v4-flash lucid reasoning traces
   on MATE positions into gemma (trace+answer vs answer-only comparison =
-  A-vs-B design)
+  A-vs-B design). A separate "caveman gemma" style-transfer arm (synthesize
+  lucid rewrites → QLoRA SFT) was **dropped 2026-08-12**: the lit review shows
+  content, not style, drives accuracy (2606.30128), A1's lucid traces already
+  carry the style, and it cost a full rewrite pipeline + QLoRA run. Style-vs-
+  verbose is recovered at eval time as a zero-train prompt-side baseline
+  (CoD-style "be concise", 2502.18600) on the benchmark matrix.
 - **Refined idea** (`refined-idea.md`): a **phase-segregated** (opening /
   middlegame / endgame), engine-verified trace dataset + a phase-stratified
   benchmark released from the same pipeline — the primary paper contribution

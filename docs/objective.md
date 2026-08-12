@@ -24,9 +24,11 @@ Two stages:
 2. **Close the gap by fine-tuning.** Fine-tune Gemma 4 (4-bit LoRA,
    starting with 50k MATE examples) so that its reasoning improves enough
    to beat DeepSeek V4 Flash at chess. How exactly — data mix, reward
-   design, whether to teach it to "think in caveman style" like DeepSeek
-   does, reasoning-trace supervision — is deliberately **not decided
-   yet**. That is the next research question.
+   design, reasoning-trace supervision — is deliberately **not decided
+   yet**. That is the next research question. (2026-08-12: a "teach it
+   the caveman style" arm was dropped — trace supervision already carries
+   the compressed style, and the review shows content, not length, drives
+   accuracy; style-vs-verbose becomes a zero-train prompt baseline.)
 
 Constraints that are already decided:
 

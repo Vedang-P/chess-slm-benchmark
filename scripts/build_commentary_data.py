@@ -272,7 +272,7 @@ def prehoch(args: argparse.Namespace) -> None:
     games_path = OUT_DIR / "games.jsonl"
     out = OUT_DIR / "prehoch.jsonl"
     if out.exists() and not args.force:
-        print("skip prehoch (exists)", flush=True)
+        print("skip prehoch (exists) -- use --force to redo", flush=True)
         return
     if not games_path.exists():
         print("no games.jsonl (run `games` first)", flush=True)
@@ -280,23 +280,40 @@ def prehoch(args: argparse.Namespace) -> None:
     sys.path.insert(0, str(ROOT))
     from src.models import OpenCodeGoModel
 
+    done: set[tuple] = set()
+    if out.exists():
+        for line in out.open():
+            try:
+                r = json.loads(line)
+                done.add((r["game_id"], r["ply"]))
+            except Exception:
+                pass
+        print(f"resuming prehoch: {len(done)} rows already done", flush=True)
+    else:
+        out.touch()
+
     model = OpenCodeGoModel(args.model)
     model.load()
     n_moves = n_ok = n_agree = 0
     total_in = total_out = 0
-    with games_path.open() as fin, out.open("w") as fout:
+    with games_path.open() as fin, out.open("a") as fout:
         for line in fin:
             g = json.loads(line)
             board = chess.Board()
             history: list[str] = []
+            gid = f"{g.get('event','')}-{g.get('white','')}-{g.get('black','')}"
             for i, m in enumerate(g["moves"]):
                 san = m["san"]
                 mv = board.parse_san(san)
                 # comment the position BEFORE the master's move
                 if i > 0:
+                    n_moves += 1
+                    if (gid, i + 1) in done:
+                        board.push(mv)
+                        history.append(san)
+                        continue
                     row = _comment_one(model, g, board, history,
                                        m, args)
-                    n_moves += 1
                     if row:
                         n_ok += 1
                         n_agree += 1 if row["agree"] else 0
@@ -304,6 +321,7 @@ def prehoch(args: argparse.Namespace) -> None:
                         total_out += row["output_tokens"]
                         fout.write(json.dumps(row) + "\n")
                         fout.flush()
+                        done.add((gid, i))
                     if n_moves % 25 == 0:
                         print(f"prehoch: {n_moves} moves, {n_ok} ok, "
                               f"{n_agree} agree "

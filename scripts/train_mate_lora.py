@@ -52,9 +52,16 @@ def main() -> None:
     ap.add_argument("--save-steps", type=int, default=10000)
     ap.add_argument("--wandb-project", default="", help="wandb project name "
                     "(empty = no wandb)")
+    ap.add_argument("--game-mode", action="store_true",
+                    help="expect the full-game commentary format "
+                    "('user: FEN+history+turn' / 'assistant: "
+                    "<reasoning>\\nMove: <SAN>') instead of MATE selection "
+                    "pairs; rows come from build_commentary_data.py --emit")
     ap.add_argument("--smoke", action="store_true",
                     help="tiny run to validate the stack")
     args = ap.parse_args()
+    if args.game_mode:
+        args.max_seq_len = max(args.max_seq_len, 4096)
 
     import torch
     from datasets import load_dataset
@@ -77,15 +84,29 @@ def main() -> None:
         bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=compute_dtype,
     )
     print("loading base model...", flush=True)
-    processor = AutoProcessor.from_pretrained(args.base)
-    tokenizer = processor.tokenizer
-    model = AutoModelForImageTextToText.from_pretrained(
-        args.base, quantization_config=quant, device_map={"": 0},
-        dtype=compute_dtype)
+    if args.game_mode:
+        # text-only checkpoint (extract_text_tower.py): causal LM, much
+        # smaller than the multimodal E2B, fits a 6GB card in 4-bit.
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    # 4-bit -> prepare for k-bit training, then wrap ONLY the language tower.
+        tokenizer = AutoTokenizer.from_pretrained(args.base)
+        model = AutoModelForCausalLM.from_pretrained(
+            args.base, quantization_config=quant, device_map="auto",
+            low_cpu_mem_usage=True, dtype=compute_dtype)
+        processor = None
+    else:
+        processor = AutoProcessor.from_pretrained(args.base)
+        tokenizer = processor.tokenizer
+        model = AutoModelForImageTextToText.from_pretrained(
+            args.base, quantization_config=quant, device_map={"": 0},
+            dtype=compute_dtype)
+
+    # 4-bit -> prepare for k-bit training, then wrap the language model.
     model = prepare_model_for_kbit_training(model)
-    lang_model = model.model.language_model
+    if args.game_mode:
+        lang_model = model
+    else:
+        lang_model = model.model.language_model
     print("language_model params:",
           sum(p.numel() for p in lang_model.parameters()) / 1e6, "M",
           flush=True)
@@ -96,7 +117,10 @@ def main() -> None:
                         "gate_proj", "up_proj", "down_proj"],
         task_type="CAUSAL_LM")
     lang_model = get_peft_model(lang_model, lora)
-    model.model.language_model = lang_model
+    if not args.game_mode:
+        model.model.language_model = lang_model
+    else:
+        model = lang_model
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable params: {trainable/1e6:.1f}M "
           f"({trainable/sum(p.numel() for p in model.parameters())*100:.2f}%)",
@@ -111,12 +135,29 @@ def main() -> None:
         # processor.apply_chat_template(enable_thinking=False). Thinking is
         # OFF for the LoRA eval, so the trainer must use the same rendering
         # or train/eval prompts diverge (a silent accuracy cap).
-        out = processor.apply_chat_template(
-            msgs, tokenize=True, add_generation_prompt=False,
-            return_assistant_tokens_mask=True, return_dict=True,
-            enable_thinking=False)
-        input_ids = out["input_ids"]
-        mask = out["assistant_tokens_mask"]
+        if processor is not None:
+            out = processor.apply_chat_template(
+                msgs, tokenize=True, add_generation_prompt=False,
+                return_assistant_tokens_mask=True, return_dict=True,
+                enable_thinking=False)
+            input_ids = out["input_ids"]
+            mask = out["assistant_tokens_mask"]
+        else:
+            # text-only causal LM: compute the assistant span from the
+            # '<|turn>model\n' marker (the last assistant turn).
+            text = tokenizer.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=False)
+            ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+            marker = tokenizer("<|turn>model\n",
+                               add_special_tokens=False)["input_ids"]
+            start = None
+            for i in range(len(ids) - len(marker) + 1):
+                if ids[i:i + len(marker)] == marker:
+                    start = i
+            input_ids = ids
+            mask = [False] * len(ids)
+            if start is not None:
+                mask[start:] = [True] * (len(ids) - start)
         if len(input_ids) > args.max_seq_len:
             input_ids = input_ids[: args.max_seq_len]
             mask = mask[: args.max_seq_len]
@@ -126,15 +167,18 @@ def main() -> None:
 
     def to_text(row):
         msgs = row["messages"]
-        return {"text": processor.apply_chat_template(
-            msgs, tokenize=False, add_generation_prompt=False,
-            enable_thinking=False)}
+        if processor is not None:
+            return {"text": processor.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=False,
+                enable_thinking=False)}
+        return {"text": tokenizer.apply_chat_template(
+            msgs, tokenize=False, add_generation_prompt=False)}
 
     train_ds = ds["train"].map(to_text)
     eval_ds = ds["eval"].map(to_text)
     if args.smoke:
-        train_ds = train_ds.select(range(300))
-        eval_ds = eval_ds.select(range(60))
+        train_ds = train_ds.select(range(min(300, len(train_ds))))
+        eval_ds = eval_ds.select(range(min(60, len(eval_ds))))
     train_ds = train_ds.map(to_ids, remove_columns=["text", "messages", "fen"])
     eval_ds = eval_ds.map(to_ids, remove_columns=["text", "messages", "fen"])
     print(f"train rows: {len(train_ds)} | eval rows: {len(eval_ds)}", flush=True)
@@ -166,7 +210,7 @@ def main() -> None:
         gradient_accumulation_steps=args.grad_accum,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.05,
+        warmup_steps=50,
         weight_decay=0.01,
         optim="adamw_8bit",
         bf16=cap >= (7, 5),
@@ -217,7 +261,8 @@ def main() -> None:
     trainer.train()
     trainer.save_model(str(out))
     tokenizer.save_pretrained(str(out))
-    processor.save_pretrained(str(out))
+    if processor is not None:
+        processor.save_pretrained(str(out))
     print(f"done in {(time.time()-t0)/3600:.2f}h -> {out}", flush=True)
     if not args.smoke:
         metrics = trainer.evaluate()
