@@ -212,11 +212,12 @@ class HFModel:
     """4-bit HF model with chat-template generation (greedy by default)."""
 
     def __init__(self, model_key: str, smoke_test: bool = False,
-                 system_prompt: str = ""):
+                 system_prompt: str = "", adapter_path: str = ""):
         self.model_key = model_key
         self.model_id = MODEL_IDS.get(model_key, model_key)
         self.smoke_test = smoke_test
         self.system_prompt = system_prompt
+        self.adapter_path = adapter_path
         self.model = None
         self.tokenizer = None
         self.processor = None
@@ -280,6 +281,12 @@ class HFModel:
                 torch_dtype=torch.bfloat16,
             )
         self.model.eval()
+        if self.adapter_path:
+            from peft import PeftModel
+
+            self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
+            self.model.eval()
+            print(f"adapter loaded: {self.adapter_path}", flush=True)
 
     def render_chat(self, prompt: str) -> str:
         """The exact string the model will see (for debugging)."""
@@ -754,8 +761,10 @@ class OpenCodeGoModel:
             "latency_ms": (time.time() - t0) * 1000, "finished": False,
         }, local_usage(None, None, source="error"))
 
-def make_model(model_key: str, smoke_test: bool = False):
+def make_model(model_key: str, smoke_test: bool = False,
+               adapter_path: str = ""):
     """Registry: local 4-bit HF models + the gateway API model."""
     if model_key in (DEEPSEEK_V4_FLASH, DEEPSEEK_V4_FLASH_FREE):
         return OpenCodeGoModel(model_key, smoke_test=smoke_test)
-    return HFModel(model_key, smoke_test=smoke_test)
+    return HFModel(model_key, smoke_test=smoke_test,
+                   adapter_path=adapter_path)

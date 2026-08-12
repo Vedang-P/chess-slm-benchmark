@@ -95,3 +95,6 @@ worker/.wrangler/
 # Kaggle deployment scaffolding (notebooks embed API keys at build time)
 notebooks/push_*/
 notebooks/kaggle_mate_*_w*.ipynb
+
+# >100MB training artifacts
+/data/positions/mate-lora/train.jsonl

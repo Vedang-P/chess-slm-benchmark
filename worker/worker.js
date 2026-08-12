@@ -16,6 +16,7 @@
 //    worker cache TTL to >= 60s or add the secret for true live updates)
 
 const REPO = "Vedang-P/chess-bench-live";
+const HF_DATASET = "vedangfake/chess-bench-results";
 const FILES = {
   "/live": "monitor/live.json",
   "/state": "monitor/state.json",
@@ -23,7 +24,19 @@ const FILES = {
   "/gemma/live": "monitor/gemma/live.json",
   "/gemma/state": "monitor/gemma/state.json",
   "/gemma/history": "monitor/gemma/history.jsonl",
+  "/games/state": "monitor/games/live.json",
 };
+// dynamic game feeds. Full completed games live on HF (durable, no
+// GitHub spam): /games/{id} -> HF runs/selfplay/{id}.json. There is no
+// GitHub per-game file anymore — live play streams through /games/state.
+// NOTE: FILES keys win over the dynamic regex (e.g. /games/state must be
+// the index, not "game id 'state' on HF").
+function gamesPath(pathname) {
+  if (FILES[pathname]) return null;
+  const m = pathname.match(/^\/games\/([a-zA-Z0-9_-]+)$/);
+  if (m) return { hf: `runs/selfplay/${m[1]}.json` };
+  return null;
+}
 
 function base64ToBytes(b64) {
   const bin = atob(b64);
@@ -46,8 +59,9 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const file = FILES[url.pathname];
-    if (!file) {
-      return new Response("chess-live proxy: /live  /state  /history  |  /gemma/live  /gemma/state  /gemma/history", {
+    const dynamic = gamesPath(url.pathname);
+    if (!file && !dynamic) {
+      return new Response("chess-live proxy: /live  /state  /history  |  /gemma/live  /gemma/state  /gemma/history  |  /games/state  /games/{id}", {
         headers: { "Access-Control-Allow-Origin": "*" },
       });
     }
@@ -62,12 +76,27 @@ export default {
       return res;
     }
 
-    const content = await fetchContent(file, env.GH_TOKEN);
-    if (!content) {
-      return new Response("monitor file not found", {
-        status: 502,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      });
+    let content;
+    if (dynamic && dynamic.hf) {
+      // full game from HF resolve (durable archive); no GitHub spam
+      const hfRes = await fetch(
+        `https://huggingface.co/datasets/${HF_DATASET}/resolve/main/${dynamic.hf}`,
+        { headers: { "User-Agent": "chess-live" } });
+      if (!hfRes.ok) {
+        return new Response("game not found on HF", {
+          status: 502,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
+      content = { body: await hfRes.arrayBuffer(), etag: null };
+    } else {
+      content = await fetchContent(file, env.GH_TOKEN);
+      if (!content) {
+        return new Response("monitor file not found", {
+          status: 502,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        });
+      }
     }
 
     // 3s for live.json feeds (the runner republishes at most every ~2s, so a

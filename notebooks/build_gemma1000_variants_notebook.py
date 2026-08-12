@@ -275,6 +275,11 @@ def build_worker_notebook(variant: str, n: int, demo_only: bool = False) -> list
         _code(DEPS_CELL),
         _md("## 4. Engine/dataset gate"),
         _code(GATE_CELL),
+        _md("## 4b. Recover progress from HF (resume support)\n\n"
+            "Pulls this worker's own HF checkpoint back down first, so "
+            "`--resume` skips everything already scored -- without it, a "
+            "relaunched kernel restarts from zero."),
+        recover_cell(out_dir, run_name, bench_run_id),
         _md("## 5. Demo: 2 positions through the REAL pipeline\n\n"
             "Verifies model load, the thinking channel split, extraction, "
             "live push and the HF upload all work on the GPU Kaggle assigned "

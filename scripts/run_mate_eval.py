@@ -130,6 +130,9 @@ def final_metrics(rows: list) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="deepseek-v4-flash")
+    ap.add_argument("--adapter", default="",
+                    help="path to a LoRA adapter dir to load on top of the "
+                         "base model (gemma arms); empty = base model")
     ap.add_argument("--n", type=int, default=1000)
     ap.add_argument("--offset", type=int, default=0,
                     help="skip this many records from the start of the "
@@ -262,7 +265,8 @@ def main() -> None:
     # last leg scored 192 wrote n_samples=192, which then told
     # run_suite --resume the cell was unfinished).
 
-    model = make_model(args.model, smoke_test=args.smoke)
+    model = make_model(args.model, smoke_test=args.smoke,
+                       adapter_path=args.adapter)
     model.load()
 
     # live.json local writer + optional background pusher

@@ -10,7 +10,7 @@ The runner pushes `monitor/state.json`, `monitor/history.jsonl` and
 `monitor/live.json` to the **public** repo `Vedang-P/chess-bench-live` (branch
 `main`) via the GitHub contents API:
 
-- `scripts/run_suite.py --monitor` — the tactical sweep (models x tasks)
+- `scripts/run_mate_eval.py` — MATE move-selection eval (Kaggle workers)
 - `scripts/run_mate_eval.py --live-push` — the MATE move-selection run
 
 The dashboard reads them through the Cloudflare Worker proxy (3s cache) and
@@ -69,7 +69,7 @@ Everything data-related is decoupled: point `CONFIG.STATE_URL` at any JSON
 that matches the `state.json` schema and the dashboard renders it. The two
 producers are the contract:
 
-- sweep — `scripts/run_suite.py` → `Monitor._state`
+- sweep — `scripts/run_mate_eval.py` → `Monitor._state`
 - MATE — `scripts/run_mate_eval.py` → `_state_payload` / `_mate_metrics`
 
 Keep `run_kind` set; without it a new run kind silently renders through the

@@ -21,27 +21,31 @@ and the answers reported by a model are not always the answers scored. We
 build on MATE~\cite{wang2024mate}, which fine-tuned an 8B model on one
 million expert-annotated chess positions and beat GPT/Claude/Gemini at
 move selection, and update it to current models: 4-bit LoRA fine-tuning
-of Gemma~4 E2B/E4B, compared against DeepSeek V4 Flash on MATE's
-held-out move-selection set, with strict answer extraction. This draft
-reports the measurement infrastructure and the first honest results: a
-Phase~1 representation study that motivates FEN-only prompts, and
-1000-position runs on MATE selection. The central finding is a clean
+of Gemma~4 E2B, compared against DeepSeek V4 Flash on MATE's full
+four-subset held-out matrix ($4\times1000$ positions: strategy,
+noexplain, tactic, both), with strict answer extraction. This draft
+reports the measurement infrastructure and the completed evaluation: a
+Phase~1 representation study that motivates FEN-only prompts, and the
+full MATE Table-1 matrix for both models. The central finding is a clean
 mode gap under identical measurement conditions: direct-mode inference
 (2048-token budget, thinking off) scores 48.6\%, a chance-level rate on
 a balanced binary task, with a strong position-independent preference
 for the second candidate, while thinking-mode inference with an
 unbounded budget scores 85.8\% on the same positions (Wilson 95\% CI
 $[0.835,0.878]$, $p\approx 2\times10^{-125}$) with no candidate bias.
-Thinking is expensive: a median of $\sim$13.9k reasoning tokens and
-$\sim$160\,s per position, and wrong answers consume \emph{more}
-reasoning than correct ones ($p\approx 3\times10^{-10}$, Mann--Whitney),
-evidence that effort tracks difficulty rather than quality. An interim,
-fully local Gemma~4 E2B run (thinking on) on the same positions sits at
-61.1\% (n=1000, answer rate 1.0), above the zero-shot frontier scores
-reported in the MATE paper but far below the 89.7\% of the expert
-fine-tune. We also report the strict, regression-tested answer
-extraction that guarantees every scored answer is the model's own text,
-and 100\% legal-move validity on the scored set.
+Across the full matrix deepseek scores 85.8--94.0\%; the noexplain arm
+(92.2\%) exceeds its strategy score, evidence that expert explanations
+are not what carries it. Thinking is expensive: a median of
+$\sim$13.9k reasoning tokens and $\sim$160\,s per position, and wrong
+answers consume \emph{more} reasoning than correct ones
+($p\approx 3\times10^{-10}$, Mann--Whitney), evidence that effort
+tracks difficulty rather than quality. A fully local Gemma~4 E2B
+(thinking on) scores 58.1--61.5\% across the same matrix -- stable
+across subsets, above the zero-shot frontier scores reported in the
+MATE paper, but far below the 89.7\% expert fine-tune. We also report
+the strict, regression-tested answer extraction that guarantees every
+scored answer is the model's own text, and 100\% legal-move validity
+on the scored set.
 \end{abstract}
 
 \section{Introduction}
@@ -59,9 +63,10 @@ expert-annotated chess data via 4-bit LoRA, close the gap to a frontier
 reasoning model (DeepSeek V4 Flash) at chess?
 \end{quote}
 
-This is a working paper. It reports the evaluation infrastructure, the
-datasets, and the first measured results, and it is honest about what is
-not yet known.
+This is a working paper: it reports the evaluation infrastructure, the
+datasets, and the completed zero-shot matrix for both models, and it is
+honest about what is not yet known (the fine-tuning results in
+Section~\ref{sec:lora} are pending).
 
 \section{Related Work}
 \label{sec:related}
@@ -349,6 +354,113 @@ Accuracy truth A / truth B & 52.2\% / 70.2\% \\
 \label{tab:gemma}
 \end{table}
 
+\section{MATE Table-1 campaign: all four subsets}
+\label{sec:campaign}
+The MATE paper's headline evaluation (Table 1) is a $4\times1000$
+matrix: \emph{strategy} (S), \emph{noexplain} (N), \emph{tactic} (T),
+and the combined \emph{both} (ST) subsets, scored on the exact MATE
+test-set prompts with two-candidate move selection against the expert
+truth. We replicated the matrix with deepseek-v4-flash (five parallel
+CPU workers per subset, 200 disjoint positions each) and with the fully
+local gemma4-e2b (two T4/P100 GPU workers per subset, 500 positions
+each). Every arm uses thinking mode, the forced-answer prompt, and the
+identical extraction/scoring stack; all results stream live and are
+checkpointed to Hugging Face every 25 positions.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\hline
+Arm & S (strategy) & N (noexplain) & T (tactic) & ST (both) \\ \hline
+deepseek-v4-flash (thinking) & \textbf{85.8\%} & \textbf{92.2\%} &
+  \textbf{94.0\%} & 92.8\% \\
+gemma4-e2b (thinking, local) & 61.1\% & 58.1\% & 60.5\% &
+  61.5\% \\
+MATE fine-tune (LLaMA-3-8B, anchor) & 89.7\% & 63.5\% & 94.6\% & 95.2\% \\
+GPT-4 (zero-shot, anchor) & 54.6\% & -- & -- & -- \\
+Claude (zero-shot, anchor) & 54.9\% & -- & -- & -- \\ \hline
+\end{tabular}
+\caption{MATE Table-1 replication, accuracy on 1000 positions per
+subset. Anchors from Wang et al. (NAACL 2025). All our arms: thinking on,
+forced-answer prompt, zero parse/API errors. All numbers are final
+(n=1000 per subset per model).}
+\label{tab:campaign}
+\end{table}
+
+The full matrix is now measured. Three findings stand out.
+
+\emph{DeepSeek's noexplain advantage.} The model solves the noexplain
+arm at 92.2\%, \emph{above} its strategy score (85.8\%) and far above
+the MATE fine-tune's own noexplain anchor (63.5\%). Explanations are
+not what carries deepseek's performance on these positions; the
+strategy explanations in the prompt, when present, appear to add
+little.
+
+\emph{Gemma is consistent across subsets.} Gemma 4 E2B scores
+61.1\%/58.1\%/60.5\%/61.5\% across S/N/T/ST -- a spread of only
+3.3 points across the four subsets, with every arm well above the
+zero-shot frontier baselines of the MATE paper (GPT-4 54.6\%, Claude
+54.9\% on strategy) and between the fine-tuned anchor and GPT-4. The
+small spread across qualitatively different subsets (with and without
+explanations; strategy vs tactic content) suggests a stable
+per-position competence that does not depend on prompt content.
+
+\emph{The model gap is roughly constant.} DeepSeek leads gemma by
+24.7/34.1/33.5 points on S/N/T. The gap is largest exactly where the
+MATE fine-tune's anchor advantage is largest (noexplain, tactic),
+i.e., the frontier model does not need the expert signal that the
+fine-tune was trained to exploit.
+
+\section{Fine-tuning: trace distillation vs expert annotations}
+\label{sec:lora}
+\textbf{[This section is the next experiment; the scaffolding below is
+complete and will be filled when the runs land.]}
+
+The baseline gap motivates the question this paper ultimately asks: can
+4-bit LoRA fine-tuning of the on-device Gemma~4 E2B close the gap to
+deepseek, and \emph{which training signal} is the better teacher --
+expert human annotations (the MATE training set) or frontier reasoning
+traces? Both adapters are trained identically (QLoRA NF4, rank 16,
+$\alpha$ 32, all linear modules, lr $2\times10^{-4}$ cosine, 3 epochs,
+effective batch 16, assistant-only loss masking, no packing) and
+evaluated on the same four-subset matrix reported in
+Section~\ref{sec:campaign}.
+
+\emph{Data.} MATE-LoRA trains on expert-annotated (position, candidate
+pair, explanation, expert choice) examples from MATE's training split.
+Trace-LoRA trains on deepseek-v4-flash's unbounded-budget thinking
+traces over a disjoint sample of MATE training positions, filtered to
+positions the teacher answered correctly; the assistant target is the
+teacher's full reasoning chain followed by its scored answer. No
+position in either training set overlaps the evaluation matrix.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\hline
+Model & S & N & T & ST \\ \hline
+gemma4-e2b base (thinking) & 61.1\% & 58.1\% & 60.5\% & 61.5\% \\
+gemma4-e2b MATE-LoRA & TBD & TBD & TBD & TBD \\
+gemma4-e2b trace-LoRA & TBD & TBD & TBD & TBD \\
+deepseek-v4-flash (thinking) & 85.8\% & 92.2\% & 94.0\% & 92.8\% \\
+MATE fine-tune (LLaMA-3-8B, anchor) & 89.7\% & 63.5\% & 94.6\% & 95.2\% \\ \hline
+\end{tabular}
+\caption{Fine-tuning results, same 4$\times$1000 evaluation matrix
+(accuracy). TBD cells fill in when the adapters finish training and
+evaluation.}
+\label{tab:lora}
+\end{table}
+
+\emph{Reading the table when it fills.} Three outcomes are of
+interest: (i) whether either adapter closes the gap to deepseek on
+any subset; (ii) whether trace-LoRA \emph{beats} MATE-LoRA, which
+would mean frontier reasoning traces are a stronger teaching signal
+than expert annotations on a verifiable task; and (iii) whether the
+adapter preserves gemma's cost profile ($\sim$1.1k reasoning
+tokens/position, fully local) while raising accuracy.
+
 \section{Discussion and Limitations}
 \label{sec:discussion}
 \begin{itemize}
@@ -370,25 +482,32 @@ $\sim$19.3k tokens / $\sim$218\,s, or the MATE fine-tune's 89.7\%.
 \item \textbf{Gateway constraints.} The opencode-go gateway serializes
   heavy generations per API key and enforces thinking budgets loosely;
   these are documented in the repository rather than hidden.
-\item \textbf{Future work.} Gemma 4 E2B 4-bit LoRA on 50k MATE
-  examples; base vs LoRA vs deepseek on the MATE test set and the
-  tactical battery; a 100-game head-to-head with per-move telemetry;
-  candidate-order randomization as a standard control.
+\item \textbf{Future work.} The immediate next step is the
+  fine-tuning experiment in Section~\ref{sec:lora}: MATE-LoRA and
+  trace-LoRA (deepseek traces filtered to correct answers) trained
+  identically and evaluated on the same matrix. After that: a
+  100-game head-to-head with per-move telemetry, candidate-order
+  randomization as a standard control, and the tactical battery
+  (lichess-derived) for transfer.
 \end{itemize}
 
 \section{Conclusion}
 \label{sec:conclusion}
-This draft reports the measurement stack and the first honest results of
-a MATE-grounded comparison between fine-tuned SLMs and frontier models
-at chess, with strict extraction and legality checks guaranteeing that
+This draft reports the measurement stack and the completed
+MATE-grounded evaluation of a frontier model and a fully local SLM at
+chess, with strict extraction and legality checks guaranteeing that
 every scored answer is the model's own text. The first measured result
 is a clean mode gap: DeepSeek V4 Flash moves from chance-level direct
 mode (48.6\%) to 85.8\% thinking mode on the same 1000 positions, with
-effort tracking difficulty rather than quality. A fully local Gemma 4
-E2B with thinking enabled already reaches 61.1\%, above the
-zero-shot frontier baselines of the MATE paper, and the immediate
-question is whether 4-bit LoRA fine-tuning on MATE's expert examples can
-close the remaining gap to the 89.7\% fine-tuned anchor.
+effort tracking difficulty rather than quality. The completed
+$4\times1000$ matrix shows deepseek at 85.8--94.0\% across subsets --
+with the noexplain arm (92.2\%) exceeding its explained counterpart --
+and a fully local Gemma 4 E2B with thinking enabled at a stable
+58.1--61.5\% across all four subsets, above the zero-shot frontier
+baselines of the MATE paper. The open question, which the next
+experiment addresses, is whether 4-bit LoRA fine-tuning on either
+expert annotations or frontier reasoning traces can close the
+remaining gap to the 89.7\% fine-tuned anchor.
 
 \bibliographystyle{unsrt}
 \bibliography{references}

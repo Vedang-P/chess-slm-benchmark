@@ -1,0 +1,17 @@
+{
+ "classifier_version": "v1",
+ "rules": {
+  "endgame": "material<=13 and nonking_pieces<=6",
+  "opening": "fullmove<=12 and nonking_pieces>=16",
+  "middlegame": "else",
+  "sparse": "nonking_pieces<=3 (flag)"
+ },
+ "subset": "strategy",
+ "seed": 42,
+ "n_per_phase": 8000,
+ "phases": {
+  "opening": 8000,
+  "middlegame": 8000,
+  "endgame": 8000
+ }
+}

@@ -1,18 +1,20 @@
-# Research idea: Teaching SLMs to reason in compressed ("lucid") style via chess
+# Research idea: Phase-segregated chess position dataset (opening/middlegame/endgame)
 
 ## Question
-Can a small language model (gemma 4 E2B, 2B) acquire stronger reasoning ability
-by learning to reason in the compressed, telegraphic ("lucid/caveman") style
-that RL-post-trained frontier models (DeepSeek) natively use, compared to
-standard natural-language chain-of-thought?
+Can we build a refined chess training set for SLM trace distillation by
+segregating positions into opening / middlegame / endgame subsets (instead
+of playing full games), and can a subset of this dataset serve as a
+phase-stratified benchmark for evaluating other models?
 
 ## Method sketch
-- Teacher: deepseek-v4-flash generates natural (already-lucid) reasoning traces
-  on MATE chess positions.
-- Student: gemma 4 E2B, SFT in two arms: (1) labels only (B), (2) trace+answer
-  distillation (A). Compare MATE 4-subset accuracy AND tokens-per-correct.
-- Optionally start from an existing gemma reasoning fine-tune instead of base.
+- Source positions: MATE train zips (208k rows, already local) or lichess masters games.
+- Segregation: deterministic phase detection (ply count, material, piece
+  configuration, king safety) into opening/middlegame/endgame.
+- Teacher: deepseek-v4-flash unbounded thinking traces per position, filtered
+  by Stockfish eval stability.
+- Student: gemma 4 E2B QLoRA SFT on the segregated traces.
+- Benchmark: hold out a stratified subset per phase; evaluate other models
+  (base gemma, MATE-LoRA, deepseek, frontier baselines) on it.
 
 ## Domain
-Chess (MATE move-selection benchmark) as a cheap, verifiable empirical testbed.
-SFT only; no RL (compute-constrained: Kaggle T4 free tier).
+Chess SLM research; MATE-grounded evaluation; phase-aware training data.
