@@ -29,11 +29,11 @@ class MateTextDataset(Dataset):
         board = chess.Board(r["fen"])
         bid = self.tokenizer.board_ids(board)
         tid = self.tokenizer.text_ids(r["candidate_a"], r["candidate_b"])
-        aid = self.tokenizer.answer_id(r["truth"])
-        tokens = bid + tid + [aid]
+        # NO answer token in the input — the model must decide from the
+        # board + candidate text alone. The label is the target.
+        tokens = bid + tid
         types = ([BOARD_TYPE] * len(bid)
-                 + [TEXT_TYPE] * len(tid)
-                 + [ANSWER_TYPE])
+                 + [TEXT_TYPE] * len(tid))
         label = 0 if r["truth"] == "A" else 1
         return tokens, types, label
 
