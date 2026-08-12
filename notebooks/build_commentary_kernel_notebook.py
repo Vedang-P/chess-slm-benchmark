@@ -1,17 +1,14 @@
-"""Generate kaggle_commentary_prehoch.ipynb — full-game commentary
-distillation data generation on a Kaggle kernel (persists across
-sessions; the ~40h pre-hoc API loop runs here).
+"""Generate kaggle_commentary_train.ipynb — QLoRA SFT of gemma-4-E2B on
+the fullgame lucid-commentary corpus, run on a Kaggle T4 GPU kernel.
 
     python notebooks/build_commentary_kernel_notebook.py
     kaggle kernels push -p notebooks/push_commentary
 
-The kernel clones main (which carries scripts/build_commentary_data.py +
-data/positions/fullgame/games.jsonl), installs python-chess, then runs:
-
-    prehoch -> reconcile -> emit
-
-and uploads train.jsonl + eval.jsonl + the raw prehoch/reconciled rows
-to the HF dataset repo so the local trainer can pull them.
+The kernel clones main (which carries scripts/ + data/positions/fullgame
+games; the emitted train/eval rows are pulled from the HF dataset repo),
+installs the campaign deps, trains with the SAME model and load path as
+every eval baseline (full multimodal google/gemma-4-E2B-it, 4-bit,
+device_map {"":0}), and uploads the adapter + eval results to HF.
 
 Secrets injected at build time (never committed): OPENCODE_API_KEY,
 HF_WRITE_TOKEN, GITHUB_TOKEN.
@@ -26,7 +23,7 @@ from build_notebook import _code, _md, _notebook
 
 NB_DIR = Path(__file__).resolve().parent
 OWNER = os.environ.get("COMMENTARY_OWNER", "softmaxsimp")
-SLUG = "commentary-prehoch"
+SLUG = "commentary-train"
 HF_DATASET = "vedangfake/chess-bench-results"
 
 CLONE_CELL = r'''
@@ -62,89 +59,73 @@ print("cwd:", Path.cwd())
 DEPS_CELL = r'''
 import subprocess, sys
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "python-chess"], check=True)
-import chess
-print("python-chess", chess.__version__)
+                "torch==2.5.1", "--index-url",
+                "https://download.pytorch.org/whl/cu121"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "bitsandbytes==0.44.1"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "-r", "requirements.txt"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "pillow", "torchvision"], check=True)
+import torch
+print("torch", torch.__version__, "| cuda", torch.cuda.is_available(),
+      torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")
 '''.strip()
 
-PREHOCH_CELL = r'''
-import os, subprocess, sys, time
+FETCH_DATA_CELL = r'''
+import os, shutil, sys
 from pathlib import Path
+from huggingface_hub import hf_hub_download
 
-# resumable: skip if a previous wave already wrote rows
-out = Path("data/raw/commentary/prehoch.jsonl")
-if out.exists():
-    n = sum(1 for _ in out.open())
-    print(f"resuming prehoch from {n} existing rows", flush=True)
-cmd = [sys.executable, "-u", "scripts/build_commentary_data.py",
-       "prehoch",
-       "--model", "deepseek-v4-flash",
-       "--temperature", "0.3",
-       "--max-tokens", "2000",
-       "--max-attempts", "3"]
-print("running:", " ".join(cmd))
-t0 = time.time()
-res = subprocess.run(cmd, stderr=subprocess.STDOUT)
-print(f"prehoch exited rc={res.returncode} after {(time.time()-t0)/3600:.2f}h",
-      flush=True)
-if res.returncode != 0:
-    raise RuntimeError("prehoch failed -- see output above")
-'''.strip()
-
-RECONCILE_CELL = r'''
-import os, subprocess, sys, time
-from pathlib import Path
-
-cmd = [sys.executable, "-u", "scripts/build_commentary_data.py",
-       "reconcile",
-       "--model", "deepseek-v4-flash",
-       "--temperature", "0.3",
-       "--max-tokens", "2000",
-       "--max-attempts", "3"]
-print("running:", " ".join(cmd))
-t0 = time.time()
-res = subprocess.run(cmd, stderr=subprocess.STDOUT)
-print(f"reconcile exited rc={res.returncode} after {(time.time()-t0)/3600:.2f}h",
-      flush=True)
-if res.returncode != 0:
-    raise RuntimeError("reconcile failed -- see output above")
-'''.strip()
-
-EMIT_CELL = r'''
-import os, subprocess, sys
-from pathlib import Path
-
-cmd = [sys.executable, "scripts/build_commentary_data.py", "emit",
-       "--agree-ratio", "2"]
-print("running:", " ".join(cmd))
-res = subprocess.run(cmd, stderr=subprocess.STDOUT)
-if res.returncode != 0:
-    raise RuntimeError("emit failed -- see output above")
+os.makedirs("data/raw/commentary", exist_ok=True)
 for f in ("train.jsonl", "eval.jsonl"):
-    p = Path("data/raw/commentary") / f
-    if not p.exists():
-        raise RuntimeError(f"emit did not produce {f}")
-    print(f"{f}: {sum(1 for _ in p.open())} rows", flush=True)
+    p = hf_hub_download(repo_id="%(hf_dataset)s",
+                        filename=f"fullgame-commentary/{f}",
+                        repo_type="dataset",
+                        token=os.environ.get("HF_WRITE_TOKEN"))
+    shutil.copy(p, f"data/raw/commentary/{f}")
+    print(f"{f}: {sum(1 for _ in open(f'data/raw/commentary/{f}'))} rows")
+'''.strip()
+
+TRAIN_CELL = r'''
+import os, subprocess, sys, time
+from pathlib import Path
+
+cmd = [sys.executable, "scripts/train_mate_lora.py",
+       "--train", "data/raw/commentary/train.jsonl",
+       "--eval", "data/raw/commentary/eval.jsonl",
+       "--out", "results/fullgame-lora-adapter",
+       "--game-mode",
+       "--max-seq-len", "3072",
+       "--batch", "2",
+       "--grad-accum", "8",
+       "--epochs", "1",
+       "%(smoke)s"]
+cmd = [c for c in cmd if c]
+print("running:", " ".join(cmd))
+t0 = time.time()
+res = subprocess.run(cmd, stderr=subprocess.STDOUT)
+print(f"train exited rc={res.returncode} after {(time.time()-t0)/3600:.2f}h",
+      flush=True)
+if res.returncode != 0:
+    raise RuntimeError("training failed -- see output above")
 '''.strip()
 
 UPLOAD_CELL = r'''
 import os, sys
 from pathlib import Path
-
 from huggingface_hub import HfApi
+
 api = HfApi(token=os.environ.get("HF_WRITE_TOKEN", ""))
-src = Path("data/raw/commentary")
-for f in ("prehoch.jsonl", "reconciled.jsonl", "train.jsonl", "eval.jsonl"):
-    p = src / f
-    if not p.exists():
-        print(f"skip {f} (missing)", flush=True)
-        continue
-    api.upload_file(path_or_fileobj=p.read_bytes(),
-                    path_in_repo=f"fullgame-commentary/{f}",
-                    repo_id="%(hf_dataset)s",
-                    repo_type="dataset",
-                    commit_message=f"fullgame-commentary {f}")
-    print(f"uploaded {f} ({p.stat().st_size/1e6:.1f}MB)", flush=True)
+adapter = Path("results/fullgame-lora-adapter")
+for f in adapter.iterdir():
+    if f.is_file():
+        api.upload_file(path_or_fileobj=f.read_bytes(),
+                        path_in_repo=f"fullgame-commentary-adapter/{f.name}",
+                        repo_id="%(hf_dataset)s",
+                        repo_type="dataset",
+                        commit_message=f"fullgame adapter {f.name}")
+print("adapter uploaded to HF", flush=True)
 '''.strip()
 
 
@@ -182,25 +163,22 @@ def inject_secrets(nb: dict, env: dict, names: list[str]) -> None:
 
 
 def main() -> None:
+    smoke = "--smoke" in os.sys.argv
     cells = [
-        _md("# Full-game commentary distillation — data generation\n\n"
-            "deepseek-v4-flash comments on Lichess/TWIC master games "
-            "move-by-move (pre-hoc + reconcile), emitting the Track-2 "
-            "game-format training rows. Runs on a Kaggle CPU kernel so "
-            "the long API loop persists across sessions."),
+        _md("# Full-game lucid-commentary LoRA — gemma-4-E2B\n\n"
+            "QLoRA SFT on deepseek's lucid commentary over 100 master "
+            "games. Same model + load path as every eval baseline."),
         _md("## 1. Secrets (injected at build time)"),
         _code("print('secrets are injected at build time')"),
         _md("## 2. Get the repo"),
         _code(CLONE_CELL),
-        _md("## 3. Dependencies"),
+        _md("## 3. Dependencies (campaign DEPS_CELL)"),
         _code(DEPS_CELL),
-        _md("## 4. Pre-hoc commentary (per-move, long)"),
-        _code(PREHOCH_CELL),
-        _md("## 5. Reconcile disagreements"),
-        _code(RECONCILE_CELL),
-        _md("## 6. Emit train/eval rows"),
-        _code(EMIT_CELL),
-        _md("## 7. Upload to HF"),
+        _md("## 4. Pull emitted train/eval rows from HF"),
+        _code(FETCH_DATA_CELL % {"hf_dataset": HF_DATASET}),
+        _md("## 5. Train (campaign model, 4-bit QLoRA)"),
+        _code(TRAIN_CELL % {"smoke": "--smoke" if smoke else ""}),
+        _md("## 6. Upload adapter to HF"),
         _code(UPLOAD_CELL % {"hf_dataset": HF_DATASET}),
     ]
     nb = _notebook(cells)
@@ -210,16 +188,16 @@ def main() -> None:
 
     push_dir = NB_DIR / "push_commentary"
     push_dir.mkdir(parents=True, exist_ok=True)
-    code_file = "kaggle_commentary_prehoch.ipynb"
+    code_file = "kaggle_commentary_train.ipynb"
     (push_dir / code_file).write_text(json.dumps(nb, indent=1))
     (push_dir / "kernel-metadata.json").write_text(json.dumps({
         "id": f"{OWNER}/{SLUG}",
-        "title": "Commentary prehoch",
+        "title": "Commentary train",
         "code_file": code_file,
         "language": "python",
         "kernel_type": "notebook",
         "is_private": True,
-        "enable_gpu": False,
+        "enable_gpu": True,
         "enable_tpu": False,
         "enable_internet": True,
         "keywords": [],

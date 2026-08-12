@@ -1,32 +1,30 @@
-"""Build the master-game commentary distillation corpus (Track 2).
+"""Build the master-game lucid-commentary distillation corpus (Track 2).
 
-Deepseek-v4-flash comments on Lichess/TWIC master games move-by-move:
-for every move it reasons about the position (pre-hoc), commits to a
-move, and the master's actual move decides agreement vs reconcile.
+For every move of a sample of master games (both sides), deepseek
+explains WHY the master's move works — in the compressed "lucid"
+reasoning style. One API call per move. The raw thinking trace is saved
+(provenance) but only the lucid commentary is used for training.
 
-    OPENCODE_API_KEY=<key> python3 scripts/build_commentary_data.py \
-        --pgn data/raw/twic/*.pgn --out results/commentary --games 50
+    OPENCODE_API_KEY=... python3 scripts/build_commentary_data.py \
+        --pgn "data/raw/twic/*.pgn" --games 100 --out results/commentary
 
 Pipeline (each stage resumable/idempotent):
-    1. games    — parse PGNs, keep high-rated games, over-sample
-                  endgame-reachable ones (last-position phase filter)
-    2. prehoch  — per move: deepseek reasons + commits (legal list shown)
-    3. split    — agreement (teacher move == master move) vs reconcile
-    4. reconcile— for disagreements: adversarial call w/ SF PV hint
-    5. emit     — JSONL rows in the game format:
-                    user: FEN + history + turn + instruction
-                    assistant: <reasoning>\nMove: <SAN>
-                  plus phase label + agree/reconcile flag + token audit
+    1. games      — parse PGNs, keep high-rated games, over-sample
+                    endgame-reachable games, sample N
+    2. commentate — per move: lucid explanation of the master's move;
+                    saves reasoning (thinking trace) + content (lucid)
+    3. emit       — training rows: user = FEN + history + turn +
+                    instruction; assistant = <lucid>\nMove: <SAN>
 
-Training rows deliberately match play_selfplay.build_prompt (FEN +
-history + turn, NO legal list) so train == eval byte-identically. The
-teacher's candidate list is a generation aid only.
+Training rows are byte-identical to the eval game loop prompt
+(FEN + history + turn -> reason -> Move: <SAN>).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -36,10 +34,7 @@ import chess
 import chess.pgn
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
-
 OUT_DIR = ROOT / "data" / "raw" / "commentary"
-HISTORY_PLIES = 24
 MIN_RATING = 2500
 MIN_BOTH_RATING = 2400
 SEED = 42
@@ -50,8 +45,7 @@ def _utc_ts() -> str:
 
 
 def _phase_of(board: chess.Board) -> str:
-    """Use the existing deterministic phase classifier if importable;
-    else a local ply/material fallback (opening/middlegame/endgame)."""
+    """Existing deterministic phase classifier (published artifact)."""
     try:
         sys.path.insert(0, str(ROOT))
         from scripts.build_phase_dataset import classify_fen  # type: ignore
@@ -86,49 +80,27 @@ def _user_prompt(board: chess.Board, history: list[str]) -> str:
     )
 
 
-def _teacher_prompt(board: chess.Board, history: list[str]) -> str:
+def _lucid_prompt(board: chess.Board, history: list[str],
+                  move_san: str) -> str:
     san = " ".join(history) if history else "(starting position)"
     turn = "White" if board.turn == chess.WHITE else "Black"
-    legal = ", ".join(sorted(board.uci(m) for m in board.legal_moves))
     return (
-        "You are a strong chess player analyzing a position from a "
-        "master game. Reason carefully in natural prose, then pick the "
-        "best move.\n"
+        "You are a chess analyst explaining a move from a master game. "
+        "The grandmaster played "
+        f"{move_san}.\n"
         f"Position (FEN): {board.fen()}\n"
         f"Move history (SAN): {san}\n"
         f"Turn: {turn}\n"
-        f"Legal moves (UCI): {legal}\n"
-        "Think step by step about tactics, threats, and plans. End your "
-        "response with exactly one line:\n"
-        "Move: <your move in SAN notation, e.g. Move: Nf3>"
-    )
-
-
-def _reconcile_prompt(board: chess.Board, history: list[str],
-                      own_san: str, master_san: str, pv: str | None) -> str:
-    san = " ".join(history) if history else "(starting position)"
-    turn = "White" if board.turn == chess.WHITE else "Black"
-    hint = (f"\nEngine line for the master's move: {pv}\n"
-            if pv else "\n")
-    return (
-        "You are a strong chess player analyzing a master game. You "
-        "previously considered one move, but the grandmaster played a "
-        "different one. Find the flaw in your own choice and explain why "
-        "the master's move is stronger, then commit to it.\n"
-        f"Position (FEN): {board.fen()}\n"
-        f"Move history (SAN): {san}\n"
-        f"Turn: {turn}\n"
-        f"Your move: {own_san}\n"
-        f"Master's move: {master_san}\n"
-        f"{hint}"
-        "Analyze concretely where your line fails. End your response "
-        "with exactly one line:\n"
-        f"Move: {master_san}"
+        "Explain why this move works in a CONCISE, compressed reasoning "
+        "style: short phrases, key squares, the tactical/positional idea, "
+        "no filler, no 'I see' or 'we notice'. 2-6 sentences. Ground every "
+        "claim in concrete squares and pieces.\n"
+        "End with exactly one line:\n"
+        f"Move: {move_san}"
     )
 
 
 def _extract_san(text: str, board: chess.Board):
-    """Extract a legal SAN move from generated text (last legal one)."""
     text = (text or "").strip()
     if not text:
         return None
@@ -153,27 +125,25 @@ def _extract_san(text: str, board: chess.Board):
     return None
 
 
-def _generate_move(model, prompt, args) -> dict | None:
-    """Generate and extract a legal move, handling the gateway's
-    thinking/content split (the answer can land in either field)."""
+def _generate(model, prompt, args) -> dict | None:
     for attempt in range(1, args.max_attempts + 1):
         try:
             result = model.generate(
                 prompt, max_new_tokens=args.max_tokens,
-                temperature=args.temperature)
+                temperature=args.temperature,
+                thinking_disabled=not args.thinking)
         except Exception as e:
             print(f"  api error {e} (attempt {attempt})", flush=True)
             continue
         content = (result.get("content") or "").strip()
         reasoning = (result.get("reasoning") or "").strip()
-        combined = f"{reasoning}\n{content}" if content else reasoning
         return {"result": result, "content": content,
-                "reasoning": reasoning, "combined": combined}
+                "reasoning": reasoning}
     return None
 
 
 # ---------------------------------------------------------------------------
-# Stage 1: parse PGNs, filter + over-sample endgame games
+# Stage 1: parse PGNs, filter + over-sample, sample N
 # ---------------------------------------------------------------------------
 
 def _load_games(pgn_paths: list[Path], limit: int | None = None) -> list[dict]:
@@ -206,9 +176,7 @@ def _load_games(pgn_paths: list[Path], limit: int | None = None) -> list[dict]:
                         bad = True
                         break
                     moves.append({"uci": mv.uci(), "san": san})
-                if bad:
-                    continue
-                if len(moves) < 20:
+                if bad or len(moves) < 20:
                     continue
                 final_board = game.end().board()
                 games.append({
@@ -239,9 +207,9 @@ def games(args: argparse.Namespace) -> None:
         if p.suffix in (".pgn", ".txt"))
     print(f"parsing {len(pgns)} pgn files...", flush=True)
     pool = _load_games(pgns, limit=args.scan)
-    print(f"{len(pool)} qualifying games (>= {MIN_RATING} Elo)", flush=True)
+    print(f"{len(pool)} qualifying games (>= {MIN_RATING} Elo both >= "
+          f"{MIN_BOTH_RATING})", flush=True)
 
-    import random
     rng = random.Random(SEED)
     opening = [g for g in pool if g["phase"] == "opening"]
     middle = [g for g in pool if g["phase"] == "middlegame"]
@@ -249,7 +217,6 @@ def games(args: argparse.Namespace) -> None:
     print(f"phase split: opening={len(opening)} middle={len(middle)} "
           f"endgame={len(endgame)}", flush=True)
 
-    # over-sample endgame-reachable games so the phase thesis holds
     n_end = min(len(endgame), args.endgame_quota)
     n_mid = min(len(middle), max(0, args.games - n_end))
     n_open = min(len(opening), max(0, args.games - n_end - n_mid))
@@ -260,25 +227,20 @@ def games(args: argparse.Namespace) -> None:
     with out.open("w") as f:
         for g in picked:
             f.write(json.dumps(g) + "\n")
-    print(f"wrote {len(picked)} games -> {out} "
-          f"(endgame quota {n_end})", flush=True)
+    print(f"wrote {len(picked)} games -> {out} (endgame quota {n_end})",
+          flush=True)
 
 
 # ---------------------------------------------------------------------------
-# Stage 2: pre-hoc per-move commentary
+# Stage 2: per-move lucid commentary (one call per move, both sides)
 # ---------------------------------------------------------------------------
 
-def prehoch(args: argparse.Namespace) -> None:
+def commentate(args: argparse.Namespace) -> None:
     games_path = OUT_DIR / "games.jsonl"
-    out = OUT_DIR / "prehoch.jsonl"
-    if out.exists() and not args.force:
-        print("skip prehoch (exists) -- use --force to redo", flush=True)
-        return
+    out = OUT_DIR / "commentary.jsonl"
     if not games_path.exists():
         print("no games.jsonl (run `games` first)", flush=True)
         sys.exit(1)
-    sys.path.insert(0, str(ROOT))
-    from src.models import OpenCodeGoModel
 
     done: set[tuple] = set()
     if out.exists():
@@ -288,81 +250,75 @@ def prehoch(args: argparse.Namespace) -> None:
                 done.add((r["game_id"], r["ply"]))
             except Exception:
                 pass
-        print(f"resuming prehoch: {len(done)} rows already done", flush=True)
+        print(f"resuming: {len(done)} rows already done", flush=True)
     else:
         out.touch()
 
+    sys.path.insert(0, str(ROOT))
+    from src.models import OpenCodeGoModel
+
     model = OpenCodeGoModel(args.model)
     model.load()
-    n_moves = n_ok = n_agree = 0
+    n_moves = n_ok = 0
     total_in = total_out = 0
     with games_path.open() as fin, out.open("a") as fout:
         for line in fin:
             g = json.loads(line)
+            gid = f"{g.get('event','')}-{g.get('white','')}-{g.get('black','')}"
             board = chess.Board()
             history: list[str] = []
-            gid = f"{g.get('event','')}-{g.get('white','')}-{g.get('black','')}"
             for i, m in enumerate(g["moves"]):
                 san = m["san"]
                 mv = board.parse_san(san)
-                # comment the position BEFORE the master's move
+                # comment on the position BEFORE the move was played
                 if i > 0:
                     n_moves += 1
                     if (gid, i + 1) in done:
                         board.push(mv)
                         history.append(san)
                         continue
-                    row = _comment_one(model, g, board, history,
-                                       m, args)
+                    row = _comment_one(model, g, gid, i, board,
+                                       history, m, args)
                     if row:
                         n_ok += 1
-                        n_agree += 1 if row["agree"] else 0
                         total_in += row["input_tokens"]
                         total_out += row["output_tokens"]
                         fout.write(json.dumps(row) + "\n")
                         fout.flush()
-                        done.add((gid, i))
+                        done.add((gid, i + 1))
                     if n_moves % 25 == 0:
-                        print(f"prehoch: {n_moves} moves, {n_ok} ok, "
-                              f"{n_agree} agree "
-                              f"({100.0*n_agree/max(n_ok,1):.0f}%)",
+                        print(f"commentate: {n_moves} moves, {n_ok} ok "
+                              f"({100.0*n_ok/max(n_moves,1):.0f}%)",
                               flush=True)
                 board.push(mv)
                 history.append(san)
-    print(f"prehoch done: {n_ok}/{n_moves} moves, {n_agree} agree "
-          f"({100.0*n_agree/max(n_ok,1):.1f}%); "
+    print(f"commentate done: {n_ok}/{n_moves} moves; "
           f"~{total_in} in + ~{total_out} out tokens -> {out}", flush=True)
 
 
-def _comment_one(model, g, board, history, master_move, args) -> dict | None:
-    prompt = _teacher_prompt(board, history)
-    out = _generate_move(model, prompt, args)
+def _comment_one(model, g, gid, i, board, history, master_move,
+                 args) -> dict | None:
+    master_san = master_move["san"]
+    prompt = _lucid_prompt(board, history, master_san)
+    out = _generate(model, prompt, args)
     if out is None:
         print(f"  FAILED after {args.max_attempts} attempts", flush=True)
         return None
     result = out["result"]
-    m = _extract_san(out["combined"], board)
+    m = _extract_san(out["content"] or out["reasoning"], board)
     if m is None:
-        print(f"  no legal move: {out['combined'][-120:]!r}", flush=True)
-        return None
-    own_san = board.san(m)
-    master_san = master_move["san"]
-    agree = own_san == master_san
-    text = out["combined"]
+        # keep the row anyway; the lucid text is the training signal
+        pass
     row = {
-        "game_id": f"{g.get('event','')}-{g.get('white','')}-"
-                   f"{g.get('black','')}",
-        "ply": len(history) + 1,
+        "game_id": gid,
+        "ply": i + 1,
         "fen": board.fen(),
         "history": " ".join(history),
         "phase": _phase_of(board),
-        "agree": agree,
-        "own_san": own_san,
         "master_san": master_san,
-        "reasoning": out["reasoning"],
-        "answer": text,
+        "thinking": out["reasoning"],     # raw trace (saved, not trained)
+        "lucid": out["content"],          # training signal
         "teacher_model": args.model,
-        "teacher_attempts": 1,
         "input_tokens": result.get("input_tokens") or 0,
         "output_tokens": result.get("output_tokens") or 0,
         "reasoning_tokens": result.get("reasoning_tokens") or 0,
@@ -372,147 +328,43 @@ def _comment_one(model, g, board, history, master_move, args) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Stage 3: reconcile disagreements with an adversarial call + SF PV
-# ---------------------------------------------------------------------------
-
-def reconcile(args: argparse.Namespace) -> None:
-    prehoch_path = OUT_DIR / "prehoch.jsonl"
-    out = OUT_DIR / "reconciled.jsonl"
-    if out.exists() and not args.force:
-        print("skip reconcile (exists)", flush=True)
-        return
-    if not prehoch_path.exists():
-        print("no prehoch.jsonl (run `prehoch` first)", flush=True)
-        sys.exit(1)
-    sys.path.insert(0, str(ROOT))
-    from src.models import OpenCodeGoModel
-
-    model = OpenCodeGoModel(args.model)
-    model.load()
-    eng = None
-    if args.stockfish:
-        eng = _open_engine(args.stockfish)
-
-    n_rows = n_rec = 0
-    total_in = total_out = 0
-    with prehoch_path.open() as fin, out.open("w") as fout:
-        for line in fin:
-            row = json.loads(line)
-            if row["agree"]:
-                fout.write(line)
-                n_rows += 1
-                continue
-            n_rec += 1
-            board = chess.Board(row["fen"])
-            history = row["history"].split()
-            pv = None
-            if eng is not None:
-                pv = _engine_pv(eng, board)
-            prompt = _reconcile_prompt(board, history,
-                                       row["own_san"], row["master_san"], pv)
-            out = _generate_move(model, prompt, args)
-            if out is None:
-                print(f"  reconcile FAILED for {row['game_id']} "
-                      f"ply {row['ply']}", flush=True)
-                row["reconciled"] = False
-                fout.write(json.dumps(row) + "\n")
-                n_rows += 1
-                continue
-            result = out["result"]
-            m = _extract_san(out["combined"], board)
-            if m is None or board.san(m) != row["master_san"]:
-                print(f"  reconcile landed on "
-                      f"{board.san(m) if m else 'none'} not "
-                      f"{row['master_san']}, dropping", flush=True)
-                row["reconciled"] = False
-                fout.write(json.dumps(row) + "\n")
-                n_rows += 1
-                continue
-            row["reconciled"] = True
-            row["reasoning"] = out["reasoning"]
-            row["answer"] = out["combined"]
-            row["reconcile_attempts"] = 1
-            row["input_tokens"] += result.get("input_tokens") or 0
-            row["output_tokens"] += result.get("output_tokens") or 0
-            row["reconcile_tokens"] = result.get("output_tokens") or 0
-            row["engine_pv"] = pv
-            fout.write(json.dumps(row) + "\n")
-            fout.flush()
-            n_rows += 1
-            total_in += result.get("input_tokens") or 0
-            total_out += result.get("output_tokens") or 0
-            if n_rec % 25 == 0:
-                print(f"reconcile: {n_rec} disagreements processed",
-                      flush=True)
-    if eng is not None:
-        eng.quit()
-    print(f"reconcile done: {n_rows} rows, {n_rec} disagreements "
-          f"(~{total_in}+{total_out} tokens) -> {out}", flush=True)
-
-
-def _open_engine(path: str):
-    import chess.engine
-    return chess.engine.SimpleEngine.popen_uci(path)
-
-
-def _engine_pv(eng, board: chess.Board, depth: int = 12) -> str | None:
-    try:
-        r = eng.analyse(board, chess.engine.Limit(depth=depth))
-        if "pv" not in r or not r["pv"]:
-            return None
-        return " ".join(m.uci() for m in r["pv"][:6])
-    except Exception:
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Stage 4: emit the game-format training rows
+# Stage 3: emit training rows (lucid answer only, not the thinking trace)
 # ---------------------------------------------------------------------------
 
 def emit(args: argparse.Namespace) -> None:
-    reconciled_path = OUT_DIR / "reconciled.jsonl"
+    commentary_path = OUT_DIR / "commentary.jsonl"
     out = OUT_DIR / "train.jsonl"
     eval_out = OUT_DIR / "eval.jsonl"
     if out.exists() and not args.force:
         print("skip emit (exists)", flush=True)
         return
-    if not reconciled_path.exists():
-        print("no reconciled.jsonl (run `reconcile` first)", flush=True)
+    if not commentary_path.exists():
+        print("no commentary.jsonl (run `commentate` first)", flush=True)
         sys.exit(1)
-    agree, recon = [], []
-    with reconciled_path.open() as f:
-        for line in f:
-            row = json.loads(line)
-            board = chess.Board(row["fen"])
-            history = row["history"].split()
-            prompt = _user_prompt(board, history)
-            target = f"{row['reasoning']}\nMove: {row['master_san']}"
-            rec = {
-                "game_id": row["game_id"],
-                "ply": row["ply"],
-                "phase": row["phase"],
-                "agree": row["agree"],
-                "messages": [
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": target},
-                ],
-                "fen": row["fen"],
-            }
-            (agree if row["agree"] else recon).append(rec)
 
-    import random
+    rows = []
+    for line in commentary_path.open():
+        row = json.loads(line)
+        board = chess.Board(row["fen"])
+        history = row["history"].split()
+        prompt = _user_prompt(board, history)
+        target = f"{row['lucid']}\nMove: {row['master_san']}"
+        rows.append({
+            "game_id": row["game_id"],
+            "ply": row["ply"],
+            "phase": row["phase"],
+            "messages": [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": target},
+            ],
+            "fen": row["fen"],
+        })
+
     rng = random.Random(SEED)
-    rng.shuffle(agree)
-    rng.shuffle(recon)
-    # agreement rows upsampled 2:1
-    n_recon = len(recon)
-    n_agree = min(len(agree), n_recon * args.agree_ratio)
-    train = recon + agree[:n_agree]
-    rng.shuffle(train)
-    # hold out ~5% as eval (position-disjoint by construction)
-    n_eval = max(1, len(train) // 20)
-    eval_rows = train[:n_eval]
-    train_rows = train[n_eval:]
+    rng.shuffle(rows)
+    n_eval = max(1, len(rows) // 20)
+    eval_rows = rows[:n_eval]
+    train_rows = rows[n_eval:]
     with out.open("w") as f:
         for r in train_rows:
             f.write(json.dumps(r) + "\n")
@@ -520,7 +372,6 @@ def emit(args: argparse.Namespace) -> None:
         for r in eval_rows:
             f.write(json.dumps(r) + "\n")
     print(f"emit done: {len(train_rows)} train + {len(eval_rows)} eval "
-          f"(agree {n_agree}/{len(agree)}, reconcile {n_recon}) "
           f"-> {out}", flush=True)
 
 
@@ -530,40 +381,29 @@ def main() -> None:
 
     p = sub.add_parser("games", help="parse + filter + over-sample games")
     p.add_argument("--pgn", nargs="+", default=["data/raw/twic/*.pgn"])
-    p.add_argument("--games", type=int, default=50)
-    p.add_argument("--scan", type=int, default=None,
-                   help="max games to scan for qualification")
-    p.add_argument("--endgame-quota", type=int, default=20)
+    p.add_argument("--games", type=int, default=100)
+    p.add_argument("--scan", type=int, default=None)
+    p.add_argument("--endgame-quota", type=int, default=30)
     p.add_argument("--force", action="store_true")
 
-    p = sub.add_parser("prehoch", help="per-move deepseek commentary")
+    p = sub.add_parser("commentate", help="per-move lucid commentary")
     p.add_argument("--model", default="deepseek-v4-flash")
     p.add_argument("--temperature", type=float, default=0.3)
-    p.add_argument("--max-tokens", type=int, default=2000)
+    p.add_argument("--max-tokens", type=int, default=800)
     p.add_argument("--max-attempts", type=int, default=3)
-    p.add_argument("--force", action="store_true")
-
-    p = sub.add_parser("reconcile", help="adversarial reconcile of disagreements")
-    p.add_argument("--model", default="deepseek-v4-flash")
-    p.add_argument("--temperature", type=float, default=0.3)
-    p.add_argument("--max-tokens", type=int, default=2000)
-    p.add_argument("--max-attempts", type=int, default=3)
-    p.add_argument("--stockfish", default="",
-                   help="path to stockfish binary for the PV hint")
-    p.add_argument("--force", action="store_true")
+    p.add_argument("--thinking", action="store_true",
+                   help="keep deepseek thinking ON (slower, richer trace); "
+                        "default OFF because the lucid answer is the "
+                        "training signal and thinking burns ~4k tokens/move")
 
     p = sub.add_parser("emit", help="emit game-format training rows")
-    p.add_argument("--agree-ratio", type=int, default=2,
-                   help="agreement:reconcile upsample ratio (2 = 2:1)")
     p.add_argument("--force", action="store_true")
 
     args = ap.parse_args()
     if args.stage == "games":
         games(args)
-    elif args.stage == "prehoch":
-        prehoch(args)
-    elif args.stage == "reconcile":
-        reconcile(args)
+    elif args.stage == "commentate":
+        commentate(args)
     elif args.stage == "emit":
         emit(args)
 

@@ -1,7 +1,7 @@
-"""Master pipeline runner for the fullgame commentary track.
+"""Master pipeline runner for the fullgame lucid-commentary track.
 
-Chains prehoch -> reconcile -> emit -> train in one resumable process
-so the whole 40h+ job runs unattended. Each stage skips if its output
+Chains games -> commentate -> emit -> train in one resumable process so
+the whole multi-hour job runs unattended. Each stage skips if its output
 already exists (idempotent), so a crash resumes at the next stage.
 
     OPENCODE_API_KEY=... nohup python scripts/run_fullgame_pipeline.py \
@@ -37,45 +37,27 @@ def run_stage(name: str, cmd: list[str], cwd: Path) -> int:
 
 def main() -> None:
     stages = [
-        ("prehoch", [
+        ("commentate", [
             sys.executable, "-u", "scripts/build_commentary_data.py",
-            "prehoch",
+            "commentate",
             "--model", "deepseek-v4-flash",
             "--temperature", "0.3",
-            "--max-tokens", "2000",
+            "--max-tokens", "800",
             "--max-attempts", "3"]),
-        ("reconcile", [
-            sys.executable, "-u", "scripts/build_commentary_data.py",
-            "reconcile",
-            "--model", "deepseek-v4-flash",
-            "--temperature", "0.3",
-            "--max-tokens", "2000",
-            "--max-attempts", "3",
-            "--stockfish", str(ROOT / "venv/bin/stockfish")]),
         ("emit", [
             sys.executable, "scripts/build_commentary_data.py",
-            "emit", "--agree-ratio", "2"]),
-        ("train", [
-            sys.executable, "scripts/train_mate_lora.py",
-            "--train", str(COMMENTARY / "train.jsonl"),
-            "--eval", str(COMMENTARY / "eval.jsonl"),
-            "--out", str(ROOT / "results/fullgame-lora-adapter"),
-            "--base", str(ROOT / "data/models/gemma-4-E2B-it-text"),
-            "--game-mode",
-            "--max-seq-len", "3072",
-            "--batch", "1",
-            "--grad-accum", "16",
-            "--epochs", "1"]),
+            "emit"]),
+        # training runs on Kaggle T4 (16GB, the campaign model) — see
+        # notebooks/build_commentary_kernel_notebook.py. Locally the model
+        # does not fit this GPU's 6GB, so the train stage is not chained here.
     ]
     for name, cmd in stages:
         t0 = time.time()
         rc = run_stage(name, cmd, ROOT)
         _log(f"stage {name} finished in {(time.time()-t0)/3600:.2f}h rc={rc}")
-        if rc != 0 and name != "prehoch":
+        if rc != 0:
             _log(f"FATAL: stage {name} failed; aborting")
             sys.exit(1)
-        if name == "prehoch" and rc != 0:
-            _log("WARN: prehoch rc!=0 but continuing (resume next run)")
     _log("ALL STAGES DONE")
 
 
