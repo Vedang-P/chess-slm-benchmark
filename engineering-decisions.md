@@ -62,6 +62,10 @@ goal is to beat MATE-style recipes (1M rows, 8B, full FT) with LESS compute,
 a SMALLER model, and BETTER techniques. Right-sized design (~600-680k rows,
 ~135-165M tokens, ~1 epoch):
 
+- **Eval protocol (reset): thinking ON everywhere** — baselines (deepseek
+  85.8%, base gemma 61.1%) were measured thinking ON; the fine-tune is
+  evaluated with `--local-thinking`, same `ANSWER_SPEC`, last-mention parse,
+  tokens-per-correct measured.
 - **Labels channel (B)**: ~500-600k rows, **format-balanced (25% from each
   of the four format pools), phase-natural (~91/6/3), test-FEN-excluded**.
   The four formats share the same ~1.42M-position pool; we do NOT train
@@ -70,8 +74,10 @@ a SMALLER model, and BETTER techniques. Right-sized design (~600-680k rows,
   = every prompt style appears in training so all 4 testbeds are processed
   fluently; unique-position diversity is what counts, and 25%-per-format
   sampling yields ~450-550k unique positions.
-- **Verified lucid traces channel (A2)**: ~50-80k rows where deepseek-v4-flash
-  writes a compressed lucid trace (≤4k tokens) then the choice. **Every
+- **Verified lucid traces channel (A2) — 3k CURATED teacher traces** (the
+  deepseek budget is ~3k positions, period): spent on endgames (teacher's
+  weakest), near-equal-eval pairs (deciding cases), rare tactical motifs.
+  deepseek-v4-flash writes a compressed lucid trace (≤4k tokens) then the choice. **Every
   claim is then Stockfish-verified at depth 14**:
   - final choice == engine best at the position → keep, else discard
   - each intermediate candidate/line mentioned must be legal + eval-stable
@@ -82,10 +88,14 @@ a SMALLER model, and BETTER techniques. Right-sized design (~600-680k rows,
   per-step grounding). Trace positions are sampled phase-oversampled
   (~30% endgame) so endgame traces survive the tight filter in usable
   numbers; trace yield per phase is itself a paper result.
+- **Style scaling — self-generated verified traces (20-60k, free)**: after a
+  competence checkpoint, sample the model itself (temp 0.7, best-of-N), keep
+  only Stockfish-verified-correct completions, train as on-policy traces.
+  3k teacher traces become ~60k trace-style rows at zero teacher cost
+  (2502.20122 self-training, 2502.12744 SERT, 2412.09413 STILL-2).
 - **Why mix, not all-traces**: labels are free, high-volume, and carry the
-  exact eval prompt format; traces are the style/grounding carriers and cost
-  deepseek API + Stockfish CPU time. Mix ratio and epochs are **eval-decided
-  checkpoints**, not assumptions.
+  exact eval prompt format; traces are the style/grounding carriers. Mix
+  ratio and epochs are **eval-decided checkpoints**, not assumptions.
 - **Epochs**: eval at 0.5/1/1.4 checkpoints; the faithful count is whatever
   the 4×1000 says.
 - **Rank**: r=32 base, r=64 as the buffer option if eval at the 1-epoch

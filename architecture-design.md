@@ -41,23 +41,34 @@ Guided by 2607.25583/2607.09757: sweep r ∈ {16, 32, 64}, attn-only vs
 all-linear, lr 1e-4/2e-4; pick the config by eval accuracy on the 4×1000.
 Default if inconclusive: r=32, alpha=32, all-linear, lr=2e-4, batch 16.
 
-### Stage 1 — SFT: competence + lucid style (15-20h T4, ~1 epoch over ~600-680k rows)
-Right-sized to beat MATE at less compute: NOT full-corpus, NOT
-position-format pairs (formats share one position pool; coverage not
-saturation is the goal).
-**Data recipe** (`scripts/build_mate_lora_data.py` extended):
-- **Labels channel (B)**: ~500-600k rows, **format-balanced (25% per format
-  pool), phase-natural (~91/6/3, matching the eval), test-FEN-excluded**,
-  yielding ~450-550k unique positions with all four prompt styles covered.
-- **Lucid trace distillation channel (A2)**: ~50-80k rows (phase-oversampled
-  toward endgame) where deepseek-v4-flash generates the *lucid* reasoning
-  trace (compressed, ≤4k tokens); then **every claim is verified**: final
-  choice must equal Stockfish-best (deep ~14) at the position, intermediate
-  candidate moves must be legal and eval-stable (|Δeval| ≤ 100cp from the
-  position's eval). Only fully-grounded traces enter the corpus. Verified
-  traces get a `Verified: yes` footer in training.
-- Mix ratio (labels : traces ≈ 85:15) and epochs (0.5/1/1.4) are
-  **eval-decided checkpoints**, not assumptions.
+### Stage 1 — SFT: competence + lucid style (15-20h T4, thinking-ON protocol)
+
+**Eval protocol (reset 2026-08-12): thinking ON everywhere.** Baselines were
+measured thinking ON (deepseek 85.8% unbounded; base gemma 61.1% @32768).
+The LoRA fine-tune is evaluated with `--local-thinking` on, same `ANSWER_SPEC`,
+last-mention parse, and tokens-per-correct measured. Thinking OFF is dead —
+the goal is a reasoning-in-trace-style model.
+
+**Data recipe — teacher traces teach style; labels teach competence; the
+model scales the style for free (literature: 2501.19393 s1, 2606.26797
+curation, 2502.20122 self-training, 2502.12744 SERT, 2412.09413 STILL-2,
+2502.12143 mix distillation):**
+- **Competence backbone (labels)**: ~500-600k rows, format-balanced (25% per
+  format pool), phase-natural (~91/6/3), test-FEN-excluded. Assistant =
+  `MoveX:<move>`. This is the B arm and the volume backbone (~95M tok).
+- **Style channel (3k deepseek traces, CURATED)**: ~3k verified lucid traces
+  spent on the positions labels can't teach: endgames (teacher's weakest),
+  near-equal-eval pairs (the deciding cases), rare tactical motifs. Every
+  claim verified: final choice == Stockfish-best(d14), intermediate moves
+  legal + eval-stable (|Δeval| ≤ 100cp), `Verified: yes` footer. Assistant =
+  lucid trace + `MoveX:<move>`.
+- **Style scaling (self-generated verified traces, 20-60k, free)**: sample
+  the competence checkpoint itself (temp 0.7, best-of-N), keep only
+  Stockfish-verified-correct completions, train as on-policy traces.
+  3k teacher traces become ~60k trace-style rows at zero teacher cost.
+- Mix ratio (labels : traces) and epochs (0.5/1/1.4) are eval-decided
+  checkpoints, not assumptions. SED-SFT-style diversity (2602.07464) noted:
+  keep trace variety so downstream RL exploration isn't mode-collapsed.
 - Prompt format identical to `run_mate_eval.py` (byte-identical, candidates +
   trailing space). Assistant-only loss. QLoRA NF4, completion_only_loss.
 
