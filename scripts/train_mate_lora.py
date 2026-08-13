@@ -35,13 +35,113 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 
+def _hf_api():
+    """HfApi from HF_WRITE_TOKEN (env or .env) — same pattern as src/hf_push."""
+    import os
+    from huggingface_hub import HfApi
+
+    token = os.environ.get("HF_WRITE_TOKEN")
+    if not token:
+        env_path = ROOT / ".env"
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line.startswith("HF_WRITE_TOKEN="):
+                    token = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    if not token:
+        raise RuntimeError("no HF_WRITE_TOKEN for HF checkpoint uploads")
+    return HfApi(token=token)
+
+
+class HfCheckpointCallback:
+    """Upload the latest trainer checkpoint to HF every --hf-upload-every
+    seconds (checkpoint dir = adapter weights + optimizer + scheduler +
+    trainer_state, so a killed Kaggle session can resume with
+    --resume-from-hf). Also uploads the final adapter at train end."""
+
+    def __init__(self, api, repo_id: str, remote_dir: str,
+                 interval_s: float, checkpoint_root: str):
+        self.api = api
+        self.repo_id = repo_id
+        self.remote_dir = remote_dir.strip("/")
+        self.interval_s = interval_s
+        self.checkpoint_root = Path(checkpoint_root)
+        self._last = time.time()
+        self._uploaded = set()
+
+    def _latest_checkpoint(self) -> Path | None:
+        cps = sorted(self.checkpoint_root.glob("checkpoint-*"),
+                     key=lambda p: int(p.name.split("-")[1]))
+        return cps[-1] if cps else None
+
+    def _upload_dir(self, cp: Path):
+        import os
+        from huggingface_hub import HfApi
+
+        rel = cp.name
+        api = HfApi(token=self.api.token) if False else self.api
+        files = [f for f in cp.rglob("*") if f.is_file()]
+        for f in files:
+            rpath = f"{self.remote_dir}/{rel}/{f.relative_to(cp)}"
+            api.upload_file(path_or_fileobj=str(f), path_in_repo=rpath,
+                            repo_id=self.repo_id, repo_type="dataset")
+        self._uploaded.add(rel)
+        print(f"[hf-cp] uploaded {rel} ({len(files)} files) -> "
+              f"{self.repo_id}/{self.remote_dir}/", flush=True)
+
+    def maybe_upload(self, force: bool = False):
+        cp = self._latest_checkpoint()
+        if cp is None:
+            return
+        if cp.name in self._uploaded:
+            return
+        if force or (time.time() - self._last) >= self.interval_s:
+            try:
+                self._upload_dir(cp)
+                self._last = time.time()
+            except Exception as e:
+                print(f"[hf-cp] upload failed (will retry): {e}", flush=True)
+
+    def final(self):
+        self._upload_dir(self._latest_checkpoint()) if self._latest_checkpoint() else None
+
+
+def download_hf_checkpoint(api, repo_id: str, remote_dir: str,
+                           local_root: str) -> Path | None:
+    """Fetch the latest checkpoint-* dir from HF into local_root; return
+    its path (for Trainer resume_from_checkpoint) or None."""
+    from huggingface_hub import hf_hub_download
+
+    local_root = Path(local_root)
+    local_root.mkdir(parents=True, exist_ok=True)
+    try:
+        files = api.list_repo_files(repo_id=repo_id, repo_type="dataset")
+    except Exception as e:
+        print(f"[resume] cannot list {repo_id}: {e}", flush=True)
+        return None
+    prefix = f"{remote_dir.strip('/')}/checkpoint-"
+    cps = sorted({f.split("/")[2] for f in files if f.startswith(prefix) and len(f.split("/")) > 2})
+    if not cps:
+        print(f"[resume] no checkpoints under {remote_dir} in {repo_id}", flush=True)
+        return None
+    latest = cps[-1]
+    print(f"[resume] downloading {remote_dir}/{latest}", flush=True)
+    for f in files:
+        if not f.startswith(f"{remote_dir}/{latest}/"):
+            continue
+        hf_hub_download(repo_id=repo_id, filename=f, repo_type="dataset",
+                        local_dir=str(local_root), token=api.token)
+    return local_root / remote_dir / latest
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--train", required=True)
     ap.add_argument("--eval", required=True)
     ap.add_argument("--out", default="results/mate-lora-adapter")
     ap.add_argument("--base", default="google/gemma-4-E2B-it")
-    ap.add_argument("--epochs", type=int, default=1)
+    ap.add_argument("--epochs", type=float, default=1)
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--rank", type=int, default=64)
     ap.add_argument("--alpha", type=int, default=64)
@@ -52,6 +152,20 @@ def main() -> None:
     ap.add_argument("--save-steps", type=int, default=10000)
     ap.add_argument("--wandb-project", default="", help="wandb project name "
                     "(empty = no wandb)")
+    ap.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark",
+                    help="HF dataset repo for checkpoint upload/resume "
+                         "(adapter + optimizer + trainer state)")
+    ap.add_argument("--hf-upload-every", type=float, default=1800,
+                    help="seconds between HF checkpoint uploads "
+                         "(Kaggle T4 sessions are ~12h; this is the "
+                         "crash/session-loss safety net)")
+    ap.add_argument("--resume-from-hf", default="",
+                    help="download latest checkpoint from --hf-repo and "
+                         "resume training from it (path_in_repo dir, e.g. "
+                         "noexplain-slice/checkpoint-XXXX)")
+    ap.add_argument("--train-tag", default="noexplain-slice",
+                    help="folder under --hf-repo (and wandb run name) "
+                         "for this training run")
     ap.add_argument("--game-mode", action="store_true",
                     help="expect the full-game commentary format "
                     "('user: FEN+history+turn' / 'assistant: "
@@ -71,6 +185,7 @@ def main() -> None:
         AutoProcessor,
         BitsAndBytesConfig,
         Trainer,
+        TrainerCallback,
         TrainingArguments,
     )
 
@@ -169,6 +284,20 @@ def main() -> None:
         print(f"wandb: project={args.wandb_project} run will log losses",
               flush=True)
 
+    # HF checkpoint safety net + resume (Kaggle T4 sessions die at ~12h)
+    api = _hf_api()
+    hf_cb = HfCheckpointCallback(api, args.hf_repo, args.train_tag,
+                                 args.hf_upload_every, str(out))
+    resume_from = None
+    if args.resume_from_hf:
+        resume_from = download_hf_checkpoint(api, args.hf_repo, args.train_tag,
+                                             str(out.parent))
+        if resume_from is not None:
+            print(f"[resume] resuming from {resume_from}", flush=True)
+        else:
+            print("[resume] no remote checkpoint found; starting fresh",
+                  flush=True)
+
     training_args = TrainingArguments(
         output_dir=str(out),
         num_train_epochs=args.epochs,
@@ -187,8 +316,9 @@ def main() -> None:
         eval_steps=args.eval_steps,
         save_strategy="steps",
         save_steps=args.save_steps,
-        save_total_limit=2,
+        save_total_limit=4,
         report_to=report_to,
+        run_name=args.train_tag,
         seed=42,
         max_grad_norm=1.0,
         dataloader_pin_memory=False,
@@ -216,19 +346,33 @@ def main() -> None:
                     "attention_mask": ids["attention_mask"],
                     "labels": labels}
 
+    class HfUploadCallback(TrainerCallback):
+        """Trigger the HF safety-net upload on the trainer's own cadence."""
+
+        def __init__(self, cb: HfCheckpointCallback):
+            self.cb = cb
+
+        def on_step_end(self, args, state, control, **kwargs):
+            self.cb.maybe_upload()
+
+        def on_train_end(self, args, state, control, **kwargs):
+            self.cb.maybe_upload(force=True)
+
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=eval_ds if not args.smoke else None,
         data_collator=MaskedCollator(tokenizer),
+        callbacks=[HfUploadCallback(hf_cb)] if not args.smoke else [],
     )
     print("training...", flush=True)
     t0 = time.time()
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume_from)
     trainer.save_model(str(out))
     tokenizer.save_pretrained(str(out))
     processor.save_pretrained(str(out))
+    hf_cb.final()
     print(f"done in {(time.time()-t0)/3600:.2f}h -> {out}", flush=True)
     if not args.smoke:
         metrics = trainer.evaluate()
