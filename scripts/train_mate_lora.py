@@ -30,6 +30,7 @@ from pathlib import Path
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -179,7 +180,7 @@ def main() -> None:
 
     import torch
     from datasets import load_dataset
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from peft import LoraConfig, get_peft_model
     from transformers import (
         AutoModelForImageTextToText,
         AutoProcessor,
@@ -212,17 +213,22 @@ def main() -> None:
         args.base, quantization_config=quant, device_map={"": 0},
         dtype=compute_dtype)
 
-    # 4-bit -> prepare ONLY the language tower for k-bit training (the
-    # vision/audio towers stay frozen and untouched). Calling
-    # prepare_model_for_kbit_training on the FULL multimodal model upcasts
-    # the whole thing to fp32 -> CUDA OOM on the 16GB T4.
+    # 4-bit -> freeze the base (LoRA marks its own params trainable). We
+    # deliberately do NOT call prepare_model_for_kbit_training: it casts
+    # every non-quantized param to fp32, which OOM'd on the T4 (tried to
+    # allocate 8.75 GiB at load on the 2B text tower).
     lang_model = model.model.language_model
-    lang_model = prepare_model_for_kbit_training(lang_model)
+    for p in lang_model.parameters():
+        p.requires_grad = False
     lang_model.config.use_cache = False
     try:
         lang_model.gradient_checkpointing_enable()
     except Exception as e:
         print(f"grad checkpointing unavailable: {e}", flush=True)
+    n_quant = sum(1 for m in lang_model.modules()
+                  if type(m).__name__ == "Linear4bit")
+    print(f"4-bit Linear modules in text tower: {n_quant} "
+          f"(0 = quantization did NOT engage)", flush=True)
     print("language_model params:",
           sum(p.numel() for p in lang_model.parameters()) / 1e6, "M",
           flush=True)
