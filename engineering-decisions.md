@@ -84,6 +84,19 @@ the yield-per-phase audit is itself a paper result.
 - deepseek lucid trace pass: 20–40k × ~1.5k tokens ≈ 30–60M tokens ≈ few
   hours of gateway time, local, no GPU.
 
+### 2.6 Why not "350k from every format" (asked 2026-08-12)
+Distributionally sound, computationally impossible. Measured avg row
+lengths: noexplain 157 tok, strategy 196, tactic 185, both 226. 350k×4 =
+268M tokens/epoch ≈ 12–25h of T4 SFT alone (2–4 days for the full 1.4M);
+the 30h budget must also cover RL (the novelty core) and eval. The plan
+instead allocates **equal compute per format**: ~86M tokens ≈ 220k rows ≈
+55k/format, adjusted so tokens/format are equal (fewer "both" rows, more
+"noexplain"). Rationale: (a) the four formats are one position population
+with different prompt text — extra rows repeat positions, and rank-32 QLoRA
+saturates capacity far below 1.4M; (b) 2B-class models learn best from
+short, clean, diverse traces (2502.12143; s1 2501.19393); (c) tactic/both's
+full 350k pools remain usable as free RL rollout position pools.
+
 ---
 
 ## 3. Stage 0 — configuration ablation (1–2h GPU)
