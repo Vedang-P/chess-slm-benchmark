@@ -56,12 +56,19 @@ curation, 2502.20122 self-training, 2502.12744 SERT, 2412.09413 STILL-2,
 - **Competence backbone (labels)**: ~500-600k rows, format-balanced (25% per
   format pool), phase-natural (~91/6/3), test-FEN-excluded. Assistant =
   `MoveX:<move>`. This is the B arm and the volume backbone (~95M tok).
-- **Style channel (3k deepseek traces, CURATED)**: ~3k verified lucid traces
-  spent on the positions labels can't teach: endgames (teacher's weakest),
-  near-equal-eval pairs (the deciding cases), rare tactical motifs. Every
-  claim verified: final choice == Stockfish-best(d14), intermediate moves
-  legal + eval-stable (|Δeval| ≤ 100cp), `Verified: yes` footer. Assistant =
-  lucid trace + `MoveX:<move>`.
+- **Style channel (3k deepseek traces, CURATED)**: ~3k verified lucid traces.
+  **Selection is difficulty-driven, phase-natural, format-balanced — no axis
+  is sacrificed (user decision 2026-08-12: the model must be good at
+  everything equally, not endgame-maxxed).** Per cell (phase × format):
+  phases at the natural ~91/6/3 split (endgame is 2.8% of the eval — not a
+  training target), formats 25% each; within each cell pick the *hardest*
+  positions (near-equal Stockfish evals, low prior density, rare tactical
+  motifs — the universal difficulty signal, phase-independent). Every claim
+  verified: final choice == Stockfish-best(d14), intermediate moves legal +
+  eval-stable (|Δeval| ≤ 100cp), `Verified: yes` footer. Assistant = lucid
+  trace + `MoveX:<move>`. The phase-stratified benchmark (300/phase) is
+  *reported*, never a training target — if endgame is weak there, it is a
+  finding, not a reason to distort training.
 - **Style scaling (self-generated verified traces, 20-60k, free)**: sample
   the competence checkpoint itself (temp 0.7, best-of-N), keep only
   Stockfish-verified-correct completions, train as on-policy traces.

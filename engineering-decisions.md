@@ -75,8 +75,11 @@ a SMALLER model, and BETTER techniques. Right-sized design (~600-680k rows,
   fluently; unique-position diversity is what counts, and 25%-per-format
   sampling yields ~450-550k unique positions.
 - **Verified lucid traces channel (A2) — 3k CURATED teacher traces** (the
-  deepseek budget is ~3k positions, period): spent on endgames (teacher's
-  weakest), near-equal-eval pairs (deciding cases), rare tactical motifs.
+  deepseek budget is ~3k positions, period). Selection is **difficulty-driven,
+  phase-natural, format-balanced** (user decision 2026-08-12: good at
+  everything equally, no endgame maxx): phases at the natural ~91/6/3 split,
+  formats 25% each, and within each (phase × format) cell the HARDEST
+  positions (near-equal Stockfish evals, low prior density, rare motifs).
   deepseek-v4-flash writes a compressed lucid trace (≤4k tokens) then the choice. **Every
   claim is then Stockfish-verified at depth 14**:
   - final choice == engine best at the position → keep, else discard
@@ -90,9 +93,11 @@ a SMALLER model, and BETTER techniques. Right-sized design (~600-680k rows,
   numbers; trace yield per phase is itself a paper result.
 - **Style scaling — self-generated verified traces (20-60k, free)**: after a
   competence checkpoint, sample the model itself (temp 0.7, best-of-N), keep
-  only Stockfish-verified-correct completions, train as on-policy traces.
-  3k teacher traces become ~60k trace-style rows at zero teacher cost
-  (2502.20122 self-training, 2502.12744 SERT, 2412.09413 STILL-2).
+  only Stockfish-verified-correct completions, train as on-policy traces,
+  drawn from the SAME natural distribution (phase-natural, format-balanced,
+  difficulty-gated). 3k teacher traces become ~60k trace-style rows at zero
+  teacher cost (2502.20122 self-training, 2502.12744 SERT, 2412.09413
+  STILL-2).
 - **Why mix, not all-traces**: labels are free, high-volume, and carry the
   exact eval prompt format; traces are the style/grounding carriers. Mix
   ratio and epochs are **eval-decided checkpoints**, not assumptions.
