@@ -100,6 +100,10 @@ TRACES_CELL = r'''
 import os, subprocess, sys, time
 from pathlib import Path
 
+# gateway serializes per API key: the injected shard key drives this
+# kernel's quota while the generic env slot stays untouched for other runs
+os.environ["OPENCODE_API_KEY"] = os.environ.get("%(key_name)s", "")
+
 cmd = [sys.executable, "scripts/build_lucid_traces.py",
        "--stage", "traces",
        "--offset", "%(offset)s",
@@ -159,11 +163,14 @@ def inject_secrets(nb: dict, env: dict, names: list[str]) -> None:
 def main() -> None:
     offset = 0
     count = 1000
+    key_name = "OPENCODE_API_KEY"
     for a in sys.argv[1:]:
         if a.startswith("--offset="):
             offset = int(a.split("=")[1])
         elif a.startswith("--count="):
             count = int(a.split("=")[1])
+        elif a.startswith("--key-name="):
+            key_name = a.split("=")[1]
     slug = f"traces-cpu-{offset}"
     cells = [
         _md("# Verified lucid trace generation (CPU, overnight)\n\n"
@@ -179,12 +186,13 @@ def main() -> None:
         _md("## 4. Fetch the shared selected list"),
         _code(FETCH_CELL),
         _md("## 5. Generate + verify lucid traces (resume-safe)"),
-        _code(TRACES_CELL % {"offset": offset, "count": count}),
+        _code(TRACES_CELL % {"offset": offset, "count": count,
+                             "key_name": key_name}),
     ]
     nb = _notebook(cells)
     env = load_env()
     inject_secrets(nb, env,
-                   ["GITHUB_TOKEN", "HF_WRITE_TOKEN", "OPENCODE_API_KEY",
+                   ["GITHUB_TOKEN", "HF_WRITE_TOKEN", key_name,
                     "WANDB_API_KEY"])
 
     push_dir = NB_DIR / f"push_traces_{offset}"

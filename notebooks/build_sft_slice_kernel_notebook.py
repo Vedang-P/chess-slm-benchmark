@@ -65,7 +65,7 @@ subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "torchvision==0.21.0", "torchaudio==2.6.0", "--index-url",
                 "https://download.pytorch.org/whl/cu126"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "bitsandbytes==0.45.4"], check=True)
+                "bitsandbytes>=0.46.1"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "-r", "requirements.txt"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-U", "wandb"], check=True)
