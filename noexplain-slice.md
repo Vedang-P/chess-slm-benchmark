@@ -1,22 +1,20 @@
 # Noexplain-First Vertical Slice — the provable pipeline milestone
 
-Decision 2026-08-12. First goal: **beat deepseek on the noexplain testbed**
-(92.2%) — the purest chess signal (no explanation text in the prompt to lean
-on) and where the MATE fine-tune anchor gap is largest (8B anchor: 63.5%).
-Prove the full pipeline on ONE subset, then broaden to all four formats.
+Decision 2026-08-12. First goal: **beat deepseek on the noexplain testbed
+(92.2% (922/1000))** — the purest chess signal (no explanation text in the
+prompt to lean on) and where the MATE fine-tune anchor gap is largest (8B
+anchor: 63.5%). Prove the full pipeline on ONE subset, then broaden to all
+four formats.
 
-## Ground truth (no re-runs — all baselines exist and are verified)
+## Ground truth (no re-runs — the baselines exist and are verified)
 
-- **Full deepseek matrix already measured** (paper/main.tex, verified from
-  the HF archive): strategy 85.8% (Wilson CI [0.835,0.878]), **noexplain
-  92.2%**, tactic 94.0%, both 92.8%. The 91.0% merged artifact was
-  investigated and rejected before this design session — it is not a
-  baseline. Baselines are final; no deepseek re-runs.
-- The noexplain target to beat is **92.2%**, not 85.8% — deepseek is
-  actually weakest at strategy; noexplain is its second-best subset. The
-  slice's success bar is high by design.
-- Deepseek strategy efficiency anchor: ~8,800 reasoning tokens/position,
-  ~79s latency (monitor). Our tokens-per-correct win is measured against this.
+- **deepseek noexplain baseline: 92.2% (922/1000)** — measured, HF archive
+  (`mate-noexplain-w1..w5`, thinking ON, unbounded, protocol-comparable).
+- **deepseek strategy baseline: 85.8% (858/1000)** (Wilson CI [0.835,0.878],
+  verified from the HF archive). The 91.0% merged artifact was investigated
+  and rejected — it is not a baseline.
+- Deepseek efficiency anchor: ~8,800 reasoning tokens/position, ~79s latency
+  (monitor). Our tokens-per-correct win is measured against this.
 
 ## Step 0 — Noexplain SFT data (build 1-2h CPU, train 15-20h T4)
 
@@ -29,7 +27,7 @@ Prove the full pipeline on ONE subset, then broaden to all four formats.
   intermediate moves legal + eval-stable ±100cp), `Verified: yes` footer.
 - **Self-generated verified traces** (20-60k, free): best-of-N samples from a
   competence checkpoint, Stockfish-filtered, on-policy, same distribution.
-- Eval: noexplain 1000, thinking ON, protocol parity with the 92.2%
+- Eval: noexplain 1000, thinking ON, protocol parity with the 92.2% (922/1000)
   baseline run, tokens-per-correct.
 
 ## Step 1 — RLVR (remaining budget)
@@ -40,7 +38,7 @@ DAPO/Dr.GRPO/S-GRPO stabilizers, near-equal-eval rollout pool.
 ## Step 2 — Provable result
 
 - SFT alone: target 70-78% on noexplain (MATE 8B fine-tune: 63.5%).
-- +RLVR + self-consistency: toward/over the 92.2% deepseek baseline.
+- +RLVR + self-consistency: toward/over the 92.2% (922/1000) deepseek baseline.
 - If the slice works on noexplain, broaden to all 4 formats (labels 25% per
   format pool + traces per format) — additive, same machinery.
 

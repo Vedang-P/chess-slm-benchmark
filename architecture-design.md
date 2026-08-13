@@ -2,8 +2,10 @@
 
 Design date: 2026-08-12. Compute: 30h T4-class (Kaggle, account `vedanggggg`).
 Model: gemma-4-E2B (2B, 4-bit QLoRA). Eval: MATE 4×1000 (strategy /
-noexplain / tactic / both). Target: beat deepseek-v4-flash (85.8% strategy)
-on all four subsets, measured as accuracy AND tokens-per-correct. Hard
+noexplain / tactic / both). **First target: beat deepseek-v4-flash on
+noexplain (92.2% (922/1000))**, then the full matrix (strategy 85.8%
+(858/1000), tactic 94.0% (940/1000), both 92.8% (928/1000)), measured as
+accuracy AND tokens-per-correct. Hard
 constraint: **no engine at inference** — Stockfish is a training-time oracle
 only.
 

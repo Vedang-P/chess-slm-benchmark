@@ -17,10 +17,10 @@ of the same architecture, and (b) the frontier/SLM baselines on the MATE
 | Model | Accuracy |
 |---|---|
 | random | 50% |
-| gemma-4-E2B zero-shot | 61.1% |
-| MATE LLaMA-3-8B fine-tune | 89.7% |
-| deepseek-v4-flash thinking | 92.2% |
-| MATE best combined fine-tune | 95.2% |
+| gemma-4-E2B zero-shot | 61.1% (strategy arm; noexplain not yet measured) |
+| MATE LLaMA-3-8B fine-tune (noexplain anchor) | 63.5% |
+| deepseek-v4-flash thinking | 92.2% (922/1000) |
+| MATE best combined fine-tune (both anchor) | 95.2% |
 
 ## Architecture (hybrid: board tokens + text head)
 

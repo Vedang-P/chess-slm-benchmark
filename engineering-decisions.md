@@ -14,7 +14,7 @@ costs. Companion docs: `architecture-design.md` (stages + novelty pillars),
 | GPU | Kaggle T4-class 16GB, fp16 tensor cores only (CC 7.5; bf16 supported but unaccelerated → we train fp16) |
 | Compute | 30h GPU (account `vedanggggg`), resets 2026-08-15 |
 | Eval | MATE 4 subsets × 1000 (strategy/noexplain/tactic/both), exact MATE prompts, 2-candidate selection |
-| Baselines | deepseek-v4-flash 85.8% (strategy, thinking); base gemma 61.1% (strategy); MATE LLaMA-3-8B SFT anchors 63.5/89.7/94.6/95.2 |
+| Baselines | deepseek-v4-flash (thinking): strategy 85.8% (858/1000), noexplain 92.2% (922/1000), tactic 94.0% (940/1000), both 92.8% (928/1000); base gemma 61.1% (611/1000, strategy); MATE LLaMA-3-8B SFT anchors 63.5/89.7/94.6/95.2 |
 | Gap to close | ~25 points vs deepseek on strategy, from a 61% base |
 | Hard rule | no engine at inference — Stockfish is training-time only |
 

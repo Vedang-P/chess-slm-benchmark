@@ -88,7 +88,7 @@ gemma}. Current state (README matrix):
 
 | arm | strategy | noexplain | tactic | both |
 |---|---|---|---|---|
-| deepseek-v4-flash, thinking | **85.8%** (858/1000) ✓ | ran | ran | ran |
+| deepseek-v4-flash, thinking | **85.8%** (858/1000) ✓ | **92.2%** (922/1000) ✓ | **94.0%** (940/1000) ✓ | 92.8% (928/1000) ✓ |
 | gemma4-e2b, thinking, 32768 budget | **61.1%** (611/1000) ✓ | ran | ran | ran |
 | gemma4-e2b MATE-LoRA fine-tune | — | — | — | — (next) |
 
@@ -179,7 +179,7 @@ gemma}. Current state (README matrix):
 |---|---|
 | Phase-1 representation study | done (fen 5/5; report in docs) |
 | Eval harness + task sets | done, gated by test_engine.py |
-| MATE 4×1000 campaign (deepseek) | done 3 subsets, strategy 85.8%; both pending/finalized |
+| MATE 4×1000 campaign (deepseek) | done — strategy 85.8% (858/1000), noexplain 92.2% (922/1000), tactic 94.0% (940/1000), both 92.8% (928/1000) |
 | MATE 4×1000 campaign (gemma) | strategy 61.1% + others ran |
 | MATE-LoRA train data | done (200k/5k, HF-mirrored) |
 | MATE-LoRA training | **queued** (Kaggle T4 budget) |

@@ -46,7 +46,7 @@ The campaign matrix:
 
 | arm | strategy | noexplain | tactic | both | status |
 |---|---|---|---|---|---|
-| deepseek-v4-flash, thinking (unbounded) | **85.8%** (858/1000) | running | queued | queued | **Table 1 core** |
+| deepseek-v4-flash, thinking (unbounded) | **85.8%** (858/1000) | **92.2%** (922/1000) | **94.0%** (940/1000) | 92.8% (928/1000) | **Table 1 core** (complete) |
 | gemma4-e2b, thinking, 32768 budget | **61.1%** (611/1000) | to run | to run | to run | local-model column |
 | gemma4-e2b MATE-LoRA fine-tune | to run | to run | to run | to run | the project's contribution |
 
