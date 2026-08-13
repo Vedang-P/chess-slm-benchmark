@@ -189,6 +189,9 @@ def main() -> None:
         TrainingArguments,
     )
 
+    torch.cuda.empty_cache()
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
     cap = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else (0, 0)
     compute_dtype = torch.bfloat16 if cap >= (7, 5) else torch.float16
     print(f"cuda={torch.cuda.is_available()} cap={cap} dtype={compute_dtype}",
@@ -209,9 +212,17 @@ def main() -> None:
         args.base, quantization_config=quant, device_map={"": 0},
         dtype=compute_dtype)
 
-    # 4-bit -> prepare for k-bit training, then wrap ONLY the language tower.
-    model = prepare_model_for_kbit_training(model)
+    # 4-bit -> prepare ONLY the language tower for k-bit training (the
+    # vision/audio towers stay frozen and untouched). Calling
+    # prepare_model_for_kbit_training on the FULL multimodal model upcasts
+    # the whole thing to fp32 -> CUDA OOM on the 16GB T4.
     lang_model = model.model.language_model
+    lang_model = prepare_model_for_kbit_training(lang_model)
+    lang_model.config.use_cache = False
+    try:
+        lang_model.gradient_checkpointing_enable()
+    except Exception as e:
+        print(f"grad checkpointing unavailable: {e}", flush=True)
     print("language_model params:",
           sum(p.numel() for p in lang_model.parameters()) / 1e6, "M",
           flush=True)
