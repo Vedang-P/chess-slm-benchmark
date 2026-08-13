@@ -63,6 +63,9 @@ def main() -> None:
     ap.add_argument("--eval-every", type=int, default=1000)
     ap.add_argument("--max-steps", type=int, default=0,
                     help="0 = run full epochs")
+    ap.add_argument("--resume", default="",
+                    help="path to a .pt checkpoint (best.pt) to continue "
+                         "training from; restores model + optimizer + step")
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
@@ -104,6 +107,22 @@ def main() -> None:
     if args.max_steps:
         total_steps = args.max_steps
 
+    start_step = 0
+    start_epoch = 1
+    best_val = -1.0
+    if args.resume:
+        ckpt = torch.load(args.resume, map_location=device)
+        state = {k: (v.bfloat16() if device == "cuda" else v)
+                 for k, v in ckpt["model"].items()}
+        model.load_state_dict(state)
+        if "optimizer" in ckpt:
+            opt.load_state_dict(ckpt["optimizer"])
+        start_step = ckpt.get("step", 0)
+        start_epoch = ckpt.get("epoch", 1)
+        best_val = ckpt.get("best_val", -1.0)
+        print(f"resumed from {args.resume}: step {start_step} "
+              f"epoch {start_epoch} best_val {best_val}", flush=True)
+
     use_wandb = bool(args.wandb_project)
     if use_wandb:
         try:
@@ -114,12 +133,13 @@ def main() -> None:
         except Exception:
             use_wandb = False
 
-    step = 0
-    best_val = -1.0
+    step = start_step
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    for epoch in range(1, args.epochs + 1):
+    print(f"starting at epoch {start_epoch} step {step} "
+          f"of {args.epochs} epochs", flush=True)
+    for epoch in range(start_epoch, args.epochs + 1):
         model.train()
         for tok_ids, type_ids, labels in train_loader:
             tok_ids, type_ids, labels = (tok_ids.to(device),
@@ -148,8 +168,11 @@ def main() -> None:
                 if val_acc > best_val:
                     best_val = val_acc
                     torch.save({"model": model.state_dict(),
+                                "optimizer": opt.state_dict(),
                                 "cfg": cfg.__dict__,
-                                "vocab": tokenizer.vocab_size},
+                                "vocab": tokenizer.vocab_size,
+                                "step": step, "epoch": epoch,
+                                "best_val": best_val},
                                out / "best.pt")
                     print(f"  saved best ({best_val:.4f})", flush=True)
 

@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <defs>
+    <style>
+      text { font-family: 'Helvetica Neue', Arial, sans-serif; }
+      .title { font-size: 22px; font-weight: bold; fill: #111; }
+      .label { font-size: 13px; fill: #333; }
+      .small { font-size: 11px; fill: #666; }
+      .box { fill: #f4f6f8; stroke: #2c3e50; stroke-width: 1.5px; }
+      .boxhead { fill: #2c3e50; stroke: #2c3e50; }
+      .boxheadtext { fill: #fff; font-size: 13px; font-weight: bold; }
+      .mod { fill: #eaf2f8; stroke: #2980b9; stroke-width: 1.5px; }
+      .mod2 { fill: #fef9e7; stroke: #b7950b; stroke-width: 1.5px; }
+      .mod3 { fill: #eafaf1; stroke: #27ae60; stroke-width: 1.5px; }
+      .mod4 { fill: #fdf2e9; stroke: #ca6f1e; stroke-width: 1.5px; }
+      .arrow { stroke: #555; stroke-width: 1.8px; fill: none; marker-end: url(#arrowhead); }
+      .arrowhead { fill: #555; }
+      .dashed { stroke-dasharray: 5,4; stroke: #999; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="arrowhead"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="600" y="35" text-anchor="middle" class="title">MATE Text Transformer — Hybrid Board-Token + Text Architecture</text>
+  <text x="600" y="55" text-anchor="middle" class="small">d_model=512 · L=8 decoder blocks · H=8 heads · d_ff=2048 · 25.5M params · vocab=42</text>
+
+  <!-- ===================== INPUTS ===================== -->
+  <!-- Board tokens -->
+  <rect x="40" y="90" width="440" height="120" rx="6" class="box"/>
+  <rect x="40" y="90" width="440" height="28" rx="6" class="boxhead"/>
+  <text x="260" y="109" text-anchor="middle" class="boxheadtext">Board Encoder (structured tokens)</text>
+
+  <!-- mini board grid -->
+  <g transform="translate(60,130)">
+    <rect x="0" y="0" width="112" height="64" fill="#fff" stroke="#2c3e50"/>
+    <!-- 4x8 mini squares with piece letters -->
+    <g font-size="9" text-anchor="middle">
+      <text x="7" y="10" fill="#333">r</text><text x="21" y="10" fill="#333">n</text><text x="35" y="10" fill="#333">b</text><text x="49" y="10" fill="#333">q</text>
+      <text x="7" y="24" fill="#333">p</text><text x="21" y="24" fill="#333">.</text><text x="35" y="24" fill="#333">.</text><text x="49" y="24" fill="#333">.</text>
+      <text x="7" y="38" fill="#333">.</text><text x="21" y="38" fill="#333">.</text><text x="35" y="38" fill="#333">n</text><text x="49" y="38" fill="#333">.</text>
+      <text x="7" y="52" fill="#333">.</text><text x="21" y="52" fill="#333">P</text><text x="35" y="52" fill="#333">.</text><text x="49" y="52" fill="#333">.</text>
+    </g>
+  </g>
+  <text x="190" y="138" class="small">64 square tokens</text>
+  <text x="190" y="152" class="small">(piece-on-square,</text>
+  <text x="190" y="166" class="small"> color-offset)</text>
+
+  <text x="300" y="140" class="label">+ metadata tokens:</text>
+  <text x="300" y="158" class="small">&lt;mside&gt; side-to-move</text>
+  <text x="300" y="174" class="small">&lt;castle&gt; rights</text>
+  <text x="300" y="190" class="small">&lt;ep&gt; en-passant</text>
+
+  <!-- Text tokens -->
+  <rect x="40" y="235" width="440" height="100" rx="6" class="box"/>
+  <rect x="40" y="235" width="440" height="28" rx="6" class="boxhead"/>
+  <text x="260" y="254" text-anchor="middle" class="boxheadtext">Text Encoder (candidate moves)</text>
+  <text x="260" y="290" text-anchor="middle" class="label">&lt;text&gt; MoveA : e2e4 MoveB : g1f3</text>
+  <text x="260" y="315" text-anchor="middle" class="small">tokenized UCI moves (8-char each: source + dest + promo)</text>
+
+  <!-- ===================== EMBEDDINGS ===================== -->
+  <rect x="530" y="160" width="220" height="70" rx="6" class="mod"/>
+  <text x="640" y="190" text-anchor="middle" class="label">Token Embedding</text>
+  <text x="640" y="208" text-anchor="middle" class="small">42 × 512</text>
+  <text x="640" y="222" text-anchor="middle" class="small">+ Type Embedding (3)</text>
+
+  <!-- arrows input -> embedding -->
+  <path d="M 440 150 C 480 150, 500 185, 525 185" class="arrow"/>
+  <path d="M 440 285 C 480 285, 500 195, 525 195" class="arrow"/>
+
+  <!-- Positional -->
+  <rect x="530" y="90" width="220" height="55" rx="6" class="mod"/>
+  <text x="640" y="112" text-anchor="middle" class="label">Positional Embedding</text>
+  <text x="640" y="130" text-anchor="middle" class="small">sinusoidal · max_seq 512</text>
+  <path d="M 640 145 L 640 158" class="arrow"/>
+
+  <!-- fused embeddings -->
+  <rect x="530" y="245" width="220" height="45" rx="6" class="mod2"/>
+  <text x="640" y="262" text-anchor="middle" class="label">Fused Input Embeddings</text>
+  <text x="640" y="279" text-anchor="middle" class="small">x₀ ∈ ℝ^(T×512)</text>
+  <path d="M 640 230 L 640 243" class="arrow"/>
+
+  <!-- ===================== TRANSFORMER BLOCKS ===================== -->
+  <!-- block 1 -->
+  <rect x="530" y="320" width="220" height="240" rx="6" class="mod3"/>
+  <text x="640" y="340" text-anchor="middle" class="boxheadtext" fill="#27ae60">Decoder Block 1 (×8)</text>
+
+  <rect x="545" y="355" width="190" height="40" rx="4" class="box"/>
+  <text x="640" y="372" text-anchor="middle" class="label">RMSNorm → Self-Attention</text>
+  <text x="640" y="388" text-anchor="middle" class="small">8 heads · causal mask</text>
+
+  <rect x="545" y="410" width="190" height="40" rx="4" class="box"/>
+  <text x="640" y="427" text-anchor="middle" class="label">+ Residual (Add)</text>
+
+  <rect x="545" y="465" width="190" height="40" rx="4" class="box"/>
+  <text x="640" y="482" text-anchor="middle" class="label">RMSNorm → MLP (GELU)</text>
+  <text x="640" y="498" text-anchor="middle" class="small">512 → 2048 → 512</text>
+
+  <rect x="545" y="520" width="190" height="28" rx="4" class="box"/>
+  <text x="640" y="538" text-anchor="middle" class="label">+ Residual (Add)</text>
+
+  <!-- blocks x8 label -->
+  <text x="752" y="430" class="small" transform="rotate(90,752,430)">× 8 stacked layers</text>
+
+  <!-- arrow into block -->
+  <path d="M 640 290 L 640 318" class="arrow"/>
+
+  <!-- ===================== OUTPUT ===================== -->
+  <rect x="530" y="590" width="220" height="50" rx="6" class="mod4"/>
+  <text x="640" y="612" text-anchor="middle" class="label">Final RMSNorm</text>
+  <text x="640" y="628" text-anchor="middle" class="small">over last hidden state</text>
+  <path d="M 640 560 L 640 588" class="arrow"/>
+
+  <!-- classification head -->
+  <rect x="820" y="560" width="330" height="80" rx="6" class="mod4"/>
+  <text x="985" y="588" text-anchor="middle" class="label">Classification Head</text>
+  <text x="985" y="606" text-anchor="middle" class="small">Linear(512 → 2) on h_T</text>
+  <text x="985" y="624" text-anchor="middle" class="small">softmax → P(MoveA) vs P(MoveB)</text>
+  <path d="M 750 615 L 815 615" class="arrow"/>
+
+  <!-- loss -->
+  <rect x="820" y="470" width="330" height="55" rx="6" class="box"/>
+  <text x="985" y="492" text-anchor="middle" class="label">Training Objective</text>
+  <text x="985" y="510" text-anchor="middle" class="small">Cross-Entropy(2 classes)</text>
+  <text x="985" y="525" text-anchor="middle" class="small">label smoothing 0.1</text>
+  <path d="M 985 560 L 985 527" class="arrow"/>
+
+  <!-- ground truth annotation -->
+  <text x="985" y="455" text-anchor="middle" class="small">ground truth: MoveA / MoveB</text>
+  <path d="M 985 470 L 985 462" class="arrow dashed"/>
+
+  <!-- ===================== FOOTER NOTES ===================== -->
+  <text x="600" y="685" text-anchor="middle" class="small">Input = board tokens ‖ text tokens (no answer token — the label is the target, preventing answer leakage)</text>
+  <text x="600" y="705" text-anchor="middle" class="small">Sequence: 64 board + ~8 metadata + ~20 text ≈ 90 tokens · causal mask · classify on final position h_T</text>
+</svg>
