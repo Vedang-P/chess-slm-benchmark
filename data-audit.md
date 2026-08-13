@@ -143,8 +143,11 @@ Cross-format FEN overlap in the EVAL sets:
 **The tactic and both testbeds are the same 1000 positions with different
 prompt text** — format-invariance is directly rewarded by the eval.
 
-**Consequence (supersedes §6.1 and the equal-compute decision):** the
-faithful training distribution is every (position, format) pair that exists
-(~3.48M rows, ≈640M tokens/epoch) — matching the eval's own structure.
-Equal-rows-per-format (350k×4) would retrain the same positions four times;
-equal-compute-per-format was a budget argument, no longer operative.
+**Consequence (final, 2026-08-12):** the formats being one position pool
+means **format coverage is a sampling concern, not a saturation concern** —
+the SFT mix draws 25% of rows from each format pool (every prompt style
+covered at ~450-550k unique positions) and does NOT train (position, format)
+pairs: the model receives no format signal at eval, and retraining positions
+in all four dresses wastes capacity without adding chess information. Full
+3.48M-row training is MATE-scale overkill; our claim is beating that recipe
+at less compute with verified lucid traces + RLVR.

@@ -36,31 +36,28 @@ this **Grounded Lucid Reasoning (GLR)**. The four novelty pillars:
 
 ## 1. Training stages
 
-### Stage 0 — Rank/module ablation (full-corpus slices, compute-unconstrained)
-Guided by 2607.25583/2607.09757: sweep r ∈ {32, 64, 128}, attn-only vs
-all-linear, lr 1e-4/2e-4, on ~200k-row slices; pick by eval accuracy on the
-4×1000 (not a synthetic holdout). Capacity is a real research variable now
-that the corpus is full-size — the sweep decides, no default.
+### Stage 0 — Rank/module ablation (1-2h, ~200k-row slices)
+Guided by 2607.25583/2607.09757: sweep r ∈ {16, 32, 64}, attn-only vs
+all-linear, lr 1e-4/2e-4; pick the config by eval accuracy on the 4×1000.
+Default if inconclusive: r=32, alpha=32, all-linear, lr=2e-4, batch 16.
 
-### Stage 1 — SFT: competence + lucid style (full corpus)
+### Stage 1 — SFT: competence + lucid style (15-20h T4, ~1 epoch over ~600-680k rows)
+Right-sized to beat MATE at less compute: NOT full-corpus, NOT
+position-format pairs (formats share one position pool; coverage not
+saturation is the goal).
 **Data recipe** (`scripts/build_mate_lora_data.py` extended):
-- **Every (position, format) pair that exists**: ~3.48M rows (noexplain
-  1.42M + strategy 1.36M + tactic 350k + both 350k), phase-natural
-  (~91/6/3, matching the eval), test-FEN-excluded. The four formats are one
-  position pool with different prompt text (measured) — training all pairs
-  teaches format-invariance, which the eval directly rewards (tactic and
-  both testbeds are the same 1000 positions).
-- **Lucid trace distillation channel (A2)**: ~150–250k rows (phase-oversampled
+- **Labels channel (B)**: ~500-600k rows, **format-balanced (25% per format
+  pool), phase-natural (~91/6/3, matching the eval), test-FEN-excluded**,
+  yielding ~450-550k unique positions with all four prompt styles covered.
+- **Lucid trace distillation channel (A2)**: ~50-80k rows (phase-oversampled
   toward endgame) where deepseek-v4-flash generates the *lucid* reasoning
   trace (compressed, ≤4k tokens); then **every claim is verified**: final
   choice must equal Stockfish-best (deep ~14) at the position, intermediate
   candidate moves must be legal and eval-stable (|Δeval| ≤ 100cp from the
   position's eval). Only fully-grounded traces enter the corpus. Verified
   traces get a `Verified: yes` footer in training.
-- **Labels channel (B)**: plain labels `MoveX:<move>` for the full
-  (position, format) set — the baseline arm and the volume backbone.
-- Mix ratio (labels : traces) and epochs (0.5/1/2) are **eval-decided
-  checkpoints**, not assumptions.
+- Mix ratio (labels : traces ≈ 85:15) and epochs (0.5/1/1.4) are
+  **eval-decided checkpoints**, not assumptions.
 - Prompt format identical to `run_mate_eval.py` (byte-identical, candidates +
   trailing space). Assistant-only loss. QLoRA NF4, completion_only_loss.
 
@@ -115,7 +112,7 @@ cases), 2605.22074.
 | Stage | Hours | What |
 |---|---|---|
 | 0 ablation | sweep | rank/module sweep on ~200k slices |
-| 1 SFT | full corpus | 3.48M (position,format) pairs + 150–250k traces; epochs by eval |
+| 1 SFT | 15-20h T4 | ~600-680k rows (25% per format, phase-natural) + 50-80k verified traces; epochs by eval |
 | 2 RLVR | 12–18 | GRPO, N=8 groups, ~15–30k steps, LoRA |
 | eval | 2–3 | 4×1000 × {greedy, K=4 self-selected} + novelty subset |
 | buffer | 2–3 | retries, hand-off resume (2504.15610) |

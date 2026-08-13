@@ -42,30 +42,37 @@ training row gets a phase label.
 **Audited correction**: both train and eval are ~91/6/3 (middlegame/opening/
 endgame) — the eval is NOT phase-balanced and mirrors the train distribution
 (data-audit.md §2). Therefore the main SFT mix is **phase-natural**
-(≈91/6/3, matches the eval exactly), NOT phase-balanced. **Format coverage is
-total, not sampled**: the four formats are ONE position pool (~1.42M unique
-FENs) with different prompt text — strategy ⊂ noexplain (~100% overlap),
-tactic/both ⊂ noexplain (100%). The faithful training distribution is every
-(position, format) pair that exists (~3.48M rows), because the eval itself is
-a set of (position, format) pairs (and tactic/both eval are literally the
-same 1000 positions with different text — measured, data-audit.md §7).
-Phase-natural sampling applies only when subsampling is needed (the trace
-channel). The phase-stratified benchmark (300/phase) stays a separate
+(≈91/6/3, matches the eval exactly), NOT phase-balanced. **Format coverage
+is sampled, not saturated**: the four formats are ONE position pool
+(~1.42M unique FENs) with different prompt text — strategy ⊂ noexplain
+(~100% overlap), tactic/both ⊂ noexplain (100%) — so the SFT mix draws 25%
+of rows from each format pool (every prompt style covered, ~450-550k unique
+positions), and does NOT train (position, format) pairs (redundant: the
+model gets no format signal at eval; data-audit.md §7 + §2.6).
+The phase-stratified benchmark (300/phase) stays a separate
 instrument; per-phase accuracy is reported on it, and a small
 endgame-oversampled boost stage can follow the main run if the endgame tier
 is weak. The verified-trace channel samples phase-oversampled (~30% endgame)
 so endgame traces survive the (tight) verification filter in usable numbers —
 the yield-per-phase audit is itself a paper result.
 
-### 2.3 Two channels (compute-unconstrained sizing — revised 2026-08-12)
-- **Labels channel (B)**: raw MATE rows → chat pair `MoveX:<move>`.
-  **All 3.48M (position, format) pairs** — no sampling (≈640M tokens/epoch).
-  The B baseline arm and the volume backbone. If a position exists in all
-  four formats it is trained in all four — teaching format-invariance, which
-  the eval directly rewards (tactic and both test the same positions).
-- **Verified lucid traces channel (A2)**: ~150–250k rows where
-  deepseek-v4-flash writes a compressed lucid trace (≤4k tokens) then the
-  choice. **Every claim is then Stockfish-verified at depth 14**:
+### 2.3 Two channels (right-sized for 15-20h SFT — revised 2026-08-12)
+Compute is realistically bounded (Kaggle T4-class, ~15-20h for SFT). The
+goal is to beat MATE-style recipes (1M rows, 8B, full FT) with LESS compute,
+a SMALLER model, and BETTER techniques. Right-sized design (~600-680k rows,
+~135-165M tokens, ~1 epoch):
+
+- **Labels channel (B)**: ~500-600k rows, **format-balanced (25% from each
+  of the four format pools), phase-natural (~91/6/3), test-FEN-excluded**.
+  The four formats share the same ~1.42M-position pool; we do NOT train
+  (position, format) pairs (that is redundant — the format is prompt
+  decoration, and the model gets no format signal at eval). Format coverage
+  = every prompt style appears in training so all 4 testbeds are processed
+  fluently; unique-position diversity is what counts, and 25%-per-format
+  sampling yields ~450-550k unique positions.
+- **Verified lucid traces channel (A2)**: ~50-80k rows where deepseek-v4-flash
+  writes a compressed lucid trace (≤4k tokens) then the choice. **Every
+  claim is then Stockfish-verified at depth 14**:
   - final choice == engine best at the position → keep, else discard
   - each intermediate candidate/line mentioned must be legal + eval-stable
     (|Δeval| ≤ 100cp from position eval)
@@ -75,16 +82,14 @@ the yield-per-phase audit is itself a paper result.
   per-step grounding). Trace positions are sampled phase-oversampled
   (~30% endgame) so endgame traces survive the tight filter in usable
   numbers; trace yield per phase is itself a paper result.
-- **Why mix, not all-traces**: traces cost deepseek API + Stockfish CPU time
-  (both cheap now) but the *labels* carry the exact eval prompt format and
-  every (position, format) pair; traces add style + verified process. The
-  mix ratio is an ablation variable, not an assumption.
-- **Epochs**: chosen by eval at checkpoints (0.5/1/2), not assumed — the
-  faithful epoch count is whatever the eval says, and compute allows
-  measuring it.
-- **Rank**: with full-corpus training the capacity question is real — the
-  stage-0 ablation sweep extends to r ∈ {32, 64, 128} on the full labels
-  channel, not a 20k slice.
+- **Why mix, not all-traces**: labels are free, high-volume, and carry the
+  exact eval prompt format; traces are the style/grounding carriers and cost
+  deepseek API + Stockfish CPU time. Mix ratio and epochs are **eval-decided
+  checkpoints**, not assumptions.
+- **Epochs**: eval at 0.5/1/1.4 checkpoints; the faithful count is whatever
+  the 4×1000 says.
+- **Rank**: r=32 base, r=64 as the buffer option if eval at the 1-epoch
+  checkpoint is still climbing — measured, not assumed.
 
 ### 2.4 Hygiene (non-negotiable, all existing machinery)
 - MATE test FENs excluded at build time (already in `build_mate_lora_data.py`).
@@ -102,20 +107,19 @@ the yield-per-phase audit is itself a paper result.
 - deepseek lucid trace pass: 20–40k × ~1.5k tokens ≈ 30–60M tokens ≈ few
   hours of gateway time, local, no GPU.
 
-### 2.6 Why "350k from every format" is STILL not the right answer — but for a different reason (asked 2026-08-12, revised)
-The naive objection — "equal rows per format" — fails on a *measurement*,
-not a compute argument: **the four formats are the same ~1.42M positions
-with different prompt text.** strategy overlaps noexplain ~100%; tactic/both
-are a 350k-position subset of the same pool (measured, data-audit.md §6).
-Equal-rows-per-format would train the same positions four times over with
-no new information — 350k from noexplain and 350k from strategy are the
-same positions in different dress.
-The faithful answer is bigger than either proposal: **train every
-(position, format) pair that exists** (~3.48M rows, ≈640M tokens/epoch) —
-that is exactly the eval's structure (4×1000 (position, format) pairs; the
-tactic and both testbeds are the same 1000 positions with different text).
-This is now affordable by decision: compute is not a constraint, so the
-limit is data, and the data limit is the corpus itself.
+### 2.6 What the SFT data is NOT (decisions locked 2026-08-12)
+- **NOT full corpus (3.48M (position,format) pairs)** — that is MATE-scale
+  overkill; we beat MATE with less compute, a smaller model, and better
+  techniques (verified lucid traces + RLVR), not by matching their data
+  volume.
+- **NOT 350k rows per format** — equal-rows-per-format would repeat the
+  same positions four times over (the formats share one ~1.42M-position
+  pool; strategy ⊂ noexplain ~100%, tactic/both ⊂ noexplain 100% — measured,
+  data-audit.md §7). Format *coverage* (25% of rows from each format pool)
+  is what the eval needs, not format-saturated repetition.
+- **The model never receives a format signal**: the format is the prompt
+  text itself; training on all four styles makes it robust to whichever
+  style appears at eval. No format tag is used or needed.
 
 ---
 
