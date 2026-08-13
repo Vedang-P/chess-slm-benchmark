@@ -34,11 +34,23 @@ explanation text in the prompt, tactic carries a line+motif, noexplain is
 bare. A model trained on one format silently underperforms on the others.
 The four eval sets are the four formats, so train coverage must match.
 
-### 2.2 Phase labels (existing artifact)
+### 2.2 Phase labels (existing artifact) — CORRECTED 2026-08-12 (see data-audit.md)
 Our deterministic classifier (`scripts/build_phase_dataset.py`): opening =
 ply ≤ 12, endgame = non-king material ≤ threshold, else middlegame. Every
-training row gets a phase label; sampling is phase-balanced. This is
-pillar 3 (also yields the phase-stratified benchmark).
+training row gets a phase label.
+
+**Audited correction**: both train and eval are ~91/6/3 (middlegame/opening/
+endgame) — the eval is NOT phase-balanced and mirrors the train distribution
+(data-audit.md §2). Therefore the main SFT mix is **phase-natural**
+(≈91/6/3, matches the eval exactly), NOT phase-balanced. Sampling is
+**format-balanced** (25% from each of the four MATE formats — the formats are
+4× imbalanced in corpus size, data-audit.md §4) and phase-natural within each
+format. The phase-stratified benchmark (300/phase) stays a separate
+instrument; per-phase accuracy is reported on it, and a small
+endgame-oversampled boost stage can follow the main run if the endgame tier
+is weak. The verified-trace channel samples phase-oversampled (~30% endgame)
+so endgame traces survive the (tight) verification filter in usable numbers —
+the yield-per-phase audit is itself a paper result.
 
 ### 2.3 Two channels, mixed ~60/40
 - **Labels channel (B)**: raw MATE rows → chat pair `MoveX:<move>` (~200k).
