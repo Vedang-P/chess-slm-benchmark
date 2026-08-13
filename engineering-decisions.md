@@ -42,31 +42,49 @@ training row gets a phase label.
 **Audited correction**: both train and eval are ~91/6/3 (middlegame/opening/
 endgame) — the eval is NOT phase-balanced and mirrors the train distribution
 (data-audit.md §2). Therefore the main SFT mix is **phase-natural**
-(≈91/6/3, matches the eval exactly), NOT phase-balanced. Sampling is
-**format-balanced** (25% from each of the four MATE formats — the formats are
-4× imbalanced in corpus size, data-audit.md §4) and phase-natural within each
-format. The phase-stratified benchmark (300/phase) stays a separate
+(≈91/6/3, matches the eval exactly), NOT phase-balanced. **Format coverage is
+total, not sampled**: the four formats are ONE position pool (~1.42M unique
+FENs) with different prompt text — strategy ⊂ noexplain (~100% overlap),
+tactic/both ⊂ noexplain (100%). The faithful training distribution is every
+(position, format) pair that exists (~3.48M rows), because the eval itself is
+a set of (position, format) pairs (and tactic/both eval are literally the
+same 1000 positions with different text — measured, data-audit.md §7).
+Phase-natural sampling applies only when subsampling is needed (the trace
+channel). The phase-stratified benchmark (300/phase) stays a separate
 instrument; per-phase accuracy is reported on it, and a small
 endgame-oversampled boost stage can follow the main run if the endgame tier
 is weak. The verified-trace channel samples phase-oversampled (~30% endgame)
 so endgame traces survive the (tight) verification filter in usable numbers —
 the yield-per-phase audit is itself a paper result.
 
-### 2.3 Two channels, mixed ~60/40
-- **Labels channel (B)**: raw MATE rows → chat pair `MoveX:<move>` (~200k).
-  Cheap, high volume, already built (`data/positions/mate-lora/`).
-- **Verified lucid traces channel (A2)**: ~20–40k rows where deepseek-v4-flash
-  writes a compressed lucid trace (≤4k tokens) then the choice. **Every
-  claim is then Stockfish-verified at depth 14**:
+### 2.3 Two channels (compute-unconstrained sizing — revised 2026-08-12)
+- **Labels channel (B)**: raw MATE rows → chat pair `MoveX:<move>`.
+  **All 3.48M (position, format) pairs** — no sampling (≈640M tokens/epoch).
+  The B baseline arm and the volume backbone. If a position exists in all
+  four formats it is trained in all four — teaching format-invariance, which
+  the eval directly rewards (tactic and both test the same positions).
+- **Verified lucid traces channel (A2)**: ~150–250k rows where
+  deepseek-v4-flash writes a compressed lucid trace (≤4k tokens) then the
+  choice. **Every claim is then Stockfish-verified at depth 14**:
   - final choice == engine best at the position → keep, else discard
   - each intermediate candidate/line mentioned must be legal + eval-stable
     (|Δeval| ≤ 100cp from position eval)
   - fully grounded traces get a `Verified: yes` footer in the training text
   This is pillar 1: compressed style + verified process supervision (extends
   C1's trace distillation into the compressed regime with VPS-style
-  per-step grounding).
-- **Why mix, not all-traces**: trace generation costs ~20–40k deepseek calls
-  (gateway, cheap); labels are free and provide volume + the B baseline arm.
+  per-step grounding). Trace positions are sampled phase-oversampled
+  (~30% endgame) so endgame traces survive the tight filter in usable
+  numbers; trace yield per phase is itself a paper result.
+- **Why mix, not all-traces**: traces cost deepseek API + Stockfish CPU time
+  (both cheap now) but the *labels* carry the exact eval prompt format and
+  every (position, format) pair; traces add style + verified process. The
+  mix ratio is an ablation variable, not an assumption.
+- **Epochs**: chosen by eval at checkpoints (0.5/1/2), not assumed — the
+  faithful epoch count is whatever the eval says, and compute allows
+  measuring it.
+- **Rank**: with full-corpus training the capacity question is real — the
+  stage-0 ablation sweep extends to r ∈ {32, 64, 128} on the full labels
+  channel, not a 20k slice.
 
 ### 2.4 Hygiene (non-negotiable, all existing machinery)
 - MATE test FENs excluded at build time (already in `build_mate_lora_data.py`).
@@ -84,18 +102,20 @@ the yield-per-phase audit is itself a paper result.
 - deepseek lucid trace pass: 20–40k × ~1.5k tokens ≈ 30–60M tokens ≈ few
   hours of gateway time, local, no GPU.
 
-### 2.6 Why not "350k from every format" (asked 2026-08-12)
-Distributionally sound, computationally impossible. Measured avg row
-lengths: noexplain 157 tok, strategy 196, tactic 185, both 226. 350k×4 =
-268M tokens/epoch ≈ 12–25h of T4 SFT alone (2–4 days for the full 1.4M);
-the 30h budget must also cover RL (the novelty core) and eval. The plan
-instead allocates **equal compute per format**: ~86M tokens ≈ 220k rows ≈
-55k/format, adjusted so tokens/format are equal (fewer "both" rows, more
-"noexplain"). Rationale: (a) the four formats are one position population
-with different prompt text — extra rows repeat positions, and rank-32 QLoRA
-saturates capacity far below 1.4M; (b) 2B-class models learn best from
-short, clean, diverse traces (2502.12143; s1 2501.19393); (c) tactic/both's
-full 350k pools remain usable as free RL rollout position pools.
+### 2.6 Why "350k from every format" is STILL not the right answer — but for a different reason (asked 2026-08-12, revised)
+The naive objection — "equal rows per format" — fails on a *measurement*,
+not a compute argument: **the four formats are the same ~1.42M positions
+with different prompt text.** strategy overlaps noexplain ~100%; tactic/both
+are a 350k-position subset of the same pool (measured, data-audit.md §6).
+Equal-rows-per-format would train the same positions four times over with
+no new information — 350k from noexplain and 350k from strategy are the
+same positions in different dress.
+The faithful answer is bigger than either proposal: **train every
+(position, format) pair that exists** (~3.48M rows, ≈640M tokens/epoch) —
+that is exactly the eval's structure (4×1000 (position, format) pairs; the
+tactic and both testbeds are the same 1000 positions with different text).
+This is now affordable by decision: compute is not a constraint, so the
+limit is data, and the data limit is the corpus itself.
 
 ---
 

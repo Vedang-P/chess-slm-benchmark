@@ -114,3 +114,37 @@ comment).
    with the same protocol if the committed numbers for tactic/both/noexplain
    are missing (README shows them "ran" — numbers to be confirmed from the
    monitor archive).
+
+## 7. The decisive finding (2026-08-12): the four formats are one position pool
+
+Cross-format FEN overlap in the TRAIN corpus:
+
+| pair | overlap |
+|---|---|
+| strategy ∩ noexplain | ~100% (1,365,488 of 1,364,797 strategy FENs) |
+| tactic ∩ noexplain | 100% (all 349,568) |
+| both ∩ noexplain | 100% (all 349,619) |
+| union (noexp ∪ strat ∪ tactic) | 1,419,501 = exactly noexplain's unique count |
+
+**The MATE train corpus is ~1.42M unique positions; "strategy", "noexplain",
+"tactic", "both" are the same positions with different explanation text.**
+tactic/both are a 350k-position subset of the pool that received tactic
+annotations.
+
+Cross-format FEN overlap in the EVAL sets:
+
+| pair | overlap |
+|---|---|
+| tactic ∩ both | **1000 positions** (identical sets) |
+| strategy ∩ noexplain | 30 |
+| strategy ∩ tactic | 11 |
+| noexplain ∩ tactic | 7 |
+
+**The tactic and both testbeds are the same 1000 positions with different
+prompt text** — format-invariance is directly rewarded by the eval.
+
+**Consequence (supersedes §6.1 and the equal-compute decision):** the
+faithful training distribution is every (position, format) pair that exists
+(~3.48M rows, ≈640M tokens/epoch) — matching the eval's own structure.
+Equal-rows-per-format (350k×4) would retrain the same positions four times;
+equal-compute-per-format was a budget argument, no longer operative.
