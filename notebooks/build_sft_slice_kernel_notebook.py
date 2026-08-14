@@ -54,18 +54,19 @@ print("cwd:", Path.cwd())
 
 DEPS_CELL = r'''
 import torch
-# torch 2.5.1 pins nvidia-cudnn-cu12==9.1.0.70 which was REMOVED from PyPI
-# (pip resolution fails). torch 2.6.0 (cu126) pins cudnn 9.3.0.75 which
-# still exists; keep transformers>=5.13 (gemma4 arch) and a bnb release
-# compatible with torch 2.6.
+# GPU matrix: Kaggle free tier hands out P100 (sm_60) OR T4 (sm_75).
+#   - torch 2.6+ dropped sm_60 entirely -> P100 dies.
+#   - torch 2.5.1 pins nvidia-cudnn-cu12==9.1.0.70 which was REMOVED from
+#     PyPI -> pip resolution fails.
+#   - torch 2.4.1 cu121: supports sm_60 + sm_75, and pins NO cudnn version
+#     (resolves to available builds). Proven P100 combo in this repo's
+#     history (pre-5.14/DTensor bump).
+# transformers: pin 5.13.x -- 5.14+ needs torch.distributed._tensor, which
+# does not exist in torch 2.4.1 (the repo history notes exactly this).
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "torch==2.6.0", "--index-url",
-                "https://download.pytorch.org/whl/cu126"], check=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "torchvision==0.21.0", "torchaudio==2.6.0", "--index-url",
-                "https://download.pytorch.org/whl/cu126"], check=True)
-# transformers >= 5.13 (gemma4) requires bitsandbytes >= 0.46.1 for 4-bit;
-# older pins (0.44.1/0.45.4) are rejected by its quantizer check.
+                "torch==2.4.1", "torchvision==0.19.1", "torchaudio==2.4.1",
+                "--index-url",
+                "https://download.pytorch.org/whl/cu121"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "bitsandbytes==0.46.1"], check=True)
 # Kaggle's base image ships torchao 0.10.0 which newer peft rejects
@@ -74,6 +75,8 @@ subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y",
                 "torchao"], check=False)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "-r", "requirements.txt"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "transformers==5.13.1"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-U", "wandb"], check=True)
 print("torch", torch.__version__, "| cuda", torch.cuda.is_available(),
       torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")
