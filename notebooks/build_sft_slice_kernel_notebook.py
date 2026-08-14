@@ -64,8 +64,10 @@ subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "torchvision==0.21.0", "torchaudio==2.6.0", "--index-url",
                 "https://download.pytorch.org/whl/cu126"], check=True)
+# transformers >= 5.13 (gemma4) requires bitsandbytes >= 0.46.1 for 4-bit;
+# older pins (0.44.1/0.45.4) are rejected by its quantizer check.
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "bitsandbytes==0.45.4"], check=True)
+                "bitsandbytes==0.46.1"], check=True)
 # Kaggle's base image ships torchao 0.10.0 which newer peft rejects
 # ("only versions above 0.16.0 are supported") and we do not use torchao.
 subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y",
