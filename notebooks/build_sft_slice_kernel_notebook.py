@@ -91,7 +91,7 @@ for name in ("train.jsonl", "eval.jsonl", "manifest.json"):
         repo_id="vedangfake/chess-slm-benchmark",
         filename=f"noexplain-slice/{name}",
         repo_type="dataset",
-        local_dir="/kaggle/working/chess-slm-benchmark/data/positions/noexplain-slice",
+        local_dir="/kaggle/working/chess-slm-benchmark",
         token=os.environ.get("HF_WRITE_TOKEN", ""))
     print("fetched", name, flush=True)
 '''.strip()
