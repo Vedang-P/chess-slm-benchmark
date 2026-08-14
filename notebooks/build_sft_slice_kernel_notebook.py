@@ -55,18 +55,28 @@ print("cwd:", Path.cwd())
 DEPS_CELL = r'''
 import torch
 # GPU matrix: Kaggle free tier hands out P100 (sm_60) OR T4 (sm_75).
-#   - torch 2.6+ dropped sm_60 entirely -> P100 dies.
-#   - torch 2.5.1 pins nvidia-cudnn-cu12==9.1.0.70 which was REMOVED from
-#     PyPI -> pip resolution fails.
-#   - torch 2.4.1 cu121: supports sm_60 + sm_75, and pins NO cudnn version
-#     (resolves to available builds). Proven P100 combo in this repo's
-#     history (pre-5.14/DTensor bump).
-# transformers: pin 5.13.x -- 5.14+ needs torch.distributed._tensor, which
-# does not exist in torch 2.4.1 (the repo history notes exactly this).
+# torch 2.6+ dropped sm_60 -> P100 dies. torch 2.4.1/2.5.1 cu121 both pin
+# nvidia-cudnn-cu12==9.1.0.70 which was REMOVED from PyPI, so the normal
+# install fails. Fix: install torch with --no-deps, then pull the nvidia
+# runtime stack from the PyTorch cu121 index, using cudnn 9.1.1.17
+# (patch-compatible with the yanked 9.1.0.70).
+# transformers is pinned to 5.13.1: 5.14+ needs torch.distributed._tensor,
+# which does not exist in torch 2.4.1 (repo history notes exactly this).
+CU121 = "https://download.pytorch.org/whl/cu121"
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "torch==2.4.1", "torchvision==0.19.1", "torchaudio==2.4.1",
-                "--index-url",
-                "https://download.pytorch.org/whl/cu121"], check=True)
+                "--index-url", CU121, "--no-deps"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "nvidia-cudnn-cu12==9.1.1.17", "--index-url", CU121],
+               check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "nvidia-cublas-cu12", "nvidia-cuda-cupti-cu12",
+                "nvidia-cuda-nvrtc-cu12", "nvidia-cuda-runtime-cu12",
+                "nvidia-cufft-cu12", "nvidia-curand-cu12",
+                "nvidia-cusolver-cu12", "nvidia-cusparse-cu12",
+                "nvidia-nccl-cu12", "nvidia-nvjitlink-cu12",
+                "nvidia-nvtx-cu12", "triton",
+                "--index-url", CU121], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "bitsandbytes==0.46.1"], check=True)
 # Kaggle's base image ships torchao 0.10.0 which newer peft rejects
