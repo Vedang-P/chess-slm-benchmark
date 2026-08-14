@@ -98,3 +98,6 @@ notebooks/kaggle_mate_*_w*.ipynb
 
 # >100MB training artifacts
 /data/positions/mate-lora/train.jsonl
+
+# noexplain slice (HF-hosted, >100MB)
+/data/positions/noexplain-slice/train.jsonl

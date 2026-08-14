@@ -103,14 +103,16 @@ import os, subprocess, sys
 from pathlib import Path
 
 # the 600k noexplain slice labels + eval live in the HF dataset repo
-# (too large for git). Pull them into the repo's expected paths.
+# (too large for git). hf_hub_download places local_dir/filename, so
+# local_dir must be the repo's data/positions to land where the trainer
+# expects them (data/positions/noexplain-slice/...).
 from huggingface_hub import hf_hub_download
 for name in ("train.jsonl", "eval.jsonl", "manifest.json"):
     hf_hub_download(
         repo_id="vedangfake/chess-slm-benchmark",
         filename=f"noexplain-slice/{name}",
         repo_type="dataset",
-        local_dir="/kaggle/working/chess-slm-benchmark",
+        local_dir="/kaggle/working/chess-slm-benchmark/data/positions",
         token=os.environ.get("HF_WRITE_TOKEN", ""))
     print("fetched", name, flush=True)
 '''.strip()
@@ -121,8 +123,8 @@ from pathlib import Path
 
 os.environ["BENCH_RUN_ID"] = "sft-slice-noexplain"
 cmd = [sys.executable, "scripts/train_mate_lora.py",
-       "--train", "data/positions/noexplain-slice/train.jsonl",
-       "--eval", "data/positions/noexplain-slice/eval.jsonl",
+       "--train", "%(train_path)s",
+       "--eval", "%(eval_path)s",
        "--out", "results/noexplain-slice-adapter",
        "--wandb-project", "%(wandb_project)s",
        "--train-tag", "noexplain-slice",
@@ -240,19 +242,40 @@ def main() -> None:
         _code(CLONE_CELL),
         _md("## 3. Dependencies"),
         _code(DEPS_CELL),
-        _md("## 4. Fetch the noexplain slice data (HF)"),
-        _code(FETCH_DATA_CELL),
-        _md("## 5. Train (wandb-logged, HF checkpointed)"),
-        _code(TRAIN_CELL % {"wandb_project": WANDB_PROJECT,
-                            "epochs": epochs, "rank": rank, "batch": batch,
-                            "grad_accum": grad_accum,
-                            "resume": "--resume-from-hf latest" if resume else "",
-                            "smoke": "--smoke" if smoke else ""}),
-        _md("## 6. Eval on the 1k noexplain test set (thinking ON)"),
-        _code(EVAL_CELL),
-        _md("## 7. Upload eval to HF"),
-        _code(UPLOAD_EVAL_CELL),
     ]
+    if smoke:
+        # smoke uses the tiny committed dataset — no HF fetch, fast
+        cells += [
+            _md("## 4. Train (SMOKE — committed 300-row dataset, no HF fetch)"),
+            _code(TRAIN_CELL % {"wandb_project": WANDB_PROJECT,
+                                "epochs": epochs, "rank": rank, "batch": batch,
+                                "grad_accum": grad_accum,
+                                "resume": "",
+                                "train_path": "data/positions/noexplain-slice-smoke/train.jsonl",
+                                "eval_path": "data/positions/noexplain-slice-smoke/eval.jsonl",
+                                "smoke": "--smoke"}),
+            _md("## 5. Eval on the 1k noexplain test set (thinking ON)"),
+            _code(EVAL_CELL),
+            _md("## 6. Upload eval to HF"),
+            _code(UPLOAD_EVAL_CELL),
+        ]
+    else:
+        cells += [
+            _md("## 4. Fetch the noexplain slice data (HF)"),
+            _code(FETCH_DATA_CELL),
+            _md("## 5. Train (wandb-logged, HF checkpointed)"),
+            _code(TRAIN_CELL % {"wandb_project": WANDB_PROJECT,
+                                "epochs": epochs, "rank": rank, "batch": batch,
+                                "grad_accum": grad_accum,
+                                "resume": "--resume-from-hf latest" if resume else "",
+                                "train_path": "data/positions/noexplain-slice/train.jsonl",
+                                "eval_path": "data/positions/noexplain-slice/eval.jsonl",
+                                "smoke": ""}),
+            _md("## 6. Eval on the 1k noexplain test set (thinking ON)"),
+            _code(EVAL_CELL),
+            _md("## 7. Upload eval to HF"),
+            _code(UPLOAD_EVAL_CELL),
+        ]
     nb = _notebook(cells)
     env = load_env()
     inject_secrets(nb, env, ["GITHUB_TOKEN", "HF_WRITE_TOKEN", "WANDB_API_KEY"])

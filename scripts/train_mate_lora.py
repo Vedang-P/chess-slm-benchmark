@@ -213,40 +213,35 @@ def main() -> None:
         args.base, quantization_config=quant, device_map={"": 0},
         dtype=compute_dtype)
 
-    # 4-bit -> freeze the base (LoRA marks its own params trainable). We
-    # deliberately do NOT call prepare_model_for_kbit_training: it casts
+    # 4-bit -> freeze the whole base (LoRA marks its own params trainable).
+    # We deliberately do NOT call prepare_model_for_kbit_training: it casts
     # every non-quantized param to fp32, which OOM'd on the T4 (tried to
     # allocate 8.75 GiB at load on the 2B text tower).
-    lang_model = model.model.language_model
-    for p in lang_model.parameters():
+    # IMPORTANT: we wrap the FULL multimodal model, not just the text tower,
+    # so that trainer.save_model produces a standard PeftModel checkpoint
+    # (adapter_model.safetensors + adapter_config.json) that
+    # run_mate_eval's PeftModel.from_pretrained(full_model, ...) can load.
+    # Wrapping only the text tower made save/eval asymmetric: save_pretrained
+    # on the non-PeFT outer model wrote full weights and the eval adapter
+    # load could never find an adapter file.
+    for p in model.parameters():
         p.requires_grad = False
-    # peft >= 0.16 reads prepare_inputs_for_generation off the wrapped
-    # module during PeftModel init, but Gemma4TextModel (the bare text
-    # tower) does not define it — it lives on the outer multimodal
-    # wrapper. Training never calls it (we never generate inside the
-    # trainer), so a stub is safe and keeps newer peft happy.
-    if not hasattr(lang_model, "prepare_inputs_for_generation"):
-        lang_model.prepare_inputs_for_generation = lambda *a, **k: None
-    lang_model.config.use_cache = False
+    n_quant = sum(1 for m in model.modules()
+                  if type(m).__name__ == "Linear4bit")
+    print(f"4-bit Linear modules: {n_quant} "
+          f"(0 = quantization did NOT engage)", flush=True)
+    model.config.use_cache = False
     try:
-        lang_model.gradient_checkpointing_enable()
+        model.gradient_checkpointing_enable()
     except Exception as e:
         print(f"grad checkpointing unavailable: {e}", flush=True)
-    n_quant = sum(1 for m in lang_model.modules()
-                  if type(m).__name__ == "Linear4bit")
-    print(f"4-bit Linear modules in text tower: {n_quant} "
-          f"(0 = quantization did NOT engage)", flush=True)
-    print("language_model params:",
-          sum(p.numel() for p in lang_model.parameters()) / 1e6, "M",
-          flush=True)
     lora = LoraConfig(
         r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
         bias="none",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                         "gate_proj", "up_proj", "down_proj"],
         task_type="CAUSAL_LM")
-    lang_model = get_peft_model(lang_model, lora)
-    model.model.language_model = lang_model
+    model = get_peft_model(model, lora)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable params: {trainable/1e6:.1f}M "
           f"({trainable/sum(p.numel() for p in model.parameters())*100:.2f}%)",
@@ -257,21 +252,30 @@ def main() -> None:
 
     def to_ids(row):
         msgs = row["messages"]
-        # render EXACTLY like run_mate_eval -> HFModel.generate does:
-        # processor.apply_chat_template(enable_thinking=False). Thinking is
-        # OFF for the LoRA eval, so the trainer must use the same rendering
-        # or train/eval prompts diverge (a silent accuracy cap).
-        out = processor.apply_chat_template(
+        # Render EXACTLY like run_mate_eval -> HFModel.generate does
+        # (enable_thinking=False) so train/eval prompts are byte-identical.
+        # Assistant mask via prefix-difference: transformers 5.13.1's
+        # return_assistant_tokens_mask is BROKEN for this template (all
+        # zeros -- audited 2026-08-14: '{% generation %}' keyword not
+        # detected, mask stays 0 for every token -> labels all -100 -> a
+        # silent no-op training run). The reliable method: tokenize the
+        # full message and the prompt-only (user + assistant header);
+        # assistant tokens = the suffix after the prompt prefix.
+        full = processor.apply_chat_template(
             msgs, tokenize=True, add_generation_prompt=False,
-            return_assistant_tokens_mask=True, return_dict=True,
-            enable_thinking=False)
-        input_ids = out["input_ids"]
-        mask = out["assistant_tokens_mask"]
+            return_dict=True, return_tensors="pt", enable_thinking=False)["input_ids"][0]
+        prompt = processor.apply_chat_template(
+            msgs[:1], tokenize=True, add_generation_prompt=True,
+            return_dict=True, return_tensors="pt", enable_thinking=False)["input_ids"][0]
+        if not full[:len(prompt)].tolist() == prompt.tolist():
+            raise RuntimeError("prompt is not a prefix of the full message "
+                               "-- assistant mask would be wrong")
+        input_ids = full.tolist()
         if len(input_ids) > args.max_seq_len:
             input_ids = input_ids[: args.max_seq_len]
-            mask = mask[: args.max_seq_len]
-        labels = [-100 if not m else i
-                  for i, m in zip(input_ids, mask)]
+        labels = [-100] * len(prompt) + input_ids[len(prompt):]
+        # after truncation both must stay the same length
+        labels = labels[: args.max_seq_len]
         return {"input_ids": input_ids, "labels": labels}
 
     def to_text(row):
@@ -291,12 +295,14 @@ def main() -> None:
 
     # sanity: verify the assistant mask marks exactly the answer tokens
     s = train_ds[0]
-    n_assistant = sum(1 for m in s["assistant_tokens_mask"]) if "assistant_tokens_mask" in s else None
     print("--- sample check ---", flush=True)
     print("input len:", len(s["input_ids"]), "| label -100 count:",
           s["labels"].count(-100), flush=True)
     print("non-masked (assistant) tokens:",
           len(s["input_ids"]) - s["labels"].count(-100), flush=True)
+    if s["labels"].count(-100) == len(s["input_ids"]):
+        raise RuntimeError("assistant mask is empty -- labels all -100, "
+                           "training would be a silent no-op")
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

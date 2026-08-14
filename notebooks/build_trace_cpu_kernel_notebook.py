@@ -85,13 +85,15 @@ import os
 from huggingface_hub import hf_hub_download
 import subprocess, sys
 from pathlib import Path
-# fetch the shared selected list
+# fetch the shared selected list; hf_hub_download places
+# local_dir/filename, so local_dir must be data/positions for the script
+# to find it at data/positions/noexplain-slice/traces/selected.jsonl.
 Path("data/positions/noexplain-slice/traces").mkdir(parents=True, exist_ok=True)
 hf_hub_download(
     repo_id="vedangfake/chess-slm-benchmark",
     filename="noexplain-slice/traces/selected.jsonl",
     repo_type="dataset",
-    local_dir="/kaggle/working/chess-slm-benchmark",
+    local_dir="/kaggle/working/chess-slm-benchmark/data/positions",
     token=os.environ.get("HF_WRITE_TOKEN", ""))
 print("selected.jsonl fetched", flush=True)
 '''.strip()
