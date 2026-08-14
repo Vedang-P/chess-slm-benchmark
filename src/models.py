@@ -284,8 +284,27 @@ class HFModel:
         if self.adapter_path:
             from peft import PeftModel
 
-            self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
-            self.model.eval()
+            if self.is_gemma4:
+                # The LoRA adapter is trained on the TEXT TOWER only
+                # (train_mate_lora.py wraps model.model.language_model with
+                # target_modules=["linear"] and saves the adapter from that
+                # PeftModel). Loading the adapter onto the full multimodal
+                # model would fail (the config's target module names don't
+                # exist at the top level). Load it onto the text tower the
+                # same way it was trained.
+                lang = self.model.model.language_model
+                # peft reads prepare_inputs_for_generation off the wrapped
+                # module at PeftModel init; the bare text tower does not
+                # define it (it lives on the outer multimodal wrapper).
+                # Generation goes through the outer model, so a stub is safe.
+                if not hasattr(lang, "prepare_inputs_for_generation"):
+                    lang.prepare_inputs_for_generation = lambda *a, **k: None
+                lang = PeftModel.from_pretrained(lang, self.adapter_path)
+                self.model.model.language_model = lang
+                self.model.eval()
+            else:
+                self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
+                self.model.eval()
             print(f"adapter loaded: {self.adapter_path}", flush=True)
 
     def render_chat(self, prompt: str) -> str:

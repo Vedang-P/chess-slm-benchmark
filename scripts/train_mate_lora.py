@@ -217,31 +217,38 @@ def main() -> None:
     # We deliberately do NOT call prepare_model_for_kbit_training: it casts
     # every non-quantized param to fp32, which OOM'd on the T4 (tried to
     # allocate 8.75 GiB at load on the 2B text tower).
-    # IMPORTANT: we wrap the FULL multimodal model, not just the text tower,
-    # so that trainer.save_model produces a standard PeftModel checkpoint
-    # (adapter_model.safetensors + adapter_config.json) that
-    # run_mate_eval's PeftModel.from_pretrained(full_model, ...) can load.
-    # Wrapping only the text tower made save/eval asymmetric: save_pretrained
-    # on the non-PeFT outer model wrote full weights and the eval adapter
-    # load could never find an adapter file.
-    for p in model.parameters():
+    # gemma4 projections are Gemma4ClippableLinear wrappers around the real
+    # Linear4bit; peft's dispatch only handles nn.Linear/Linear4bit, so we
+    # target the inner ".linear" modules (verified: wraps cleanly through
+    # the wrapper class). We wrap ONLY the text tower (target_modules=
+    # ["linear"]) so the vision/audio encoders stay untouched, and save the
+    # adapter via the PeftModel's save_pretrained so run_mate_eval's
+    # PeftModel.from_pretrained(text_tower, ...) can load it.
+    lang_model = model.model.language_model
+    for p in lang_model.parameters():
         p.requires_grad = False
-    n_quant = sum(1 for m in model.modules()
-                  if type(m).__name__ == "Linear4bit")
-    print(f"4-bit Linear modules: {n_quant} "
-          f"(0 = quantization did NOT engage)", flush=True)
-    model.config.use_cache = False
+    # peft reads prepare_inputs_for_generation off the wrapped module at
+    # PeftModel init; the bare text tower does not define it (it lives on
+    # the outer multimodal wrapper). Training never calls it (no generation
+    # inside the trainer), so a stub is safe.
+    if not hasattr(lang_model, "prepare_inputs_for_generation"):
+        lang_model.prepare_inputs_for_generation = lambda *a, **k: None
+    lang_model.config.use_cache = False
     try:
-        model.gradient_checkpointing_enable()
+        lang_model.gradient_checkpointing_enable()
     except Exception as e:
         print(f"grad checkpointing unavailable: {e}", flush=True)
+    n_quant = sum(1 for m in lang_model.modules()
+                  if type(m).__name__ == "Linear4bit")
+    print(f"4-bit Linear modules in text tower: {n_quant} "
+          f"(0 = quantization did NOT engage)", flush=True)
     lora = LoraConfig(
         r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
         bias="none",
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                        "gate_proj", "up_proj", "down_proj"],
+        target_modules=["linear"],
         task_type="CAUSAL_LM")
-    model = get_peft_model(model, lora)
+    lang_model = get_peft_model(lang_model, lora)
+    model.model.language_model = lang_model
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable params: {trainable/1e6:.1f}M "
           f"({trainable/sum(p.numel() for p in model.parameters())*100:.2f}%)",
@@ -399,7 +406,11 @@ def main() -> None:
     print("training...", flush=True)
     t0 = time.time()
     trainer.train(resume_from_checkpoint=resume_from)
-    trainer.save_model(str(out))
+    # save the adapter from the PeftModel itself: save_pretrained on the
+    # outer multimodal model would write full weights with no adapter file.
+    # The text-tower PeftModel saves adapter_model.safetensors +
+    # adapter_config.json which run_mate_eval loads onto the text tower.
+    lang_model.save_pretrained(str(out))
     tokenizer.save_pretrained(str(out))
     processor.save_pretrained(str(out))
     hf_cb.final()
