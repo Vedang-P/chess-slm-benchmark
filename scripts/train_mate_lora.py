@@ -421,4 +421,28 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback as _tb
+
+        # Write the REAL failure to HF so diagnostics never require
+        # downloading the multi-GB /kaggle/working (which makes
+        # 'kaggle kernels output' unusable). Read it back with:
+        #   hf_hub_download("vedangfake/chess-slm-benchmark",
+        #                   "noexplain-slice/run-status.txt", ...)
+        try:
+            import os as _os
+            api = _hf_api()
+            body = (f"{type(e).__name__}: {e}\n"
+                    + _tb.format_exc()[-4000:])
+            api.upload_file(path_or_fileobj=body.encode(),
+                            path_in_repo="noexplain-slice/run-status.txt",
+                            repo_id=_os.environ.get("HF_REPO",
+                                "vedangfake/chess-slm-benchmark"),
+                            repo_type="dataset",
+                            commit_message="train failure status")
+            print("[status] failure written to HF run-status.txt", flush=True)
+        except Exception as e2:
+            print(f"[status] failed to write run-status.txt: {e2}", flush=True)
+        raise
