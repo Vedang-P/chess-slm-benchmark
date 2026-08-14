@@ -85,6 +85,10 @@ subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y",
                 "torchao"], check=False)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "-r", "requirements.txt"], check=True)
+# peft 0.20+ calls nn.Module.set_submodule which torch 2.4.1 does not have
+# (added in torch 2.5); pin peft to the last version before that refactor.
+subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
+                "peft==0.14.0"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "transformers==5.13.1"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-U", "wandb"], check=True)
