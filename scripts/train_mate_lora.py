@@ -220,6 +220,13 @@ def main() -> None:
     lang_model = model.model.language_model
     for p in lang_model.parameters():
         p.requires_grad = False
+    # peft >= 0.16 reads prepare_inputs_for_generation off the wrapped
+    # module during PeftModel init, but Gemma4TextModel (the bare text
+    # tower) does not define it — it lives on the outer multimodal
+    # wrapper. Training never calls it (we never generate inside the
+    # trainer), so a stub is safe and keeps newer peft happy.
+    if not hasattr(lang_model, "prepare_inputs_for_generation"):
+        lang_model.prepare_inputs_for_generation = lambda *a, **k: None
     lang_model.config.use_cache = False
     try:
         lang_model.gradient_checkpointing_enable()
