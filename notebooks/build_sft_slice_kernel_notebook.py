@@ -60,11 +60,13 @@ import torch
 # install fails. Fix: install torch with --no-deps, then pull the nvidia
 # runtime stack from the PyTorch cu121 index, using cudnn 9.1.1.17
 # (patch-compatible with the yanked 9.1.0.70).
-# transformers is pinned to 5.13.1: 5.14+ needs torch.distributed._tensor,
-# which does not exist in torch 2.4.1 (repo history notes exactly this).
+# torch 2.5.1: has nn.Module.set_submodule (torch>=2.5) which transformers'
+# 4-bit integration calls during weight loading (torch 2.4.1 lacks it),
+# AND supports P100/T4. transformers pinned to 5.13.1 (5.14+ needs
+# torch.distributed._tensor, which 2.5.1 has, but 5.13.1 is the proven pin).
 CU121 = "https://download.pytorch.org/whl/cu121"
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "torch==2.4.1", "torchvision==0.19.1", "torchaudio==2.4.1",
+                "torch==2.5.1", "torchvision==0.20.1", "torchaudio==2.5.1",
                 "--index-url", CU121, "--no-deps"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "nvidia-cudnn-cu12==9.1.1.17", "--index-url", CU121],
@@ -85,8 +87,8 @@ subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y",
                 "torchao"], check=False)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "-r", "requirements.txt"], check=True)
-# peft 0.20+ calls nn.Module.set_submodule which torch 2.4.1 does not have
-# (added in torch 2.5); pin peft to the last version before that refactor.
+# peft: 0.20+ calls nn.Module.set_submodule (fine on torch 2.5.1); keep
+# 0.14.0 pin from requirements to stay on the proven stack.
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "peft==0.14.0"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
