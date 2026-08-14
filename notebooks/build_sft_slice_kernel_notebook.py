@@ -118,7 +118,7 @@ for name in ("train.jsonl", "eval.jsonl", "manifest.json"):
 '''.strip()
 
 TRAIN_CELL = r'''
-import os, subprocess, sys, time
+import os, subprocess, sys, time, traceback
 from pathlib import Path
 
 os.environ["BENCH_RUN_ID"] = "sft-slice-noexplain"
@@ -141,10 +141,28 @@ cmd = [sys.executable, "scripts/train_mate_lora.py",
 cmd = [c for c in cmd if c]
 print("running:", " ".join(cmd))
 t0 = time.time()
-res = subprocess.run(cmd, stderr=subprocess.STDOUT)
-print(f"train exited rc={res.returncode} after {(time.time()-t0)/3600:.2f}h", flush=True)
-if res.returncode != 0:
-    raise RuntimeError("training failed -- see output above")
+try:
+    res = subprocess.run(cmd, stderr=subprocess.STDOUT, timeout=12*3600)
+    print(f"train exited rc={res.returncode} after {(time.time()-t0)/3600:.2f}h", flush=True)
+    if res.returncode != 0:
+        raise RuntimeError("training failed -- see output above")
+except Exception as e:
+    # push the failure reason to HF so it is inspectable WITHOUT
+    # downloading the whole /kaggle/working (which is multi-GB and makes
+    # 'kaggle kernels output' unusable as a debugging channel)
+    try:
+        from huggingface_hub import HfApi
+        api = HfApi(token=os.environ.get("HF_WRITE_TOKEN", ""))
+        body = f"run failed at {(time.time()-t0)/60:.0f}min: {type(e).__name__}: {e}\n"
+        body += traceback.format_exc()[-3000:]
+        api.upload_file(path_or_fileobj=body.encode(),
+                        path_in_repo="noexplain-slice/run-status.txt",
+                        repo_id="vedangfake/chess-slm-benchmark",
+                        repo_type="dataset",
+                        commit_message="smoke run failure status")
+    except Exception as e2:
+        print("status upload failed:", e2, flush=True)
+    raise
 '''.strip()
 
 EVAL_CELL = r'''
