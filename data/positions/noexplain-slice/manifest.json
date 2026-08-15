@@ -1,0 +1,16 @@
+{
+ "classifier": "build_phase_dataset.v1",
+ "subset": "noexplain",
+ "seed": 42,
+ "n_train": 600000,
+ "n_eval": 5000,
+ "test_overlap": 0,
+ "sampling": "phase-natural (uniform over pool; pool is ~91/6/3)",
+ "train_phase_sample_20k": {
+  "middlegame": 18289,
+  "opening": 1165,
+  "endgame": 450,
+  "sparse": 96
+ },
+ "answer_spec": "Answer with exactly one of: MoveA:<move> or MoveB:<move>. Only output the line, nothing else."
+}

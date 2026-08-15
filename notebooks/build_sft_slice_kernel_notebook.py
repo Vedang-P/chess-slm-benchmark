@@ -148,7 +148,6 @@ if res.returncode != 0:
     # the real traceback (see train_mate_lora.py); this is the fallback
     raise RuntimeError("training failed -- see run-status.txt on HF")
 '''.strip()
-'''.strip()
 
 EVAL_CELL = r'''
 import os, subprocess, sys, time
