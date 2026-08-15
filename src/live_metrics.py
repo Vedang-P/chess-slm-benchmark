@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 import torch
+from transformers import TrainerCallback
 
 ANSWER_RE = re.compile(
     r"\bMove\s*([AB])\b\s*[:.\-]?\s*([a-h][1-8][a-h][1-8][qrbnQRBN]?)?", re.I)
@@ -49,10 +50,14 @@ def parse_choice(text: str, candidate_a: str, candidate_b: str):
     return None, None
 
 
-class LiveEvalCallback:
+class LiveEvalCallback(TrainerCallback):
     """Compute real-task metrics on a test-set sample every N steps and
     log them to wandb. Uses the exact run_mate_eval prompt so the curve is
-    comparable to the final numbers."""
+    comparable to the final numbers.
+
+    Must inherit TrainerCallback: the Trainer calls every lifecycle event
+    (on_init_end etc.) on ALL callbacks; without the base class's no-op
+    methods the trainer crashes at init (observed 2026-08-15)."""
 
     def __init__(self, model, processor, test_path: str,
                  n: int = 100, every_steps: int = 500,
