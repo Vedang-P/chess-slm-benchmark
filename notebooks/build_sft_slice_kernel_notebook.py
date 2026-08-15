@@ -136,6 +136,9 @@ cmd = [sys.executable, "scripts/train_mate_lora.py",
        "--grad-accum", "%(grad_accum)s",
        "--eval-steps", "3000",
        "--save-steps", "2000",
+       "--live-test", "data/positions/mate-selection-test-noexplain.json",
+       "--live-n", "%(live_n)s",
+       "--live-every", "2000",
        "%(resume)s",
        "%(smoke)s"]
 cmd = [c for c in cmd if c]
@@ -150,7 +153,7 @@ if res.returncode != 0:
 '''.strip()
 
 EVAL_CELL = r'''
-import os, subprocess, sys, time
+import os, subprocess, sys, time, json, glob
 from pathlib import Path
 
 # score the adapter on the exact 1k-position noexplain test set,
@@ -170,6 +173,42 @@ res = subprocess.run(cmd, stderr=subprocess.STDOUT)
 print(f"eval exited rc={res.returncode} after {(time.time()-t0)/60:.1f}min", flush=True)
 if res.returncode != 0:
     raise RuntimeError("eval failed -- see output above")
+
+# push final metrics into the wandb run for the paper
+try:
+    import wandb
+    api = wandb.Api()
+    runs = api.runs("vedanggg-mit-manipal/chess-slm-benchmark")
+    target = None
+    for r in runs:
+        if r.name == "noexplain-slice":
+            target = r
+            break
+    if target is not None:
+        # read the eval summary
+        summary_paths = sorted(glob.glob("results/noexplain-slice-eval/*summary*.json"))
+        if summary_paths:
+            m = json.loads(open(summary_paths[-1]).read())
+            acc = m.get("accuracy", m)
+            toks = m.get("token_usage", {})
+            update = {
+                "final/accuracy_strict": acc.get("accuracy_strict"),
+                "final/accuracy_of_parsed": acc.get("accuracy_of_parsed"),
+                "final/parse_rate": acc.get("parse_rate"),
+                "final/correct": acc.get("correct"),
+                "final/n": acc.get("n"),
+                "final/mean_output_tokens": toks.get("output_tokens_mean"),
+                "final/mean_reasoning_tokens": toks.get("reasoning_tokens_mean"),
+            }
+            acc_s = update["final/accuracy_strict"]
+            tpc = (toks.get("output_tokens_total") / acc.get("correct")
+                   if acc.get("correct") and toks.get("output_tokens_total") else None)
+            update["final/tokens_per_correct"] = tpc
+            target.summary.update(update)
+            target.update()
+            print("wandb final metrics pushed:", update, flush=True)
+except Exception as e:
+    print("wandb final-metrics push failed (non-fatal):", e, flush=True)
 '''.strip()
 
 UPLOAD_EVAL_CELL = r'''
@@ -255,7 +294,7 @@ def main() -> None:
                                 "resume": "",
                                 "train_path": "data/positions/noexplain-slice-smoke/train.jsonl",
                                 "eval_path": "data/positions/noexplain-slice-smoke/eval.jsonl",
-                                "smoke": "--smoke"}),
+                                "smoke": "--smoke", "live_n": "20"}),
             _md("## 5. Eval on the 1k noexplain test set (thinking ON)"),
             _code(EVAL_CELL),
             _md("## 6. Upload eval to HF"),
@@ -272,7 +311,7 @@ def main() -> None:
                                 "resume": "--resume-from-hf latest" if resume else "",
                                 "train_path": "data/positions/noexplain-slice/train.jsonl",
                                 "eval_path": "data/positions/noexplain-slice/eval.jsonl",
-                                "smoke": ""}),
+                                "smoke": "", "live_n": "100"}),
             _md("## 6. Eval on the 1k noexplain test set (thinking ON)"),
             _code(EVAL_CELL),
             _md("## 7. Upload eval to HF"),

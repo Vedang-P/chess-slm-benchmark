@@ -167,6 +167,14 @@ def main() -> None:
     ap.add_argument("--train-tag", default="noexplain-slice",
                     help="folder under --hf-repo (and wandb run name) "
                          "for this training run")
+    ap.add_argument("--live-test", default="data/positions/mate-selection-test-noexplain.json",
+                    help="real test set for live accuracy tracking during "
+                         "training (wandb live/* metrics)")
+    ap.add_argument("--live-n", type=int, default=100,
+                    help="positions sampled per live eval (byte-identical "
+                         "eval prompt, thinking off for speed)")
+    ap.add_argument("--live-every", type=int, default=1000,
+                    help="live eval every N training steps")
     ap.add_argument("--game-mode", action="store_true",
                     help="expect the full-game commentary format "
                     "('user: FEN+history+turn' / 'assistant: "
@@ -323,12 +331,17 @@ def main() -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     report_to = ["wandb"] if args.wandb_project else []
+    wandb_run = None
     if report_to:
         os.environ.setdefault("WANDB_PROJECT", args.wandb_project)
         import wandb
 
-        print(f"wandb: project={args.wandb_project} run will log losses",
-              flush=True)
+        wandb_run = wandb.init(project=args.wandb_project, name=args.train_tag,
+                               config={"base_model": args.base})
+        from src.live_metrics import log_run_config
+        log_run_config(wandb_run, args)
+        print(f"wandb: project={args.wandb_project} run will log losses "
+              f"+ live accuracy", flush=True)
 
     # HF checkpoint safety net + resume (Kaggle T4 sessions die at ~12h)
     api = _hf_api()
@@ -404,13 +417,22 @@ def main() -> None:
         def on_train_end(self, args, state, control, **kwargs):
             self.cb.maybe_upload(force=True)
 
+    callbacks = [HfUploadCallback(hf_cb)] if not args.smoke else []
+    if args.wandb_project and not args.smoke:
+        from src.live_metrics import LiveEvalCallback
+
+        live_cb = LiveEvalCallback(
+            model, processor, args.live_test,
+            n=args.live_n, every_steps=args.live_every)
+        callbacks.append(live_cb)
+
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=eval_ds if not args.smoke else None,
         data_collator=MaskedCollator(tokenizer),
-        callbacks=[HfUploadCallback(hf_cb)] if not args.smoke else [],
+        callbacks=callbacks,
     )
     print("training...", flush=True)
     t0 = time.time()
@@ -426,6 +448,10 @@ def main() -> None:
     if not args.smoke:
         metrics = trainer.evaluate()
         print("eval:", json.dumps(metrics, indent=1), flush=True)
+        if wandb_run is not None:
+            wandb.log({"final/eval_loss": metrics.get("eval_loss"),
+                       "final/train_loss": metrics.get("train_loss")})
+            wandb.finish()
 
 
 if __name__ == "__main__":
