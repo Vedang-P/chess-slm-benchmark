@@ -179,6 +179,7 @@ def main() -> None:
         args.max_seq_len = max(args.max_seq_len, 4096)
 
     import torch
+    import torch.nn as nn
     from datasets import load_dataset
     from peft import LoraConfig, get_peft_model
     from transformers import (
@@ -245,9 +246,24 @@ def main() -> None:
     lora = LoraConfig(
         r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
         bias="none",
-        target_modules=["linear"],
+        target_modules="all-linear",
         task_type="CAUSAL_LM")
-    lang_model = get_peft_model(lang_model, lora)
+    try:
+        lang_model = get_peft_model(lang_model, lora)
+    except ValueError as e:
+        # fallback: explicitly enumerate every Linear/Linear4bit module
+        # name (handles non-PreTrainedModel towers or unusual wrappers)
+        lin_names = [n for n, mod in lang_model.named_modules()
+                     if isinstance(mod, nn.Linear)
+                     or type(mod).__name__ in ("Linear4bit", "Linear8bitLt")]
+        print(f"all-linear failed ({e}); explicit fallback with "
+              f"{len(lin_names)} linear modules", flush=True)
+        lora2 = LoraConfig(
+            r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
+            bias="none",
+            target_modules=lin_names[:512] or ["linear"],
+            task_type="CAUSAL_LM")
+        lang_model = get_peft_model(lang_model, lora2)
     model.model.language_model = lang_model
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable params: {trainable/1e6:.1f}M "
