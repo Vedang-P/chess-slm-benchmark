@@ -107,7 +107,7 @@ from pathlib import Path
 # local_dir must be the repo's data/positions to land where the trainer
 # expects them (data/positions/noexplain-slice/...).
 from huggingface_hub import hf_hub_download
-for name in ("train.jsonl", "eval.jsonl", "manifest.json"):
+for name in ("train_pretok.jsonl", "eval_pretok.jsonl"):
     hf_hub_download(
         repo_id="vedangfake/chess-slm-benchmark",
         filename=f"noexplain-slice/{name}",

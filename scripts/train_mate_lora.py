@@ -272,49 +272,66 @@ def main() -> None:
           flush=True)
 
     print("loading datasets...", flush=True)
-    ds = load_dataset("json", data_files={"train": args.train, "eval": args.eval})
+    # Pre-tokenized input (input_ids + labels JSONL, built offline by
+    # scripts/pre_tokenize_slice.py) loads instantly — no per-row
+    # apply_chat_template on the Kaggle CPU (600k rows took >95 min and
+    # stalled; see git log 2026-08-16). Messages-format fallback kept for
+    # small/smoke sets.
+    pretok = Path(args.train).with_name(args.train.split("/")[-1].replace(
+        "train", "train_pretok"))
+    eval_pretok = Path(args.eval).with_name(
+        Path(args.eval).name.replace("eval", "eval_pretok"))
+    if pretok.exists():
+        print(f"loading PRE-TOKENIZED data: {pretok} (+ {eval_pretok.name})",
+              flush=True)
+        train_ds = load_dataset(
+            "json", data_files=str(pretok))["train"]
+        eval_ds = load_dataset(
+            "json", data_files=str(eval_pretok))["train"]
+    else:
+        ds = load_dataset("json", data_files={"train": args.train, "eval": args.eval})
 
-    def to_ids(row):
-        msgs = row["messages"]
-        # Render EXACTLY like run_mate_eval -> HFModel.generate does
-        # (enable_thinking=False) so train/eval prompts are byte-identical.
-        # Assistant mask via prefix-difference: transformers 5.13.1's
-        # return_assistant_tokens_mask is BROKEN for this template (all
-        # zeros -- audited 2026-08-14: '{% generation %}' keyword not
-        # detected, mask stays 0 for every token -> labels all -100 -> a
-        # silent no-op training run). The reliable method: tokenize the
-        # full message and the prompt-only (user + assistant header);
-        # assistant tokens = the suffix after the prompt prefix.
-        full = processor.apply_chat_template(
-            msgs, tokenize=True, add_generation_prompt=False,
-            return_dict=True, return_tensors="pt", enable_thinking=False)["input_ids"][0]
-        prompt = processor.apply_chat_template(
-            msgs[:1], tokenize=True, add_generation_prompt=True,
-            return_dict=True, return_tensors="pt", enable_thinking=False)["input_ids"][0]
-        if not full[:len(prompt)].tolist() == prompt.tolist():
-            raise RuntimeError("prompt is not a prefix of the full message "
-                               "-- assistant mask would be wrong")
-        input_ids = full.tolist()
-        if len(input_ids) > args.max_seq_len:
-            input_ids = input_ids[: args.max_seq_len]
-        labels = [-100] * len(prompt) + input_ids[len(prompt):]
-        # after truncation both must stay the same length
-        labels = labels[: args.max_seq_len]
-        return {"input_ids": input_ids, "labels": labels}
+        def to_ids(row):
+            msgs = row["messages"]
+            # Render EXACTLY like run_mate_eval -> HFModel.generate does
+            # (enable_thinking=False) so train/eval prompts are byte-identical.
+            # Assistant mask via prefix-difference: transformers 5.13.1's
+            # return_assistant_tokens_mask is BROKEN for this template (all
+            # zeros -- audited 2026-08-14: '{% generation %}' keyword not
+            # detected, mask stays 0 for every token -> labels all -100 -> a
+            # silent no-op training run). The reliable method: tokenize the
+            # full message and the prompt-only (user + assistant header);
+            # assistant tokens = the suffix after the prompt prefix.
+            full = processor.apply_chat_template(
+                msgs, tokenize=True, add_generation_prompt=False,
+                return_dict=True, return_tensors="pt", enable_thinking=False)["input_ids"][0]
+            prompt = processor.apply_chat_template(
+                msgs[:1], tokenize=True, add_generation_prompt=True,
+                return_dict=True, return_tensors="pt", enable_thinking=False)["input_ids"][0]
+            if not full[:len(prompt)].tolist() == prompt.tolist():
+                raise RuntimeError("prompt is not a prefix of the full message "
+                                   "-- assistant mask would be wrong")
+            input_ids = full.tolist()
+            if len(input_ids) > args.max_seq_len:
+                input_ids = input_ids[: args.max_seq_len]
+            labels = [-100] * len(prompt) + input_ids[len(prompt):]
+            # after truncation both must stay the same length
+            labels = labels[: args.max_seq_len]
+            return {"input_ids": input_ids, "labels": labels}
 
-    def to_text(row):
-        msgs = row["messages"]
-        return {"text": processor.apply_chat_template(
-            msgs, tokenize=False, add_generation_prompt=False,
-            enable_thinking=False)}
+        def to_text(row):
+            msgs = row["messages"]
+            return {"text": processor.apply_chat_template(
+                msgs, tokenize=False, add_generation_prompt=False,
+                enable_thinking=False)}
 
-    train_ds = ds["train"].map(to_text)
-    eval_ds = ds["eval"].map(to_text)
-    if args.smoke:
-        train_ds = train_ds.select(range(min(300, len(train_ds))))
-        eval_ds = eval_ds.select(range(min(60, len(eval_ds))))
-    train_ds = train_ds.map(to_ids, remove_columns=["text", "messages", "fen"])
-    eval_ds = eval_ds.map(to_ids, remove_columns=["text", "messages", "fen"])
+        train_ds = ds["train"].map(to_text)
+        eval_ds = ds["eval"].map(to_text)
+        if args.smoke:
+            train_ds = train_ds.select(range(min(300, len(train_ds))))
+            eval_ds = eval_ds.select(range(min(60, len(eval_ds))))
+        train_ds = train_ds.map(to_ids, remove_columns=["text", "messages", "fen"])
+        eval_ds = eval_ds.map(to_ids, remove_columns=["text", "messages", "fen"])
     print(f"train rows: {len(train_ds)} | eval rows: {len(eval_ds)}", flush=True)
 
     # sanity: verify the assistant mask marks exactly the answer tokens
