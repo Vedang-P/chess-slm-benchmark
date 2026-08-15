@@ -370,7 +370,7 @@ def main() -> None:
         optim="adamw_8bit",
         bf16=cap >= (7, 5),
         fp16=cap < (7, 5),
-        logging_steps=50,
+        logging_steps=1,
         eval_strategy="steps" if not args.smoke else "no",
         eval_steps=args.eval_steps,
         save_strategy="steps",

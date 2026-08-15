@@ -304,7 +304,7 @@ def main() -> None:
         cells += [
             _md("## 4. Fetch the noexplain slice data (HF)"),
             _code(FETCH_DATA_CELL),
-            _md("## 5. Train (wandb-logged, HF checkpointed)"),
+            _md("## 5. Train (wandb-logged, HF checkpointed, training-only)"),
             _code(TRAIN_CELL % {"wandb_project": WANDB_PROJECT,
                                 "epochs": epochs, "rank": rank, "batch": batch,
                                 "grad_accum": grad_accum,
@@ -312,10 +312,7 @@ def main() -> None:
                                 "train_path": "data/positions/noexplain-slice/train.jsonl",
                                 "eval_path": "data/positions/noexplain-slice/eval.jsonl",
                                 "smoke": "", "live_n": "100"}),
-            _md("## 6. Eval on the 1k noexplain test set (thinking ON)"),
-            _code(EVAL_CELL),
-            _md("## 7. Upload eval to HF"),
-            _code(UPLOAD_EVAL_CELL),
+            _md("## 6. (Eval runs in a separate kernel after training)"),
         ]
     nb = _notebook(cells)
     env = load_env()
