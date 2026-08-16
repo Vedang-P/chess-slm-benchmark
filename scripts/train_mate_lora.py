@@ -281,11 +281,15 @@ def main() -> None:
     # apply_chat_template on the Kaggle CPU (600k rows took >95 min and
     # stalled; see git log 2026-08-16). Messages-format fallback kept for
     # small/smoke sets.
-    pretok = Path(args.train).with_name(args.train.split("/")[-1].replace(
-        "train", "train_pretok"))
-    eval_pretok = Path(args.eval).with_name(
-        Path(args.eval).name.replace("eval", "eval_pretok"))
-    if pretok.exists():
+    # If --train already IS a *_pretok.jsonl, use it directly; otherwise
+    # look for <stem>_pretok.jsonl next to it (the kernel fetches exactly
+    # that name).
+    if "_pretok" in Path(args.train).name:
+        pretok, eval_pretok = args.train, args.eval
+    else:
+        pretok = args.train.replace(".jsonl", "_pretok.jsonl")
+        eval_pretok = args.eval.replace(".jsonl", "_pretok.jsonl")
+    if Path(pretok).exists():
         print(f"loading PRE-TOKENIZED data: {pretok} (+ {eval_pretok.name})",
               flush=True)
         train_ds = load_dataset(
