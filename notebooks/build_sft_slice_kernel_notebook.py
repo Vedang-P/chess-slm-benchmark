@@ -107,7 +107,7 @@ from pathlib import Path
 # local_dir must be the repo's data/positions to land where the trainer
 # expects them (data/positions/noexplain-slice/...).
 from huggingface_hub import hf_hub_download
-for name in ("train_pretok.jsonl", "eval_pretok.jsonl"):
+for name in ("train_pretok_60k.jsonl", "eval_pretok_60k.jsonl"):
     hf_hub_download(
         repo_id="vedangfake/chess-slm-benchmark",
         filename=f"noexplain-slice/{name}",
@@ -128,6 +128,7 @@ cmd = [sys.executable, "scripts/train_mate_lora.py",
        "--out", "results/noexplain-slice-adapter",
        "--wandb-project", "%(wandb_project)s",
        "--train-tag", "noexplain-slice",
+       "--max-train-rows", "60000",
        "--hf-repo", "vedangfake/chess-slm-benchmark",
        "--hf-upload-every", "1800",
        "--epochs", "%(epochs)s",
@@ -309,8 +310,8 @@ def main() -> None:
                                 "epochs": epochs, "rank": rank, "batch": batch,
                                 "grad_accum": grad_accum,
                                 "resume": "--resume-from-hf latest" if resume else "",
-                                "train_path": "data/positions/noexplain-slice/train.jsonl",
-                                "eval_path": "data/positions/noexplain-slice/eval.jsonl",
+                                "train_path": "data/positions/noexplain-slice/train_pretok_60k.jsonl",
+                                "eval_path": "data/positions/noexplain-slice/eval_pretok_60k.jsonl",
                                 "smoke": "", "live_n": "100"}),
             _md("## 6. (Eval runs in a separate kernel after training)"),
         ]

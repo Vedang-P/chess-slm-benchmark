@@ -175,6 +175,10 @@ def main() -> None:
                          "eval prompt, thinking off for speed)")
     ap.add_argument("--live-every", type=int, default=1000,
                     help="live eval every N training steps")
+    ap.add_argument("--max-train-rows", type=int, default=0,
+                    help="cap training rows (0 = all). Use to fit a 12h "
+                         "Kaggle kernel: 60k rows x 1 epoch ~= 10h at "
+                         "measured 369 steps/hr (batch2 x accum8).")
     ap.add_argument("--game-mode", action="store_true",
                     help="expect the full-game commentary format "
                     "('user: FEN+history+turn' / 'assistant: "
@@ -286,6 +290,9 @@ def main() -> None:
               flush=True)
         train_ds = load_dataset(
             "json", data_files=str(pretok))["train"]
+        if args.max_train_rows > 0:
+            train_ds = train_ds.select(range(min(args.max_train_rows,
+                                                 len(train_ds))))
         eval_ds = load_dataset(
             "json", data_files=str(eval_pretok))["train"]
     else:
