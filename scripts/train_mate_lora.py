@@ -290,7 +290,7 @@ def main() -> None:
         pretok = args.train.replace(".jsonl", "_pretok.jsonl")
         eval_pretok = args.eval.replace(".jsonl", "_pretok.jsonl")
     if Path(pretok).exists():
-        print(f"loading PRE-TOKENIZED data: {pretok} (+ {eval_pretok.name})",
+        print(f"loading PRE-TOKENIZED data: {pretok} (+ {eval_pretok})",
               flush=True)
         train_ds = load_dataset(
             "json", data_files=str(pretok))["train"]
