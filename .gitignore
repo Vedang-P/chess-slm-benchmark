@@ -101,3 +101,6 @@ notebooks/kaggle_mate_*_w*.ipynb
 
 # noexplain slice (HF-hosted, >100MB)
 /data/positions/noexplain-slice/train.jsonl
+
+# pre-tokenized datasets (HF-hosted, >100MB)
+/data/positions/noexplain-slice/*pretok*.jsonl
