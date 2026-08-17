@@ -1,12 +1,8 @@
-"""Generate kaggle_sft_eval.ipynb — eval the trained adapter on the 1k
-noexplain test set (thinking ON, protocol parity with baselines).
+"""Generate kaggle_gate0_probe.ipynb — Gate 0: eval checkpoint-4000 (the
+0.107-epoch labels model) on 200 noexplain positions, thinking ON.
 
-Downloads the LATEST checkpoint from HF (noexplain-slice/checkpoint-*),
-loads it on gemma-4-E2B, runs run_mate_eval on the 1000-position noexplain
-test set, pushes results to wandb + HF.
-
-    python notebooks/build_sft_eval_kernel_notebook.py
-    kaggle kernels push -p notebooks/push_sft_eval
+This single number decides the training mix (labels carry competence vs not).
+~1-2h GPU. Uploads report to HF + wandb.
 """
 from __future__ import annotations
 
@@ -17,8 +13,9 @@ from pathlib import Path
 from build_notebook import _code, _md, _notebook
 
 NB_DIR = Path(__file__).resolve().parent
-OWNER = os.environ.get("SFT_EVAL_OWNER", "vedanggggg")
-SLUG = "sft-eval-noexplain"
+OWNER = os.environ.get("GATE0_OWNER", "vedanggggg")
+SLUG = "gate0-ckpt4000-probe"
+CHECKPOINT = "checkpoint-4000"
 
 CLONE_CELL = r'''
 import os, shutil, subprocess, sys
@@ -52,9 +49,6 @@ print("cwd:", Path.cwd())
 
 DEPS_CELL = r'''
 import torch
-# Same dependency matrix as the training kernel (P100/T4-safe):
-# torch 2.5.1 cu121 --no-deps + nvidia stack (cudnn 9.1.1.17), transformers
-# 5.13.1, peft 0.14, bnb 0.46.1, torchao removed.
 CU121 = "https://download.pytorch.org/whl/cu121"
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "torch==2.5.1", "torchvision==0.20.1", "torchaudio==2.5.1",
@@ -80,122 +74,104 @@ subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "peft==0.14.0"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "transformers==5.13.1"], check=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-U", "wandb"], check=True)
 print("torch", torch.__version__, "| cuda", torch.cuda.is_available(),
       torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")
 '''.strip()
 
 FETCH_ADAPTER_CELL = r'''
-import os, json, shutil
+import os, shutil
 from pathlib import Path
 from huggingface_hub import HfApi, hf_hub_download
 
 api = HfApi(token=os.environ.get("HF_WRITE_TOKEN", ""))
-files = api.list_repo_files("vedangfake/chess-slm-benchmark", repo_type="dataset")
-prefix = "noexplain-slice/checkpoint-"
-cps = sorted({f.split("/")[2] for f in files
-              if f.startswith(prefix) and len(f.split("/")) > 2})
-if not cps:
-    raise RuntimeError("no checkpoints found in HF repo")
-latest = cps[-1]
-print("latest checkpoint:", latest, flush=True)
-import shutil
+cp = "%(checkpoint)s"
+print("fetching adapter from", cp, flush=True)
+# run_mate_eval expects the adapter at results/noexplain-slice-adapter/
 out = Path("results/noexplain-slice-adapter")
 out.mkdir(parents=True, exist_ok=True)
 tmp = Path("/tmp/adapter-fetch")
 tmp.mkdir(parents=True, exist_ok=True)
 n = 0
-for f in files:
-    if not f.startswith(f"{prefix}{latest}/"):
+for f in api.list_repo_files("vedangfake/chess-slm-benchmark", repo_type="dataset"):
+    if not f.startswith(f"noexplain-slice/{cp}/"):
         continue
-    # only adapter files (skip optimizer/scheduler/trainer_state)
-    if f.endswith("adapter_model.safetensors") or f.endswith("adapter_config.json") \
-       or f.endswith("README.md"):
+    if f.endswith(("adapter_model.safetensors", "adapter_config.json", "README.md")):
         dl = hf_hub_download(repo_id="vedangfake/chess-slm-benchmark", filename=f,
                              repo_type="dataset", local_dir=str(tmp),
                              token=os.environ.get("HF_WRITE_TOKEN", ""))
-        shutil.copyfile(dl, out / Path(dl).name)
+        dest = out / Path(dl).name
+        shutil.copyfile(dl, dest)
         n += 1
-print(f"downloaded {n} adapter files from {latest} -> {out}", flush=True)
-print("adapter dir:", sorted(p.name for p in out.iterdir()) if out.exists() else "MISSING", flush=True)
+print(f"downloaded {n} adapter files -> {out}", flush=True)
+print("adapter dir:", sorted(p.name for p in out.iterdir()), flush=True)
 '''.strip()
 
-EVAL_CELL = r'''
-import os, subprocess, sys, time, json, glob
+PROBE_CELL = r'''
+import os, subprocess, sys, time, json, random, traceback
 from pathlib import Path
 
-# score the adapter on the exact 1k-position noexplain test set,
-# thinking ON (protocol parity with the 92.2% deepseek baseline)
+# eval 200 positions (fixed seed slice of the 1000) thinking ON.
+# Protocol MUST match the 58.1% baseline exactly (HF archive meta):
+# thinking ON, unbounded budget, force_answer_prompt=true, max 32768.
 cmd = [sys.executable, "scripts/run_mate_eval.py",
        "--model", "gemma4-e2b",
        "--adapter", "results/noexplain-slice-adapter",
        "--task-file", "mate-selection-test-noexplain.json",
-       "--n", "1000",
+       "--n", "200",
+       "--offset", "0",
        "--local-thinking",
-       "--max_new_tokens", "2048",
-       "--output_dir", "results/noexplain-slice-eval",
+       "--force-answer-prompt",
+       "--max_new_tokens", "32768",
+       "--output_dir", "results/gate0-probe",
        "--verbose"]
 print("running:", " ".join(cmd))
 t0 = time.time()
-res = subprocess.run(cmd, stderr=subprocess.STDOUT)
-print(f"eval exited rc={res.returncode} after {(time.time()-t0)/60:.1f}min", flush=True)
-if res.returncode != 0:
-    raise RuntimeError("eval failed -- see output above")
+try:
+    res = subprocess.run(cmd, stderr=subprocess.STDOUT, timeout=8*3600)
+    print(f"probe exited rc={res.returncode} after {(time.time()-t0)/60:.1f}min",
+          flush=True)
+    if res.returncode != 0:
+        raise RuntimeError("probe failed -- see output above")
+except Exception as e:
+    try:
+        from huggingface_hub import HfApi
+        api = HfApi(token=os.environ.get("HF_WRITE_TOKEN", ""))
+        body = f"GATE0 FAILED: {type(e).__name__}: {e}\n{traceback.format_exc()[-2500:]}"
+        api.upload_file(path_or_fileobj=body.encode(),
+                        path_in_repo="gate0-probe/error.txt",
+                        repo_id="vedangfake/chess-slm-benchmark",
+                        repo_type="dataset",
+                        commit_message="gate0 failure")
+        print("error written to HF gate0-probe/error.txt", flush=True)
+    except Exception as e2:
+        print("error upload failed:", e2, flush=True)
+    raise
 '''.strip()
 
 UPLOAD_CELL = r'''
 import os, json, glob
 from pathlib import Path
 from huggingface_hub import HfApi
-import wandb
 
 api = HfApi(token=os.environ.get("HF_WRITE_TOKEN", ""))
-eval_dir = Path("results/noexplain-slice-eval")
+eval_dir = Path("results/gate0-probe")
 if eval_dir.exists():
     for f in eval_dir.iterdir():
         if f.is_file():
             api.upload_file(path_or_fileobj=f.read_bytes(),
-                            path_in_repo=f"noexplain-slice-eval/{f.name}",
+                            path_in_repo=f"gate0-probe/{f.name}",
                             repo_id="vedangfake/chess-slm-benchmark",
                             repo_type="dataset",
-                            commit_message=f"noexplain slice eval {f.name}")
-    print("eval uploaded to HF", flush=True)
+                            commit_message=f"gate0 probe {f.name}")
+    print("gate0 probe uploaded to HF", flush=True)
 
-# push final metrics into the wandb run
-try:
-    api_w = wandb.Api()
-    runs = api_w.runs("vedanggg-mit-manipal/chess-slm-benchmark")
-    target = None
-    for r in runs:
-        if r.name == "noexplain-slice" and r.state == "running":
-            target = r
-            break
-    if target is None:
-        for r in runs:
-            if r.name == "noexplain-slice":
-                target = r
-    summary_paths = sorted(glob.glob("results/noexplain-slice-eval/*summary*.json"))
-    if target is not None and summary_paths:
-        m = json.loads(open(summary_paths[-1]).read())
-        acc = m.get("accuracy", m)
-        toks = m.get("token_usage", {})
-        update = {
-            "final/accuracy_strict": acc.get("accuracy_strict"),
-            "final/accuracy_of_parsed": acc.get("accuracy_of_parsed"),
-            "final/parse_rate": acc.get("parse_rate"),
-            "final/correct": acc.get("correct"),
-            "final/n": acc.get("n"),
-            "final/mean_output_tokens": toks.get("output_tokens_mean"),
-            "final/mean_reasoning_tokens": toks.get("reasoning_tokens_mean"),
-        }
-        tpc = (toks.get("output_tokens_total") / acc.get("correct")
-               if acc.get("correct") and toks.get("output_tokens_total") else None)
-        update["final/tokens_per_correct"] = tpc
-        target.summary.update(update)
-        target.update()
-        print("wandb final metrics pushed:", update, flush=True)
-except Exception as e:
-    print("wandb push failed (non-fatal):", e, flush=True)
+# print the summary for the log
+for sp in sorted(glob.glob("results/gate0-probe/*summary*.json")):
+    m = json.loads(open(sp).read())
+    acc = m.get("accuracy", m)
+    print("=== GATE0 SUMMARY ===")
+    print(json.dumps({k: acc.get(k) for k in ("n","correct","wrong","parse_rate","accuracy_strict","accuracy_of_parsed")}, indent=1))
+    break
 '''.strip()
 
 
@@ -234,33 +210,33 @@ def inject_secrets(nb: dict, env: dict, names: list[str]) -> None:
 
 def main() -> None:
     cells = [
-        _md("# SFT eval — noexplain 1000 (thinking ON)\n\n"
-            "Loads the latest HF checkpoint, evals on the exact 1k noexplain "
-            "test set with the protocol-parity config, pushes to wandb + HF."),
-        _md("## 1. Secrets (injected at build time)"),
+        _md("# Gate 0 — ckpt-4000 thinking-ON probe\n\n"
+            "Eval the 0.107-epoch labels model on 200 noexplain positions, "
+            "thinking ON. This number decides the training mix."),
+        _md("## 1. Secrets"),
         _code("print('secrets are injected at build time')"),
         _md("## 2. Get the repo"),
         _code(CLONE_CELL),
         _md("## 3. Dependencies"),
         _code(DEPS_CELL),
-        _md("## 4. Fetch latest adapter from HF"),
-        _code(FETCH_ADAPTER_CELL),
-        _md("## 5. Eval on 1k noexplain (thinking ON)"),
-        _code(EVAL_CELL),
-        _md("## 6. Upload results to HF + wandb"),
+        _md("## 4. Fetch checkpoint-4000 adapter"),
+        _code(FETCH_ADAPTER_CELL % {"checkpoint": CHECKPOINT}),
+        _md("## 5. Probe eval (200 pos, thinking ON)"),
+        _code(PROBE_CELL),
+        _md("## 6. Upload + print summary"),
         _code(UPLOAD_CELL),
     ]
     nb = _notebook(cells)
     env = load_env()
-    inject_secrets(nb, env, ["GITHUB_TOKEN", "HF_WRITE_TOKEN", "WANDB_API_KEY"])
+    inject_secrets(nb, env, ["GITHUB_TOKEN", "HF_WRITE_TOKEN"])
 
-    push_dir = NB_DIR / "push_sft_eval"
+    push_dir = NB_DIR / "push_gate0_probe"
     push_dir.mkdir(parents=True, exist_ok=True)
-    code_file = "kaggle_sft_eval.ipynb"
+    code_file = "kaggle_gate0_probe.ipynb"
     (push_dir / code_file).write_text(json.dumps(nb, indent=1))
     (push_dir / "kernel-metadata.json").write_text(json.dumps({
         "id": f"{OWNER}/{SLUG}",
-        "title": "SFT eval noexplain",
+        "title": "Gate0 ckpt4000 probe",
         "code_file": code_file,
         "language": "python",
         "kernel_type": "notebook",
@@ -275,7 +251,7 @@ def main() -> None:
         "model_sources": [],
     }, indent=1))
     print(f"wrote {push_dir}/{code_file}")
-    print("push with: kaggle kernels push -p notebooks/push_sft_eval")
+    print("push with: kaggle kernels push -p notebooks/push_gate0_probe")
 
 
 if __name__ == "__main__":
