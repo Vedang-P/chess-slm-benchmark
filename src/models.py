@@ -212,12 +212,14 @@ class HFModel:
     """4-bit HF model with chat-template generation (greedy by default)."""
 
     def __init__(self, model_key: str, smoke_test: bool = False,
-                 system_prompt: str = "", adapter_path: str = ""):
+                 system_prompt: str = "", adapter_path: str = "",
+                 cpu: bool = False):
         self.model_key = model_key
         self.model_id = MODEL_IDS.get(model_key, model_key)
         self.smoke_test = smoke_test
         self.system_prompt = system_prompt
         self.adapter_path = adapter_path
+        self.cpu = cpu
         self.model = None
         self.tokenizer = None
         self.processor = None
@@ -228,6 +230,30 @@ class HFModel:
             return
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+        if self.cpu:
+            # CPU inference (no GPU quota needed): unquantized, no device_map
+            # trick, attention to CPU. Used by the Gate-0 probe when the
+            # weekly GPU quota is exhausted. Slower but quota-free.
+            from transformers import (
+                AutoModelForImageTextToText,
+                AutoProcessor,
+            )
+
+            self.processor = AutoProcessor.from_pretrained(self.model_id)
+            self.tokenizer = self.processor.tokenizer
+            self.model = AutoModelForImageTextToText.from_pretrained(
+                self.model_id, device_map="cpu", dtype=torch.float32,
+                low_cpu_mem_usage=True,
+            )
+            self.model.eval()
+            if self.adapter_path:
+                from peft import PeftModel
+
+                self.model = PeftModel.from_pretrained(self.model, self.adapter_path)
+                self.model.eval()
+                print(f"adapter loaded (cpu): {self.adapter_path}", flush=True)
+            return
 
         if self.is_gemma4:
             # Gemma 4 E2B/E4B are multimodal Gemma4ForConditionalGeneration
@@ -766,9 +792,9 @@ class OpenCodeGoModel:
         }, local_usage(None, None, source="error"))
 
 def make_model(model_key: str, smoke_test: bool = False,
-               adapter_path: str = ""):
+               adapter_path: str = "", cpu: bool = False):
     """Registry: local 4-bit HF models + the gateway API model."""
     if model_key in (DEEPSEEK_V4_FLASH, DEEPSEEK_V4_FLASH_FREE):
         return OpenCodeGoModel(model_key, smoke_test=smoke_test)
     return HFModel(model_key, smoke_test=smoke_test,
-                   adapter_path=adapter_path)
+                   adapter_path=adapter_path, cpu=cpu)

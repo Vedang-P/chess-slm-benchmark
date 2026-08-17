@@ -48,34 +48,16 @@ print("cwd:", Path.cwd())
 '''.strip()
 
 DEPS_CELL = r'''
-import torch
-CU121 = "https://download.pytorch.org/whl/cu121"
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "torch==2.5.1", "torchvision==0.20.1", "torchaudio==2.5.1",
-                "--index-url", CU121, "--no-deps"], check=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "nvidia-cudnn-cu12==9.1.1.17", "--index-url", CU121],
-               check=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "nvidia-cublas-cu12", "nvidia-cuda-cupti-cu12",
-                "nvidia-cuda-nvrtc-cu12", "nvidia-cuda-runtime-cu12",
-                "nvidia-cufft-cu12", "nvidia-curand-cu12",
-                "nvidia-cusolver-cu12", "nvidia-cusparse-cu12",
-                "nvidia-nccl-cu12", "nvidia-nvjitlink-cu12",
-                "nvidia-nvtx-cu12", "triton",
-                "--index-url", CU121], check=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
-                "bitsandbytes==0.46.1"], check=True)
-subprocess.run([sys.executable, "-m", "pip", "uninstall", "--quiet", "-y",
-                "torchao"], check=False)
+import subprocess, sys
+# CPU kernel: no torch/nvidia stack needed beyond what requirements brings
+# (python-chess, transformers for loading gemma on CPU).
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "-r", "requirements.txt"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "peft==0.14.0"], check=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--quiet",
                 "transformers==5.13.1"], check=True)
-print("torch", torch.__version__, "| cuda", torch.cuda.is_available(),
-      torch.cuda.get_device_name(0) if torch.cuda.is_available() else "")
+print("cpu deps ok")
 '''.strip()
 
 FETCH_ADAPTER_CELL = r'''
@@ -119,6 +101,7 @@ cmd = [sys.executable, "scripts/run_mate_eval.py",
        "--task-file", "mate-selection-test-noexplain.json",
        "--n", "200",
        "--offset", "0",
+       "--cpu",
        "--local-thinking",
        "--force-answer-prompt",
        "--max_new_tokens", "32768",
@@ -241,7 +224,7 @@ def main() -> None:
         "language": "python",
         "kernel_type": "notebook",
         "is_private": True,
-        "enable_gpu": True,
+        "enable_gpu": False,
         "enable_tpu": False,
         "enable_internet": True,
         "keywords": [],

@@ -130,6 +130,10 @@ def final_metrics(rows: list) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="deepseek-v4-flash")
+    ap.add_argument("--cpu", action="store_true",
+                    help="load the local gemma model on CPU (unquantized "
+                         "fp32) — no GPU quota needed; slower, for probes "
+                         "when the weekly GPU quota is exhausted")
     ap.add_argument("--adapter", default="",
                     help="path to a LoRA adapter dir to load on top of the "
                          "base model (gemma arms); empty = base model")
@@ -266,7 +270,7 @@ def main() -> None:
     # run_suite --resume the cell was unfinished).
 
     model = make_model(args.model, smoke_test=args.smoke,
-                       adapter_path=args.adapter)
+                       adapter_path=args.adapter, cpu=args.cpu)
     model.load()
 
     # live.json local writer + optional background pusher
