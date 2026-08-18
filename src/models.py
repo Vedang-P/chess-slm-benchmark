@@ -337,7 +337,8 @@ class HFModel:
                  repetition_penalty: float = 1.0, stream: bool = False,
                  on_chunk=None, thinking_budget: Optional[int] = None,
                  thinking_disabled: bool = False,
-                 local_thinking: bool = False) -> dict:
+                 local_thinking: bool = False,
+                 abort_reasoning_budget: Optional[int] = None) -> dict:
         """Returns {content, input_tokens, output_tokens, latency_ms, finished}.
         With stream=True, tokens are printed live to stdout as they are
         generated (chain-of-thought visibility in notebook cells).
@@ -577,7 +578,8 @@ class OpenCodeGoModel:
                  temperature: float = 0.0, stream: bool = False,
                  on_chunk=None, thinking_budget: Optional[int] = None,
                  thinking_disabled: bool = False,
-                 local_thinking: bool = False) -> dict:
+                 local_thinking: bool = False,
+                 abort_reasoning_budget: Optional[int] = None) -> dict:
         """Generate via the gateway. Thinking is ENABLED and UNBOUNDED: V4
         Flash reasons long on chess positions, and the study wants that
         thinking visible — we just wait for the final answer (max_tokens
@@ -630,6 +632,7 @@ class OpenCodeGoModel:
                                        + self.MAX_MIDSTREAM_RETRIES + 1)
                 for silent_attempt in range(max_stream_attempts):
                     content, reasoning = "", ""
+                    aborted_by_budget = False
                     final_usage = {}
                     stream_events = 0
                     first_token_at = None
@@ -698,6 +701,27 @@ class OpenCodeGoModel:
                                 reasoning += delta_reasoning
                                 finish = ch[0].get("finish_reason")
                                 finish_reason = finish or finish_reason
+                                # HARD client-side cap on the reasoning
+                                # phase (the gateway's budget_tokens hint is
+                                # NOT reliably enforced — measured 2026-08-18:
+                                # a 143k-char reasoning stream ignored it and
+                                # burned the full 32,768. ~4.5 chars/token is
+                                # the measured ratio for this model's
+                                # reasoning). Abort = break the stream and
+                                # close the connection: we pay for what was
+                                # streamed (~8k) instead of the full budget
+                                # (~32k), and the caller records the row as
+                                # honestly cut, no retry.
+                                if (abort_reasoning_budget and not content
+                                        and len(reasoning)
+                                        > abort_reasoning_budget * 4.5):
+                                    print(f"[opencode_go] attempt {attempt_no}: "
+                                          f"reasoning {len(reasoning)} chars "
+                                          f"(> {abort_reasoning_budget} tok cap) "
+                                          f"with no content — aborting stream "
+                                          f"to stop the burn", flush=True)
+                                    aborted_by_budget = True
+                                    break
                                 if on_chunk and (time.time() - last_chunk_at >= 2
                                                  or finish):
                                     last_chunk_at = time.time()
@@ -720,6 +744,12 @@ class OpenCodeGoModel:
                     # connection drops into permanent fake "truncated"
                     # no_answers with no usage data (measured: 42/42 of the
                     # 1000-run truncations had token_usage=None).
+                    if aborted_by_budget:
+                        # deliberate client-side cut, NOT a transport issue:
+                        # a retry would re-burn the budget on the same
+                        # overthinker. Record honestly, move on.
+                        finish_reason = "abort"
+                        break
                     if finish_reason is not None:
                         break
                     midstream = stream_events > 0

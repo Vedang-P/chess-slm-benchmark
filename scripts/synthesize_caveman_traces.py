@@ -5,7 +5,9 @@ The chess content is engine-given (build_caveman_lines.py): deepseek only
 writes the WORDS. But it can still distort a line (claim "wins queen"
 when the line wins a pawn), so each trace is checked, not trusted:
 
-  1. final choice (last MoveX mention) == engine_preferred candidate
+  1. the answer is engine-given (engine_preferred, argmax eval) and
+     appended deterministically — the model never chooses; any answer
+     line it writes anyway is stripped
   2. every UCI mentioned is a legal move from the root position
   3. every UCI mentioned appears in the engine lines we supplied
      (candidate moves + both continuations) — the trace may only explain
@@ -14,11 +16,13 @@ when the line wins a pawn), so each trace is checked, not trusted:
      (gemma-4-E2B-it), so the band is the real train-time cost
   5. no hedging/filler words (caveman style is telegraphic, never hedged)
 
-Generation is UNLIMITED (max 32768, the bench's normal budget): bounding
-the budget only cut deepseek off mid-think and produced empty content,
-every time it was tried — the model finishes its thinking and then writes
-the answer; we wait for it. The private CoT (reasoning channel) is NOT the
-training target — the trace is content only.
+Generation uses the bench's normal 32768 budget, with the REASONING
+phase capped at --thinking-budget (default 8192, gateway budget_tokens):
+deepseek-v4-flash over-thinks this task — measured 2026-08-18, 25% of
+rows burned the full budget on looped re-verification and were cut off
+with empty content. Capping the thinking phase forces it to write the
+answer; the private CoT (reasoning channel) is NOT the training target —
+the trace is content only.
 
 An example that fails ANY check is dropped. Resume-safe + append-only.
 
@@ -74,9 +78,11 @@ RULES (every one is mandatory):
    not visible in the lines below, do not claim it.
 7. Every move you mention MUST be in UCI notation: start square + end
    square, e.g. "c3e4" or "g5h7" — never piece names.
-8. The last line MUST be exactly one of: MoveA:<uci> or MoveB:<uci>.
+8. Do NOT write MoveA:/MoveB: and do NOT choose a move. The correct move
+   is already known — you only explain WHY it is better. No answer line,
+   ever.
 
-STYLE SAMPLE (a good caveman trace looks exactly like this):
+STYLE SAMPLE (a good caveman explanation looks exactly like this):
 
 c3e4 trades knights.
 f3g5 runs into h7h6.
@@ -86,18 +92,8 @@ c3d5 takes knight first.
 black recaptures b7d5.
 c3e4 keeps knight safe.
 better for white.
-MoveA:c3e4
 
 Now do the same for the position below."""
-
-
-def parse_final_choice(text: str):
-    """Last MoveA/B mention wins, like run_mate_eval.parse_choice."""
-    matches = list(ANSWER_RE.finditer(text))
-    if matches:
-        m = matches[-1]
-        return m.group(1).upper(), (m.group(2) or "").lower()
-    return None, None
 
 
 def brief_of(row: dict) -> str:
@@ -108,7 +104,8 @@ def brief_of(row: dict) -> str:
     return (f"POSITION (FEN): {row['fen']}\n"
             f"Candidate A: {a}\n"
             f"Candidate B: {b}\n\n"
-            "Explain why the better move is better. CAVEMAN style.")
+            "Explain why the better move is better. CAVEMAN style. "
+            "No MoveA:/MoveB: line.")
 
 
 def _lines_legal(row: dict) -> bool:
@@ -162,6 +159,15 @@ def main() -> None:
                          "(must be the training tokenizer)")
     ap.add_argument("--offset", type=int, default=0)
     ap.add_argument("--count", type=int, default=0)
+    ap.add_argument("--thinking-budget", type=int, default=8192,
+                    help="cap the REASONING phase only (gateway "
+                         "budget_tokens): deepseek-v4-flash over-thinks this "
+                         "task — measured 2026-08-18, 4/16 rows (25%) burned "
+                         "the full 32768-token generation budget on looped "
+                         "re-verification and were cut off with empty "
+                         "content. budget_tokens forces the model to stop "
+                         "thinking at N and write the answer (the trace "
+                         "itself is 60-110 tokens). 0 = unbounded.")
     ap.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark",
                     help="HF dataset repo for periodic trace uploads")
     ap.add_argument("--hf-path", default="caveman-traces/traces.jsonl",
@@ -203,8 +209,8 @@ def main() -> None:
 
     api = None
     if args.hf_upload_every > 0:
-        from scripts.train_mate_grpo import _hf_api
-        api = _hf_api()
+        from src.hf_push import _api
+        api = _api()
 
     def _upload_checkpoint(rows_written: int, out: Path):
         if api is None:
@@ -229,17 +235,29 @@ def main() -> None:
             # >~12k reasoning tokens (measured). Streaming waits for the
             # real finish_reason and delivers reasoning + content in full.
             res = model.generate(prompt, max_new_tokens=MAX_GEN_TOKENS,
-                                 stream=True)
+                                 stream=True,
+                                 thinking_budget=(args.thinking_budget
+                                                  or None),
+                                 abort_reasoning_budget=(
+                                     args.thinking_budget or None))
             if res.get("error"):
                 api_err += 1
                 print(f"  [{i}] API error: {res['error'][:90]}", flush=True)
                 time.sleep(10)
                 continue
             trace = (res.get("content") or "").strip()
-            label, uci = parse_final_choice(trace)
+            # Explanation-only contract: the answer is engine-given and
+            # appended deterministically. Any MoveA:/MoveB: line the model
+            # writes anyway is stripped so training data never carries a
+            # model-chosen (possibly wrong) label.
+            am = list(ANSWER_RE.finditer(trace))
+            if am:
+                last = am[-1]
+                trace = (trace[: last.start()] + trace[last.end():]).strip()
+            label, uci = row["engine_preferred"], row[
+                f"candidate_{row['engine_preferred'].lower()}"].lower()
             checks = {
-                "choice": (label is not None and label == row["engine_preferred"]
-                           and uci == row[f"candidate_{label.lower()}"].lower()),
+                "choice": label in ("A", "B"),  # deterministic answer valid
                 "legal": True,
                 "grounded": True,
                 "length": False,
@@ -255,7 +273,8 @@ def main() -> None:
                 checks["grounded"] = _verify_grounding(trace, row)
             verified = all(checks.values())
             rec = {**row, "trace": trace, "choice_label": label,
-                   "choice_uci": uci, "n_tokens": n_tokens,
+                   "choice_uci": uci, "answer": f"Move{label}:{uci}",
+                   "n_tokens": n_tokens,
                    "verified": verified, "checks": checks,
                    # the FULL deepseek thinking is archived with the answer
                    # (user-requested: useful for later analysis), plus the

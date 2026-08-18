@@ -646,8 +646,24 @@ def main() -> None:
         def on_train_end(self, args_, state, control, **kwargs):
             hf_cb.maybe_upload(force=True)
 
+    class _RewardLogCallback(TrainerCallback):
+        """Per-step reward evidence: print the last logged metrics so a
+        run visibly shows all three reward funcs returning real values
+        (outcome/process/style), not silent zeros."""
+
+        def on_step_end(self, args_, state, control, **kwargs):
+            if not state.log_history:
+                return
+            entry = state.log_history[-1]
+            hit = {k: round(v, 4) for k, v in entry.items()
+                   if isinstance(v, (int, float)) and
+                   ("reward" in k or k in ("kl", "completion_length"))}
+            if hit:
+                print(f"step {state.global_step}: {hit}", flush=True)
+
     if not args.smoke:
         trainer.add_callback(_HfUploadCallback())
+    trainer.add_callback(_RewardLogCallback())
 
     print("training...", flush=True)
     t0 = time.time()

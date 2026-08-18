@@ -60,6 +60,15 @@ def parse_row(row: dict) -> dict | None:
             "candidate_b": candidate_b, "truth_label": truth_label}
 
 
+def _load_fens(path: str) -> set:
+    """Load a set of FENs from a json list of {fen} rows or a jsonl."""
+    text = Path(path).read_text().strip()
+    if text.startswith("["):
+        return {r.get("fen") for r in json.loads(text) if r.get("fen")}
+    return {json.loads(line).get("fen") for line in text.splitlines()
+            if line.strip()}
+
+
 def _score_candidate(fen: str, move: str, engine) -> float | None:
     """cp eval of the position AFTER playing `move` (from the side-to-move
     pov), or None on error."""
@@ -87,6 +96,15 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-rows", type=int, default=0,
                     help="cap pool size (0 = all parsed rows)")
+    ap.add_argument("--sample-rows", type=int, default=0,
+                    help="randomly sample this many parsed rows BEFORE the "
+                         "difficulty gate (0 = keep all). Gating every one "
+                         "of 600k train rows is ~1.2M stockfish evals "
+                         "(10-20h); a 50k pre-gate sample is the plan's "
+                         "20k-target regime (~2-4h).")
+    ap.add_argument("--exclude-fens", default="",
+                    help="json (list of {fen}) or jsonl of eval-set FENs to "
+                         "drop from the pool — rlvr-plan: test-FEN-excluded")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--difficulty-gate", action="store_true",
                     help="keep only rows where |evalA - evalB| <= --max-gap-cp "
@@ -106,6 +124,18 @@ def main() -> None:
         else:
             rows.append(row)
     print(f"parsed {len(rows)} pool rows, dropped {dropped}", flush=True)
+
+    rng = random.Random(args.seed)
+
+    if args.exclude_fens:
+        excl = _load_fens(args.exclude_fens)
+        rows = [r for r in rows if r["fen"] not in excl]
+        print(f"eval-FEN exclusion: {len(excl)} test FENs, "
+              f"{len(rows)} rows left", flush=True)
+
+    if args.sample_rows > 0 and len(rows) > args.sample_rows:
+        rows = rng.sample(rows, args.sample_rows)
+        print(f"pre-gate sample: {len(rows)} rows", flush=True)
 
     if args.difficulty_gate:
         import chess
@@ -132,7 +162,6 @@ def main() -> None:
         print(f"difficulty gate: {len(rows)} kept (|gap| <= {args.max_gap_cp}cp), "
               f"{skipped} unscoreable dropped", flush=True)
 
-    rng = random.Random(args.seed)
     rng.shuffle(rows)
     if args.max_rows > 0:
         rows = rows[:args.max_rows]
