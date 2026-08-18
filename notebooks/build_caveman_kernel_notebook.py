@@ -92,7 +92,7 @@ out = WORK / "traces.jsonl"
 if not out.exists():
     try:
         shard = hf_hub_download(repo_id=REPO_ID,
-                                filename="caveman-traces/traces.jsonl",
+                                filename="%HF_PATH%",
                                 repo_type="dataset")
         out.write_bytes(Path(shard).read_bytes())
         print(f"resume: {len(out.read_text().splitlines())} rows already done")
@@ -107,7 +107,8 @@ import subprocess, sys
 from pathlib import Path
 
 cmd = [sys.executable, "scripts/synthesize_caveman_traces.py",
-       "--lines", LINES, "--out", OUT, %RUN_ARGS%]
+       "--lines", LINES, "--out", OUT,
+       "--hf-path", "%HF_PATH%", %RUN_ARGS%]
 print("running:", " ".join(cmd[:6]), "...")
 r = subprocess.run(cmd)
 if r.returncode != 0:
@@ -129,12 +130,15 @@ def load_env() -> dict:
     return env
 
 
-def inject_secrets(nb: dict, env: dict, names: list[str]) -> None:
+def inject_secrets(nb: dict, env: dict, names: list[str],
+                   remap: dict | None = None) -> None:
+    remap = remap or {}
     lines = ["import os\n"]
     for name in names:
-        if name not in env or not env[name]:
-            raise RuntimeError(f"missing secret {name} in .env")
-        lines.append(f'os.environ[{name!r}] = {env[name]!r}\n')
+        src = remap.get(name, name)
+        if src not in env or not env[src]:
+            raise RuntimeError(f"missing secret {src} in .env")
+        lines.append(f'os.environ[{name!r}] = {env[src]!r}\n')
     lines.append("print('secrets set:', "
                  + ", ".join(f"bool(os.environ.get({n!r}))" for n in names)
                  + ")\n")
@@ -155,9 +159,19 @@ def main() -> None:
     ap.add_argument("--count", type=int, default=0,
                     help="rows to synthesize (0 = all remaining)")
     ap.add_argument("--offset", type=int, default=0)
+    ap.add_argument("--hf-path", default="caveman-traces/traces.jsonl",
+                    help="HF path for this notebook's resume+upload shard "
+                         "(sharded runs use caveman-traces/shards/shard-N.jsonl)")
+    ap.add_argument("--slug", default="",
+                    help="kernel slug override (default derived from count)")
+    ap.add_argument("--key-from", default="OPENCODE_API_KEY",
+                    help=".env key whose value is injected as OPENCODE_API_KEY")
     args = ap.parse_args()
 
-    if args.count > 0:
+    if args.slug:
+        slug = args.slug
+        title = slug.replace("-", " ")
+    elif args.count > 0:
         slug = f"caveman-traces-demo-c{args.count}"
         title = f"caveman traces demo c{args.count}"
     else:
@@ -178,10 +192,11 @@ def main() -> None:
         _md("## 3. Dependencies"),
         _code(DEPS_CELL),
         _md("## 4. Fetch lines + resume shard from HF"),
-        _code(FETCH_CELL),
+        _code(FETCH_CELL.replace("%HF_PATH%", args.hf_path)),
         _md("## 5. Synthesize"),
         _code(RUN_CELL.replace("LINES", '"/kaggle/working/lines.jsonl"')
                    .replace("OUT", '"/kaggle/working/traces.jsonl"')
+                   .replace("%HF_PATH%", args.hf_path)
                    .replace("%RUN_ARGS%", run_args)),
         _md("## 6. Notes\n\n"
             "- Re-run this notebook to continue: it resumes from the HF "
@@ -194,7 +209,8 @@ def main() -> None:
     nb = _notebook(cells)
     env = load_env()
     inject_secrets(nb, env, ["OPENCODE_API_KEY", "HF_WRITE_TOKEN",
-                             "GITHUB_TOKEN"])
+                             "GITHUB_TOKEN"],
+                   remap={"OPENCODE_API_KEY": args.key_from})
 
     push_dir = NB_DIR / f"push_{slug}"
     push_dir.mkdir(parents=True, exist_ok=True)

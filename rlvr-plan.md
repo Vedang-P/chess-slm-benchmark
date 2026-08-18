@@ -153,6 +153,13 @@ deterministically) → `scripts/build_sft_from_traces.py` →
 
 ### Stage 1. Caveman SFT (T4 kernel, first thing on Aug 22)
 
+Synthesis runs as 3 concurrent Kaggle CPU kernels, one API key each
+(5 keys in .env): the prefix worker covers rows from 0 (canonical
+`caveman-traces/traces.jsonl`), shard-2 covers 667-1333, shard-3 covers
+1334-1999 (per-shard HF paths). `scripts/merge_caveman_shards.py`
+combines them (dedupe by fen) into the canonical file — run after each
+kernel completes. ~3x wall-clock speedup, same per-row cost.
+
     python3 scripts/build_sft_from_traces.py \
         --traces results/caveman/traces-2000.jsonl \
         --out data/positions/caveman-sft
