@@ -7,8 +7,11 @@ transformers>=5.13.0
 peft>=0.10.0
 bitsandbytes
 accelerate
+torch
 numpy
 huggingface_hub
+datasets
+trl>=0.17,<0.18
 tqdm
 pyyaml
 python-chess
