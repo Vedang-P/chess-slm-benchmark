@@ -244,7 +244,7 @@ def main() -> None:
                 "grounded": True,
                 "length": False,
                 "words": True,
-                "empty": not trace,
+                "empty": bool(trace),  # True = non-empty trace PASSES
             }
             n_tokens = len(tok.encode(trace))
             checks["length"] = MIN_TRACE_TOKENS <= n_tokens <= MAX_TRACE_TOKENS

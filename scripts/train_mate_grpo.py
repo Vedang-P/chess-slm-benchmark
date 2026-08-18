@@ -17,7 +17,8 @@ model, one batch of rollouts + one optimizer step:
         --train data/positions/noexplain-slice-smoke/train.jsonl \
         --out results/rlvr-pool/smoke.jsonl
     python3 scripts/train_mate_grpo.py \
-        --base HuggingFaceTB/SmolLM2-135M --train results/rlvr-pool/smoke.jsonl \
+        --base HuggingFaceTB/SmolLM2-135M-Instruct \
+        --train results/rlvr-pool/smoke.jsonl \
         --out results/rlvr-smoke --cpu --smoke --max-steps 1
 
 GPU run (Aug 22+, the gemma4 loader path proven by train_mate_lora.py):
@@ -310,9 +311,22 @@ class Oracle:
 
 
 def _completion_text(completion) -> str:
+    """trl 0.17 passes each completion as an OpenAI-style message list
+    ([{role, content}]) or, on some paths, the raw dict/str — normalize
+    all three (list shape caught by the 2026-08-18 CPU smoke)."""
+    if isinstance(completion, list):
+        return "".join(
+            (m.get("content") or "") for m in completion if isinstance(m, dict))
     if isinstance(completion, dict):
         return completion.get("content") or ""
     return completion or ""
+
+
+def _prompt_key(prompt) -> str:
+    """Hashable prompt identity: trl passes prompts as message lists too,
+    and dict keys must be hashable. Group members share one prompt text,
+    so text is the correct outcome-memo key."""
+    return _completion_text(prompt)
 
 
 def _verify_trace(completion: str, fen: str, oracle: Oracle) -> float:
@@ -374,8 +388,8 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
             best = oracle.best_label(fens[i], cas[i], cbs[i], truths[i])
             ok = (best is not None and label == best
                   or (move and move == oracle.best_move(fens[i])))
-            outcomes[prompts[i]] = 1.0 if ok else 0.0
-            rewards.append(outcomes[prompts[i]])
+            outcomes[_prompt_key(prompts[i])] = 1.0 if ok else 0.0
+            rewards.append(outcomes[_prompt_key(prompts[i])])
         return rewards
 
     def process_reward(prompts, completions, **kwargs):
@@ -392,7 +406,7 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
     def style_reward(prompts, completions, **kwargs):
         rewards = []
         for i, completion in enumerate(completions):
-            ok = outcomes.get(prompts[i], 0.0)
+            ok = outcomes.get(_prompt_key(prompts[i]), 0.0)
             if not ok:
                 rewards.append(0.0)  # never reward short-and-wrong
                 continue
@@ -493,6 +507,15 @@ def main() -> None:
         processor = tokenizer
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
+        if tokenizer.chat_template is None:
+            # base (non-instruct) checkpoints carry no chat template and
+            # trl's prompt rendering requires one (caught by the
+            # 2026-08-18 CPU smoke on SmolLM2-135M). Minimal fallback so
+            # any small base validates the loop; the gemma4 path always
+            # has the real processor template.
+            tokenizer.chat_template = ("{% for m in messages %}{{'<|user|>\\n'"
+                                       "+ m['content'] + '\\n<|assistant|>\\n'}}"
+                                       "{% endfor %}")
         if args.cpu:
             model = AutoModelForCausalLM.from_pretrained(
                 args.base, device_map="cpu", dtype=torch.float32,
@@ -510,6 +533,14 @@ def main() -> None:
         r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
         bias="none", target_modules="all-linear", task_type="CAUSAL_LM")
     model = get_peft_model(model, lora)
+    # trl 0.17's GRPOTrainer.__init__ unconditionally does
+    # model.warnings_issued["estimate_tokens"] = True; transformers 5.14
+    # removed the PreTrainedModel.warnings_issued class attribute that
+    # existed in 4.x, so a plain PeftModel raises AttributeError at
+    # trainer construction (caught by the 2026-08-18 CPU smoke). Same
+    # class of shim as the trl tuple-guard patch above.
+    if not hasattr(model, "warnings_issued"):
+        model.warnings_issued = {}
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable params: {trainable / 1e6:.1f}M "
           f"({trainable / sum(p.numel() for p in model.parameters()) * 100:.2f}%)",
@@ -546,7 +577,11 @@ def main() -> None:
         output_dir=str(Path(args.out)),
         max_steps=args.max_steps,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=1,
+        # trl 0.17 requires effective batch (batch x accum x processes)
+        # to be evenly divisible by num_generations, else it refuses the
+        # trainer (caught by the 2026-08-18 CPU smoke). accum = group gives
+        # effective = group, so group 8/4/2/1 all validate.
+        gradient_accumulation_steps=args.group,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
         warmup_steps=50,
@@ -584,19 +619,23 @@ def main() -> None:
     )
 
     # HF checkpoint safety net + resume (AGENTS.md: killed kernels must
-    # not strand progress; the latest checkpoint survives to HF)
-    api = _hf_api()
-    hf_cb = HfCheckpointCallback(api, args.hf_repo, args.hf_tag,
-                                 args.hf_upload_every, args.out)
+    # not strand progress; the latest checkpoint survives to HF). The
+    # smoke path needs no HF token: it uploads nothing and resumes nothing.
+    api = None
+    hf_cb = None
     resume_from = None
-    if args.resume_from_hf:
-        resume_from = download_hf_checkpoint(api, args.hf_repo, args.hf_tag,
-                                             str(Path(args.out).parent))
-        if resume_from is not None:
-            print(f"[resume] resuming from {resume_from}", flush=True)
-        else:
-            print("[resume] no remote checkpoint found; starting fresh",
-                  flush=True)
+    if not args.smoke:
+        api = _hf_api()
+        hf_cb = HfCheckpointCallback(api, args.hf_repo, args.hf_tag,
+                                     args.hf_upload_every, args.out)
+        if args.resume_from_hf:
+            resume_from = download_hf_checkpoint(api, args.hf_repo, args.hf_tag,
+                                                 str(Path(args.out).parent))
+            if resume_from is not None:
+                print(f"[resume] resuming from {resume_from}", flush=True)
+            else:
+                print("[resume] no remote checkpoint found; starting fresh",
+                      flush=True)
 
     class _HfUploadCallback(TrainerCallback):
         """Trigger the HF safety-net upload on the trainer's cadence."""

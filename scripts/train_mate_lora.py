@@ -77,16 +77,12 @@ class HfCheckpointCallback:
         return cps[-1] if cps else None
 
     def _upload_dir(self, cp: Path):
-        import os
-        from huggingface_hub import HfApi
-
         rel = cp.name
-        api = HfApi(token=self.api.token) if False else self.api
         files = [f for f in cp.rglob("*") if f.is_file()]
         for f in files:
             rpath = f"{self.remote_dir}/{rel}/{f.relative_to(cp)}"
-            api.upload_file(path_or_fileobj=str(f), path_in_repo=rpath,
-                            repo_id=self.repo_id, repo_type="dataset")
+            self.api.upload_file(path_or_fileobj=str(f), path_in_repo=rpath,
+                                 repo_id=self.repo_id, repo_type="dataset")
         self._uploaded.add(rel)
         print(f"[hf-cp] uploaded {rel} ({len(files)} files) -> "
               f"{self.repo_id}/{self.remote_dir}/", flush=True)
@@ -105,7 +101,9 @@ class HfCheckpointCallback:
                 print(f"[hf-cp] upload failed (will retry): {e}", flush=True)
 
     def final(self):
-        self._upload_dir(self._latest_checkpoint()) if self._latest_checkpoint() else None
+        cp = self._latest_checkpoint()
+        if cp is not None:
+            self._upload_dir(cp)
 
 
 def download_hf_checkpoint(api, repo_id: str, remote_dir: str,
@@ -179,16 +177,9 @@ def main() -> None:
                     help="cap training rows (0 = all). Use to fit a 12h "
                          "Kaggle kernel: 60k rows x 1 epoch ~= 10h at "
                          "measured 369 steps/hr (batch2 x accum8).")
-    ap.add_argument("--game-mode", action="store_true",
-                    help="expect the full-game commentary format "
-                    "('user: FEN+history+turn' / 'assistant: "
-                    "<reasoning>\\nMove: <SAN>') instead of MATE selection "
-                    "pairs; rows come from build_commentary_data.py --emit")
     ap.add_argument("--smoke", action="store_true",
                     help="tiny run to validate the stack")
     args = ap.parse_args()
-    if args.game_mode:
-        args.max_seq_len = max(args.max_seq_len, 4096)
 
     import torch
     import torch.nn as nn
@@ -371,19 +362,23 @@ def main() -> None:
         print(f"wandb: project={args.wandb_project} run will log losses "
               f"+ live accuracy", flush=True)
 
-    # HF checkpoint safety net + resume (Kaggle T4 sessions die at ~12h)
-    api = _hf_api()
-    hf_cb = HfCheckpointCallback(api, args.hf_repo, args.train_tag,
-                                 args.hf_upload_every, str(out))
+    # HF checkpoint safety net + resume (Kaggle T4 sessions die at ~12h).
+    # The smoke path needs no HF token: it uploads nothing and resumes nothing.
+    api = None
+    hf_cb = None
     resume_from = None
-    if args.resume_from_hf:
-        resume_from = download_hf_checkpoint(api, args.hf_repo, args.train_tag,
-                                             str(out.parent))
-        if resume_from is not None:
-            print(f"[resume] resuming from {resume_from}", flush=True)
-        else:
-            print("[resume] no remote checkpoint found; starting fresh",
-                  flush=True)
+    if not args.smoke:
+        api = _hf_api()
+        hf_cb = HfCheckpointCallback(api, args.hf_repo, args.train_tag,
+                                     args.hf_upload_every, str(out))
+        if args.resume_from_hf:
+            resume_from = download_hf_checkpoint(api, args.hf_repo, args.train_tag,
+                                                 str(out.parent))
+            if resume_from is not None:
+                print(f"[resume] resuming from {resume_from}", flush=True)
+            else:
+                print("[resume] no remote checkpoint found; starting fresh",
+                      flush=True)
 
     training_args = TrainingArguments(
         output_dir=str(out),
@@ -471,7 +466,8 @@ def main() -> None:
     model.save_pretrained(str(out))
     tokenizer.save_pretrained(str(out))
     processor.save_pretrained(str(out))
-    hf_cb.final()
+    if not args.smoke:
+        hf_cb.final()
     print(f"done in {(time.time()-t0)/3600:.2f}h -> {out}", flush=True)
     if not args.smoke:
         metrics = trainer.evaluate()
