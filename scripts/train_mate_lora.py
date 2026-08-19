@@ -371,6 +371,7 @@ def main() -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("TRAIN_TAG", args.train_tag)
     report_to = ["wandb"] if args.wandb_project else []
     wandb_run = None
     if report_to:
@@ -510,14 +511,14 @@ if __name__ == "__main__":
         # downloading the multi-GB /kaggle/working (which makes
         # 'kaggle kernels output' unusable). Read it back with:
         #   hf_hub_download("vedangfake/chess-slm-benchmark",
-        #                   "noexplain-slice/run-status.txt", ...)
+        #                   "<train-tag>/run-status.txt", ...)
         try:
             import os as _os
             api = _hf_api()
             body = (f"{type(e).__name__}: {e}\n"
                     + _tb.format_exc()[-4000:])
             api.upload_file(path_or_fileobj=body.encode(),
-                            path_in_repo="noexplain-slice/run-status.txt",
+                            path_in_repo=f"{_os.environ.get('TRAIN_TAG', 'sft')}/run-status.txt",
                             repo_id=_os.environ.get("HF_REPO",
                                 "vedangfake/chess-slm-benchmark"),
                             repo_type="dataset",
