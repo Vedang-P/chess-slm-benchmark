@@ -204,7 +204,14 @@ def main() -> None:
 
     quant = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=True,
+        # STRING, not torch.dtype: transformers 5.13.1's
+        # BitsAndBytesConfig references module-level `torch` in its
+        # isinstance(dtype, torch.dtype) branch without importing it
+        # (NameError, measured 2026-08-19 on the P100 demo). The str
+        # branch avoids it and converts identically.
+        bnb_4bit_compute_dtype=("float16" if compute_dtype == torch.float16
+                                else "bfloat16"),
     )
     print("loading base model...", flush=True)
     # THE CAMPAIGN MODEL: full multimodal google/gemma-4-E2B-it loaded
