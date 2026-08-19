@@ -202,16 +202,19 @@ def main() -> None:
     print(f"cuda={torch.cuda.is_available()} cap={cap} dtype={compute_dtype}",
           flush=True)
 
+    # transformers 5.13.1 shim: quantization_config.py only imports torch
+    # under `if is_torch_available()` which returned False on the Kaggle
+    # P100 stack (torch 2.2.2+cu118) — BitsAndBytesConfig then NameErrors
+    # on `torch` in both the dtype and str branches (measured 2026-08-19).
+    # Bind it explicitly; harmless when the module already has it.
+    import transformers.utils.quantization_config as _qc
+    if not hasattr(_qc, "torch"):
+        _qc.torch = torch
+
     quant = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4",
         bnb_4bit_use_double_quant=True,
-        # STRING, not torch.dtype: transformers 5.13.1's
-        # BitsAndBytesConfig references module-level `torch` in its
-        # isinstance(dtype, torch.dtype) branch without importing it
-        # (NameError, measured 2026-08-19 on the P100 demo). The str
-        # branch avoids it and converts identically.
-        bnb_4bit_compute_dtype=("float16" if compute_dtype == torch.float16
-                                else "bfloat16"),
+        bnb_4bit_compute_dtype=compute_dtype,
     )
     print("loading base model...", flush=True)
     # THE CAMPAIGN MODEL: full multimodal google/gemma-4-E2B-it loaded

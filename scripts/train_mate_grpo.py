@@ -495,6 +495,12 @@ def main() -> None:
         else:
             cap = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else (0, 0)
             compute_dtype = torch.bfloat16 if cap >= (7, 5) else torch.float16
+            # same transformers 5.13.1 shim as train_mate_lora: bind
+            # torch into quantization_config (is_torch_available() False
+            # on the P100 stack -> BitsAndBytesConfig NameError)
+            import transformers.utils.quantization_config as _qc
+            if not hasattr(_qc, "torch"):
+                _qc.torch = torch
             quant = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_quant_type="nf4",
                 bnb_4bit_use_double_quant=True,
