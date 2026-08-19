@@ -211,6 +211,18 @@ def main() -> None:
     if not hasattr(_qc, "torch"):
         _qc.torch = torch
 
+    # torch 2.4.1 lacks nn.Module.set_submodule (added in 2.5+); bnb
+    # 0.46.1's replace_with_bnb_linear calls it during 4-bit conversion
+    # (measured 2026-08-19 on the P100 demo). Same semantics as torch's.
+    if not hasattr(torch.nn.Module, "set_submodule"):
+        def _set_submodule(self, target, module):
+            atoms = target.split(".")
+            parent = self
+            for atom in atoms[:-1]:
+                parent = getattr(parent, atom)
+            setattr(parent, atoms[-1], module)
+        torch.nn.Module.set_submodule = _set_submodule
+
     quant = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4",
         bnb_4bit_use_double_quant=True,
