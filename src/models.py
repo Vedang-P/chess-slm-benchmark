@@ -226,6 +226,15 @@ class HFModel:
         self.is_gemma4 = model_key in ("gemma4-e2b", "gemma4-e4b")
 
     def load(self):
+        import torch
+
+        # transformers 5.13.1 shim (same as the trainers): quantization_config
+        # only imports torch under `if is_torch_available()`, which returns
+        # False on the P100 stack (torch 2.4.1) — BitsAndBytesConfig then
+        # NameErrors on `torch`. Bind it explicitly.
+        import transformers.utils.quantization_config as _qc
+        if not hasattr(_qc, "torch"):
+            _qc.torch = torch
         if self.smoke_test:
             return
         import torch
