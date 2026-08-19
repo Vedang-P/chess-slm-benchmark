@@ -622,7 +622,25 @@ def main() -> None:
     lora = LoraConfig(
         r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
         bias="none", target_modules="all-linear", task_type="CAUSAL_LM")
-    model = get_peft_model(model, lora)
+    try:
+        model = get_peft_model(model, lora)
+    except ValueError as e:
+        # all-linear can't dispatch on the gemma4 wrap (Gemma4ClippableLinear
+        # is not nn.Linear by type) — the proven fallback from the SFT
+        # trainer: enumerate every linear by name (the stage-1 adapter used
+        # this exact path: 529 modules).
+        import torch.nn as nn
+        lin_names = [n for n, mod in model.named_modules()
+                     if isinstance(mod, nn.Linear)
+                     or type(mod).__name__ in ("Linear4bit", "Linear8bitLt")]
+        print(f"all-linear failed ({e}); explicit fallback with "
+              f"{len(lin_names)} linear modules", flush=True)
+        lora2 = LoraConfig(
+            r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
+            bias="none",
+            target_modules=lin_names[:512] or ["linear"],
+            task_type="CAUSAL_LM")
+        model = get_peft_model(model, lora2)
     # trl 0.17's GRPOTrainer.__init__ unconditionally does
     # model.warnings_issued["estimate_tokens"] = True; transformers 5.14
     # removed the PreTrainedModel.warnings_issued class attribute that
