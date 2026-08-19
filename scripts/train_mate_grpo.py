@@ -51,7 +51,7 @@ from pathlib import Path
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-os.environ.setdefault("WANDB_DISABLED", "true")
+os.environ.setdefault("WANDB_DISABLED", "true")  # re-enabled iff --wandb-project
 
 import trl.import_utils as _trl_iu  # noqa: E402
 
@@ -168,7 +168,10 @@ def download_hf_checkpoint(api, repo_id: str, remote_dir: str,
         print(f"[resume] cannot list {repo_id}: {e}", flush=True)
         return None
     prefix = f"{remote_dir.strip('/')}/checkpoint-"
-    cps = sorted({f.split("/")[2] for f in files
+    # path layout: <remote_dir>/checkpoint-<N>/<file> — the checkpoint
+    # dir name is component [1] (bug found 2026-08-19: [2] selected the
+    # file name, so resume pointed at a nonexistent file path).
+    cps = sorted({f.split("/")[1] for f in files
                   if f.startswith(prefix) and len(f.split("/")) > 2})
     if not cps:
         print(f"[resume] no checkpoints under {remote_dir} in {repo_id}",
@@ -249,7 +252,26 @@ class Oracle:
         self._best = {}
         self._evals = {}
         if mode == "stockfish":
+            import shutil
             import chess.engine
+            # Kaggle apt installs to /usr/games/stockfish; the homebrew
+            # default is the local path. Resolve in order: explicit arg ->
+            # PATH -> the two known install locations.
+            if stockfish and not Path(stockfish).exists():
+                print(f"[oracle] {stockfish} not found; resolving", flush=True)
+                stockfish = ""
+            if not stockfish:
+                stockfish = shutil.which("stockfish") or ""
+            if not stockfish:
+                for cand in ("/usr/games/stockfish",
+                             "/opt/homebrew/bin/stockfish"):
+                    if Path(cand).exists():
+                        stockfish = cand
+                        break
+            if not stockfish:
+                raise RuntimeError("stockfish binary not found — install it "
+                                   "(Kaggle: !apt-get install -y stockfish)")
+            print(f"[oracle] stockfish: {stockfish}", flush=True)
             self.engine = chess.engine.SimpleEngine.popen_uci(stockfish)
 
     def close(self):
@@ -371,7 +393,12 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
     columns (fen/candidate_a/candidate_b/truth_label) — verified against
     grpo_trainer._generate_and_score_completions: reward_kwargs = every
     input column except prompt/completion."""
-    outcomes = {}  # prompt -> 1/0 memo, shared so style gates on outcome
+    outcomes = {}  # (prompt_text, completion_index) -> 1/0.
+    # Keyed per-completion, NOT per prompt: all group members share one
+    # prompt, so a prompt-only key would let the LAST completion's outcome
+    # gate the style reward for every member (bug found in the 2026-08-19
+    # audit). trl calls the reward funcs with aligned, same-order lists
+    # within a step, so the index is stable across calls.
 
     def outcome_reward(prompts, completions, **kwargs):
         fens = kwargs.get("fen") or [None] * len(completions)
@@ -388,8 +415,8 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
             best = oracle.best_label(fens[i], cas[i], cbs[i], truths[i])
             ok = (best is not None and label == best
                   or (move and move == oracle.best_move(fens[i])))
-            outcomes[_prompt_key(prompts[i])] = 1.0 if ok else 0.0
-            rewards.append(outcomes[_prompt_key(prompts[i])])
+            outcomes[(_prompt_key(prompts[i]), i)] = 1.0 if ok else 0.0
+            rewards.append(outcomes[(_prompt_key(prompts[i]), i)])
         return rewards
 
     def process_reward(prompts, completions, **kwargs):
@@ -406,7 +433,7 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
     def style_reward(prompts, completions, **kwargs):
         rewards = []
         for i, completion in enumerate(completions):
-            ok = outcomes.get(_prompt_key(prompts[i]), 0.0)
+            ok = outcomes.get((_prompt_key(prompts[i]), i), 0.0)
             if not ok:
                 rewards.append(0.0)  # never reward short-and-wrong
                 continue
@@ -420,6 +447,12 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="google/gemma-4-E2B-it")
+    ap.add_argument("--from-adapter", default="",
+                    help="path to the stage-1 SFT adapter dir. Loaded on the "
+                         "base and FROZEN, then a NEW trainable RL LoRA is "
+                         "wrapped on top (peft nesting) — the SFT weights are "
+                         "the skill, RL adjusts on top. Without this, RL "
+                         "trains from the raw base.")
     ap.add_argument("--train", required=True,
                     help="pool jsonl from build_rlvr_pool.py")
     ap.add_argument("--out", default="results/rlvr-adapter")
@@ -458,9 +491,16 @@ def main() -> None:
     ap.add_argument("--resume-from-hf", action="store_true",
                     help="download the latest checkpoint from --hf-repo "
                          "under --hf-tag and resume training from it")
-    ap.add_argument("--save-steps", type=int, default=500,
+    ap.add_argument("--save-steps", type=int, default=50,
                     help="local checkpoint cadence (uploaded to HF every "
-                         "--hf-upload-every seconds)")
+                         "--hf-upload-every seconds). Default 50 matches the "
+                         "P100 throughput reality (~200 steps per 12h kernel "
+                         "at ~5.6 tok/s generation; the old 500 default "
+                         "would upload nothing — same bug class as the SFT "
+                         "run's save_steps=10000).")
+    ap.add_argument("--wandb-project", default="",
+                    help="wandb project name (empty = no wandb; requires "
+                         "WANDB_API_KEY)")
     args = ap.parse_args()
 
     import torch
@@ -530,6 +570,24 @@ def main() -> None:
             model = AutoModelForCausalLM.from_pretrained(
                 args.base, device_map={"": 0}, torch_dtype=torch.bfloat16)
 
+    # ---- stage-1 SFT adapter, MERGED into the base ----
+    # The SFT weights are baked into the base (peft merge_and_unload: on
+    # the 4-bit gemma4 path this dequantizes to fp16 — ~4GB for E2B, fits
+    # the P100, and fp16 generation is typically faster than 4-bit
+    # dequant, to be measured in the pretest). The NEW RL LoRA then
+    # targets the PLAIN base structure, so the saved RL adapter loads onto
+    # the raw base with run_mate_eval's single-adapter path (the nested
+    # PeftModel-on-PeftModel approach produced adapter keys that silently
+    # failed to load onto the raw base — missing-keys warning, measured
+    # 2026-08-19 in the local smoke).
+    if args.from_adapter:
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, args.from_adapter)
+        model = model.merge_and_unload()
+        print(f"SFT adapter MERGED into base: {args.from_adapter}",
+              flush=True)
+
     # LoRA on the FULL model (all-linear matches Linear4bit by type;
     # proven by train_mate_lora — same wrap, same save/load symmetry)
     for p in model.parameters():
@@ -579,6 +637,25 @@ def main() -> None:
     reward_funcs = make_rewards(oracle, tokenizer,
                                 args.max_completion_length, args.max_steps)
 
+    wandb_run = None
+    if args.wandb_project:
+        os.environ.pop("WANDB_DISABLED", None)
+        os.environ.setdefault("WANDB_PROJECT", args.wandb_project)
+        import wandb
+        wandb_run = wandb.init(project=args.wandb_project, name=args.hf_tag,
+                               config={"base": args.base,
+                                       "from_adapter": args.from_adapter,
+                                       "lr": args.lr, "beta": args.beta,
+                                       "group": args.group,
+                                       "max_steps": args.max_steps,
+                                       "max_completion_length":
+                                           args.max_completion_length,
+                                       "pool": args.train,
+                                       "oracle": args.oracle,
+                                       "depth": args.depth})
+        print(f"wandb: project={args.wandb_project} run={args.hf_tag}",
+              flush=True)
+
     cfg = GRPOConfig(
         output_dir=str(Path(args.out)),
         max_steps=args.max_steps,
@@ -590,7 +667,9 @@ def main() -> None:
         gradient_accumulation_steps=args.group,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
-        warmup_steps=50,
+        # scale warmup to the real step budget (P100: ~200 steps per 12h
+        # kernel); the old fixed 50 was 25% of a 200-step run.
+        warmup_steps=max(5, args.max_steps // 20),
         weight_decay=0.01,
         max_prompt_length=args.max_prompt_length,
         max_completion_length=args.max_completion_length,
@@ -609,7 +688,7 @@ def main() -> None:
         save_steps=args.save_steps,
         save_total_limit=4,
         seed=42,
-        report_to=[],
+        report_to=["wandb"] if args.wandb_project else [],
     )
     print(f"GRPO: lr={cfg.learning_rate} beta={cfg.beta} "
           f"group={cfg.num_generations} max_completion={cfg.max_completion_length} "
@@ -666,6 +745,8 @@ def main() -> None:
                    ("reward" in k or k in ("kl", "completion_length"))}
             if hit:
                 print(f"step {state.global_step}: {hit}", flush=True)
+                if wandb_run is not None:
+                    wandb_run.log(hit, step=state.global_step)
 
     if not args.smoke:
         trainer.add_callback(_HfUploadCallback())

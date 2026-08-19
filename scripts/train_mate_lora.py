@@ -120,7 +120,9 @@ def download_hf_checkpoint(api, repo_id: str, remote_dir: str,
         print(f"[resume] cannot list {repo_id}: {e}", flush=True)
         return None
     prefix = f"{remote_dir.strip('/')}/checkpoint-"
-    cps = sorted({f.split("/")[2] for f in files if f.startswith(prefix) and len(f.split("/")) > 2})
+    # checkpoint dir name is component [1] (bug found 2026-08-19: [2]
+    # selected the file name, breaking resume)
+    cps = sorted({f.split("/")[1] for f in files if f.startswith(prefix) and len(f.split("/")) > 2})
     if not cps:
         print(f"[resume] no checkpoints under {remote_dir} in {repo_id}", flush=True)
         return None
