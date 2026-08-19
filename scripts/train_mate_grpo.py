@@ -475,6 +475,14 @@ def main() -> None:
                     help="gemma4 only: enable the <|channel>thought block "
                          "during rollouts (the RLVR design's thinking-ON "
                          "variant)")
+    ap.add_argument("--no-quant", action="store_true",
+                    help="gemma4 GPU path: load the base in fp16 instead of "
+                         "4-bit. REQUIRED with --from-adapter: peft 0.14's "
+                         "merge_and_unload on a 4-bit bnb base crashes "
+                         "(Params4bit._is_hf_initialized, measured "
+                         "2026-08-19); fp16 merges cleanly, E2B fp16 is "
+                         "~4GB (fits the P100 16GB), and fp16 generation "
+                         "is typically faster than 4-bit dequant.")
     ap.add_argument("--cpu", action="store_true",
                     help="fp32 CPU load + use_cpu trainer (local smoke; "
                          "gemma-4 is too large for this — use a small "
@@ -535,31 +543,37 @@ def main() -> None:
         else:
             cap = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else (0, 0)
             compute_dtype = torch.bfloat16 if cap >= (7, 5) else torch.float16
-            # same transformers 5.13.1 shim as train_mate_lora: bind
-            # torch into quantization_config (is_torch_available() False
-            # on the P100 stack -> BitsAndBytesConfig NameError)
-            import transformers.utils.quantization_config as _qc
-            if not hasattr(_qc, "torch"):
-                _qc.torch = torch
-            # torch 2.4.1 lacks nn.Module.set_submodule (added 2.5+); bnb
-            # 0.46.1's replace_with_bnb_linear needs it during 4-bit load
-            # (same shim as train_mate_lora/src.models; missing here caused
-            # the 2026-08-19 pretest failure).
-            if not hasattr(torch.nn.Module, "set_submodule"):
-                def _set_submodule(self, target, module):
-                    atoms = target.split(".")
-                    parent = self
-                    for atom in atoms[:-1]:
-                        parent = getattr(parent, atom)
-                    setattr(parent, atoms[-1], module)
-                torch.nn.Module.set_submodule = _set_submodule
-            quant = BitsAndBytesConfig(
-                load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_compute_dtype=compute_dtype)
-            model = AutoModelForImageTextToText.from_pretrained(
-                args.base, quantization_config=quant, device_map={"": 0},
-                dtype=compute_dtype)
+            if args.no_quant:
+                model = AutoModelForImageTextToText.from_pretrained(
+                    args.base, device_map={"": 0}, dtype=compute_dtype)
+                print("base loaded fp16 (no 4-bit) for clean SFT merge",
+                      flush=True)
+            else:
+                # same transformers 5.13.1 shim as train_mate_lora: bind
+                # torch into quantization_config (is_torch_available() False
+                # on the P100 stack -> BitsAndBytesConfig NameError)
+                import transformers.utils.quantization_config as _qc
+                if not hasattr(_qc, "torch"):
+                    _qc.torch = torch
+                # torch 2.4.1 lacks nn.Module.set_submodule (added 2.5+); bnb
+                # 0.46.1's replace_with_bnb_linear needs it during 4-bit load
+                # (same shim as train_mate_lora/src.models; missing here caused
+                # the 2026-08-19 pretest failure).
+                if not hasattr(torch.nn.Module, "set_submodule"):
+                    def _set_submodule(self, target, module):
+                        atoms = target.split(".")
+                        parent = self
+                        for atom in atoms[:-1]:
+                            parent = getattr(parent, atom)
+                        setattr(parent, atoms[-1], module)
+                    torch.nn.Module.set_submodule = _set_submodule
+                quant = BitsAndBytesConfig(
+                    load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=compute_dtype)
+                model = AutoModelForImageTextToText.from_pretrained(
+                    args.base, quantization_config=quant, device_map={"": 0},
+                    dtype=compute_dtype)
     else:
         tokenizer = AutoTokenizer.from_pretrained(args.base)
         processor = tokenizer
