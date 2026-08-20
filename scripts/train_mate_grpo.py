@@ -469,6 +469,9 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--group", type=int, default=8,
                     help="GRPO group size (num_generations per step)")
+    ap.add_argument("--optim", type=str, default="adamw_torch",
+                    help="optimizer (adamw_torch for CPU smoke, "
+                         "adamw_bnb_8bit to save ~0.5GB on P100)")
     ap.add_argument("--max-steps", type=int, default=3500)
     ap.add_argument("--max-prompt-length", type=int, default=1024)
     ap.add_argument("--max-completion-length", type=int, default=2048,
@@ -748,6 +751,7 @@ def main() -> None:
         bf16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] >= 7 if torch.cuda.is_available() else False),
         fp16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] < 7 if torch.cuda.is_available() else False),
         disable_dropout=True,
+        optim=args.optim,
         gradient_checkpointing=True,
         disable_tqdm=args.smoke,
         logging_steps=1,

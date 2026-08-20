@@ -128,11 +128,14 @@ cmd = [sys.executable, "scripts/train_mate_grpo.py",
        "--out", "/kaggle/working/rlvr-pretest-adapter",
        "--oracle", "stockfish", "--stockfish", "/usr/games/stockfish",
        "--depth", "12",
-       "--max-steps", "2", "--group", "8",
+       "--max-steps", "2", "--group", "4",
+       "--optim", "adamw_bnb_8bit",
+       "--no-quant",
        "--max-train-rows", "64",
        "--save-steps", "1",
        "--hf-repo", "%REPO_ID%", "--hf-tag", "rlvr-pretest",
-       "--hf-upload-every", "60"]
+       "--hf-upload-every", "60",
+       "--wandb-project", "chess-slm-rlvr"]
 print("running:", " ".join(cmd[:6]), "...")
 r = subprocess.run(cmd)
 if r.returncode != 0:
@@ -208,7 +211,7 @@ def main() -> None:
     ]
     nb = _notebook(cells)
     env = load_env()
-    inject_secrets(nb, env, ["HF_WRITE_TOKEN", "GITHUB_TOKEN"])
+    inject_secrets(nb, env, ["HF_WRITE_TOKEN", "GITHUB_TOKEN", "WANDB_API_KEY"])
 
     push_dir = NB_DIR / f"push_{slug}"
     push_dir.mkdir(parents=True, exist_ok=True)
