@@ -818,57 +818,76 @@ def main() -> None:
                     wandb_run.log(hit, step=state.global_step)
 
     class _ProgressHeartbeat(TrainerCallback):
-        """Push a compact progress.json to HF every --progress-every seconds
-        so a kernel that shows only RUNNING is still observable: the Kaggle
-        log API is unreliable, but HF always is. Fields: step, total steps,
-        last reward metrics, elapsed, ETA. Uploaded to <hf-tag>/progress.json
-        (overwrites; also uploaded at train end)."""
+        """Push a compact progress.json to HF on a timer so a kernel that
+        shows only RUNNING is still observable (the Kaggle log API is
+        unreliable; HF always is). A daemon thread fires EVERY interval
+        during training (mid-step included — a single degenerate rollout
+        can take ~50 min at the 2048 budget, and step-end-only would leave
+        the run invisible that whole time). Fields: step, total, phase,
+        elapsed, ETA, last reward metrics. Uploaded to <hf-tag>/progress.json
+        (overwrites)."""
 
         def __init__(self, api, remote_dir, interval_s, total_steps):
             self.api = api
             self.remote_dir = remote_dir.strip("/")
             self.interval_s = interval_s
             self.total_steps = total_steps
-            self._last = 0.0
+            self.state = None
             self.t0 = time.time()
+            self._stop = threading.Event()
 
-        def _push(self, state):
-            entry = state.log_history[-1] if state.log_history else {}
+        def _payload(self):
+            entry = (self.state.log_history[-1] if self.state
+                     and self.state.log_history else {})
             hit = {k: v for k, v in entry.items()
                    if isinstance(v, (int, float)) and
                    ("reward" in k or k in ("kl", "completion_length"))}
+            step = self.state.global_step if self.state else 0
             elapsed = time.time() - self.t0
-            per = elapsed / max(state.global_step, 1)
-            payload = {
-                "step": state.global_step,
+            per = elapsed / max(step, 1)
+            return {
+                "step": step,
                 "total_steps": self.total_steps,
+                "phase": "training" if self.state and self.state.global_step
+                         else "setup",
                 "elapsed_s": round(elapsed),
-                "eta_s": round(per * (self.total_steps - state.global_step))
-                if state.global_step else None,
+                "eta_s": round(per * (self.total_steps - step))
+                if step else None,
                 "metrics": hit,
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
+
+        def _push(self):
             try:
                 self.api.upload_file(
-                    path_or_fileobj=json.dumps(payload).encode(),
+                    path_or_fileobj=json.dumps(self._payload()).encode(),
                     path_in_repo=f"{self.remote_dir}/progress.json",
                     repo_id="vedangfake/chess-slm-benchmark",
                     repo_type="dataset",
-                    commit_message=f"rlvr progress step {state.global_step}")
-                print(f"[progress] step {state.global_step}/"
+                    commit_message=f"rlvr progress step "
+                                   f"{self._payload()['step']}")
+                print(f"[progress] step {self._payload()['step']}/"
                       f"{self.total_steps} -> HF progress.json", flush=True)
             except Exception as e:
                 print(f"[progress] upload failed (will retry): {e}",
                       flush=True)
 
+        def _loop(self):
+            while not self._stop.wait(self.interval_s):
+                self._push()
+
+        def on_train_begin(self, args_, state, control, **kwargs):
+            self.state = state
+            self.t0 = time.time()
+            threading.Thread(target=self._loop, daemon=True).start()
+            self._push()
+
         def on_step_end(self, args_, state, control, **kwargs):
-            if time.time() - self._last < self.interval_s:
-                return
-            self._last = time.time()
-            self._push(state)
+            self._push()
 
         def on_train_end(self, args_, state, control, **kwargs):
-            self._push(state)
+            self._stop.set()
+            self._push()
 
     if not args.smoke:
         trainer.add_callback(_HfUploadCallback())
