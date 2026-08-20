@@ -142,6 +142,15 @@ if not OUT.exists():
     model.save_pretrained(OUT)
     AutoProcessor.from_pretrained("google/gemma-4-E2B-it").save_pretrained(OUT)
     print("merged base saved:", OUT)
+    # CRITICAL: the fp16 model is 10.3GB on the GPU — free it before the
+    # run cell loads the 4-bit version, or the load's allocator warmup
+    # OOMs (measured 2026-08-20 pretest v4: 5.06GB free, warmup wants
+    # 6.24GB). Notebook cells share one kernel; del + gc + empty_cache.
+    del model
+    import gc
+    gc.collect()
+    torch.cuda.empty_cache()
+    print("prep model freed from GPU")
 else:
     print("merged base already exists:", OUT)
 '''.strip()
