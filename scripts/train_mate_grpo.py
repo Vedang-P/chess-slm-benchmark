@@ -471,10 +471,13 @@ def main() -> None:
                     help="GRPO group size (num_generations per step)")
     ap.add_argument("--max-steps", type=int, default=3500)
     ap.add_argument("--max-prompt-length", type=int, default=1024)
-    ap.add_argument("--max-completion-length", type=int, default=256,
-                    help="rollout completion budget. Default 256: the SFT'd "
-                         "model averages ~127 tokens (eval data); 256 halves "
-                         "rollout memory vs 512 (part of the P100 OOM fix)")
+    ap.add_argument("--max-completion-length", type=int, default=2048,
+                    help="rollout completion budget. 2048 = the eval "
+                         "protocol's budget (unbounded thinking directive; "
+                         "the SFT'd model averages ~127 tokens, so 2048 is "
+                         "10x headroom, never binds). OOM fix = gradient "
+                         "checkpointing + expandable segments, not a small "
+                         "budget.")
     ap.add_argument("--beta", type=float, default=0.04)
     ap.add_argument("--max-train-rows", type=int, default=0,
                     help="cap pool rows (0 = all)")
