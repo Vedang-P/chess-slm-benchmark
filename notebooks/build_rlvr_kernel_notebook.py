@@ -51,6 +51,9 @@ res = subprocess.run(["git", "clone", "--quiet", "-b", "main", url, str(REPO)],
 if res.returncode != 0:
     raise RuntimeError("clone failed: " + res.stderr[-300:])
 os.chdir(REPO)
+# guard against cloning mid-push: always run the latest main
+subprocess.run(["git", "fetch", "--quiet", "origin", "main"], check=True)
+subprocess.run(["git", "reset", "--hard", "--quiet", "origin/main"], check=True)
 print("cwd:", Path.cwd())
 '''.strip()
 
