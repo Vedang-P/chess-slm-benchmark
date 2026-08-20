@@ -121,6 +121,31 @@ shutil.copy(p, pool)
 print("pool fetched:", len([l for l in pool.read_text().splitlines() if l.strip()]), "rows")
 '''.strip()
 
+PREP_CELL = r'''
+import torch
+from pathlib import Path
+from transformers import AutoModelForImageTextToText, AutoProcessor
+from peft import PeftModel
+
+# One-time: merge the SFT adapter into the fp16 base and save it locally.
+# The run cell then loads THIS dir through the 4-bit QLoRA path (~2.6GB)
+# so the fp16 10.3GB base no longer blows the P100 at the first backward.
+# KL reference stays correct: the merged base IS the policy with the RL
+# adapter disabled (the SFT'd model), exactly the intended anchor.
+OUT = Path("/kaggle/working/gemma-4-E2B-sft-merged")
+if not OUT.exists():
+    model = AutoModelForImageTextToText.from_pretrained(
+        "google/gemma-4-E2B-it", device_map={"": 0}, dtype=torch.float16)
+    model = PeftModel.from_pretrained(model, "/kaggle/working/caveman-sft-adapter")
+    model = model.merge_and_unload()
+    model.config.use_cache = False
+    model.save_pretrained(OUT)
+    AutoProcessor.from_pretrained("google/gemma-4-E2B-it").save_pretrained(OUT)
+    print("merged base saved:", OUT)
+else:
+    print("merged base already exists:", OUT)
+'''.strip()
+
 RUN_CELL = r'''
 import os, signal, subprocess, sys
 
@@ -130,15 +155,13 @@ import os, signal, subprocess, sys
 RUN_TIMEOUT_MIN = 45   # demo; the full 200-step run uses 720
 
 cmd = [sys.executable, "scripts/train_mate_grpo.py",
-       "--base", "google/gemma-4-E2B-it",
-       "--from-adapter", "/kaggle/working/caveman-sft-adapter",
+       "--base", "/kaggle/working/gemma-4-E2B-sft-merged",
        "--train", "/kaggle/working/pool.jsonl",
        "--out", "/kaggle/working/rlvr-pretest-adapter",
        "--oracle", "stockfish", "--stockfish", "/usr/games/stockfish",
        "--depth", "12",
-       "--max-steps", "2", "--group", "4",
+       "--max-steps", "2", "--group", "8",
        "--optim", "adamw_bnb_8bit",
-       "--no-quant",
        "--max-train-rows", "64",
        "--save-steps", "1",
        "--hf-repo", "%REPO_ID%", "--hf-tag", "rlvr-pretest",
@@ -228,7 +251,9 @@ def main() -> None:
         _code(GPU_CELL),
         _md("## 4. Fetch SFT adapter + pool"),
         _code(FETCH_CELL.replace("%REPO_ID%", REPO_ID)),
-        _md("## 5. RLVR: 2 steps, stockfish oracle, merge path"),
+        _md("## 4b. Merge SFT into fp16 base (one-time, 4-bit base for the run)"),
+        _code(PREP_CELL),
+        _md("## 5. RLVR: 2 steps, stockfish oracle, 4-bit QLoRA on merged base"),
         _code(RUN_CELL.replace("%REPO_ID%", REPO_ID)),
         _md("## 6. Upload artifacts"),
         _code(UPLOAD_CELL.replace("%REPO_ID%", REPO_ID)),
