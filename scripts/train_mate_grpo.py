@@ -38,6 +38,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import sys
 import threading
 import time
@@ -524,10 +525,11 @@ def main() -> None:
                     help="wandb project name (empty = no wandb; requires "
                          "WANDB_API_KEY)")
     ap.add_argument("--progress-every", type=float, default=60,
-                    help="seconds between HF progress.json heartbeats (the "
-                         "Kaggle log API is unreliable; HF always surfaces "
-                         "the file — live step/reward/ETA visibility even "
-                         "when the kernel shows only RUNNING)")
+                    help="seconds between HF progress.json heartbeats")
+    ap.add_argument("--step-timeout-min", type=float, default=0,
+                    help="SIGINT a step stuck longer than N minutes "
+                         "(graceful checkpoint + upload, then exit); "
+                         "0 disables")
     args = ap.parse_args()
 
     import torch
@@ -832,7 +834,8 @@ def main() -> None:
         elapsed, ETA, last reward metrics. Uploaded to <hf-tag>/progress.json
         (overwrites)."""
 
-        def __init__(self, api, remote_dir, interval_s, total_steps):
+        def __init__(self, api, remote_dir, interval_s, total_steps,
+                     step_timeout_min=0):
             self.api = api
             self.remote_dir = remote_dir.strip("/")
             self.interval_s = interval_s
@@ -840,6 +843,9 @@ def main() -> None:
             self.state = None
             self.t0 = time.time()
             self._stop = threading.Event()
+            self.step_timeout_min = step_timeout_min
+            self._step_started = None
+            self._watchdog_stop = threading.Event()
 
         def _payload(self):
             entry = (self.state.log_history[-1] if self.state
@@ -881,24 +887,51 @@ def main() -> None:
             while not self._stop.wait(self.interval_s):
                 self._push()
 
+        def _watchdog(self):
+            """Interrupt a step that exceeds the cap so a hang or a
+            degenerate long rollout stops the run with a graceful
+            checkpoint instead of burning GPU silently. SIGINT -> the
+            trainer saves state + adapter and uploads them to HF, then
+            exits nonzero, which fails the notebook cell."""
+            if not self.step_timeout_min:
+                return
+            cap = self.step_timeout_min * 60
+            while not self._watchdog_stop.wait(20):
+                if self._step_started is None:
+                    continue
+                stuck = time.time() - self._step_started
+                if stuck > cap:
+                    print(f"[watchdog] step stuck {stuck / 60:.0f} min > "
+                          f"cap {self.step_timeout_min} min; SIGINT for a "
+                          f"graceful checkpoint", flush=True)
+                    os.kill(os.getpid(), signal.SIGINT)
+                    return
+
         def on_train_begin(self, args_, state, control, **kwargs):
             self.state = state
             self.t0 = time.time()
             threading.Thread(target=self._loop, daemon=True).start()
+            threading.Thread(target=self._watchdog, daemon=True).start()
             self._push()
 
+        def on_step_begin(self, args_, state, control, **kwargs):
+            self._step_started = time.time()
+
         def on_step_end(self, args_, state, control, **kwargs):
+            self._step_started = None
             self._push()
 
         def on_train_end(self, args_, state, control, **kwargs):
-            self._stop.set()
+            self._step_started = None
+            self._watchdog_stop.set()
             self._push()
 
     if not args.smoke:
         trainer.add_callback(_HfUploadCallback())
         trainer.add_callback(_ProgressHeartbeat(api, args.hf_tag,
                                                 args.progress_every,
-                                                args.max_steps))
+                                                args.max_steps,
+                                                args.step_timeout_min))
     trainer.add_callback(_RewardLogCallback())
 
     print("training...", flush=True)

@@ -122,7 +122,12 @@ print("pool fetched:", len([l for l in pool.read_text().splitlines() if l.strip(
 '''.strip()
 
 RUN_CELL = r'''
-import os, subprocess, sys
+import os, signal, subprocess, sys
+
+# Hard wall-clock cap: a hang or runaway must stop the run, not burn GPU.
+# SIGINT first so the trainer saves + uploads its checkpoint (transformers
+# handles KeyboardInterrupt gracefully), then SIGKILL if it ignores that.
+RUN_TIMEOUT_MIN = 45   # demo; the full 200-step run uses 720
 
 cmd = [sys.executable, "scripts/train_mate_grpo.py",
        "--base", "google/gemma-4-E2B-it",
@@ -139,11 +144,26 @@ cmd = [sys.executable, "scripts/train_mate_grpo.py",
        "--hf-repo", "%REPO_ID%", "--hf-tag", "rlvr-pretest",
        "--hf-upload-every", "60",
        "--progress-every", "60",
+       "--step-timeout-min", "45",
        "--wandb-project", "chess-slm-rlvr"]
 print("running:", " ".join(cmd[:6]), "...")
-r = subprocess.run(cmd)
-if r.returncode != 0:
-    raise SystemExit(f"rlvr pretest failed: {r.returncode}")
+proc = subprocess.Popen(cmd)
+try:
+    rc = proc.wait(timeout=RUN_TIMEOUT_MIN * 60)
+except subprocess.TimeoutExpired:
+    print(f"[run] wall-clock cap {RUN_TIMEOUT_MIN} min hit; "
+          f"SIGINT for a graceful checkpoint", flush=True)
+    proc.send_signal(signal.SIGINT)
+    try:
+        rc = proc.wait(timeout=90)
+    except subprocess.TimeoutExpired:
+        print("[run] no graceful exit; SIGKILL", flush=True)
+        proc.kill()
+        rc = proc.wait()
+    raise SystemExit(f"rlvr timed out after {RUN_TIMEOUT_MIN} min "
+                     f"(rc={rc}); checkpoint should be on HF")
+if rc != 0:
+    raise SystemExit(f"rlvr pretest failed: {rc}")
 print("rlvr pretest done")
 '''.strip()
 
