@@ -52,6 +52,10 @@ os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("WANDB_DISABLED", "true")  # re-enabled iff --wandb-project
+# OOM fix (measured 2026-08-19, pretest v6: 15.13GB of 15.89GB used at the
+# first backward; the SFT trainer that runs the same model on the same P100
+# sets this + gradient checkpointing and fits batch 2x8 at 2048 tokens).
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import trl.import_utils as _trl_iu  # noqa: E402
 
@@ -467,7 +471,10 @@ def main() -> None:
                     help="GRPO group size (num_generations per step)")
     ap.add_argument("--max-steps", type=int, default=3500)
     ap.add_argument("--max-prompt-length", type=int, default=1024)
-    ap.add_argument("--max-completion-length", type=int, default=512)
+    ap.add_argument("--max-completion-length", type=int, default=256,
+                    help="rollout completion budget. Default 256: the SFT'd "
+                         "model averages ~127 tokens (eval data); 256 halves "
+                         "rollout memory vs 512 (part of the P100 OOM fix)")
     ap.add_argument("--beta", type=float, default=0.04)
     ap.add_argument("--max-train-rows", type=int, default=0,
                     help="cap pool rows (0 = all)")
@@ -649,6 +656,11 @@ def main() -> None:
     # class of shim as the trl tuple-guard patch above.
     if not hasattr(model, "warnings_issued"):
         model.warnings_issued = {}
+    try:
+        model.gradient_checkpointing_enable()
+        print("gradient checkpointing enabled", flush=True)
+    except Exception as e:
+        print(f"grad checkpointing unavailable: {e}", flush=True)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable params: {trainable / 1e6:.1f}M "
           f"({trainable / sum(p.numel() for p in model.parameters()) * 100:.2f}%)",
@@ -728,6 +740,7 @@ def main() -> None:
         bf16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] >= 7 if torch.cuda.is_available() else False),
         fp16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] < 7 if torch.cuda.is_available() else False),
         disable_dropout=True,
+        gradient_checkpointing=True,
         disable_tqdm=args.smoke,
         logging_steps=1,
         log_completions=args.smoke,
