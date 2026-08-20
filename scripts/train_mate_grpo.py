@@ -519,6 +519,11 @@ def main() -> None:
     ap.add_argument("--wandb-project", default="",
                     help="wandb project name (empty = no wandb; requires "
                          "WANDB_API_KEY)")
+    ap.add_argument("--progress-every", type=float, default=60,
+                    help="seconds between HF progress.json heartbeats (the "
+                         "Kaggle log API is unreliable; HF always surfaces "
+                         "the file — live step/reward/ETA visibility even "
+                         "when the kernel shows only RUNNING)")
     args = ap.parse_args()
 
     import torch
@@ -812,8 +817,64 @@ def main() -> None:
                 if wandb_run is not None:
                     wandb_run.log(hit, step=state.global_step)
 
+    class _ProgressHeartbeat(TrainerCallback):
+        """Push a compact progress.json to HF every --progress-every seconds
+        so a kernel that shows only RUNNING is still observable: the Kaggle
+        log API is unreliable, but HF always is. Fields: step, total steps,
+        last reward metrics, elapsed, ETA. Uploaded to <hf-tag>/progress.json
+        (overwrites; also uploaded at train end)."""
+
+        def __init__(self, api, remote_dir, interval_s, total_steps):
+            self.api = api
+            self.remote_dir = remote_dir.strip("/")
+            self.interval_s = interval_s
+            self.total_steps = total_steps
+            self._last = 0.0
+            self.t0 = time.time()
+
+        def _push(self, state):
+            entry = state.log_history[-1] if state.log_history else {}
+            hit = {k: v for k, v in entry.items()
+                   if isinstance(v, (int, float)) and
+                   ("reward" in k or k in ("kl", "completion_length"))}
+            elapsed = time.time() - self.t0
+            per = elapsed / max(state.global_step, 1)
+            payload = {
+                "step": state.global_step,
+                "total_steps": self.total_steps,
+                "elapsed_s": round(elapsed),
+                "eta_s": round(per * (self.total_steps - state.global_step))
+                if state.global_step else None,
+                "metrics": hit,
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            try:
+                self.api.upload_file(
+                    path_or_fileobj=json.dumps(payload).encode(),
+                    path_in_repo=f"{self.remote_dir}/progress.json",
+                    repo_id="vedangfake/chess-slm-benchmark",
+                    repo_type="dataset",
+                    commit_message=f"rlvr progress step {state.global_step}")
+                print(f"[progress] step {state.global_step}/"
+                      f"{self.total_steps} -> HF progress.json", flush=True)
+            except Exception as e:
+                print(f"[progress] upload failed (will retry): {e}",
+                      flush=True)
+
+        def on_step_end(self, args_, state, control, **kwargs):
+            if time.time() - self._last < self.interval_s:
+                return
+            self._last = time.time()
+            self._push(state)
+
+        def on_train_end(self, args_, state, control, **kwargs):
+            self._push(state)
+
     if not args.smoke:
         trainer.add_callback(_HfUploadCallback())
+        trainer.add_callback(_ProgressHeartbeat(api, args.hf_tag,
+                                                args.progress_every,
+                                                args.max_steps))
     trainer.add_callback(_RewardLogCallback())
 
     print("training...", flush=True)
