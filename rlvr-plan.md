@@ -249,3 +249,58 @@ Per sample: does the model's own process-verified trace correlate with
 correctness? The probe output carries per-sample traces; the analysis
 pass (`_verify_trace` reuse over probe samples vs outcome) is the
 remaining Milestone-2 code. Cheap: a post-probe script, no new training.
+
+## RLVR build status + launch plan (2026-08-19)
+
+### Architecture decisions (all verified with evidence)
+
+- **Base for RL**: `--from-adapter adapters/caveman-sft-final` + `--no-quant`
+  (fp16 load). The SFT adapter is MERGED into the base (peft
+  merge_and_unload) and the NEW RL LoRA (r32, all-linear w/ 528-module
+  explicit fallback on the gemma4 wrap) trains on top. Merge, not nesting:
+  the nested PeftModel's adapter keys silently failed to load onto the raw
+  base (missing-keys, measured in local smoke); the merged path reloads
+  cleanly (210 LoRA modules applied) and matches run_mate_eval's
+  single-adapter eval path. fp16 E2B ~4GB fits the P100; the 4-bit merge
+  crashes on peft 0.14 x bnb 0.46 (`Params4bit._is_hf_initialized`).
+- **Rewards** (unchanged design): r = 1.0·outcome + 0.3·process + 0.1·style.
+  Bug fixed: outcome/style keyed per completion (prompt+index) — the old
+  prompt-only memo gated all 8 group members on the last one's outcome
+  (style mean 0.824 -> 0.303 after fix, measured).
+- **Rollouts**: thinking OFF (the SFT'd model writes its trace as content —
+  eval evidence: reasoning empty, trace in output; the SFT trained
+  enable_thinking=False). No thinking cap (budget null). Prompt =
+  byte-identical eval forced-answer prompt.
+- **Pool**: 335 gated rows (|gap|<=60cp, d12) — accepted for run 1;
+  re-gate a larger sample only if overfitting appears.
+- **Oracle**: stockfish at d12 (Kaggle: apt-get install stockfish ->
+  /usr/games/stockfish; resolution falls back through PATH + known paths).
+
+### Verified end-to-end (local + pretest evidence)
+
+- CPU smoke loop (deterministic rewards, re-run post-shims) ✅
+- --from-adapter merge + reload onto raw base (210 modules) ✅
+- HF checkpoint upload -> download -> resume -> continue (index bug
+  `split("/")[2]`->`[1]` fixed in both trainers) ✅
+- trl 0.17 + transformers 5.13.1 + torch 2.4.1 + stockfish on the P100 ✅
+- fp16 load + SFT merge + 528-module fallback + GRPOTrainer construction ✅
+  (pretest v6 log)
+- P100 OOM at first backward -> fixed: expandable_segments, gradient
+  checkpointing, max_completion_length 256 (avg 127 tok measured). The
+  pretest has NOT yet cleared the backward (v7 push pending).
+
+### Launch commands (after the pretest passes)
+
+    python3 scripts/train_mate_grpo.py \
+        --base google/gemma-4-E2B-it \
+        --from-adapter results/caveman-sft-adapter \
+        --train results/rlvr-pool/train.jsonl \
+        --out results/rlvr-adapter --no-quant --oracle stockfish \
+        --max-steps 400 --group 4 --save-steps 50 \
+        --hf-repo vedangfake/chess-slm-benchmark --hf-tag rlvr \
+        --hf-upload-every 1800 --wandb-project chess-slm-rlvr
+
+P100 throughput: ~3.3 min/step at group 8 (measured 5.6 tok/s fp16-to-verify
+on the pretest; group 4 halves generation) -> ~200-400 steps per 12h
+kernel -> 2 kernels within the ~26h quota. First gate: probe 200 positions
+after ~200 steps; continue if accuracy moves >~3pp vs the 55.4% SFT base.
