@@ -655,7 +655,11 @@ def main() -> None:
           flush=True)
 
     if args.thinking and is_gemma4:
-        processor = _ThinkingProcessor(processor, enable_thinking=True)
+        # wrap the TOKENIZER (the processing_class), not the processor:
+        # trl 0.17 reads processing_class.pad_token, which Gemma4Processor
+        # lacks (AttributeError, measured 2026-08-19). The tokenizer has
+        # pad_token + the chat template; rollouts are text-only.
+        tokenizer = _ThinkingProcessor(tokenizer, enable_thinking=True)
         print("thinking channel ENABLED for rollouts", flush=True)
 
     # ---- pool -> trl dataset: prompt (messages) + oracle columns ----
@@ -743,7 +747,7 @@ def main() -> None:
         reward_funcs=reward_funcs,
         args=cfg,
         train_dataset=ds,
-        processing_class=processor,
+        processing_class=tokenizer,
         peft_config=None,
     )
 
