@@ -138,6 +138,7 @@ cmd = [sys.executable, "scripts/train_mate_grpo.py",
        "--save-steps", "1",
        "--hf-repo", "%REPO_ID%", "--hf-tag", "rlvr-pretest",
        "--hf-upload-every", "60",
+       "--progress-every", "60",
        "--wandb-project", "chess-slm-rlvr"]
 print("running:", " ".join(cmd[:6]), "...")
 r = subprocess.run(cmd)
