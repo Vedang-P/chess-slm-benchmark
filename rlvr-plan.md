@@ -304,3 +304,30 @@ P100 throughput: ~3.3 min/step at group 8 (measured 5.6 tok/s fp16-to-verify
 on the pretest; group 4 halves generation) -> ~200-400 steps per 12h
 kernel -> 2 kernels within the ~26h quota. First gate: probe 200 positions
 after ~200 steps; continue if accuracy moves >~3pp vs the 55.4% SFT base.
+
+## Chess-R1-informed decisions (2026-08-19)
+
+From KRAFTON's Chess-R1 (arXiv:2507.00726 — Qwen2.5-3B/7B + Llama3.1-8B,
+GRPO on Lichess puzzles) + the MATE authors' fine-tune:
+
+- **First probe at 200 steps (1 kernel, half the quota).** Chess-R1 saw
+  real gains in 150 steps. Continue only if the probe signal moves;
+  400 stays the ceiling, not the default.
+- **Group 8 validated** — Chess-R1 used exactly 8 rollouts (Table 2),
+  not a memory compromise. Keep.
+- **Dense outcome (cp-delta) is the primary upgrade, agreed.** Their
+  finding: dense > sparse, and sparse failed entirely for 3B/8B. Note
+  their normalized-rank dense reward with L=2 collapses to our binary
+  outcome — ours is already the rank-dense analog; cp-delta is the
+  direct-win-rate analog (the next step). Implement as a run-2/fallback
+  variant of outcome_reward.
+- **Entropy bonus (1e-3) on a trl upgrade** — trl 0.17 lacks it; adopt
+  if we move to a version with DAPO/Dr.GRPO features.
+- **SAN vs UCI: resolved in favor of UCI** (user's earlier testing showed
+  UCI >= SAN for our model; Chess-R1's SAN>UCI finding was on Qwen/Llama
+  full-move tasks and does not transfer here). Prompt stays UCI.
+- **SFT lesson recorded**: the MATE authors needed 50k examples for
+  their 63.5% (we used 1.6k) and full-parameter SFT; our 55.4% vs
+  58.1% base is the volume + grounding-gap result. RL base is slightly
+  weaker at selection than the raw base — the dense outcome matters more,
+  not less.
