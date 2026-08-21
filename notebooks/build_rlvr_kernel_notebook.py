@@ -28,6 +28,11 @@ from pathlib import Path
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "chess-slm-benchmark"
+# leave any previous CWD first: rmtree below deletes the repo, and if the
+# kernel's CWD is inside it, git dies with 'Unable to read current working
+# directory' on re-runs (measured in the interactive T4 session, 2026-08-21)
+if Path.cwd() != WORK:
+    os.chdir(WORK)
 if REPO.exists():
     shutil.rmtree(REPO)
 
