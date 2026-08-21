@@ -545,6 +545,26 @@ def main() -> None:
     from trl import GRPOConfig, GRPOTrainer
     from transformers import TrainerCallback
 
+    # P100 memory fix (measured pretest v5/v6, 2026-08-20): trl 0.17's
+    # _compute_loss runs the training forward over the WHOLE group at once
+    # (grpo_trainer.py:1197 passes no batch_size), materializing
+    # group x completion_len x vocab fp16 logits — 4-8 x 2048 x 256k with
+    # rollouts at the 2048 cap, on top of the model's fp16-equivalent
+    # footprint (bnb has no sm_60 4-bit kernels, so the P100 dequantizes
+    # to fp16). The ref/old logprob paths (grpo_trainer.py:1005/1014)
+    # already chunk at per_device_train_batch_size=1; force the same for
+    # the training forward: identical math (logps are concatenated), but
+    # only one completion's logits are alive at a time during backward.
+    import trl.trainer.grpo_trainer as _grpo_mod
+    _orig_logps = _grpo_mod.GRPOTrainer._get_per_token_logps
+
+    def _chunked_logps(self, model, input_ids, attention_mask,
+                       logits_to_keep, batch_size=1):
+        return _orig_logps(self, model, input_ids, attention_mask,
+                           logits_to_keep, batch_size=batch_size or 1)
+
+    _grpo_mod.GRPOTrainer._get_per_token_logps = _chunked_logps
+
     is_gemma4 = "gemma-4" in args.base
     if args.smoke:
         args.max_steps = min(args.max_steps, 1)
@@ -975,4 +995,9 @@ if __name__ == "__main__":
             print("[status] failure written to HF run-status.txt", flush=True)
         except Exception as e2:
             print(f"[status] failed to write run-status.txt: {e2}", flush=True)
-        raise
+        # Hard exit: wandb's non-daemon uploader thread and the heartbeat
+        # loop would otherwise keep this process alive after a crash,
+        # burning GPU until the notebook's wall-clock cap fires (measured
+        # 2026-08-20 v6: 45 min of dead time). os._exit skips atexit and
+        # kills every thread immediately; run-status.txt is already on HF.
+        os._exit(1)
