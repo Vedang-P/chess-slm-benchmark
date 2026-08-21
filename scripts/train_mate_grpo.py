@@ -567,6 +567,33 @@ def main() -> None:
     print("[memfix] trl GRPO training forward chunked to batch_size=1",
           flush=True)
 
+    # ---- memory diagnostics (v9): locate the ~14GB peak ----
+    import torch as _torch
+    _torch.cuda.reset_peak_memory_stats()
+
+    def _mem(tag):
+        print(f"[mem] {tag}: allocated={_torch.cuda.memory_allocated()/1e9:.2f}GB "
+              f"reserved={_torch.cuda.memory_reserved()/1e9:.2f}GB "
+              f"peak={_torch.cuda.max_memory_allocated()/1e9:.2f}GB",
+              flush=True)
+
+    _orig_gsc = _grpo_mod.GRPOTrainer._generate_and_score_completions
+
+    def _gsc(self, *a, **k):
+        r = _orig_gsc(self, *a, **k)
+        _mem("after generate_and_score (gen+ref+rewards)")
+        return r
+
+    _grpo_mod.GRPOTrainer._generate_and_score_completions = _gsc
+
+    _orig_cl = _grpo_mod.GRPOTrainer._compute_loss
+
+    def _cl(self, model, inputs):
+        _mem("at _compute_loss start")
+        return _orig_cl(self, model, inputs)
+
+    _grpo_mod.GRPOTrainer._compute_loss = _cl
+
     is_gemma4 = "gemma-4" in args.base
     if args.smoke:
         args.max_steps = min(args.max_steps, 1)
@@ -878,7 +905,14 @@ def main() -> None:
             step = self.state.global_step if self.state else 0
             elapsed = time.time() - self.t0
             per = elapsed / max(step, 1)
-            return {
+            mem = None
+            try:
+                import torch as _t
+                if _t.cuda.is_available():
+                    mem = round(_t.cuda.memory_allocated() / 1e9, 2)
+            except Exception:
+                pass
+            payload = {
                 "step": step,
                 "total_steps": self.total_steps,
                 "phase": "training" if self.state and self.state.global_step
@@ -889,6 +923,9 @@ def main() -> None:
                 "metrics": hit,
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
+            if mem is not None:
+                payload["mem_gb"] = mem
+            return payload
 
         def _push(self):
             try:
@@ -997,6 +1034,16 @@ if __name__ == "__main__":
             print("[status] failure written to HF run-status.txt", flush=True)
         except Exception as e2:
             print(f"[status] failed to write run-status.txt: {e2}", flush=True)
+        # Memory forensics: what was holding the GPU when it died.
+        try:
+            import torch as _t
+            if _t.cuda.is_available():
+                print(f"[mem] CRASH peak={_t.cuda.max_memory_allocated()/1e9:.2f}GB "
+                      f"allocated={_t.cuda.memory_allocated()/1e9:.2f}GB",
+                      flush=True)
+                _t.cuda.memory_summary(abbreviated=True)
+        except Exception as _e3:
+            print(f"[mem] summary failed: {_e3}", flush=True)
         # Hard exit: wandb's non-daemon uploader thread and the heartbeat
         # loop would otherwise keep this process alive after a crash,
         # burning GPU until the notebook's wall-clock cap fires (measured
