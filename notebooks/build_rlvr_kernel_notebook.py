@@ -128,10 +128,12 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 from peft import PeftModel
 
 # One-time: merge the SFT adapter into the fp16 base and save it locally.
-# The run cell then loads THIS dir through the 4-bit QLoRA path (~2.6GB)
-# so the fp16 10.3GB base no longer blows the P100 at the first backward.
-# KL reference stays correct: the merged base IS the policy with the RL
-# adapter disabled (the SFT'd model), exactly the intended anchor.
+# The run cell loads THIS dir in fp16 with the chunked-loss patch. On the
+# P100 (sm_60) bnb has NO native 4-bit kernels: it keeps a full fp16
+# dequantized copy + the 4-bit storage (~13GB effective), so 4-bit is
+# WORSE than plain fp16 here (measured v8: 14.96GB peak vs v10 fp16
+# ~12.5GB). The trl loss-forward chunking (see trainer) caps the loss
+# phase to ~2.2GB on top of the model. Group 8 + 2048 budget intact.
 OUT = Path("/kaggle/working/gemma-4-E2B-sft-merged")
 if not OUT.exists():
     model = AutoModelForImageTextToText.from_pretrained(
@@ -171,6 +173,7 @@ cmd = [sys.executable, "scripts/train_mate_grpo.py",
        "--depth", "12",
        "--max-steps", "2", "--group", "8",
        "--optim", "adamw_bnb_8bit",
+       "--no-quant",
        "--max-train-rows", "64",
        "--save-steps", "1",
        "--hf-repo", "%REPO_ID%", "--hf-tag", "rlvr-pretest",
