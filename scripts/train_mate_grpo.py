@@ -576,6 +576,21 @@ def main() -> None:
     print("[memfix] trl GRPO training forward chunked to batch_size=1",
           flush=True)
 
+    # GRPO in fp16 (Chess-R1/TinyZero run the loss in bf16 — fp16 is MORE
+    # precise). accelerate's device_map dispatch wraps model calls with
+    # convert_to_fp32, materializing a 2GB fp32 copy of the completion
+    # logits at 256k vocab on long rollouts — the final OOM push on 16GB
+    # GPUs (measured 2026-08-21 T4 pretest: peak 13.32/14.56GB at
+    # tensor.float(); P100 variants identical). Patch the top-level
+    # convert_to_fp32 used by Operations.__call__ to identity.
+    try:
+        import accelerate.utils.operations as _ops
+        _ops.convert_to_fp32 = lambda t, *a, **k: t
+        print("[memfix] accelerate fp32 logits conversion disabled",
+              flush=True)
+    except Exception as e:
+        print(f"[memfix] fp32 patch failed: {e}", flush=True)
+
     # ---- memory diagnostics (v9): locate the ~14GB peak ----
     import torch as _torch
     _torch.cuda.reset_peak_memory_stats()
