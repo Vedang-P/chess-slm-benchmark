@@ -564,6 +564,8 @@ def main() -> None:
                            logits_to_keep, batch_size=batch_size or 1)
 
     _grpo_mod.GRPOTrainer._get_per_token_logps = _chunked_logps
+    print("[memfix] trl GRPO training forward chunked to batch_size=1",
+          flush=True)
 
     is_gemma4 = "gemma-4" in args.base
     if args.smoke:
