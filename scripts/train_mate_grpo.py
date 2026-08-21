@@ -490,6 +490,15 @@ def main() -> None:
                     help="gemma4 only: enable the <|channel>thought block "
                          "during rollouts (the RLVR design's thinking-ON "
                          "variant)")
+    ap.add_argument("--no-grad-checkpoint", action="store_true",
+                    help="disable gradient checkpointing: on sm_60 bnb's "
+                         "4-bit fallback dequantizes to fp16 per layer and "
+                         "checkpointing's backward recompute materializes "
+                         "the WHOLE model in fp16 at once (~10GB, measured "
+                         "2026-08-21: loss-phase peak 14.96GB at any group "
+                         "size). Without it, per-layer dequant frees after "
+                         "each layer's backward; activations at chunk "
+                         "batch=1 are ~1GB.")
     ap.add_argument("--no-quant", action="store_true",
                     help="gemma4 GPU path: load the base in fp16 instead of "
                          "4-bit. REQUIRED with --from-adapter: peft 0.14's "
@@ -720,8 +729,12 @@ def main() -> None:
     if not hasattr(model, "warnings_issued"):
         model.warnings_issued = {}
     try:
-        model.gradient_checkpointing_enable()
-        print("gradient checkpointing enabled", flush=True)
+        if not args.no_grad_checkpoint:
+            model.gradient_checkpointing_enable()
+            print("gradient checkpointing enabled", flush=True)
+        else:
+            print("gradient checkpointing DISABLED (sm_60 bnb dequant "
+                  "retention fix)", flush=True)
     except Exception as e:
         print(f"grad checkpointing unavailable: {e}", flush=True)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -804,7 +817,7 @@ def main() -> None:
         fp16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] < 7 if torch.cuda.is_available() else False),
         disable_dropout=True,
         optim=args.optim,
-        gradient_checkpointing=True,
+        gradient_checkpointing=not args.no_grad_checkpoint,
         disable_tqdm=args.smoke,
         logging_steps=1,
         log_completions=args.smoke,
