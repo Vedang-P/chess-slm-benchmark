@@ -484,6 +484,16 @@ def main() -> None:
                          "checkpointing + expandable segments, not a small "
                          "budget.")
     ap.add_argument("--beta", type=float, default=0.04)
+    ap.add_argument("--temperature", type=float, default=1.0,
+                    help="rollout sampling temperature. The SFT'd model "
+                         "degenerates under trl's default temp 1.0 sampling "
+                         "(measured 2026-08-21: all 8 rollouts ran to the "
+                         "2048 cap with no EOS -> zero rewards -> no "
+                         "signal); ~0.7 matches the eval protocol's greedy "
+                         "behavior while still sampling.")
+    ap.add_argument("--top-p", type=float, default=1.0,
+                    help="rollout nucleus sampling (0.9 with temperature "
+                         "0.7 preserves the SFT policy's structure)")
     ap.add_argument("--max-train-rows", type=int, default=0,
                     help="cap pool rows (0 = all)")
     ap.add_argument("--thinking", action="store_true",
@@ -826,6 +836,8 @@ def main() -> None:
         max_completion_length=args.max_completion_length,
         num_generations=args.group,
         beta=args.beta,
+        temperature=args.temperature,
+        top_p=args.top_p,
         reward_weights=[1.0, 0.3, 0.1],
         use_cpu=args.cpu,
         bf16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] >= 7 if torch.cuda.is_available() else False),
