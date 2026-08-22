@@ -459,6 +459,14 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
                 continue
             label, move = parse_choice(text, cas[i], cbs[i])
             best = oracle.best_label(fens[i], cas[i], cbs[i], truths[i])
+            if i == 0:
+                try:
+                    import chess as _ch
+                    _ba = _ch.Board(fens[i]); _ba.push(_ch.Move.from_uci(cas[i])); _ea = oracle.eval_cp(_ba.fen())
+                    _bb = _ch.Board(fens[i]); _bb.push(_ch.Move.from_uci(cbs[i])); _eb = oracle.eval_cp(_bb.fen())
+                    print(f"[sample] text={text[:300]!r} label={label} move={move} best={best} a={cas[i]} b={cbs[i]} truth={truths[i]} ea={_ea} eb={_eb}", flush=True)
+                except Exception as _e:
+                    print(f"[sample] text={text[:200]!r} label={label} best={best} err={_e}", flush=True)
             ok = (best is not None and label == best
                   or (move and move == oracle.best_move(fens[i])))
             outcomes[(_prompt_key(prompts[i]), i)] = 1.0 if ok else 0.0
