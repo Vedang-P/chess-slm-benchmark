@@ -868,6 +868,21 @@ def main() -> None:
         peft_config=None,
     )
 
+    # gemma-4-E2B terminates turns with <turn|> (id 106), not <eos> (id 1);
+    # config.json declares eos_token_id=[1,106]. trl 0.17 builds the rollout
+    # generation config with ONLY processing_class.eos_token_id (=1), so
+    # rollouts never stop at <turn|> and run to the 2048 cap (measured:
+    # 16/16 rollouts at 2048, all rewards 0, at temp 1.0 AND 0.7 — the eval
+    # works because it uses the model's default generation config with both
+    # ids, terminating ~127 tokens). Restore the full eos set.
+    try:
+        eos_ids = list(model.config.eos_token_id) if isinstance(
+            model.config.eos_token_id, (list, tuple)) else [model.config.eos_token_id]
+        trainer.generation_config.eos_token_id = eos_ids
+        print(f"[eosfix] rollout eos_token_id = {eos_ids}", flush=True)
+    except Exception as e:
+        print(f"[eosfix] failed: {e}", flush=True)
+
     # HF checkpoint safety net + resume (AGENTS.md: killed kernels must
     # not strand progress; the latest checkpoint survives to HF). The
     # smoke path needs no HF token: it uploads nothing and resumes nothing.
