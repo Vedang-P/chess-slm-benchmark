@@ -287,15 +287,55 @@ class Oracle:
 
     def best_label(self, fen: str, a: str, b: str, truth_label: str | None,
                    ) -> str | None:
-        """Oracle's answer label for the position, or None if undecided."""
+        """Oracle's answer label for the position, or None if undecided.
+
+        Stockfish mode: pairwise eval comparison of the two candidates, not
+        the global PV. The global PV can be a third move C (neither A nor B),
+        so PV-vs-candidate mislabels every such position as None -> zero
+        reward. Pairwise eval fixes it; the PV is only a fallback when evals
+        fail. Tie -> truth_label tie-break to keep expert signal.
+        """
         key = (fen, a, b)
         if key in self._best:
             return self._best[key]
         if self.mode == "truth":
             label = truth_label  # mock: the pool's expert answer
         else:
-            best = self._best_move(fen)
-            label = ("A" if best == a else "B" if best == b else None)
+            # Pairwise Stockfish: which candidate gives the better position
+            # for the mover. eval_cp returns opponent POV, so smaller opponent
+            # score is better for mover.
+            try:
+                import chess
+                board_a = chess.Board(fen)
+                board_b = chess.Board(fen)
+                try:
+                    ma = chess.Move.from_uci(a)
+                except Exception:
+                    ma = None
+                try:
+                    mb = chess.Move.from_uci(b)
+                except Exception:
+                    mb = None
+                if ma is None or ma not in board_a.legal_moves or mb is None or mb not in board_b.legal_moves:
+                    best = self._best_move(fen)
+                    label = ("A" if best == a else "B" if best == b else None)
+                else:
+                    board_a.push(ma)
+                    board_b.push(mb)
+                    ea = self.eval_cp(board_a.fen())
+                    eb = self.eval_cp(board_b.fen())
+                    if ea is None or eb is None:
+                        best = self._best_move(fen)
+                        label = ("A" if best == a else "B" if best == b else None)
+                    else:
+                        if ea < eb:
+                            label = "A"
+                        elif eb < ea:
+                            label = "B"
+                        else:
+                            label = truth_label
+            except Exception:
+                label = truth_label
         self._best[key] = label
         return label
 
@@ -926,7 +966,10 @@ def main() -> None:
             if hit:
                 print(f"step {state.global_step}: {hit}", flush=True)
                 if wandb_run is not None:
-                    wandb_run.log(hit, step=state.global_step)
+                    # Don't pass step: trl's global_step counts optimizer steps (1,2) but
+                    # Trainer has already logged at higher micro-step counts (e.g. 57),
+                    # so explicit step would be < current and wandb drops it. Let wandb auto-increment.
+                    wandb_run.log(hit)
 
     class _ProgressHeartbeat(TrainerCallback):
         """Push a compact progress.json to HF on a timer so a kernel that
