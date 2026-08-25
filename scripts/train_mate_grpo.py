@@ -625,16 +625,23 @@ def main() -> None:
     # the training forward: identical math (logps are concatenated), but
     # only one completion's logits are alive at a time during backward.
     import trl.trainer.grpo_trainer as _grpo_mod
-    _orig_logps = _grpo_mod.GRPOTrainer._get_per_token_logps
+    # Gate chunk fix is trl-0.17-only (_get_per_token_logps was added in 0.17;
+    # 0.14's GRPOTrainer has no such attr and batches differently). Guard so
+    # that notebooks pinned to trl==0.14.* still boot for the 2-step gate.
+    if hasattr(_grpo_mod.GRPOTrainer, "_get_per_token_logps"):
+        _orig_logps = _grpo_mod.GRPOTrainer._get_per_token_logps
 
-    def _chunked_logps(self, model, input_ids, attention_mask,
-                       logits_to_keep, batch_size=1):
-        return _orig_logps(self, model, input_ids, attention_mask,
-                           logits_to_keep, batch_size=batch_size or 1)
+        def _chunked_logps(self, model, input_ids, attention_mask,
+                           logits_to_keep, batch_size=1):
+            return _orig_logps(self, model, input_ids, attention_mask,
+                               logits_to_keep, batch_size=batch_size or 1)
 
-    _grpo_mod.GRPOTrainer._get_per_token_logps = _chunked_logps
-    print("[memfix] trl GRPO training forward chunked to batch_size=1",
-          flush=True)
+        _grpo_mod.GRPOTrainer._get_per_token_logps = _chunked_logps
+        print("[memfix] trl GRPO training forward chunked to batch_size=1",
+              flush=True)
+    else:
+        print("[memfix] skip _get_per_token_logps chunk (trl <0.17)",
+              flush=True)
 
     # GRPO in fp16 (Chess-R1/TinyZero run the loss in bf16 — fp16 is MORE
     # precise). accelerate's device_map dispatch wraps model calls with
@@ -681,22 +688,24 @@ def main() -> None:
         except Exception:
             pass
 
-    _orig_gsc = _grpo_mod.GRPOTrainer._generate_and_score_completions
+    if hasattr(_grpo_mod.GRPOTrainer, "_generate_and_score_completions"):
+        _orig_gsc = _grpo_mod.GRPOTrainer._generate_and_score_completions
 
-    def _gsc(self, *a, **k):
-        r = _orig_gsc(self, *a, **k)
-        _mem("after generate_and_score (gen+ref+rewards)")
-        return r
+        def _gsc(self, *a, **k):
+            r = _orig_gsc(self, *a, **k)
+            _mem("after generate_and_score (gen+ref+rewards)")
+            return r
 
-    _grpo_mod.GRPOTrainer._generate_and_score_completions = _gsc
+        _grpo_mod.GRPOTrainer._generate_and_score_completions = _gsc
 
-    _orig_cl = _grpo_mod.GRPOTrainer._compute_loss
+    if hasattr(_grpo_mod.GRPOTrainer, "_compute_loss"):
+        _orig_cl = _grpo_mod.GRPOTrainer._compute_loss
 
-    def _cl(self, model, inputs):
-        _mem("at _compute_loss start")
-        return _orig_cl(self, model, inputs)
+        def _cl(self, model, inputs):
+            _mem("at _compute_loss start")
+            return _orig_cl(self, model, inputs)
 
-    _grpo_mod.GRPOTrainer._compute_loss = _cl
+        _grpo_mod.GRPOTrainer._compute_loss = _cl
 
     is_gemma4 = "gemma-4" in args.base
     if args.smoke:
