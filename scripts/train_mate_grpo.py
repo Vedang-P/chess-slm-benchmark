@@ -770,12 +770,15 @@ def main() -> None:
                     args.base, quantization_config=quant, device_map={"": 0},
                     dtype=compute_dtype)
     else:
-        # transformers 4.53's GemmaFast has a list-vs-dict bug (extra_special_tokens
-        # is a list on the gemma-4 hub). Use slow tokenizer to boot the gate.
+        # gemma-4 fast has a list bug on 4.53; try fast then slow.
+        # gemma-2/Qwen fast works fine - prefer fast.
         try:
-            tokenizer = AutoTokenizer.from_pretrained(args.base, use_fast=False, trust_remote_code=True)
+            tokenizer = AutoTokenizer.from_pretrained(args.base, trust_remote_code=True)
         except Exception:
-            tokenizer = AutoTokenizer.from_pretrained(args.base, use_fast=False)
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(args.base, use_fast=False, trust_remote_code=True)
+            except Exception:
+                tokenizer = AutoTokenizer.from_pretrained(args.base, use_fast=False)
         processor = tokenizer
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
