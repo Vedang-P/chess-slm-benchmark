@@ -47,11 +47,44 @@ The campaign matrix:
 | arm | strategy | noexplain | tactic | both | status |
 |---|---|---|---|---|---|
 | deepseek-v4-flash, thinking (unbounded) | **85.8%** (858/1000) | **92.2%** (922/1000) | **94.0%** (940/1000) | 92.8% (928/1000) | **Table 1 core** (complete) |
-| gemma4-e2b, thinking, 32768 budget | **61.1%** (611/1000) | to run | to run | to run | local-model column |
+| gemma4-e2b, thinking, 32768 budget | **60.8%** (61.4+60.3) | **58.1%** (56.0+60.2) | **60.5%** (60.8+60.2) | **61.5%** (59.6+63.4) | local-model column (complete; 2×500 workers per subset) |
 | gemma4-e2b MATE-LoRA fine-tune | to run | to run | to run | to run | the project's contribution |
 
 Reference points from the MATE paper (their fine-tuned LLaMA-3-8B
 zero-shot): 63.5% (N), 89.7% (S), 94.6% (T), 95.2% (ST).
+
+## Stage 2 — Caveman SFT eval (noexplain subset, 2026-08-19)
+
+The stage-1 caveman SFT (deepseek traces of Stockfish lines → QLoRA on
+gemma-4-E2B, 1575 train rows) evaluated on the same 1000 noexplain
+positions, thinking ON (unbounded), force-answer, run as 4 parallel
+250-position kernels (2 per account: softmaxsimp a1/a2, vedangpandeyyy
+b1/b2), interim HF uploads every 25 positions.
+
+| kernel | positions | accuracy |
+|---|---|---|
+| a1 (0–250) | 250 | 54.4% |
+| a2 (250–500) | 250 | 52.0% |
+| b1 (500–750) | 250 | 57.6% |
+| b2 (750–1000) | 250 | 57.6% |
+| **FINAL (1000/1000)** | 1000 | **55.4%** |
+
+**Verdict**: style transfer succeeded (parse rate 1.0; mean output
+~127 tokens/position vs the base's ~1,368 — ~10× fewer; decisive
+caveman traces). **Selection accuracy did not improve: 55.4% vs the
+58.1% gemma4-e2b base (−2.7pp, SE ±1.6pp at n=1000)** and below the
+MATE authors' fine-tuned LLaMA-3-8B (63.5% on noexplain). Shard spread
+(52.0–57.6%) is position-sampling noise — theme (100% noexplain),
+truth balance (~50/50), and Stockfish difficulty (median |eval gap|
+639–714cp, d12) are matched across shards; the base model shows the
+same slice-to-slice spread (56.0/60.2).
+
+Protocol note: this eval ran at max_new_tokens=2048 vs the baseline's
+32768 (budget never bound — parse 1.0, mean 127 tokens — but strict
+parity would re-run at 32768). Adapter: `adapters/caveman-sft-final`
+on HF. Samples: `runs/2026-08-19T18:34:*Z` + `eval-results/caveman-sft-*`
+in the results archive. Next: stage 3 RLVR on this base (the selection
+fix — SFT gave style, RL gives engine-grounded selection).
 
 **Deployment**: deepseek arms run as 5 parallel CPU Kaggle kernels per
 subset (5 concurrent CPU kernels per account; gateway serializes per API

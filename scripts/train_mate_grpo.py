@@ -38,7 +38,9 @@ import argparse
 import json
 import os
 import re
+import signal
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -51,7 +53,11 @@ from pathlib import Path
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-os.environ.setdefault("WANDB_DISABLED", "true")
+os.environ.setdefault("WANDB_DISABLED", "true")  # re-enabled iff --wandb-project
+# OOM fix (measured 2026-08-19, pretest v6: 15.13GB of 15.89GB used at the
+# first backward; the SFT trainer that runs the same model on the same P100
+# sets this + gradient checkpointing and fits batch 2x8 at 2048 tokens).
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import trl.import_utils as _trl_iu  # noqa: E402
 
@@ -168,7 +174,10 @@ def download_hf_checkpoint(api, repo_id: str, remote_dir: str,
         print(f"[resume] cannot list {repo_id}: {e}", flush=True)
         return None
     prefix = f"{remote_dir.strip('/')}/checkpoint-"
-    cps = sorted({f.split("/")[2] for f in files
+    # path layout: <remote_dir>/checkpoint-<N>/<file> — the checkpoint
+    # dir name is component [1] (bug found 2026-08-19: [2] selected the
+    # file name, so resume pointed at a nonexistent file path).
+    cps = sorted({f.split("/")[1] for f in files
                   if f.startswith(prefix) and len(f.split("/")) > 2})
     if not cps:
         print(f"[resume] no checkpoints under {remote_dir} in {repo_id}",
@@ -249,7 +258,26 @@ class Oracle:
         self._best = {}
         self._evals = {}
         if mode == "stockfish":
+            import shutil
             import chess.engine
+            # Kaggle apt installs to /usr/games/stockfish; the homebrew
+            # default is the local path. Resolve in order: explicit arg ->
+            # PATH -> the two known install locations.
+            if stockfish and not Path(stockfish).exists():
+                print(f"[oracle] {stockfish} not found; resolving", flush=True)
+                stockfish = ""
+            if not stockfish:
+                stockfish = shutil.which("stockfish") or ""
+            if not stockfish:
+                for cand in ("/usr/games/stockfish",
+                             "/opt/homebrew/bin/stockfish"):
+                    if Path(cand).exists():
+                        stockfish = cand
+                        break
+            if not stockfish:
+                raise RuntimeError("stockfish binary not found — install it "
+                                   "(Kaggle: !apt-get install -y stockfish)")
+            print(f"[oracle] stockfish: {stockfish}", flush=True)
             self.engine = chess.engine.SimpleEngine.popen_uci(stockfish)
 
     def close(self):
@@ -371,7 +399,12 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
     columns (fen/candidate_a/candidate_b/truth_label) — verified against
     grpo_trainer._generate_and_score_completions: reward_kwargs = every
     input column except prompt/completion."""
-    outcomes = {}  # prompt -> 1/0 memo, shared so style gates on outcome
+    outcomes = {}  # (prompt_text, completion_index) -> 1/0.
+    # Keyed per-completion, NOT per prompt: all group members share one
+    # prompt, so a prompt-only key would let the LAST completion's outcome
+    # gate the style reward for every member (bug found in the 2026-08-19
+    # audit). trl calls the reward funcs with aligned, same-order lists
+    # within a step, so the index is stable across calls.
 
     def outcome_reward(prompts, completions, **kwargs):
         fens = kwargs.get("fen") or [None] * len(completions)
@@ -388,8 +421,8 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
             best = oracle.best_label(fens[i], cas[i], cbs[i], truths[i])
             ok = (best is not None and label == best
                   or (move and move == oracle.best_move(fens[i])))
-            outcomes[_prompt_key(prompts[i])] = 1.0 if ok else 0.0
-            rewards.append(outcomes[_prompt_key(prompts[i])])
+            outcomes[(_prompt_key(prompts[i]), i)] = 1.0 if ok else 0.0
+            rewards.append(outcomes[(_prompt_key(prompts[i]), i)])
         return rewards
 
     def process_reward(prompts, completions, **kwargs):
@@ -406,7 +439,7 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
     def style_reward(prompts, completions, **kwargs):
         rewards = []
         for i, completion in enumerate(completions):
-            ok = outcomes.get(_prompt_key(prompts[i]), 0.0)
+            ok = outcomes.get((_prompt_key(prompts[i]), i), 0.0)
             if not ok:
                 rewards.append(0.0)  # never reward short-and-wrong
                 continue
@@ -420,6 +453,12 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="google/gemma-4-E2B-it")
+    ap.add_argument("--from-adapter", default="",
+                    help="path to the stage-1 SFT adapter dir. Loaded on the "
+                         "base and FROZEN, then a NEW trainable RL LoRA is "
+                         "wrapped on top (peft nesting) — the SFT weights are "
+                         "the skill, RL adjusts on top. Without this, RL "
+                         "trains from the raw base.")
     ap.add_argument("--train", required=True,
                     help="pool jsonl from build_rlvr_pool.py")
     ap.add_argument("--out", default="results/rlvr-adapter")
@@ -432,16 +471,52 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--group", type=int, default=8,
                     help="GRPO group size (num_generations per step)")
+    ap.add_argument("--optim", type=str, default="adamw_torch",
+                    help="optimizer (adamw_torch for CPU smoke, "
+                         "adamw_bnb_8bit to save ~0.5GB on P100)")
     ap.add_argument("--max-steps", type=int, default=3500)
     ap.add_argument("--max-prompt-length", type=int, default=1024)
-    ap.add_argument("--max-completion-length", type=int, default=512)
+    ap.add_argument("--max-completion-length", type=int, default=2048,
+                    help="rollout completion budget. 2048 = the eval "
+                         "protocol's budget (unbounded thinking directive; "
+                         "the SFT'd model averages ~127 tokens, so 2048 is "
+                         "10x headroom, never binds). OOM fix = gradient "
+                         "checkpointing + expandable segments, not a small "
+                         "budget.")
     ap.add_argument("--beta", type=float, default=0.04)
+    ap.add_argument("--temperature", type=float, default=1.0,
+                    help="rollout sampling temperature. The SFT'd model "
+                         "degenerates under trl's default temp 1.0 sampling "
+                         "(measured 2026-08-21: all 8 rollouts ran to the "
+                         "2048 cap with no EOS -> zero rewards -> no "
+                         "signal); ~0.7 matches the eval protocol's greedy "
+                         "behavior while still sampling.")
+    ap.add_argument("--top-p", type=float, default=1.0,
+                    help="rollout nucleus sampling (0.9 with temperature "
+                         "0.7 preserves the SFT policy's structure)")
     ap.add_argument("--max-train-rows", type=int, default=0,
                     help="cap pool rows (0 = all)")
     ap.add_argument("--thinking", action="store_true",
                     help="gemma4 only: enable the <|channel>thought block "
                          "during rollouts (the RLVR design's thinking-ON "
                          "variant)")
+    ap.add_argument("--no-grad-checkpoint", action="store_true",
+                    help="disable gradient checkpointing: on sm_60 bnb's "
+                         "4-bit fallback dequantizes to fp16 per layer and "
+                         "checkpointing's backward recompute materializes "
+                         "the WHOLE model in fp16 at once (~10GB, measured "
+                         "2026-08-21: loss-phase peak 14.96GB at any group "
+                         "size). Without it, per-layer dequant frees after "
+                         "each layer's backward; activations at chunk "
+                         "batch=1 are ~1GB.")
+    ap.add_argument("--no-quant", action="store_true",
+                    help="gemma4 GPU path: load the base in fp16 instead of "
+                         "4-bit. REQUIRED with --from-adapter: peft 0.14's "
+                         "merge_and_unload on a 4-bit bnb base crashes "
+                         "(Params4bit._is_hf_initialized, measured "
+                         "2026-08-19); fp16 merges cleanly, E2B fp16 is "
+                         "~4GB (fits the P100 16GB), and fp16 generation "
+                         "is typically faster than 4-bit dequant.")
     ap.add_argument("--cpu", action="store_true",
                     help="fp32 CPU load + use_cpu trainer (local smoke; "
                          "gemma-4 is too large for this — use a small "
@@ -458,9 +533,22 @@ def main() -> None:
     ap.add_argument("--resume-from-hf", action="store_true",
                     help="download the latest checkpoint from --hf-repo "
                          "under --hf-tag and resume training from it")
-    ap.add_argument("--save-steps", type=int, default=500,
+    ap.add_argument("--save-steps", type=int, default=50,
                     help="local checkpoint cadence (uploaded to HF every "
-                         "--hf-upload-every seconds)")
+                         "--hf-upload-every seconds). Default 50 matches the "
+                         "P100 throughput reality (~200 steps per 12h kernel "
+                         "at ~5.6 tok/s generation; the old 500 default "
+                         "would upload nothing — same bug class as the SFT "
+                         "run's save_steps=10000).")
+    ap.add_argument("--wandb-project", default="",
+                    help="wandb project name (empty = no wandb; requires "
+                         "WANDB_API_KEY)")
+    ap.add_argument("--progress-every", type=float, default=60,
+                    help="seconds between HF progress.json heartbeats")
+    ap.add_argument("--step-timeout-min", type=float, default=0,
+                    help="SIGINT a step stuck longer than N minutes "
+                         "(graceful checkpoint + upload, then exit); "
+                         "0 disables")
     args = ap.parse_args()
 
     import torch
@@ -475,6 +563,70 @@ def main() -> None:
     )
     from trl import GRPOConfig, GRPOTrainer
     from transformers import TrainerCallback
+
+    # P100 memory fix (measured pretest v5/v6, 2026-08-20): trl 0.17's
+    # _compute_loss runs the training forward over the WHOLE group at once
+    # (grpo_trainer.py:1197 passes no batch_size), materializing
+    # group x completion_len x vocab fp16 logits — 4-8 x 2048 x 256k with
+    # rollouts at the 2048 cap, on top of the model's fp16-equivalent
+    # footprint (bnb has no sm_60 4-bit kernels, so the P100 dequantizes
+    # to fp16). The ref/old logprob paths (grpo_trainer.py:1005/1014)
+    # already chunk at per_device_train_batch_size=1; force the same for
+    # the training forward: identical math (logps are concatenated), but
+    # only one completion's logits are alive at a time during backward.
+    import trl.trainer.grpo_trainer as _grpo_mod
+    _orig_logps = _grpo_mod.GRPOTrainer._get_per_token_logps
+
+    def _chunked_logps(self, model, input_ids, attention_mask,
+                       logits_to_keep, batch_size=1):
+        return _orig_logps(self, model, input_ids, attention_mask,
+                           logits_to_keep, batch_size=batch_size or 1)
+
+    _grpo_mod.GRPOTrainer._get_per_token_logps = _chunked_logps
+    print("[memfix] trl GRPO training forward chunked to batch_size=1",
+          flush=True)
+
+    # GRPO in fp16 (Chess-R1/TinyZero run the loss in bf16 — fp16 is MORE
+    # precise). accelerate's device_map dispatch wraps model calls with
+    # convert_to_fp32, materializing a 2GB fp32 copy of the completion
+    # logits at 256k vocab on long rollouts — the final OOM push on 16GB
+    # GPUs (measured 2026-08-21 T4 pretest: peak 13.32/14.56GB at
+    # tensor.float(); P100 variants identical). Patch the top-level
+    # convert_to_fp32 used by Operations.__call__ to identity.
+    try:
+        import accelerate.utils.operations as _ops
+        _ops.convert_to_fp32 = lambda t, *a, **k: t
+        print("[memfix] accelerate fp32 logits conversion disabled",
+              flush=True)
+    except Exception as e:
+        print(f"[memfix] fp32 patch failed: {e}", flush=True)
+
+    # ---- memory diagnostics (v9): locate the ~14GB peak ----
+    import torch as _torch
+    _torch.cuda.reset_peak_memory_stats()
+
+    def _mem(tag):
+        print(f"[mem] {tag}: allocated={_torch.cuda.memory_allocated()/1e9:.2f}GB "
+              f"reserved={_torch.cuda.memory_reserved()/1e9:.2f}GB "
+              f"peak={_torch.cuda.max_memory_allocated()/1e9:.2f}GB",
+              flush=True)
+
+    _orig_gsc = _grpo_mod.GRPOTrainer._generate_and_score_completions
+
+    def _gsc(self, *a, **k):
+        r = _orig_gsc(self, *a, **k)
+        _mem("after generate_and_score (gen+ref+rewards)")
+        return r
+
+    _grpo_mod.GRPOTrainer._generate_and_score_completions = _gsc
+
+    _orig_cl = _grpo_mod.GRPOTrainer._compute_loss
+
+    def _cl(self, model, inputs):
+        _mem("at _compute_loss start")
+        return _orig_cl(self, model, inputs)
+
+    _grpo_mod.GRPOTrainer._compute_loss = _cl
 
     is_gemma4 = "gemma-4" in args.base
     if args.smoke:
@@ -495,13 +647,37 @@ def main() -> None:
         else:
             cap = torch.cuda.get_device_capability(0) if torch.cuda.is_available() else (0, 0)
             compute_dtype = torch.bfloat16 if cap >= (7, 5) else torch.float16
-            quant = BitsAndBytesConfig(
-                load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_compute_dtype=compute_dtype)
-            model = AutoModelForImageTextToText.from_pretrained(
-                args.base, quantization_config=quant, device_map={"": 0},
-                dtype=compute_dtype)
+            if args.no_quant:
+                model = AutoModelForImageTextToText.from_pretrained(
+                    args.base, device_map={"": 0}, dtype=compute_dtype)
+                print("base loaded fp16 (no 4-bit) for clean SFT merge",
+                      flush=True)
+            else:
+                # same transformers 5.13.1 shim as train_mate_lora: bind
+                # torch into quantization_config (is_torch_available() False
+                # on the P100 stack -> BitsAndBytesConfig NameError)
+                import transformers.utils.quantization_config as _qc
+                if not hasattr(_qc, "torch"):
+                    _qc.torch = torch
+                # torch 2.4.1 lacks nn.Module.set_submodule (added 2.5+); bnb
+                # 0.46.1's replace_with_bnb_linear needs it during 4-bit load
+                # (same shim as train_mate_lora/src.models; missing here caused
+                # the 2026-08-19 pretest failure).
+                if not hasattr(torch.nn.Module, "set_submodule"):
+                    def _set_submodule(self, target, module):
+                        atoms = target.split(".")
+                        parent = self
+                        for atom in atoms[:-1]:
+                            parent = getattr(parent, atom)
+                        setattr(parent, atoms[-1], module)
+                    torch.nn.Module.set_submodule = _set_submodule
+                quant = BitsAndBytesConfig(
+                    load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=compute_dtype)
+                model = AutoModelForImageTextToText.from_pretrained(
+                    args.base, quantization_config=quant, device_map={"": 0},
+                    dtype=compute_dtype)
     else:
         tokenizer = AutoTokenizer.from_pretrained(args.base)
         processor = tokenizer
@@ -524,6 +700,24 @@ def main() -> None:
             model = AutoModelForCausalLM.from_pretrained(
                 args.base, device_map={"": 0}, torch_dtype=torch.bfloat16)
 
+    # ---- stage-1 SFT adapter, MERGED into the base ----
+    # The SFT weights are baked into the base (peft merge_and_unload: on
+    # the 4-bit gemma4 path this dequantizes to fp16 — ~4GB for E2B, fits
+    # the P100, and fp16 generation is typically faster than 4-bit
+    # dequant, to be measured in the pretest). The NEW RL LoRA then
+    # targets the PLAIN base structure, so the saved RL adapter loads onto
+    # the raw base with run_mate_eval's single-adapter path (the nested
+    # PeftModel-on-PeftModel approach produced adapter keys that silently
+    # failed to load onto the raw base — missing-keys warning, measured
+    # 2026-08-19 in the local smoke).
+    if args.from_adapter:
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, args.from_adapter)
+        model = model.merge_and_unload()
+        print(f"SFT adapter MERGED into base: {args.from_adapter}",
+              flush=True)
+
     # LoRA on the FULL model (all-linear matches Linear4bit by type;
     # proven by train_mate_lora — same wrap, same save/load symmetry)
     for p in model.parameters():
@@ -532,7 +726,25 @@ def main() -> None:
     lora = LoraConfig(
         r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
         bias="none", target_modules="all-linear", task_type="CAUSAL_LM")
-    model = get_peft_model(model, lora)
+    try:
+        model = get_peft_model(model, lora)
+    except ValueError as e:
+        # all-linear can't dispatch on the gemma4 wrap (Gemma4ClippableLinear
+        # is not nn.Linear by type) — the proven fallback from the SFT
+        # trainer: enumerate every linear by name (the stage-1 adapter used
+        # this exact path: 529 modules).
+        import torch.nn as nn
+        lin_names = [n for n, mod in model.named_modules()
+                     if isinstance(mod, nn.Linear)
+                     or type(mod).__name__ in ("Linear4bit", "Linear8bitLt")]
+        print(f"all-linear failed ({e}); explicit fallback with "
+              f"{len(lin_names)} linear modules", flush=True)
+        lora2 = LoraConfig(
+            r=args.rank, lora_alpha=args.alpha, lora_dropout=0.0,
+            bias="none",
+            target_modules=lin_names[:512] or ["linear"],
+            task_type="CAUSAL_LM")
+        model = get_peft_model(model, lora2)
     # trl 0.17's GRPOTrainer.__init__ unconditionally does
     # model.warnings_issued["estimate_tokens"] = True; transformers 5.14
     # removed the PreTrainedModel.warnings_issued class attribute that
@@ -541,13 +753,26 @@ def main() -> None:
     # class of shim as the trl tuple-guard patch above.
     if not hasattr(model, "warnings_issued"):
         model.warnings_issued = {}
+    try:
+        if not args.no_grad_checkpoint:
+            model.gradient_checkpointing_enable()
+            print("gradient checkpointing enabled", flush=True)
+        else:
+            print("gradient checkpointing DISABLED (sm_60 bnb dequant "
+                  "retention fix)", flush=True)
+    except Exception as e:
+        print(f"grad checkpointing unavailable: {e}", flush=True)
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable params: {trainable / 1e6:.1f}M "
           f"({trainable / sum(p.numel() for p in model.parameters()) * 100:.2f}%)",
           flush=True)
 
     if args.thinking and is_gemma4:
-        processor = _ThinkingProcessor(processor, enable_thinking=True)
+        # wrap the TOKENIZER (the processing_class), not the processor:
+        # trl 0.17 reads processing_class.pad_token, which Gemma4Processor
+        # lacks (AttributeError, measured 2026-08-19). The tokenizer has
+        # pad_token + the chat template; rollouts are text-only.
+        tokenizer = _ThinkingProcessor(tokenizer, enable_thinking=True)
         print("thinking channel ENABLED for rollouts", flush=True)
 
     # ---- pool -> trl dataset: prompt (messages) + oracle columns ----
@@ -573,6 +798,25 @@ def main() -> None:
     reward_funcs = make_rewards(oracle, tokenizer,
                                 args.max_completion_length, args.max_steps)
 
+    wandb_run = None
+    if args.wandb_project:
+        os.environ.pop("WANDB_DISABLED", None)
+        os.environ.setdefault("WANDB_PROJECT", args.wandb_project)
+        import wandb
+        wandb_run = wandb.init(project=args.wandb_project, name=args.hf_tag,
+                               config={"base": args.base,
+                                       "from_adapter": args.from_adapter,
+                                       "lr": args.lr, "beta": args.beta,
+                                       "group": args.group,
+                                       "max_steps": args.max_steps,
+                                       "max_completion_length":
+                                           args.max_completion_length,
+                                       "pool": args.train,
+                                       "oracle": args.oracle,
+                                       "depth": args.depth})
+        print(f"wandb: project={args.wandb_project} run={args.hf_tag}",
+              flush=True)
+
     cfg = GRPOConfig(
         output_dir=str(Path(args.out)),
         max_steps=args.max_steps,
@@ -584,17 +828,23 @@ def main() -> None:
         gradient_accumulation_steps=args.group,
         learning_rate=args.lr,
         lr_scheduler_type="cosine",
-        warmup_steps=50,
+        # scale warmup to the real step budget (P100: ~200 steps per 12h
+        # kernel); the old fixed 50 was 25% of a 200-step run.
+        warmup_steps=max(5, args.max_steps // 20),
         weight_decay=0.01,
         max_prompt_length=args.max_prompt_length,
         max_completion_length=args.max_completion_length,
         num_generations=args.group,
         beta=args.beta,
+        temperature=args.temperature,
+        top_p=args.top_p,
         reward_weights=[1.0, 0.3, 0.1],
         use_cpu=args.cpu,
         bf16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] >= 7 if torch.cuda.is_available() else False),
         fp16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] < 7 if torch.cuda.is_available() else False),
         disable_dropout=True,
+        optim=args.optim,
+        gradient_checkpointing=not args.no_grad_checkpoint,
         disable_tqdm=args.smoke,
         logging_steps=1,
         log_completions=args.smoke,
@@ -603,7 +853,7 @@ def main() -> None:
         save_steps=args.save_steps,
         save_total_limit=4,
         seed=42,
-        report_to=[],
+        report_to=["wandb"] if args.wandb_project else [],
     )
     print(f"GRPO: lr={cfg.learning_rate} beta={cfg.beta} "
           f"group={cfg.num_generations} max_completion={cfg.max_completion_length} "
@@ -614,9 +864,24 @@ def main() -> None:
         reward_funcs=reward_funcs,
         args=cfg,
         train_dataset=ds,
-        processing_class=processor,
+        processing_class=tokenizer,
         peft_config=None,
     )
+
+    # gemma-4-E2B terminates turns with <turn|> (id 106), not <eos> (id 1);
+    # config.json declares eos_token_id=[1,106]. trl 0.17 builds the rollout
+    # generation config with ONLY processing_class.eos_token_id (=1), so
+    # rollouts never stop at <turn|> and run to the 2048 cap (measured:
+    # 16/16 rollouts at 2048, all rewards 0, at temp 1.0 AND 0.7 — the eval
+    # works because it uses the model's default generation config with both
+    # ids, terminating ~127 tokens). Restore the full eos set.
+    try:
+        eos_ids = list(model.config.eos_token_id) if isinstance(
+            model.config.eos_token_id, (list, tuple)) else [model.config.eos_token_id]
+        trainer.generation_config.eos_token_id = eos_ids
+        print(f"[eosfix] rollout eos_token_id = {eos_ids}", flush=True)
+    except Exception as e:
+        print(f"[eosfix] failed: {e}", flush=True)
 
     # HF checkpoint safety net + resume (AGENTS.md: killed kernels must
     # not strand progress; the latest checkpoint survives to HF). The
@@ -646,8 +911,142 @@ def main() -> None:
         def on_train_end(self, args_, state, control, **kwargs):
             hf_cb.maybe_upload(force=True)
 
+    class _RewardLogCallback(TrainerCallback):
+        """Per-step reward evidence: print the last logged metrics so a
+        run visibly shows all three reward funcs returning real values
+        (outcome/process/style), not silent zeros."""
+
+        def on_step_end(self, args_, state, control, **kwargs):
+            if not state.log_history:
+                return
+            entry = state.log_history[-1]
+            hit = {k: round(v, 4) for k, v in entry.items()
+                   if isinstance(v, (int, float)) and
+                   ("reward" in k or k in ("kl", "completion_length"))}
+            if hit:
+                print(f"step {state.global_step}: {hit}", flush=True)
+                if wandb_run is not None:
+                    wandb_run.log(hit, step=state.global_step)
+
+    class _ProgressHeartbeat(TrainerCallback):
+        """Push a compact progress.json to HF on a timer so a kernel that
+        shows only RUNNING is still observable (the Kaggle log API is
+        unreliable; HF always is). A daemon thread fires EVERY interval
+        during training (mid-step included — a single degenerate rollout
+        can take ~50 min at the 2048 budget, and step-end-only would leave
+        the run invisible that whole time). Fields: step, total, phase,
+        elapsed, ETA, last reward metrics. Uploaded to <hf-tag>/progress.json
+        (overwrites)."""
+
+        def __init__(self, api, remote_dir, interval_s, total_steps,
+                     step_timeout_min=0):
+            self.api = api
+            self.remote_dir = remote_dir.strip("/")
+            self.interval_s = interval_s
+            self.total_steps = total_steps
+            self.state = None
+            self.t0 = time.time()
+            self._stop = threading.Event()
+            self.step_timeout_min = step_timeout_min
+            self._step_started = None
+            self._watchdog_stop = threading.Event()
+
+        def _payload(self):
+            entry = (self.state.log_history[-1] if self.state
+                     and self.state.log_history else {})
+            hit = {k: v for k, v in entry.items()
+                   if isinstance(v, (int, float)) and
+                   ("reward" in k or k in ("kl", "completion_length"))}
+            step = self.state.global_step if self.state else 0
+            elapsed = time.time() - self.t0
+            per = elapsed / max(step, 1)
+            mem = None
+            try:
+                import torch as _t
+                if _t.cuda.is_available():
+                    mem = round(_t.cuda.memory_allocated() / 1e9, 2)
+            except Exception:
+                pass
+            payload = {
+                "step": step,
+                "total_steps": self.total_steps,
+                "phase": "training" if self.state and self.state.global_step
+                         else "setup",
+                "elapsed_s": round(elapsed),
+                "eta_s": round(per * (self.total_steps - step))
+                if step else None,
+                "metrics": hit,
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            if mem is not None:
+                payload["mem_gb"] = mem
+            return payload
+
+        def _push(self):
+            try:
+                self.api.upload_file(
+                    path_or_fileobj=json.dumps(self._payload()).encode(),
+                    path_in_repo=f"{self.remote_dir}/progress.json",
+                    repo_id="vedangfake/chess-slm-benchmark",
+                    repo_type="dataset",
+                    commit_message=f"rlvr progress step "
+                                   f"{self._payload()['step']}")
+                print(f"[progress] step {self._payload()['step']}/"
+                      f"{self.total_steps} -> HF progress.json", flush=True)
+            except Exception as e:
+                print(f"[progress] upload failed (will retry): {e}",
+                      flush=True)
+
+        def _loop(self):
+            while not self._stop.wait(self.interval_s):
+                self._push()
+
+        def _watchdog(self):
+            """Interrupt a step that exceeds the cap so a hang or a
+            degenerate long rollout stops the run with a graceful
+            checkpoint instead of burning GPU silently. SIGINT -> the
+            trainer saves state + adapter and uploads them to HF, then
+            exits nonzero, which fails the notebook cell."""
+            if not self.step_timeout_min:
+                return
+            cap = self.step_timeout_min * 60
+            while not self._watchdog_stop.wait(20):
+                if self._step_started is None:
+                    continue
+                stuck = time.time() - self._step_started
+                if stuck > cap:
+                    print(f"[watchdog] step stuck {stuck / 60:.0f} min > "
+                          f"cap {self.step_timeout_min} min; SIGINT for a "
+                          f"graceful checkpoint", flush=True)
+                    os.kill(os.getpid(), signal.SIGINT)
+                    return
+
+        def on_train_begin(self, args_, state, control, **kwargs):
+            self.state = state
+            self.t0 = time.time()
+            threading.Thread(target=self._loop, daemon=True).start()
+            threading.Thread(target=self._watchdog, daemon=True).start()
+            self._push()
+
+        def on_step_begin(self, args_, state, control, **kwargs):
+            self._step_started = time.time()
+
+        def on_step_end(self, args_, state, control, **kwargs):
+            self._step_started = None
+            self._push()
+
+        def on_train_end(self, args_, state, control, **kwargs):
+            self._step_started = None
+            self._watchdog_stop.set()
+            self._push()
+
     if not args.smoke:
         trainer.add_callback(_HfUploadCallback())
+        trainer.add_callback(_ProgressHeartbeat(api, args.hf_tag,
+                                                args.progress_every,
+                                                args.max_steps,
+                                                args.step_timeout_min))
+    trainer.add_callback(_RewardLogCallback())
 
     print("training...", flush=True)
     t0 = time.time()
@@ -690,4 +1089,19 @@ if __name__ == "__main__":
             print("[status] failure written to HF run-status.txt", flush=True)
         except Exception as e2:
             print(f"[status] failed to write run-status.txt: {e2}", flush=True)
-        raise
+        # Memory forensics: what was holding the GPU when it died.
+        try:
+            import torch as _t
+            if _t.cuda.is_available():
+                print(f"[mem] CRASH peak={_t.cuda.max_memory_allocated()/1e9:.2f}GB "
+                      f"allocated={_t.cuda.memory_allocated()/1e9:.2f}GB",
+                      flush=True)
+                _t.cuda.memory_summary(abbreviated=True)
+        except Exception as _e3:
+            print(f"[mem] summary failed: {_e3}", flush=True)
+        # Hard exit: wandb's non-daemon uploader thread and the heartbeat
+        # loop would otherwise keep this process alive after a crash,
+        # burning GPU until the notebook's wall-clock cap fires (measured
+        # 2026-08-20 v6: 45 min of dead time). os._exit skips atexit and
+        # kills every thread immediately; run-status.txt is already on HF.
+        os._exit(1)

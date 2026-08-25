@@ -104,3 +104,5 @@ notebooks/kaggle_mate_*_w*.ipynb
 
 # pre-tokenized datasets (HF-hosted, >100MB)
 /data/positions/noexplain-slice/*pretok*.jsonl
+.opencode/
+.omp/

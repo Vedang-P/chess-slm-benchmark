@@ -120,7 +120,9 @@ def download_hf_checkpoint(api, repo_id: str, remote_dir: str,
         print(f"[resume] cannot list {repo_id}: {e}", flush=True)
         return None
     prefix = f"{remote_dir.strip('/')}/checkpoint-"
-    cps = sorted({f.split("/")[2] for f in files if f.startswith(prefix) and len(f.split("/")) > 2})
+    # checkpoint dir name is component [1] (bug found 2026-08-19: [2]
+    # selected the file name, breaking resume)
+    cps = sorted({f.split("/")[1] for f in files if f.startswith(prefix) and len(f.split("/")) > 2})
     if not cps:
         print(f"[resume] no checkpoints under {remote_dir} in {repo_id}", flush=True)
         return None
@@ -202,9 +204,31 @@ def main() -> None:
     print(f"cuda={torch.cuda.is_available()} cap={cap} dtype={compute_dtype}",
           flush=True)
 
+    # transformers 5.13.1 shim: quantization_config.py only imports torch
+    # under `if is_torch_available()` which returned False on the Kaggle
+    # P100 stack (torch 2.2.2+cu118) — BitsAndBytesConfig then NameErrors
+    # on `torch` in both the dtype and str branches (measured 2026-08-19).
+    # Bind it explicitly; harmless when the module already has it.
+    import transformers.utils.quantization_config as _qc
+    if not hasattr(_qc, "torch"):
+        _qc.torch = torch
+
+    # torch 2.4.1 lacks nn.Module.set_submodule (added in 2.5+); bnb
+    # 0.46.1's replace_with_bnb_linear calls it during 4-bit conversion
+    # (measured 2026-08-19 on the P100 demo). Same semantics as torch's.
+    if not hasattr(torch.nn.Module, "set_submodule"):
+        def _set_submodule(self, target, module):
+            atoms = target.split(".")
+            parent = self
+            for atom in atoms[:-1]:
+                parent = getattr(parent, atom)
+            setattr(parent, atoms[-1], module)
+        torch.nn.Module.set_submodule = _set_submodule
+
     quant = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True, bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_use_double_quant=True,
+        bnb_4bit_compute_dtype=compute_dtype,
     )
     print("loading base model...", flush=True)
     # THE CAMPAIGN MODEL: full multimodal google/gemma-4-E2B-it loaded
@@ -349,6 +373,7 @@ def main() -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("TRAIN_TAG", args.train_tag)
     report_to = ["wandb"] if args.wandb_project else []
     wandb_run = None
     if report_to:
@@ -488,14 +513,14 @@ if __name__ == "__main__":
         # downloading the multi-GB /kaggle/working (which makes
         # 'kaggle kernels output' unusable). Read it back with:
         #   hf_hub_download("vedangfake/chess-slm-benchmark",
-        #                   "noexplain-slice/run-status.txt", ...)
+        #                   "<train-tag>/run-status.txt", ...)
         try:
             import os as _os
             api = _hf_api()
             body = (f"{type(e).__name__}: {e}\n"
                     + _tb.format_exc()[-4000:])
             api.upload_file(path_or_fileobj=body.encode(),
-                            path_in_repo="noexplain-slice/run-status.txt",
+                            path_in_repo=f"{_os.environ.get('TRAIN_TAG', 'sft')}/run-status.txt",
                             repo_id=_os.environ.get("HF_REPO",
                                 "vedangfake/chess-slm-benchmark"),
                             repo_type="dataset",
