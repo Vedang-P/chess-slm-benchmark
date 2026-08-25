@@ -649,11 +649,14 @@ def main() -> None:
     except Exception as e:
         print(f"[memfix] fp32 patch failed: {e}", flush=True)
 
-    # ---- memory diagnostics (v9): locate the ~14GB peak ----
+    # ---- memory diagnostics (v9): locate the ~14GB peak (CUDA only) ----
     import torch as _torch
-    _torch.cuda.reset_peak_memory_stats()
+    if _torch.cuda.is_available():
+        _torch.cuda.reset_peak_memory_stats()
 
     def _mem(tag):
+        if not _torch.cuda.is_available():
+            return
         print(f"[mem] {tag}: allocated={_torch.cuda.memory_allocated()/1e9:.2f}GB "
               f"reserved={_torch.cuda.memory_reserved()/1e9:.2f}GB "
               f"peak={_torch.cuda.max_memory_allocated()/1e9:.2f}GB",
