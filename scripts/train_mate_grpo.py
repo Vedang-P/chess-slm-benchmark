@@ -651,16 +651,33 @@ def main() -> None:
 
     # ---- memory diagnostics (v9): locate the ~14GB peak (CUDA only) ----
     import torch as _torch
-    if _torch.cuda.is_available():
-        _torch.cuda.reset_peak_memory_stats()
+    # MPS on Darwin: torch.cuda.is_available() itself raises (torch.mps has no current_device)
+    # Patch it to False so later is_available checks don't throw.
+    try:
+        _ = _torch.cuda.is_available()
+    except Exception:
+        _torch.cuda.is_available = lambda: False
+    def _has_cuda():
+        try:
+            return _torch.cuda.is_available()
+        except Exception:
+            return False
+    if _has_cuda():
+        try:
+            _torch.cuda.reset_peak_memory_stats()
+        except Exception:
+            pass
 
     def _mem(tag):
-        if not _torch.cuda.is_available():
+        if not _has_cuda():
             return
-        print(f"[mem] {tag}: allocated={_torch.cuda.memory_allocated()/1e9:.2f}GB "
-              f"reserved={_torch.cuda.memory_reserved()/1e9:.2f}GB "
-              f"peak={_torch.cuda.max_memory_allocated()/1e9:.2f}GB",
-              flush=True)
+        try:
+            print(f"[mem] {tag}: allocated={_torch.cuda.memory_allocated()/1e9:.2f}GB "
+                  f"reserved={_torch.cuda.memory_reserved()/1e9:.2f}GB "
+                  f"peak={_torch.cuda.max_memory_allocated()/1e9:.2f}GB",
+                  flush=True)
+        except Exception:
+            pass
 
     _orig_gsc = _grpo_mod.GRPOTrainer._generate_and_score_completions
 

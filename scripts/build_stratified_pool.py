@@ -37,7 +37,7 @@ def score(fen, move, engine):
         return None
     board.push_uci(move)
     try:
-        info=engine.analyse(board, chess.engine.Limit(depth=12), timeout=2.0)
+        info=engine.analyse(board, chess.engine.Limit(depth=12))
     except Exception:
         return None
     sc=info.get("score")
