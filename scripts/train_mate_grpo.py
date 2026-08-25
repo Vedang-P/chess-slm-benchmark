@@ -716,9 +716,21 @@ def main() -> None:
 
     # ---- model: gemma4 multimodal 4-bit path (train_mate_lora-proven)
     # vs plain CausalLM path (CPU smoke on small models) ----
+    # Gemma-4 processor is not in transformers 4.49 (Kaggle's pinned version);
+    # try it and fall back to plain tokenizer+CausalLM so the gate boots.
+    _use_gemma4_mm = False
     if is_gemma4:
-        processor = AutoProcessor.from_pretrained(args.base)
-        tokenizer = processor.tokenizer
+        try:
+            processor = AutoProcessor.from_pretrained(args.base, trust_remote_code=True)
+            tokenizer = processor.tokenizer
+            _use_gemma4_mm = True
+            print(f"gemma4 processor loaded ({args.base})", flush=True)
+        except Exception as e:
+            print(f"[warn] AutoProcessor for {args.base} failed ({e}); "
+                  "falling back to AutoTokenizer + CausalLM", flush=True)
+            _use_gemma4_mm = False
+    if _use_gemma4_mm:
+        assert processor is not None and tokenizer is not None
         if args.cpu:
             model = AutoModelForImageTextToText.from_pretrained(
                 args.base, device_map="cpu", dtype=torch.float32,
