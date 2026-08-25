@@ -593,10 +593,12 @@ def main() -> None:
                          "WANDB_API_KEY)")
     ap.add_argument("--progress-every", type=float, default=60,
                     help="seconds between HF progress.json heartbeats")
+    ap.add_argument("--reward-weights", default="1.0,0.3,0.0",
+                    help="comma-separated outcome,process,style weights (trl reward_weights). "
+                         "A1: 1.0,0.3,0.0  B: 0.1,0.9,0.0  (style 0.0 for longer reasoning, P1)")
     ap.add_argument("--step-timeout-min", type=float, default=0,
-                    help="SIGINT a step stuck longer than N minutes "
-                         "(graceful checkpoint + upload, then exit); "
-                         "0 disables")
+                    help="wall-clock minutes per step before watchdog SIGINT "
+                         "(graceful checkpoint + upload, then exit); 0 disables")
     args = ap.parse_args()
 
     import torch
@@ -906,7 +908,7 @@ def main() -> None:
         beta=args.beta,
         temperature=args.temperature,
         top_p=args.top_p,
-        reward_weights=[1.0, 0.3, 0.1],
+        reward_weights=[float(x) for x in args.reward_weights.split(",")],
         use_cpu=args.cpu,
         bf16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] >= 7 if torch.cuda.is_available() else False),
         fp16=False if args.cpu else (torch.cuda.get_device_capability(0)[0] < 7 if torch.cuda.is_available() else False),
