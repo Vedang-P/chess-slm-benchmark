@@ -243,6 +243,88 @@ class _ThinkingProcessor:
         return self._processor(*args, **kwargs)
 
 
+class _LiveThinkingSink:
+    """Rolling buffer of generated thinking tokens, streamed to the HF
+    dataset (free cloud store) on a timer so a run is watchable LIVE.
+
+    Every decoded token is appended to the buffer; a background thread
+    uploads the growing snapshot to
+        {hf_repo} / {remote_dir}/live-thinking.txt
+    every --live-upload-every seconds. The Kaggle log also shows the
+    stream via stdout (kaggle kernels logs -f). Not git — HF dataset only.
+    """
+
+    def __init__(self, api, remote_dir, interval_s: int):
+        self.api = api
+        self.remote_dir = remote_dir.strip("/")
+        self.interval_s = max(interval_s, 5)
+        self._buffer: list[str] = []
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._last_len = 0
+
+    def append(self, text: str) -> None:
+        with self._lock:
+            self._buffer.append(text)
+
+    def snapshot(self) -> str:
+        with self._lock:
+            return "".join(self._buffer)
+
+    def _push(self) -> None:
+        text = self.snapshot()
+        if not text or len(text) == self._last_len:
+            return
+        self._last_len = len(text)
+        try:
+            self.api.upload_file(
+                path_or_fileobj=text.encode(),
+                path_in_repo=f"{self.remote_dir}/live-thinking.txt",
+                repo_id="vedangfake/chess-slm-benchmark",
+                repo_type="dataset",
+                commit_message=f"live thinking {len(text)} chars")
+            print(f"\n[live] {len(text)} chars -> "
+                  f"vedangfake/chess-slm-benchmark/"
+                  f"{self.remote_dir}/live-thinking.txt", flush=True)
+        except Exception as e:
+            print(f"\n[live] upload failed (will retry): {e}", flush=True)
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self.interval_s):
+            self._push()
+
+    def start(self) -> None:
+        threading.Thread(target=self._loop, daemon=True).start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._push()
+
+
+class _LiveThinkingStreamer:
+    """TextStreamer-compatible sink: prints each decoded chunk to stdout
+    (live Kaggle log) and forwards it to the HF sink. Injected into trl's
+    rollout generate call via model.generate(streamer=...) so every
+    rollout's thinking is watchable as it is produced."""
+
+    def __init__(self, tokenizer, sink: _LiveThinkingSink):
+        self.tokenizer = tokenizer
+        self.sink = sink
+        self._pending = ""
+
+    def put(self, value) -> None:
+        text = self.tokenizer.decode(value, skip_special_tokens=False)
+        self._pending += text
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        self.sink.append(text)
+
+    def end(self) -> None:
+        if self._pending:
+            sys.stdout.flush()
+            self._pending = ""
+
+
 class Oracle:
     """Position scoring backend shared by the reward functions.
 
@@ -641,6 +723,10 @@ def main() -> None:
                          "WANDB_API_KEY)")
     ap.add_argument("--progress-every", type=float, default=60,
                     help="seconds between HF progress.json heartbeats")
+
+    ap.add_argument("--live-upload-every", type=int, default=15,
+                    help="seconds between live-thinking.txt snapshots "
+                         "to HF (0 disables the live stream)")
     ap.add_argument("--reward-weights", default="1.0,0.3,0.0",
                     help="comma-separated outcome,process,style weights (trl reward_weights). "
                          "A1: 1.0,0.3,0.0  B: 0.1,0.9,0.0  (style 0.0 for longer reasoning, P1)")
@@ -1053,8 +1139,52 @@ def main() -> None:
     api = None
     hf_cb = None
     resume_from = None
+    live_sink = None
     if not args.smoke:
         api = _hf_api()
+        # LIVE thinking stream (user requirement): every rollout's tokens
+        # go to stdout (Kaggle log, watchable live) + a growing snapshot
+        # on the HF dataset every --live-upload-every s. The streamer is
+        # injected into trl's rollout generate below.
+        live_sink = _LiveThinkingSink(api, args.hf_tag,
+                                      args.live_upload_every)
+        live_sink.start()
+        print(f"[live] thinking stream -> {args.hf_tag}/live-thinking.txt",
+              flush=True)
+
+        # Inject the live streamer into every rollout generate call. trl
+        # calls unwrapped_model.generate(...); wrap the model's generate
+        # (and PeftModel's base_model.generate if present) so the streamer
+        # kwarg always lands, without touching trl internals.
+        if args.live_upload_every > 0:
+            try:
+                from transformers import TextStreamer as _TS
+
+                class _Streamer(_TS):
+                    def on_finalized_text(self, text, stream_end=False):
+                        sys.stdout.write(text)
+                        sys.stdout.flush()
+                        live_sink.append(text)
+
+                _streamer = _Streamer(
+                    tokenizer=tokenizer, skip_prompt=True,
+                    skip_special_tokens=False)
+
+                def _with_streamer(fn):
+                    def _w(*a, **k):
+                        k.setdefault("streamer", _streamer)
+                        return fn(*a, **k)
+                    return _w
+
+                model.generate = _with_streamer(model.generate)
+                if hasattr(model, "base_model") and hasattr(
+                        model.base_model, "generate"):
+                    model.base_model.generate = _with_streamer(
+                        model.base_model.generate)
+                print("[live] streamer injected into rollout generate",
+                      flush=True)
+            except Exception as e:
+                print(f"[live] streamer injection failed: {e}", flush=True)
         hf_cb = HfCheckpointCallback(api, args.hf_repo, args.hf_tag,
                                      args.hf_upload_every, args.out)
         if args.resume_from_hf:
@@ -1253,6 +1383,13 @@ def main() -> None:
             hf_cb.final()
         except Exception as e:
             print(f"[hf-cp] final upload failed: {e}", flush=True)
+
+    if live_sink is not None:
+        try:
+            live_sink.stop()
+            print("[live] thinking stream closed", flush=True)
+        except Exception as e:
+            print(f"[live] final push failed: {e}", flush=True)
 
     oracle.close()
 
