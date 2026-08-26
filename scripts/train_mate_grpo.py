@@ -443,12 +443,35 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
     columns (fen/candidate_a/candidate_b/truth_label) — verified against
     grpo_trainer._generate_and_score_completions: reward_kwargs = every
     input column except prompt/completion."""
+    TracesPath = str(Path("rlvr-traces.jsonl"))
     outcomes = {}  # (prompt_text, completion_index) -> 1/0.
     # Keyed per-completion, NOT per prompt: all group members share one
     # prompt, so a prompt-only key would let the LAST completion's outcome
     # gate the style reward for every member (bug found in the 2026-08-19
     # audit). trl calls the reward funcs with aligned, same-order lists
     # within a step, so the index is stable across calls.
+    traces = {}  # (prompt_key, i) -> trace dict; dumped per rollout
+
+    def _dump_trace(key, trace):
+        """Print one readable line + append the full trace JSONL so the
+        thinking traces, final answer, and per-reward breakdown are
+        inspectable live and after the run (user requirement: no
+        black-box rollouts). The JSONL is uploaded to HF by the heartbeat
+        callback; the print shows on Kaggle's log with the same data."""
+        line = (f"[trace] {trace['tokens']}t label={trace['label']} "
+                f"move={trace['move']} best={trace['best']} "
+                f"truth={trace['truth']} "
+                f"outcome={trace['outcome']:.2f} "
+                f"process={trace['process']:.2f} "
+                f"style={trace['style']:.2f} "
+                f"answer={trace.get('answer','')!r}")
+        print(line, flush=True)
+        try:
+            path = Path(trace.get("traces_path", TracesPath))
+            with path.open("a") as f:
+                f.write(json.dumps(trace, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print(f"[trace] jsonl append failed: {e}", flush=True)
 
     def outcome_reward(prompts, completions, **kwargs):
         fens = kwargs.get("fen") or [None] * len(completions)
@@ -463,17 +486,19 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
                 continue
             label, move = parse_choice(text, cas[i], cbs[i])
             best = oracle.best_label(fens[i], cas[i], cbs[i], truths[i])
-            if i == 0:
-                try:
-                    import chess as _ch
-                    _ba = _ch.Board(fens[i]); _ba.push(_ch.Move.from_uci(cas[i])); _ea = oracle.eval_cp(_ba.fen())
-                    _bb = _ch.Board(fens[i]); _bb.push(_ch.Move.from_uci(cbs[i])); _eb = oracle.eval_cp(_bb.fen())
-                    print(f"[sample] text={text[:300]!r} label={label} move={move} best={best} a={cas[i]} b={cbs[i]} truth={truths[i]} ea={_ea} eb={_eb}", flush=True)
-                except Exception as _e:
-                    print(f"[sample] text={text[:200]!r} label={label} best={best} err={_e}", flush=True)
             ok = (best is not None and label == best
                   or (move and move == oracle.best_move(fens[i])))
             outcomes[(_prompt_key(prompts[i]), i)] = 1.0 if ok else 0.0
+            traces.setdefault((_prompt_key(prompts[i]), i), {})
+            traces[(_prompt_key(prompts[i]), i)].update({
+                "text": text,
+                "tokens": len(tokenizer.encode(text)),
+                "fen": fens[i], "candidate_a": cas[i],
+                "candidate_b": cbs[i], "truth": truths[i],
+                "label": label, "move": move, "best": best,
+                "outcome": float(ok),
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            })
             rewards.append(outcomes[(_prompt_key(prompts[i]), i)])
         return rewards
 
@@ -485,7 +510,11 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
             if fens[i] is None:
                 rewards.append(0.0)
                 continue
-            rewards.append(_verify_trace(text, fens[i], oracle))
+            r = _verify_trace(text, fens[i], oracle)
+            key = (_prompt_key(prompts[i]), i)
+            if key in traces:
+                traces[key]["process"] = float(r)
+            rewards.append(r)
         return rewards
 
     def style_reward(prompts, completions, **kwargs):
@@ -496,12 +525,22 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
                 rewards.append(0.0)  # never reward short-and-wrong
                 continue
             tokens = len(tokenizer.encode(_completion_text(completion)))
-            if not max_completion_length:
-                # uncapped thinking: no length penalty at all (the user's
-                # directive is longer reasoning, never punish it)
-                rewards.append(1.0)
-            else:
-                rewards.append(1.0 - tokens / max_completion_length)
+            style = (1.0 if not max_completion_length
+                     else 1.0 - tokens / max_completion_length)
+            key = (_prompt_key(prompts[i]), i)
+            if key in traces:
+                traces[key].update({
+                    "style": float(style),
+                    "answer": re.search(r"Move\s*[AB]\b[^\n]*", 
+                                        _completion_text(completion), re.I)
+                                  .group(0) if re.search(
+                                       r"Move\s*[AB]\b[^\n]*",
+                                       _completion_text(completion), re.I)
+                               else None,
+                })
+                _dump_trace(key, traces[key])
+                del traces[key]  # keep the dict bounded
+            rewards.append(style)
         return rewards
 
     return [outcome_reward, process_reward, style_reward]
@@ -1117,6 +1156,24 @@ def main() -> None:
                 print(f"[progress] upload failed (will retry): {e}",
                       flush=True)
 
+            # live thinking traces: stream the JSONL the reward funcs
+            # append to, so every rollout's full text + rewards are
+            # inspectable on HF mid-run (no black boxes).
+            traces_path = Path("rlvr-traces.jsonl")
+            if traces_path.exists():
+                try:
+                    with open(traces_path, "rb") as _tf:
+                        self.api.upload_file(
+                            path_or_fileobj=_tf,
+                            path_in_repo=f"{self.remote_dir}/rlvr-traces.jsonl",
+                            repo_id="vedangfake/chess-slm-benchmark",
+                            repo_type="dataset",
+                            commit_message=f"rlvr traces step "
+                                           f"{self._payload()['step']}")
+                except Exception as e:
+                    print(f"[traces] upload failed (will retry): {e}",
+                          flush=True)
+ 
         def _loop(self):
             while not self._stop.wait(self.interval_s):
                 self._push()
