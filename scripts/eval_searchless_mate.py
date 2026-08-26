@@ -22,6 +22,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # searchless_chess cloned at repo root: /kaggle/working/chess-slm-benchmark/searchless_chess
 SL_ROOT = ROOT / "searchless_chess"
+# the package imports itself as searchless_chess.src.* -> the PARENT of
+# the repo must be on sys.path (v1 crash: only src/ was added, so
+# `from searchless_chess.src import tokenizer` failed)
+sys.path.insert(0, str(SL_ROOT.parent))
 sys.path.insert(0, str(SL_ROOT))
 sys.path.insert(0, str(SL_ROOT / "src"))
 
