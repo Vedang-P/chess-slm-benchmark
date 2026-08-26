@@ -237,6 +237,10 @@ class _ThinkingProcessor:
     def apply_chat_template(self, conversation, **kwargs):
         kwargs.setdefault("enable_thinking", self._enable_thinking)
         return self._processor.apply_chat_template(conversation, **kwargs)
+    def __call__(self, *args, **kwargs):
+        # trl 0.17 invokes processing_class(...) to tokenize; the wrapper
+        # must stay callable (AttributeError on v10: object not callable).
+        return self._processor(*args, **kwargs)
 
 
 class Oracle:
@@ -492,7 +496,12 @@ def make_rewards(oracle: Oracle, tokenizer, max_completion_length: int,
                 rewards.append(0.0)  # never reward short-and-wrong
                 continue
             tokens = len(tokenizer.encode(_completion_text(completion)))
-            rewards.append(1.0 - tokens / max_completion_length)
+            if not max_completion_length:
+                # uncapped thinking: no length penalty at all (the user's
+                # directive is longer reasoning, never punish it)
+                rewards.append(1.0)
+            else:
+                rewards.append(1.0 - tokens / max_completion_length)
         return rewards
 
     return [outcome_reward, process_reward, style_reward]
@@ -524,13 +533,13 @@ def main() -> None:
                          "adamw_bnb_8bit to save ~0.5GB on P100)")
     ap.add_argument("--max-steps", type=int, default=3500)
     ap.add_argument("--max-prompt-length", type=int, default=1024)
-    ap.add_argument("--max-completion-length", type=int, default=2048,
-                    help="rollout completion budget. 2048 = the eval "
-                         "protocol's budget (unbounded thinking directive; "
-                         "the SFT'd model averages ~127 tokens, so 2048 is "
-                         "10x headroom, never binds). OOM fix = gradient "
-                         "checkpointing + expandable segments, not a small "
-                         "budget.")
+    ap.add_argument("--max-completion-length", type=int, default=0,
+                    help="rollout completion budget. 0 (default) = NO CAP"
+                         ": generation stops only when the model emits "
+                         "EOS (<turn|>/<eos>) or hits the 131072 context "
+                         "window — the model's own physical envelope, not "
+                         "an imposed number. Any positive value sets an "
+                         "explicit token budget.")
     ap.add_argument("--beta", type=float, default=0.04)
     ap.add_argument("--temperature", type=float, default=1.0,
                     help="rollout sampling temperature. The SFT'd model "
@@ -916,6 +925,15 @@ def main() -> None:
         print(f"wandb: project={args.wandb_project} run={args.hf_tag}",
               flush=True)
 
+    # 0 = NO CAP. trl needs an int (its GenerationConfig + Dr.GRPO loss
+    # arithmetic), so feed the model's own context ceiling (131072, from
+    # text_config.max_position_embeddings): beyond that gemma physically
+    # cannot attend. Rollouts still stop at EOS via [eosfix] — this is
+    # only the runaway wall.
+    max_completion_length = args.max_completion_length or 131072
+    print(f"[nocap] max_completion_length={max_completion_length} "
+          f"(model context ceiling; EOS-truncated, not cap-truncated)",
+          flush=True)
     cfg = GRPOConfig(
         output_dir=str(Path(args.out)),
         max_steps=args.max_steps,
@@ -932,7 +950,7 @@ def main() -> None:
         warmup_steps=max(5, args.max_steps // 20),
         weight_decay=0.01,
         max_prompt_length=args.max_prompt_length,
-        max_completion_length=args.max_completion_length,
+        max_completion_length=max_completion_length,
         num_generations=args.group,
         beta=args.beta,
         temperature=args.temperature,
