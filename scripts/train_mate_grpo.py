@@ -947,22 +947,30 @@ def main() -> None:
 
     wandb_run = None
     if args.wandb_project:
-        os.environ.pop("WANDB_DISABLED", None)
-        os.environ.setdefault("WANDB_PROJECT", args.wandb_project)
-        import wandb
-        wandb_run = wandb.init(project=args.wandb_project, name=args.hf_tag,
-                               config={"base": args.base,
-                                       "from_adapter": args.from_adapter,
-                                       "lr": args.lr, "beta": args.beta,
-                                       "group": args.group,
-                                       "max_steps": args.max_steps,
-                                       "max_completion_length":
-                                           args.max_completion_length,
-                                       "pool": args.train,
-                                       "oracle": args.oracle,
-                                       "depth": args.depth})
-        print(f"wandb: project={args.wandb_project} run={args.hf_tag}",
-              flush=True)
+        # wandb is a nice-to-have, never a hard dependency: Kaggle kernels
+        # usually have no WANDB_API_KEY (crashed A1/B on 2026-08-26 with
+        # UsageError: No API key configured). Only init when a key exists;
+        # otherwise skip with a notice.
+        if os.environ.get("WANDB_API_KEY") or os.path.exists(Path.home() / ".netrc"):
+            os.environ.pop("WANDB_DISABLED", None)
+            os.environ.setdefault("WANDB_PROJECT", args.wandb_project)
+            import wandb
+            wandb_run = wandb.init(project=args.wandb_project, name=args.hf_tag,
+                                   config={"base": args.base,
+                                           "from_adapter": args.from_adapter,
+                                           "lr": args.lr, "beta": args.beta,
+                                           "group": args.group,
+                                           "max_steps": args.max_steps,
+                                           "max_completion_length":
+                                               args.max_completion_length,
+                                           "pool": args.train,
+                                           "oracle": args.oracle,
+                                           "depth": args.depth})
+            print(f"wandb: project={args.wandb_project} run={args.hf_tag}",
+                  flush=True)
+        else:
+            print("[wandb] no WANDB_API_KEY found; skipping wandb (not fatal)",
+                  flush=True)
 
     # 0 = NO CAP. trl needs an int (its GenerationConfig + Dr.GRPO loss
     # arithmetic), so feed the model's own context ceiling (131072, from
