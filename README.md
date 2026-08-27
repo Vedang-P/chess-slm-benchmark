@@ -63,17 +63,21 @@ humans (grandmaster level).
 Baselines archived from the 2026-08-19 campaign (git); searchless models
 measured locally with the official ActionValueEngine (2026-08-27).
 
-| model | params | noexplain | tactic | both | full | status |
-|---|---|---|---|---|---|---|
-| deepseek-v4-flash (thinking, unbounded) | frontier | **85.8%** | **92.2%** | **94.0%** | **92.8%** | ✅ complete |
-| gemma4-e2b (thinking, 32768) | 2B | **58.1%** | **60.5%** | **61.5%** | **60.8%** | ✅ complete |
-| gemma4-e2b caveman-SFT | 2B | **55.4%** | — | — | — | ✅ complete (regressed) |
-| **searchless 9M** (Ruoss) | 9M | **98.2%** | TBD | TBD | TBD | 🔵 noexplain done |
-| **searchless 136M** (Ruoss) | 136M | TBD | TBD | TBD | TBD | ⬜ pending |
-| **searchless 270M** (Ruoss) | 270M | TBD | TBD | TBD | TBD | ⬜ pending |
+| model | params | noexplain | tactic | both | full | puzzles (10K) | status |
+|---|---|---|---|---|---|---|---|
+| deepseek-v4-flash (thinking, unbounded) | frontier | **85.8%** | **92.2%** | **94.0%** | **92.8%** | — | ✅ complete |
+| gemma4-e2b (thinking, 32768) | 2B | **58.1%** | **60.5%** | **61.5%** | **60.8%** | — | ✅ complete |
+| gemma4-e2b caveman-SFT | 2B | **55.4%** | — | — | — | — | ✅ complete (regressed) |
+| **searchless 9M** (Ruoss) | 9M | **98.2%** | TBD | TBD | TBD | TBD | 🔵 noexplain done |
+| **searchless 136M** (Ruoss) | 136M | TBD | TBD | TBD | TBD | TBD | ⬜ pending |
+| **searchless 270M** (Ruoss) | 270M | TBD | TBD | TBD | TBD | TBD | ⬜ pending |
 
-Reference points from the MATE paper (their fine-tuned LLaMA-3-8B
-zero-shot): 63.5% (N), 89.7% (S), 94.6% (T), 95.2% (ST).
+Reference points:
+- MATE paper (fine-tuned LLaMA-3-8B zero-shot): 63.5% (N), 89.7% (S),
+  94.6% (T), 95.2% (ST).
+- Ruoss paper puzzle accuracy (official eval, full-solution-sequence
+  match on the 10K Lichess puzzles): 9M = 88.9%, 136M = 94.5%,
+  270M = 95.4%. Our harness should reproduce these.
 
 **The result so far:** a 9M-param searchless chess specialist (98.2%)
 beats the 2B generalist gemma (58.1%) AND the frontier model DeepSeek V4
