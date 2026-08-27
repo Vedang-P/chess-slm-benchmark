@@ -1,15 +1,16 @@
-"""Evaluate google-deepmind/searchless_chess (Ruoss et al.) on MATE-style
-2-choice move selection (noexplain-1000).
+"""Evaluate searchless_chess (Ruoss et al.) on MATE 2-choice via the
+dbest-isi HF fork's clean loader (modern jax/orbax, no PositionalSharding).
 
-Reuses the OFFICIAL engine builder (engines/constants.py) so the released
-9M/136M/270M checkpoints load with their paper configs. For each MATE
-position: score win-prob of candidate A vs B via ActionValueEngine, pick
-higher. Answers: does a searchless chess model transfer to expert
-2-choice tasks, and how does it compare to gemma-4-E2B's 58.1%?
+Loads the ORIGINAL DeepMind orbax checkpoints (9M/136M/270M) through the
+fork's hf_model.py SearchlessChessModel, scores each MATE position by
+win-prob(A) vs win-prob(B) (mean over the 128 return buckets), and
+reports per-test-set accuracy.
 
-Usage (Kaggle, from the repo root):
+Usage (Kaggle):
     python3 scripts/eval_searchless_mate.py \
-        --model 270M --eval data/positions/mate-selection-test-noexplain.json
+        --model 270M --checkpoint /kaggle/working/checkpoints/270M/6400000 \
+        --eval <comma-separated MATE jsons> \
+        --sl-code /kaggle/working/chess-slm-benchmark/searchless_chess_code
 """
 from __future__ import annotations
 
@@ -19,61 +20,50 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-# searchless_chess cloned at repo root: /kaggle/working/chess-slm-benchmark/searchless_chess
-SL_ROOT = ROOT / "searchless_chess"
-# the package imports itself as searchless_chess.src.* -> the PARENT of
-# the repo must be on sys.path (v1 crash: only src/ was added, so
-# `from searchless_chess.src import tokenizer` failed)
-sys.path.insert(0, str(SL_ROOT.parent))
-sys.path.insert(0, str(SL_ROOT))
-sys.path.insert(0, str(SL_ROOT / "src"))
-
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="270M",
-                    choices=["9M", "136M", "270M"])
+    ap.add_argument("--model", default="270M", choices=["9M", "136M", "270M"])
+    ap.add_argument("--checkpoint", required=True,
+                    help="orbax checkpoint dir (…/270M/6400000)")
     ap.add_argument("--eval", required=True,
-                    help="MATE-style eval json (noexplain format)")
-    ap.add_argument("--checkpoint-dir", default="",
-                    help="dir containing checkpoints/<model> (default: "
-                         "repo root, matching the official layout)")
+                    help="comma-separated MATE json paths")
+    ap.add_argument("--sl-code", required=True,
+                    help="dir with the fork's searchless_chess_code/")
     ap.add_argument("--max-rows", type=int, default=0)
     args = ap.parse_args()
 
     import numpy as np
     import chess
 
-    # official builder: constants.ENGINE_BUILDERS['270M'] etc.
-    import sys as _sys
-    if args.checkpoint_dir:
-        _sys.path.insert(0, args.checkpoint_dir)
-    from engines import constants as sl_constants
+    sys.path.insert(0, args.sl_code)
+    from hf_model import SearchlessChessModel, SearchlessChessConfig
 
-    builder = sl_constants.ENGINE_BUILDERS[args.model]
-    engine = builder()
-    print(f"[sl] {args.model} engine loaded", flush=True)
+    # arch per model (from official constants.py)
+    arch = {"9M": (256, 8, 8), "136M": (1024, 8, 8),
+            "270M": (1024, 16, 8)}
+    embedding_dim, num_layers, num_heads = arch[args.model]
 
-    # return buckets for win-prob conversion
-    from engines import neural_engines, engine as engine_lib
-    import utils as sl_utils
+    cfg = SearchlessChessConfig(
+        vocab_size=1968, output_size=128,
+        embedding_dim=embedding_dim, num_layers=num_layers,
+        num_heads=num_heads, max_sequence_length=79,
+        num_return_buckets=128, model_name=args.model)
+    model = SearchlessChessModel(cfg)
+    model.load_params(args.checkpoint)
+    print(f"[sl] {args.model} loaded from {args.checkpoint}", flush=True)
 
-    # ---- load MATE eval set ----
     rows = []
     for path in args.eval.split(","):
         rows += json.load(open(path.strip()))
     if args.max_rows:
         rows = rows[:args.max_rows]
-    print(f"[sl] {len(rows)} MATE positions "
-          f"({args.eval})", flush=True)
+    print(f"[sl] {len(rows)} MATE positions", flush=True)
 
     n_correct = 0
     n_total = 0
-    examples = []
     per_file = {}
+    examples = []
     for i, row in enumerate(rows):
         _src = (row.get("source") or "pool")
         per_file.setdefault(_src, [0, 0])
@@ -81,7 +71,6 @@ def main() -> None:
         truth = row.get("truth_label") or row.get("label")
         ca = row.get("candidate_a") or row.get("move_a")
         cb = row.get("candidate_b") or row.get("move_b")
-        # MATE native format: candidates live in task_extra
         te = row.get("task_extra") or {}
         if not ca:
             ca = te.get("candidate_a")
@@ -93,20 +82,24 @@ def main() -> None:
             continue
         board = chess.Board(fen)
         try:
-            analysis = engine.analyse(board)
+            result = model.predict(fen, temperature=1.0)
         except Exception as e:
-            print(f"[sl] analyse failed row {i}: {e}", flush=True)
+            print(f"[sl] predict failed row {i}: {e}", flush=True)
             continue
-        log_probs = analysis["log_probs"]
-        probs = np.exp(log_probs)
-        buckets = getattr(engine, "_return_buckets_values", None)
-        if buckets is None:
-            _, buckets = sl_utils.get_uniform_buckets_edges_values(128)
-        win_probs = np.inner(probs, buckets)
-        moves = engine_lib.get_ordered_legal_moves(board)
-        win = dict(zip([m.uci() for m in moves], win_probs.tolist()))
-        wa, wb = win.get(ca), win.get(cb)
+        probs = result.get("action_probs")
+        if probs is None:
+            print(f"[sl] no action_probs row {i}", flush=True)
+            continue
+        # action_probs: per-action (1968) probability vector
+        from utils import MOVE_TO_ACTION
+        wa = wb = None
+        for uci, idx in MOVE_TO_ACTION.items():
+            if uci == ca:
+                wa = float(probs[idx])
+            if uci == cb:
+                wb = float(probs[idx])
         if wa is None or wb is None:
+            print(f"[sl] candidate not found row {i}: {ca} {cb}", flush=True)
             continue
         pred = "A" if wa > wb else "B"
         n_total += 1
