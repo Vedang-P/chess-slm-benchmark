@@ -1,431 +1,131 @@
-# Chess SLM Benchmark: Beat DeepSeek at Chess by Reasoning (Gemma, Fine-Tuned)
+# Chess SLM Benchmark: Small Models vs Frontier Models at Chess
 
-**THE OBJECTIVE (see `docs/objective.md`):** benchmark Gemma 4 on chess, then
-fine-tune it to play chess **better than DeepSeek V4 Flash using only natural
-language reasoning** — no external search, no engine at inference time. *How*
-we fine-tune is an open question (next step).
+**Vedang Pandey** — Efficient and On-Device AI Agents Workshop @ NeurIPS 2026
 
-**Target venue**: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026 (Sydney)
-— Kaggle free T4 fine-tuning/evaluation + gateway API.
+## Objective
 
-## The question
+Make a small language model play chess better than DeepSeek V4 Flash via
+reasoning — no external search, no engine at inference time. Chess is the
+probe: state, legal actions, and oracles are explicit, making it a clean
+testbed for reasoning in small models.
 
-Chess is a clean probe for reasoning because the state, legal actions, and
-oracles are explicit. The study is grounded in MATE (Wang et al., NAACL 2025),
-which fine-tuned LLaMA-3-8B on one million expert-annotated positions with
-strategy/tactic explanations. We update that recipe to Gemma 4 E2B and compare
-against DeepSeek V4 Flash, while retaining our standard-chess mate/best-move
-battery for transfer evaluation.
+Compute constraint: Kaggle free tier only (P100, ~30h/week/account, 2
+accounts). Everything in this repo is designed to fit that budget.
 
-Prior work (LLM CHESS, ChessQA, ChessBench, Easy2Hard, geometric-stability
-testing) evaluates frontier models on single formats. We add the representation
-axis and the small-model tier.
+Honesty protocol: evaluation always uses the exact noexplain-1000 test set
+(same 1000 positions used to score gemma base = 58.1% and DeepSeek V4 Flash).
+No subsets, no cherry-picking.
 
-## Models
+---
 
-| Model | Backend | Notes |
+## What has been tried (and what we learned)
+
+### 1. RLVR / GRPO on gemma-4-E2B-it (ABANDONED — measured infeasible)
+
+Plan: GRPO with Stockfish rewards, thinking ON, on a 2B model.
+
+**Results (all measured, all dead ends):**
+- **v9** (256-token cap): trained 2 steps, but every rollout clipped,
+  reward 0 — the model never emits EOS on the MoveA/B prompt, producing
+  `MoveMoveMove` repetition instead of an answer.
+- **v10**: `_ThinkingProcessor` wrapper not callable (fixed, but moot).
+- **v11** (G8, uncapped): 2h notebook timeout; 0 rollouts completed.
+- **v12** (G2, uncapped): step 0 never completed in 3h+; watchdog SIGINT
+  ineffective against CUDA-blocked generation. Killed.
+- **Live-thinking demo** (the one working piece): streamed real gemma
+  reasoning token-by-token to stdout + HF (`live-thinking.txt`, 15s
+  cadence). Demo-2 verified: real reasoning, terminates with
+  `MoveA:...<turn|>`, 4695 tokens / 163s on an easy position.
+
+**Verdict:** uncapped thinking on the base 2B model never terminates on
+P100. RLVR at this compute is infeasible. **Infrastructure built here is
+reusable**: HF checkpoint persistence (adapter + optimizer + scheduler +
+trainer_state), live trace streaming, `_ThinkingProcessor`, era-pinned
+stack knowledge.
+
+### 2. EGSD / SIL (PROPOSED, PARKED)
+
+- **EGSD** (engine-graded self-distillation): iterative SFT-only loop
+  (sample → Stockfish grade → SFT on accepted). User rejected as "caveman
+  SFT with a filter + a loop" — a fair critique.
+- **SIL** (Search-in-Language): SFT on verbalized engine search trees +
+  self-consistency voting at inference. 5000 verbalized traces built
+  (`results/searchlang-traces.jsonl` + `_sft.jsonl`) — reusable data.
+
+### 3. Improve open searchless_chess models (ACTIVE)
+
+Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
+9M/136M/270M transformers, searchless, trained on ChessBench (10M games,
+15.3B Stockfish-16 action-values). The 270M reaches 2895 Lichess Elo vs
+humans (grandmaster level).
+
+**Measured result — exact noexplain-1000 (local CPU, official engine):**
+| Model | MATE noexplain-1000 | Note |
 |---|---|---|
-| gemma4-e2b | local, 4-bit, T4 | first fine-tuning target; base + MATE-LoRA |
-| gemma4-e4b | local, 4-bit, T4 | second fine-tuning target after E2B |
-| deepseek-v4-flash | opencode-go gateway API | frontier reasoning reference; thinking enabled |
+| **searchless 9M** | **98.2%** | 9M params, chess specialist |
+| gemma-4-E2B-it (base) | 58.1% | 2B generalist |
+| DeepSeek V4 Flash | (to be re-scored) | frontier generalist |
 
-DeepSeek V4 Flash is the current frontier reference. Fine-tuning starts with
-Gemma 4 E2B only, before E4B is attempted.
+A 9M-param chess specialist crushes a 2B generalist at expert 2-choice
+judgment. The transfer question is answered: ChessBench-trained
+action-values transfer to MATE-style expert tasks.
 
-## MATE 1000-position campaign (replicating the MATE authors' Table 1)
+**Next:** score 136M + 270M on the exact noexplain-1000, then improve the
+small models via DPO self-play (see `improve-searchless-plan.md`).
 
-We replicate the MATE paper's main evaluation (Wang et al., NAACL 2025,
-arXiv:2411.06655): **4 subsets × 1000 positions each** — strategy (S),
-noexplain (N), tactic (T), both (ST) — scored on the exact MATE
-test-set prompts, 2-candidate move selection with expert truth. Each
-subset is built with the identical protocol (`scripts/build_mate_evals.py`:
-MATE testset, dedupe by FEN, SEED 2026, 1000 positions) and stored under
-`data/positions/mate-selection-test{-noexplain,-tactic,-both}.json`.
+---
 
-The campaign matrix:
+## The plan: improve searchless_chess (see `improve-searchless-plan.md`)
 
-| arm | strategy | noexplain | tactic | both | status |
-|---|---|---|---|---|---|
-| deepseek-v4-flash, thinking (unbounded) | **85.8%** (858/1000) | **92.2%** (922/1000) | **94.0%** (940/1000) | 92.8% (928/1000) | **Table 1 core** (complete) |
-| gemma4-e2b, thinking, 32768 budget | **60.8%** (61.4+60.3) | **58.1%** (56.0+60.2) | **60.5%** (60.8+60.2) | **61.5%** (59.6+63.4) | local-model column (complete; 2×500 workers per subset) |
-| gemma4-e2b MATE-LoRA fine-tune | to run | to run | to run | to run | the project's contribution |
+DPO self-play pipeline on 136M/270M:
+1. **Self-play**: current model plays games vs itself.
+2. **Mistake ID**: Stockfish (d20-24) finds plies where the model's move
+   ≠ engine best with |Δeval| > 0.3 pawns → (chosen=SF, rejected=model)
+   preference pairs. Precedent: `dbest-isi/searchless-chess-9M-dpo`
+   (+25 Elo, +1% puzzles from 1000 games / 36k pairs / 50 steps).
+3. **DPO train**: JAX/Haiku, lr 1e-5, beta 0.1, EMA 0.999.
+4. **Eval**: exact noexplain-1000 + head-to-head BayesElo.
+5. **Target**: close the 136M→270M gap (+40 Elo) at half the params —
+   "GM-level at 1/2 parameters".
 
-Reference points from the MATE paper (their fine-tuned LLaMA-3-8B
-zero-shot): 63.5% (N), 89.7% (S), 94.6% (T), 95.2% (ST).
+## External resources
 
-## Stage 2 — Caveman SFT eval (noexplain subset, 2026-08-19)
+- Paper: Ruoss et al., arXiv:2402.04494 (NeurIPS 2024)
+- Repo (open, Apache-2.0): github.com/google-deepmind/searchless_chess
+- Weights: storage.googleapis.com/searchless_chess/checkpoints/{9M,136M,270M}.zip
+- Dataset (ChessBench): data/download.sh in the repo
+- DPO precedent: huggingface.co/dbest-isi/searchless-chess-9M-dpo
+- MAV (DeepMind successor, weights NOT released): arXiv:2412.12119
 
-The stage-1 caveman SFT (deepseek traces of Stockfish lines → QLoRA on
-gemma-4-E2B, 1575 train rows) evaluated on the same 1000 noexplain
-positions, thinking ON (unbounded), force-answer, run as 4 parallel
-250-position kernels (2 per account: softmaxsimp a1/a2, vedangpandeyyy
-b1/b2), interim HF uploads every 25 positions.
-
-| kernel | positions | accuracy |
-|---|---|---|
-| a1 (0–250) | 250 | 54.4% |
-| a2 (250–500) | 250 | 52.0% |
-| b1 (500–750) | 250 | 57.6% |
-| b2 (750–1000) | 250 | 57.6% |
-| **FINAL (1000/1000)** | 1000 | **55.4%** |
-
-**Verdict**: style transfer succeeded (parse rate 1.0; mean output
-~127 tokens/position vs the base's ~1,368 — ~10× fewer; decisive
-caveman traces). **Selection accuracy did not improve: 55.4% vs the
-58.1% gemma4-e2b base (−2.7pp, SE ±1.6pp at n=1000)** and below the
-MATE authors' fine-tuned LLaMA-3-8B (63.5% on noexplain). Shard spread
-(52.0–57.6%) is position-sampling noise — theme (100% noexplain),
-truth balance (~50/50), and Stockfish difficulty (median |eval gap|
-639–714cp, d12) are matched across shards; the base model shows the
-same slice-to-slice spread (56.0/60.2).
-
-Protocol note: this eval ran at max_new_tokens=2048 vs the baseline's
-32768 (budget never bound — parse 1.0, mean 127 tokens — but strict
-parity would re-run at 32768). Adapter: `adapters/caveman-sft-final`
-on HF. Samples: `runs/2026-08-19T18:34:*Z` + `eval-results/caveman-sft-*`
-in the results archive. Next: stage 3 RLVR on this base (the selection
-fix — SFT gave style, RL gives engine-grounded selection).
-
-**Deployment**: deepseek arms run as 5 parallel CPU Kaggle kernels per
-subset (5 concurrent CPU kernels per account; gateway serializes per API
-key, so each worker gets its own opencode-go key). Kernels clone
-`main`, recover their own HF checkpoint, and `--resume`. Push one subset
-at a time: `kaggle kernels push -p notebooks/push_mate_<subset>_w<n>`
-(notebooks generated by `build_mate1000_variants_notebook.py`; the
-watcher script auto-pushes the next subset when the current one
-completes). Gemma arms clone the `mate-e2b-kaggle` branch (has
-`--local-thinking`) and run as GPU kernels.
-
-**Deliberately not replicated** (MATE appendix arms we skip): the
-3-candidate-move experiment (requires generating new 3rd candidates via
-Stockfish), explanation *generation* (needs the fine-tune first), the
-difficulty audit (needs human annotators), and the few-shot setting
-(the authors measured ~0 effect). The 4×1000 zero-shot matrix is the
-full Table-1 replication.
-
-**After the matrix completes**: LoRA fine-tune gemma 4 E2B on 50k MATE
-examples, bench it on the same 4 subsets, and compare against base
-gemma, deepseek, and the authors' fine-tune anchors — then run the
-planned 100-game head-to-head.
-
-## The plan: a general-purpose chess SLM from full-game trace distillation
-
-**Goal:** a chess-playing SLM (gemma 4 E2B) that reasons about moves in
-natural language and plays *full games* — not fine-tuned to any MATE
-category. It learns from deepseek-v4-flash's own self-play traces. The
-MATE 4-subset matrix (above) remains the position-understanding battery;
-Elo vs Stockfish becomes the game-strength battery.
-
-### Data: deepseek self-play with legality + opening diversity
-
-- **Game loop:** deepseek plays both sides, legality-enforced via
-  python-chess (illegal move → retry, then resign), draw rules
-  enforced, game ends at mate/stalemate/draw or a Stockfish eval
-  margin (|eval| ≥ +5) to avoid 200-move games. Unbounded thinking —
-  no budget cap (capping degrades play; rejected).
-- **Opening diversity (fixes self-play repertoire collapse):** two
-  pools. Pool A: games from move 1 with seeded first plies (covers
-  0–6-ply opening positions — deepseek reasons about openings too).
-  Pool B: games from random masters-DB book positions (8–14 plies) for
-  middlegame structure variety. ~50/50.
-- **Per-move soundness filter (fixes winner-bias):** every move from
-  *both* players is checked with Stockfish depth ~10; keep moves whose
-  eval dropped ≤ 100cp vs the previous move. Winner-filtering becomes
-  unnecessary — the filter is per-move, so sound moves from both sides
-  are kept (~2× data, no "winner is always right" bias).
-- **Trace compression pass:** for each kept move, a second deepseek
-  call rewrites the full trace into lucid/caveman style ≤ 4k tokens
-  (cavegemma's proven 2-step recipe). Compression is not to save
-  generation cost — it makes training sequence lengths feasible and
-  creates the lucid-style thesis. Runs *after* filtering, so we only
-  pay for kept traces.
-
-### Game count estimate (educated)
-
-| Scale | Games | Pairs (~80/game) | Wall clock @6 games concurrent | Purpose |
-|---|---|---|---|---|
-| Pilot | 150–200 | 12–16k | ~2–3 days | validate loop, trace quality, deepseek Elo |
-| Production | 500–1,000 | 40–80k | ~1.5–3 weeks | main training set |
-| Ceiling | ~2,000 | ~160k | ~6 weeks | diminishing returns — LoRA capacity binds |
-
-Reasoning: a pretrained 2B already knows rules, notation, and chess
-patterns from web text — this is behavior alignment, not from-scratch
-chess (ChessGPT needed 10M games because it started blank). C1's 39k
-balanced samples and instruction-tuning's 10–50k range bracket this
-task. Throughput, not cost, is the hard limit: ~19k tokens/move ≈
-3.3h/game, parallelized by API keys (gateway serializes per key).
-
-### Training
-
-- Base `google/gemma-4-E2B-it`; QLoRA r32–64 (competence task — not
-  cavegemma's style-task r16), lr 1–2e-4 cosine, 2–3 epochs, effective
-  batch 16, `completion_only_loss=True`, no packing.
-- Format: `user: Board <FEN> + history <SAN>. Play <color>'s move.` →
-  `assistant: <lucid trace> Move: <SAN>`.
-- Hold out 5% of *games* (not positions) for eval.
-- Runs on RunPod-class GPU (adapters are cheap; trace gen is the API
-  cost, ~1.1M tokens/game generation + compression pass).
-
-### Inference game loop
-
-1. python-chess tracks the board; prompt = FEN + history.
-2. Gemma generates lucid reasoning → `Move: <SAN>`.
-3. Legality via rejection sampling (≤3 samples, first legal) or a
-   legal-move token mask.
-4. Self-consistency: sample N=3–5, majority-vote among legal moves
-   (no engine at inference).
-5. Loop to mate/stalemate/draw via python-chess.
-
-### Elo harness (all models, one scale)
-
-- **Protocol:** each model plays Stockfish via `UCI_LimitStrength` +
-  `UCI_Elo` at fixed targets (e.g., 1400/1800/2200/2600), 50–100 games
-  per anchor, short time control (e.g., 10s+0.1). Elo fitted by
-  logistic regression on win rates with 95% CIs.
-- **Models rated:** base gemma 4 E2B, trace-trained gemma,
-  deepseek-v4-flash (teacher), MATE-LoRA (if trained). Result: one
-  table "model ↔ Elo vs Stockfish-class opponents" — the paper's
-  game-strength headline. LLM-vs-engine Elo is style-dependent; we
-  report it as such.
-- Self-play win rates are NOT Elo (no external anchor) — the Stockfish
-  anchor is mandatory for any rating claim.
-
-### Stage order
-
-**1. Game-loop + Elo harness → 2. Pilot (150–200 games) → 3. Filter +
-compress → 4. Train → 5. Full data run (500–1,000 games) if pilot
-positive → 6. Final Elo + MATE matrix + legality eval.**
-
-## Phase 2 (superseded): MATE-only fine-tuning experiment
-
-The previous plan called for a MATE-only 50k-example fine-tune as the
-first training run. That is superseded by the full-game trace
-distillation plan above; MATE-LoRA survives only as a possible baseline
-arm (position-understanding trained on expert labels, vs trace-trained
-full-game play) if the main run leaves budget.
-
-MATE is public at `OutFlankShu/MATE_DATASET`. It contains strategy and tactic
-subsets, combined data, explanation/no-explanation variants, and a held-out
-test set. A record is supervised candidate-move selection, not the same as
-our open-ended FEN move-generation task. For example:
-
-```text
-FEN: 1r4k1/4nppp/8/4Pb2/8/1P5P/r1PR4/3R3K w - - 0 27
-MoveA: d2d7  Place the piece more actively...
-MoveB: d2d8  Switch the piece to a more advantageous place...
-Answer: MoveB:d2d8
-```
-
-Tactic examples add a concrete line and motif:
-
-```text
-MoveA: d2d8, tactic d2d8 b8d8 d1d8 Checkmate!
-MoveB: d2d7, tactic d2d7 f5d7 Trade the lower value piece...
-Answer: MoveA:d2d8
-```
-
-## Elo battery (game strength, all models)
-
-Replaces the old "planned 100-game match". Full protocol is in the plan
-section above (Stockfish `UCI_Elo` anchors at 1400/1800/2200/2600,
-logistic Elo fit, 95% CI). Every model — base gemma, trace-trained
-gemma, deepseek teacher, MATE-LoRA if trained — is rated on one scale,
-then a direct deepseek-vs-gemma head-to-head is played for the paper.
-Every game saves PGN plus per-move FEN, prompt, thinking, answer,
-legality, token usage, latency, and termination reason.
-legality, average length, tokens per move, and color-balanced score/Elo
-intervals. This match is later scope, not part of the first 50k run.
-
-## Tasks (core, active)
-
-| Task | Source | Ground truth | Metadata carried |
-|---|---|---|---|
-| mate1-lichess (250) | lichess puzzle DB (CC0) | engine-verified checkmating moves | rating, rating dev, popularity, plays, themes, opening tags, game URL |
-| mate2-lichess (250) | lichess puzzle DB (CC0) | lichess 'only move' first move | same full metadata |
-
-| bestmove-8x8 (120) | lichess eval DB (CC0) | Stockfish eval: PV best move | cp, mate, depth, knodes, full PV |
-
-`scripts/build_lichess_mates.py` stratifies by **rating band** (equal-width
-bands over 800-2900, equal quota per band, seeded output shuffle so any
-`records[:n]` prefix is a fair spread) and `build_bestmove_evals.py` takes a
-seeded random sample of the qualifying eval-DB positions.
-
-> **The data currently committed under `data/positions/` predates that fix and
-> is NOT stratified.** It was built by a version that bucketed on a hash of the
-> puzzle id (not the rating) and had no per-band quota, so all 250 records came
-> from one hash bucket: mate1 spans 801-1936 with 70% under rating 1200, and
-> mate2 spans 801-2212. The best-move set was selected in FEN-lexicographic
-> order, which is why **all 120 positions have an empty a8 square**. Re-running
-> the builders produces mate1 805-2397 (median 1320) and mate2 801-2730
-> (median 1654) with ~25 per band. Rebuilding replaces the sets the Phase-1
-> numbers were measured on, so it is a deliberate step, not an automatic one.
-
-## Representations
-
-**Phase 1 (standard chess, mate-in-1, n=5/rep) measured representation
-sensitivity directly: FEN 5/5, grid 3/5, list 3/5, bitboard 0/5 (with
-illegal moves). The study therefore runs the **fen** representation only**
-— chess capability, not format adaptation. Full Phase-1 report:
-`docs/phase1-results.md` (raw per-sample data in `docs/phase1/`).
-
-- `grid`/`bitboard`/`list` — retained only as the reported Phase-1 finding, not run further
-- `pgn` — SAN move history **future scope** (needs game-history datasets)
-- **Vision** — explicitly out of scope for now
-
-## Metrics
-
-Per sample: `parse_error / illegal / legal` → `compliant` (matches oracle).
-Per cell: parse_rate, legal_rate, compliance rate. The `format` field separates
-strict from-to compliance from lenient SAN parsing, so format-following and
-chess ability are reported separately.
-
-Every new sample also records a normalized `token_usage` object:
-
-- input, output, reasoning, and total tokens
-- cache reads, writes/misses, and hit tokens when the provider reports them
-- time to first token, generation seconds, output tokens/second, reasoning
-  tokens/second
-- thinking enabled, max token setting, no-answer reason (truncated /
-  gave_up / unparseable), and usage completeness
-
-These fields are required for the paper figures, not optional diagnostics.
-
-## Honesty guarantees (no fabricated answers)
-
-- The recorded answer on every sample is the model's own text, verbatim.
-- There is NO fallback: no forced second pass, no extraction from the
-  reasoning text, no random move. If the model returns nothing parseable,
-  the sample is a `parse_error`/`no_answer` — an honest failure.
-- A gateway/transport failure is `api_error`, never model output: `content`
-  stays empty, the reason is kept in a separate `error` field, and the sample
-  is excluded from every rate (`n` counts scored samples, `n_attempted` counts
-  rows). Previously the error string was returned *as* the model's answer and
-  scored — which both counted infrastructure noise as model failure and could
-  fabricate an answer (an error body containing `"code":"e4"` parsed as the
-  legal SAN move `e3e4`).
-- Extraction is strict and tested: the last `MOVE:`-prefixed token, then a
-  line-anchored from-to move, then python-chess SAN (which only resolves to
-  legal moves). Nothing is invented.
-- Known model+gateway facts (measured, 2026-08-03): deepseek-v4-flash with
-  thinking enabled does NOT answer within practical budgets — it consumes
-  the whole budget on reasoning (0/10 native answers at 2048 total). It
-  answers natively only with thinking disabled (10/10, 80% at n=10) or
-  with multi-minute unbounded thinking. The gateway also ignores the
-  thinking budget on many requests and serializes heavy generations per
-  API key.
-
-## Paper figures
-
-`scripts/analyze_paper_figures.py` generates three publication figure families
-from raw JSONL without hand-entered values:
-
-1. **Performance versus tokens** — strict accuracy against average total
-   tokens per sample; thinking-enabled models are marked separately.
-2. **Response breakdown** — stacked overall/per-category bars for correct,
-   legal-wrong, illegal, parse-error, and no-answer outcomes.
-3. **Accuracy heatmap** — task category by model, with strict accuracy in each
-   cell and counts in the companion tables.
-
-The exact contract is documented in `docs/paper-figures.md`.
-
-## Monitoring (batched — no GitHub hammering)
-
-- state.json uploaded every 60s; one upload per completed cell (summary +
-  samples + index) — never per-sample.
-- Live dashboard: chess-bench-live.pages.dev (worker + public repo).
-- Crash-safe: recovery cell pulls backed-up summaries + samples; `--resume`
-  skips completed cells (schema-versioned).
-
-## Future scope (README roadmap)
-
-- Position evaluation (centipawn prediction from the eval DB)
-- Full game-play evaluation (LLM CHESS style: legality, win rate, Elo vs a
-  fixed-strength engine)
-- Motif/structural questions (ChessQA-style categories: structural, motifs,
-  short tactics, position judgment, semantic)
-- The `pgn`/SAN-history representation (from lichess game PGNs)
-- Board-image (vision) representation for multimodal models
-- KinGPT-style memorization/generalization checks: theme-held-out puzzles,
-  transformed positions, and verifier-in-the-loop baselines
-
-## Repo map
+## Repo layout
 
 ```
-data/positions/     committed task sets with oracles + full lichess metadata
-data/raw/           gitignored: MATE train zips (LoRA training data), raw lichess DB
-src/
-  models.py         4-bit HF loader (gemma) + OpenCodeGo gateway client (deepseek)
-  token_usage.py    normalized provider/local token, cache, latency schema
-  report.py         per-sample JSONL, summaries, comparison_table.csv
-  hf_push.py        results archive to the public HF dataset repo
-  live_push.py      GitHub contents-API uploads for the dashboard
-  mate_metrics.py   MATE move-selection metrics
-  benchmarks/games/
-    prompts.py      FEN prompts (one per task: mate-in-1, mate-in-2, best-move)
-    tasks.py        strict answer extraction + oracle scoring (python-chess)
 scripts/
-  test_engine.py    dataset-consistency + extraction regression tests (the gate)
-  build_lichess_mates.py    mate1/mate2 from lichess puzzle DB (stratified, rich metadata)
-  build_bestmove_evals.py   bestmove from lichess eval DB (cp/depth/knodes/PV)
-  build_mate_evals.py       MATE move-selection eval set (1000 held-out positions)
-  build_mate_c1_data.py     MATE train zip download + C1 scratch
-  run_chess.py      one model x one tactical task x FEN prompt
-  run_mate_eval.py  MATE move-selection eval (single worker; gateway serializes)
-  play_selfplay.py  one deepseek-vs-deepseek full game: legality-enforced loop,
-                    unbounded thinking, per-move live-push, checkpoint resume
-  run_selfplay_campaign.py  parallel self-play games (one API key per worker),
-                    live tournament index -> monitor/games/state.json
-  aggregate_live_state.py   local monitor aggregator (pushes monitor/ to the live repo)
-  analyze_paper_figures.py  publication figures + figure-ready CSV/JSON
-notebooks/
-  build_notebook.py        shared cell helpers for all notebook generators
-  build_mate1000_variants_notebook.py  deepseek thinking-run kernels per MATE subset
-  build_gemma1000_variants_notebook.py gemma T4/P100 kernels per MATE subset
-  build_campaign_watcher_notebook.py   Kaggle-hosted campaign watcher (auto-push waves)
-frontend/            live dashboard (Cloudflare Pages: chess-bench-live.pages.dev)
-                     + self-play arena (games.html): live board + both sides' thinking
-worker/              Cloudflare worker proxy (fresh GitHub contents feed; /games routes)
-docs/
-  objective.md       THE PROJECT OBJECTIVE (read this first)
-  related-work.md    detailed paper rundown + what we borrow
-  memory-decisions.md  append-only log of every project decision
-  paper-figures.md   figure definitions + per-sample data contract
-  phase1-results.md  Phase-1 representation study
-  external-resources.md
-  ai-authored.md
+  eval_searchless_mate.py   ACTIVE — MATE 2-choice eval for searchless models
+  build_search_traces.py    ACTIVE — verbalized search traces (5000 built)
+  train_mate_lora.py        SFT trainer (reusable)
+  run_mate_eval.py          eval protocol (gemma/DeepSeek baseline scoring)
+src/                        eval/SFT support (models, mate_metrics, report)
+data/positions/             the 4 MATE eval sets (noexplain/both/tactic/full)
+results/                    searchlang traces + rlvr-pool (reusable data)
+improve-searchless-plan.md  ACTIVE plan
+PROJECT-STATUS.md           current status
+engineering-decisions.md    decision log
 ```
 
-## Quick start
+## Environment gotchas (measured)
 
-```bash
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+- The 2024 searchless checkpoints are orbax-ocdbt format: need
+  **jax 0.4.35 + orbax 0.5.5** era stack (modern jax can't read them;
+  `PositionalSharding` removed in jax 0.5). Kaggle preinstalls jax 0.11 →
+  era pins hit `ResolutionImpossible` there; **run inference locally in a
+  venv with the era stack, or on Kaggle only for DPO training later**.
+- Local CPU speed: 9M ~0.28s/position, 270M ~0.85s/fwd (jit-less).
+- Run sweeps foreground/streaming — background jobs with pipes can look
+  hung (low CPU).
 
-python scripts/test_engine.py                # full gate (datasets + regressions)
-python scripts/test_engine.py --quick        # regressions only, skips the dataset sweep
-# deepseek smoke (needs OPENCODE_API_KEY in .env):
-python scripts/run_chess.py --model deepseek-v4-flash --task mate1-lichess \
-    --prompt-variant fen --n 1 --max_new_tokens 2048 --conditions win \
-    --output_dir /tmp/ds_smoke
-```
+## Status
 
-### On Kaggle (free T4)
-
-1. Attach secrets: `GITHUB_TOKEN` (repo clone + live uploads), `HF_TOKEN`
-   (gated gemma-4 checkpoints), `OPENCODE_API_KEY` (deepseek gateway) — attach,
-   **save**, **restart kernel**.
-2. Generate kernels: `python3 notebooks/build_mate1000_variants_notebook.py`
-   — five parallel CPU workers per MATE subset (noexplain/tactic/both),
-   then push one subset at a time with `kaggle kernels push -p notebooks/push_mate_<subset>_w<n>`.
-3. Multi-wave runs (push next subset when the current one finishes) are
-   driven by a watcher loop — see the campaign section above.
-
-## Live monitoring
-
-Batched uploads (state every 60s, one upload per cell) to
-`Vedang-P/chess-bench-live`. Dashboard: **chess-bench-live.pages.dev**.
-
-## Literature
-
-`docs/related-work.md` covers the benchmark landscape in detail and what we
-borrow from each; `docs/external-resources.md` inventories the datasets.
+See `PROJECT-STATUS.md` for the current snapshot. Short version: 9M scored
+98.2% on the exact noexplain-1000 (vs gemma 58.1%); 136M/270M eval + DPO
+improvement are next, pending compute allocation.
