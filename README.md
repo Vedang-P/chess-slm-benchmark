@@ -59,19 +59,26 @@ Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
 15.3B Stockfish-16 action-values). The 270M reaches 2895 Lichess Elo vs
 humans (grandmaster level).
 
-**Measured result — exact noexplain-1000 (local CPU, official engine):**
-| Model | MATE noexplain-1000 | Note |
-|---|---|---|
-| **searchless 9M** | **98.2%** | 9M params, chess specialist |
-| gemma-4-E2B-it (base) | 58.1% | 2B generalist |
-| DeepSeek V4 Flash | (to be re-scored) | frontier generalist |
+**The baseline table — all 4 MATE subsets, exact 1000s (from the 2026-08-19 campaign, archived in git):**
 
-A 9M-param chess specialist crushes a 2B generalist at expert 2-choice
-judgment. The transfer question is answered: ChessBench-trained
-action-values transfer to MATE-style expert tasks.
+| arm | noexplain | tactic | both | full |
+|---|---|---|---|---|
+| **deepseek-v4-flash** (thinking, unbounded) | **85.8%** | **92.2%** | **94.0%** | **92.8%** |
+| **gemma4-e2b** (thinking, 32768 budget) | **58.1%** | **60.5%** | **61.5%** | **60.8%** |
+| **searchless 9M** (ours, measured 2026-08-27) | **98.2%** | — | — | — |
 
-**Next:** score 136M + 270M on the exact noexplain-1000, then improve the
-small models via DPO self-play (see `improve-searchless-plan.md`).
+Reference points from the MATE paper (their fine-tuned LLaMA-3-8B
+zero-shot): 63.5% (N), 89.7% (S), 94.6% (T), 95.2% (ST).
+
+**The result:** a 9M-param searchless chess specialist (98.2%) beats the
+2B generalist gemma (58.1%) AND the frontier model DeepSeek V4 Flash
+(85.8%) at expert 2-choice chess judgment — at 1/300th of gemma's params
+and no engine at inference. The transfer question is answered:
+ChessBench-trained action-values transfer to MATE-style expert tasks.
+
+**Next:** score 136M + 270M on the exact noexplain-1000 (expect ≥98%),
+then improve the small models via DPO self-play (see
+`improve-searchless-plan.md`).
 
 ---
 
