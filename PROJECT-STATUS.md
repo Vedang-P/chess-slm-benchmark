@@ -74,6 +74,11 @@ evaluated on the exact noexplain-1000.
 - Background bash jobs with output pipes can appear hung (low CPU) — run
   sweeps foreground/streaming.
 
+
+## Baselines (paper comparison data)
+- **Gemma-4-E2B baselines — SAFE**: HF dataset `eval-results/caveman-sft-{a1,a2,b1,b2,pretest}/` (5 variants, noexplain samples+summary), restored locally to `results/baselines/`. Note: these are 250-row win-condition slices (examples), NOT full-1000 accuracy.
+- **Full clean-1000 (gemma 58.1% + DeepSeek V4 Flash samples) — LOST 2026-08-27** (deleted during cleanup; never git-tracked, not on HF). MUST re-run on the exact noexplain-1000 via `scripts/run_mate_eval.py` (gemma local, DeepSeek API) and store on HF + a non-gitignored location.
+
 ## Remaining work
 1. **Run 136M + 270M on the EXACT noexplain-1000** (local, ~1-1.5h) — the
    honest full table: 9M=98.2% (done), 136M=?, 270M=? vs gemma 58.1%.
