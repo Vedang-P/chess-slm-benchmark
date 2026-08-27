@@ -71,8 +71,6 @@ measured locally with the official ActionValueEngine (2026-08-27).
 | **searchless 9M** (Ruoss) | 9M | **98.2%** | TBD | TBD | TBD | 🔵 noexplain done |
 | **searchless 136M** (Ruoss) | 136M | TBD | TBD | TBD | TBD | ⬜ pending |
 | **searchless 270M** (Ruoss) | 270M | TBD | TBD | TBD | TBD | ⬜ pending |
-| **searchless 136M-DPO** (ours) | 136M | TBD | TBD | TBD | TBD | ⬜ pending |
-| **searchless 270M-DPO** (ours) | 270M | TBD | TBD | TBD | TBD | ⬜ pending |
 
 Reference points from the MATE paper (their fine-tuned LLaMA-3-8B
 zero-shot): 63.5% (N), 89.7% (S), 94.6% (T), 95.2% (ST).
@@ -83,32 +81,22 @@ Flash (85.8%) at expert 2-choice chess judgment — at 1/300th of gemma's
 params, no engine at inference. The transfer question is answered:
 ChessBench-trained action-values transfer to MATE-style expert tasks.
 
-**Next:** score 136M + 270M on all 4 exact subsets (expect ≥98%), then
-improve via DPO self-play and score the DPO variants (see
-`improve-searchless-plan.md`).
+**Next:** score 136M + 270M on all 4 exact subsets (expect ≥98%). Novelty
+design for the paper comes after the full benchmark.
 
 ---
 
-## The plan: improve searchless_chess (see `improve-searchless-plan.md`)
+## The plan (current)
 
-DPO self-play pipeline on 136M/270M:
-1. **Self-play**: current model plays games vs itself.
-2. **Mistake ID**: Stockfish (d20-24) finds plies where the model's move
-   ≠ engine best with |Δeval| > 0.3 pawns → (chosen=SF, rejected=model)
-   preference pairs. Precedent: `dbest-isi/searchless-chess-9M-dpo`
-   (+25 Elo, +1% puzzles from 1000 games / 36k pairs / 50 steps).
-3. **DPO train**: JAX/Haiku, lr 1e-5, beta 0.1, EMA 0.999.
-4. **Eval**: exact noexplain-1000 + head-to-head BayesElo.
-5. **Target**: close the 136M→270M gap (+40 Elo) at half the params —
-   "GM-level at 1/2 parameters".
-
+Benchmark the three open searchless models (9M/136M/270M) on all 4 MATE
+subsets (exact 1000s), then redesign the novelty contribution from the
+results.
 ## External resources
 
 - Paper: Ruoss et al., arXiv:2402.04494 (NeurIPS 2024)
 - Repo (open, Apache-2.0): github.com/google-deepmind/searchless_chess
 - Weights: storage.googleapis.com/searchless_chess/checkpoints/{9M,136M,270M}.zip
 - Dataset (ChessBench): data/download.sh in the repo
-- DPO precedent: huggingface.co/dbest-isi/searchless-chess-9M-dpo
 - MAV (DeepMind successor, weights NOT released): arXiv:2412.12119
 
 ## Repo layout
@@ -122,7 +110,6 @@ scripts/
 src/                        eval/SFT support (models, mate_metrics, report)
 data/positions/             the 4 MATE eval sets (noexplain/both/tactic/full)
 results/                    searchlang traces + rlvr-pool (reusable data)
-improve-searchless-plan.md  ACTIVE plan
 PROJECT-STATUS.md           current status
 engineering-decisions.md    decision log
 ```
@@ -133,7 +120,7 @@ engineering-decisions.md    decision log
   **jax 0.4.35 + orbax 0.5.5** era stack (modern jax can't read them;
   `PositionalSharding` removed in jax 0.5). Kaggle preinstalls jax 0.11 →
   era pins hit `ResolutionImpossible` there; **run inference locally in a
-  venv with the era stack, or on Kaggle only for DPO training later**.
+  venv with the era stack
 - Local CPU speed: 9M ~0.28s/position, 270M ~0.85s/fwd (jit-less).
 - Run sweeps foreground/streaming — background jobs with pipes can look
   hung (low CPU).
@@ -141,5 +128,5 @@ engineering-decisions.md    decision log
 ## Status
 
 See `PROJECT-STATUS.md` for the current snapshot. Short version: 9M scored
-98.2% on the exact noexplain-1000 (vs gemma 58.1%); 136M/270M eval + DPO
-improvement are next, pending compute allocation.
+98.2% on the exact noexplain-1000 (vs gemma 58.1%); 136M/270M eval
+across all 4 subsets is next.

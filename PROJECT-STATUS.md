@@ -40,14 +40,8 @@ Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
 - gemma-4-E2B base baseline: 58.1%
 - 136M / 270M: NOT YET RUN (sweep was stopped per user order)
 
-**Improvement plan (committed: `improve-searchless-plan.md`):**
-DPO self-play (precedent dbest-isi/searchless-chess-9M-dpo: +25 Elo, +1%
-puzzles from 1000 games / 36k pairs / 50 steps). Target: close the
-136M->270M gap (+40 Elo) at half the params — "GM-level at 1/2 params",
-evaluated on the exact noexplain-1000.
 
 ## Key files
-- `improve-searchless-plan.md` — active plan (DPO self-play on 136M/270M)
 - `searchlang-plan.md` — parked SIL plan
 - `egsd-plan.md` — parked EGSD plan
 - `scripts/eval_searchless_mate.py` — MATE eval for searchless models
@@ -62,7 +56,6 @@ evaluated on the exact noexplain-1000.
 - Repo (open, Apache-2.0): https://github.com/google-deepmind/searchless_chess
 - Weights: storage.googleapis.com/searchless_chess/checkpoints/{9M,136M,270M}.zip
 - Dataset ChessBench: data/download.sh (10M games, 15.3B labels)
-- DPO precedent: https://huggingface.co/dbest-isi/searchless-chess-9M-dpo
 - MAV successor (weights NOT released): https://arxiv.org/abs/2412.12119
 
 ## Environment gotchas (measured)
@@ -83,7 +76,6 @@ evaluated on the exact noexplain-1000.
 1. **Run 136M + 270M on the EXACT noexplain-1000** (local, ~1-1.5h) — the
    honest full table: 9M=98.2% (done), 136M=?, 270M=? vs gemma 58.1%.
 2. Interpret: pick target model for improvement.
-3. DPO pilot (2k self-play games, SF d20-24 mistake pairs, 50-200 steps) —
-   gate: +Elo vs base on the exact noexplain-1000.
-4. Full DPO iterations (2-3), eval each.
+3. Benchmark 136M + 270M on all 4 exact subsets.
+4. Redesign the novelty contribution from the results.
 5. Frontier comparison + paper writeup.
