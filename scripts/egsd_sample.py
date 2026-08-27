@@ -234,6 +234,21 @@ def main() -> None:
     with out.open("w") as f:
         for r in accepted:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    # Also emit the SFT-ready form (train_mate_lora schema: messages +
+    # fen) so the accepted set drops straight into the SFT trainer.
+    sft_out = out.with_name(out.stem + "_sft.jsonl")
+    with sft_out.open("w") as f:
+        for r in accepted:
+            f.write(json.dumps({
+                "fen": r["fen"],
+                "messages": [
+                    {"role": "user",
+                     "content": build_prompt(r["fen"], r["candidate_a"],
+                                             r["candidate_b"])},
+                    {"role": "assistant", "content": r["completion"]},
+                ],
+            }, ensure_ascii=False) + "\n")
+    print(f"[egsd] SFT-ready -> {sft_out}", flush=True)
     print(f"[egsd] DONE: {len(accepted)} accepted, {rejected} rejected "
           f"-> {out}", flush=True)
     print(f"[egsd] accept rate: "
