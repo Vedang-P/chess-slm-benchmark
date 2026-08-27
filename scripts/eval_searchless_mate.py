@@ -62,19 +62,33 @@ def main() -> None:
     import utils as sl_utils
 
     # ---- load MATE eval set ----
-    rows = json.load(open(args.eval))
+    rows = []
+    for path in args.eval.split(","):
+        rows += json.load(open(path.strip()))
     if args.max_rows:
         rows = rows[:args.max_rows]
-    print(f"[sl] {len(rows)} MATE positions", flush=True)
+    print(f"[sl] {len(rows)} MATE positions "
+          f"({args.eval})", flush=True)
 
     n_correct = 0
     n_total = 0
     examples = []
+    per_file = {}
     for i, row in enumerate(rows):
+        _src = (row.get("source") or "pool")
+        per_file.setdefault(_src, [0, 0])
         fen = row.get("fen") or row.get("position")
         truth = row.get("truth_label") or row.get("label")
         ca = row.get("candidate_a") or row.get("move_a")
         cb = row.get("candidate_b") or row.get("move_b")
+        # MATE native format: candidates live in task_extra
+        te = row.get("task_extra") or {}
+        if not ca:
+            ca = te.get("candidate_a")
+        if not cb:
+            cb = te.get("candidate_b")
+        if not truth:
+            truth = te.get("truth_label")
         if not fen or not ca or not cb:
             continue
         board = chess.Board(fen)
@@ -96,8 +110,10 @@ def main() -> None:
             continue
         pred = "A" if wa > wb else "B"
         n_total += 1
+        per_file[_src][1] += 1
         if pred == truth:
             n_correct += 1
+            per_file[_src][0] += 1
         if i < 5:
             examples.append({"fen": fen[:30], "truth": truth, "pred": pred,
                              "wa": round(wa, 4), "wb": round(wb, 4)})
@@ -105,6 +121,9 @@ def main() -> None:
     acc = n_correct / n_total if n_total else 0.0
     print(f"[sl] MATE 2-choice accuracy: {n_correct}/{n_total} = "
           f"{acc*100:.1f}%  (gemma base = 58.1%)", flush=True)
+    for src_name, (c, t) in sorted(per_file.items()):
+        if t:
+            print(f"[sl]   {src_name}: {c}/{t} = {c/t*100:.1f}%", flush=True)
     print("[sl] first 5:", json.dumps(examples, indent=1), flush=True)
 
 
