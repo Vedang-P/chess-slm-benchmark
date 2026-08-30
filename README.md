@@ -69,16 +69,18 @@ measured locally with the official ActionValueEngine (2026-08-27).
 | deepseek-v4-flash (thinking, unbounded) | frontier | **85.8%** | **92.2%** | **94.0%** | **92.8%** | — | ✅ complete |
 | gemma4-e2b (thinking, 32768) | 2B | **58.1%** | **60.5%** | **61.5%** | **60.8%** | — | ✅ complete |
 | gemma4-e2b caveman-SFT | 2B | **55.4%** | — | — | — | — | ✅ complete (regressed) |
-| **searchless 9M** (Ruoss) | 9M | **98.2%** | **98.9%** | **98.9%** | **98.9%** | **86.1%** | ✅ MATE + puzzle measured |
-| **searchless 136M** (Ruoss) | 136M | **99.4%** | **99.4%** | **99.4%** | **99.4%** | TBD | ✅ MATE measured |
-| **searchless 270M** (Ruoss) | 270M | **99.4%** | **99.4%** | **99.4%** | **99.5%** | TBD | ✅ MATE measured |
+| **searchless 9M** (Ruoss) | 9M | **98.2%** | **98.9%** | **98.9%** | **98.9%** | **86.1%** / 88.9%† | ✅ MATE + puzzle measured (local / paper) |
+| **searchless 136M** (Ruoss) | 136M | **99.4%** | **99.4%** | **99.4%** | **99.4%** | **94.5%**† | ✅ MATE measured; puzzle = paper Table 1 |
+| **searchless 270M** (Ruoss) | 270M | **99.4%** | **99.4%** | **99.4%** | **99.5%** | **95.4%**† | ✅ MATE measured; puzzle = paper Table 1 |
+
+† Ruoss et al., *Amortized Planning with Large-Scale Transformers: A Case Study on Chess*, arXiv:2402.04494v2, Table 1 — puzzle accuracy is full-solution-sequence match on the 10K Lichess puzzles (official `puzzles.csv` protocol). 9M local harness = 86.1% (8613/10000, `scripts/run_sl_puzzles.py` with `use_ema_params=True`); paper reports 88.9%.
 
 Reference points:
 - MATE paper (fine-tuned LLaMA-3-8B zero-shot): 63.5% (N), 89.7% (S),
   94.6% (T), 95.2% (ST).
-- Ruoss paper puzzle accuracy (official eval, full-solution-sequence
-  match on the 10K Lichess puzzles): 9M = 88.9%, 136M = 94.5%,
-  270M = 95.4%. Our harness should reproduce these.
+- Ruoss et al. (2024) puzzle accuracy (official eval, full-solution-sequence
+  match on the 10K Lichess puzzles, Table 1): 9M = 88.9%, 136M = 94.5%,
+  270M = 95.4%.
 
 **The result so far:** a 9M-param searchless chess specialist (98.2%)
 beats the 2B generalist gemma (58.1%) AND the frontier model DeepSeek V4
