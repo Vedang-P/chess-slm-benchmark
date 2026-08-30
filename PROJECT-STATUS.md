@@ -1,13 +1,15 @@
-# Project Status — Chess SLM Benchmark (2026-08-27, evening)
+# Project Status — Chess SLM Benchmark (2026-08-30)
 
 Current working status. Keep updated as the direction changes.
 
-## The objective (unchanged)
-Make a small language model play chess better than DeepSeek V4 Flash via
-natural-language reasoning, no engine at inference. Target: Efficient and
-On-Device AI Agents Workshop @ NeurIPS 2026. Compute: Kaggle free tier only
-(P100, ~30h/week/account, 2 accounts). Honesty protocol: only the exact
-noexplain-1000 (same positions used for gemma 58.1% / DeepSeek) counts.
+## The objective
+Find the best searchless chess action-value model below 9M parameters, with a
+primary target of matching or exceeding Ruoss 9M on MATE and official puzzles,
+then test whether the same method can approach the 136M/270M accuracy frontier.
+Target: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026. Compute:
+Kaggle free tier only (T4/P100, ~30h/week/account, 3 accounts). Honesty
+protocol: the exact frozen MATE sets and official 10K puzzle protocol are never
+used for training or model selection.
 
 ## Direction history
 
@@ -35,10 +37,13 @@ Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
 9M/136M/270M transformers, searchless, trained on ChessBench (10M games,
 15.3B Stockfish-16 action-values). 270M = 2895 Lichess Elo vs humans (GM).
 
-**Measured result (exact noexplain-1000, local CPU, official ActionValueEngine):**
+**Measured result (exact MATE subsets, local CPU, official ActionValueEngine):**
 - 9M: **98.2%** (982/1000) — complete, full 1000 rows
+- 9M: **98.9%** on tactic, both, and strategy/full (989/1000 each)
+- 136M: **99.4%** on all four subsets (3976/4000 combined)
+- 270M: **99.4%**, **99.4%**, **99.4%**, **99.5%** on noexplain, tactic, both, strategy/full (3977/4000 combined)
+- 9M official puzzle harness: **86.13%** (8613/10000 full solution sequences)
 - gemma-4-E2B base baseline: 58.1%
-- 136M / 270M: NOT YET RUN (sweep was stopped per user order)
 
 
 ## Key files
@@ -73,9 +78,14 @@ Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
 - **Full clean-1000 (gemma 58.1% + DeepSeek V4 Flash samples) — LOST 2026-08-27** (deleted during cleanup; never git-tracked, not on HF). MUST re-run on the exact noexplain-1000 via `scripts/run_mate_eval.py` (gemma local, DeepSeek API) and store on HF + a non-gitignored location.
 
 ## Remaining work
-1. **Run 136M + 270M on the EXACT noexplain-1000** (local, ~1-1.5h) — the
-   honest full table: 9M=98.2% (done), 136M=?, 270M=? vs gemma 58.1%.
-2. Interpret: pick target model for improvement.
-3. Benchmark 136M + 270M on all 4 exact subsets.
-4. Redesign the novelty contribution from the results.
-5. Frontier comparison + paper writeup.
+1. Repair the controlled 5M student: fix the double-log-softmax bug, use the
+   real training distribution rather than a test-bag derivative, and add full
+   HF-resumable state.
+2. Implement the 3–6M square-token Geometric Action-Value Network (GAVN),
+   with chess relation bias, source/destination action factorization, and
+   distribution + scalar-Q + ranking objectives.
+3. Run a frozen-protocol ablation matrix across the three Kaggle accounts.
+4. Select the Pareto frontier by held-out MATE accuracy, 10K puzzle accuracy,
+   parameters, FLOPs, latency, calibration, and error overlap.
+5. Convert the result into a reproducible A* workshop paper with uncertainty
+   estimates and negative-result documentation.

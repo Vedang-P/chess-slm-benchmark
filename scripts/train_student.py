@@ -9,9 +9,13 @@ Losses (all switchable):
 
 Total = L_KL + w_ce*L_CE + w_rank*L_rank.
 
+The official Searchless Chess predictor already returns log-softmax values.
+Keep that representation throughout the loss; applying log_softmax a second
+time changes the distillation target and invalidates the controlled baseline.
+
 Adam (hand-rolled, bias-corrected), warmup + cosine LR, EMA(0.999) for eval.
-Checkpoints: npz (flattened fp32 params) + pickled treedef + config json, saved as
-<outdir>/step-<n>.npz (+ .treedef.pkl + .config.json).
+Checkpoints: <outdir>/checkpoint-<n>/ contains EMA weights plus full optimizer,
+EMA, RNG, and config state; the directory is uploadable and resumable from HF.
 
 Usage (WSL GPU venv):
     python3 scripts/train_student.py --npz C:/tmp/searchless_chess/data/test/train_set.npz \
@@ -29,12 +33,21 @@ import time
 from pathlib import Path
 import numpy as np
 
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from scripts.kaggle_checkpoint import (  # noqa: E402
+    UploadTimer, api as make_hf_api, download_latest, upload_checkpoint,
+    write_status,
+)
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--npz", required=True)
     ap.add_argument("--teacher", required=True, help="teacher log-probs (.npy [N,128])")
     ap.add_argument("--outdir", required=True)
+    ap.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "C:/tmp/searchless_chess"),
+                    help="local checkout of the official searchless_chess repo")
     ap.add_argument("--dim", type=int, default=224)
     ap.add_argument("--layers", type=int, default=6)
     ap.add_argument("--heads", type=int, default=8)
@@ -56,20 +69,34 @@ def main() -> None:
                     help="'teacher' = Q(teacher) derived from t_logp "
                          "(for sets without SF winprob labels)")
     ap.add_argument("--init", default="",
-                    help="base path of a previous checkpoint to continue from "
+                     help="base path of a previous checkpoint to continue from "
                          "(e.g. results/student/step-15000)")
+    ap.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark",
+                    help="HF dataset repo for complete checkpoint persistence")
+    ap.add_argument("--hf-run", default="student-5m",
+                    help="remote directory for this run")
+    ap.add_argument("--hf-upload-every", type=float, default=1800,
+                    help="minimum seconds between checkpoint uploads")
+    ap.add_argument("--resume-from-hf", action="store_true",
+                    help="download and resume the latest complete HF checkpoint")
     args = ap.parse_args()
 
     import jax
     import jax.numpy as jnp
-    import haiku as hk  # noqa: F401  (imported by transformer module graph)
-
-    sl_repo = Path(__import__("os").environ.get("SL_REPO", "C:/tmp/searchless_chess"))
+    sl_repo = Path(args.sl_repo)
     sys.path.insert(0, str(sl_repo.parent))
     from searchless_chess.src import tokenizer, transformer, utils
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+
+    hf_client = None
+    hf_timer = UploadTimer(args.hf_upload_every)
+    hf_resume_dir = None
+    if args.resume_from_hf:
+        hf_client = make_hf_api(ROOT)
+        hf_resume_dir = download_latest(hf_client, args.hf_repo, args.hf_run,
+                                         outdir / "hf-resume")
 
     # ---- data ----
     d = np.load(args.npz)
@@ -85,6 +112,8 @@ def main() -> None:
     tdata = np.load(args.teacher)
     t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
     t_logp = np.asarray(t_logp, dtype=np.float32)
+    if args.max_records:
+        t_logp = t_logp[:n]
     assert t_logp.shape[0] == n, (t_logp.shape, n)
     if args.winprob_source == "teacher":
         from searchless_chess.src import utils as _u
@@ -95,7 +124,7 @@ def main() -> None:
         print("[train] winprob derived from teacher Q", flush=True)
     print(f"[train] N={n} teacher={t_logp.shape}", flush=True)
 
-    # ---- rank pairs: group rows by FEN (72-byte token prefix is unique) ----
+    # ---- rank pairs: group rows by FEN (72-token prefix is unique) ----
     prefix = tokens[:, :72].view(np.uint64)
     _, fen_id = np.unique(prefix, axis=0, return_inverse=True)
     order = np.argsort(fen_id, kind="stable")
@@ -173,7 +202,6 @@ def main() -> None:
         def loss_fn(p):
             lp = predictor.predict(params=p, targets=make_seq(b_tok, b_act),
                                    rng=None)[:, -1]
-            lp = jax.nn.log_softmax(lp, axis=-1)
             tp = jax.nn.softmax(b_tp, axis=-1)
             l_kl = jnp.mean(jnp.sum(tp * (jnp.log(tp + 1e-9) - lp), axis=-1))
             l_ce = -jnp.mean(jnp.sum(b_hl * lp, axis=-1))
@@ -204,8 +232,13 @@ def main() -> None:
     ema = jax.tree_util.tree_map(jnp.array, params)
 
     rng_state = np.random.default_rng(args.seed)
+    start_step = 0
+    if hf_resume_dir is not None and (hf_resume_dir / "state.npz").exists():
+        params, m, v, ema, start_step, rng_state = load_state(
+            hf_resume_dir, jax, jnp)
+        print(f"[resume] restored full state at step {start_step}", flush=True)
     t0 = time.time()
-    for step in range(args.steps):
+    for step in range(start_step, args.steps):
         idx = rng_state.integers(0, n, size=args.batch)
         b_tok = jnp.asarray(tokens[idx], dtype=jnp.int32)
         b_act = jnp.asarray(actions[idx], dtype=jnp.int32)
@@ -237,21 +270,78 @@ def main() -> None:
             print(f"[train] step {step+1}/{args.steps} loss={float(loss):.4f} "
                   f"({time.time()-t0:.0f}s)", flush=True)
         if (step + 1) % args.ckpt_every == 0 or step + 1 == args.steps:
-            save_ckpt(outdir, ema, args, step + 1, float(loss))
+            checkpoint = save_ckpt(
+                outdir, params, m, v, ema, rng_state, args, step + 1,
+                float(loss))
+            if hf_client is None and os.environ.get("HF_WRITE_TOKEN"):
+                hf_client = make_hf_api(ROOT)
+            if hf_client is not None and (hf_timer.due() or step + 1 == args.steps):
+                try:
+                    upload_checkpoint(hf_client, args.hf_repo, outdir,
+                                      args.hf_run, checkpoint.name)
+                    hf_timer.mark()
+                except Exception as exc:
+                    print(f"[hf] upload failed; local checkpoint retained: {exc}",
+                          flush=True)
     print(f"[train] done in {time.time()-t0:.0f}s", flush=True)
 
 
-def save_ckpt(outdir, ema, args, step, loss):
+def save_ckpt(outdir, params, m, v, ema, rng_state, args, step, loss):
     import jax
+    checkpoint = outdir / f"checkpoint-{step}"
+    checkpoint.mkdir(parents=True, exist_ok=True)
     leaves, treedef = jax.tree_util.tree_flatten(ema)
-    np.savez(outdir / f"step-{step}.npz", *[np.asarray(l) for l in leaves])
-    with open(outdir / f"step-{step}.treedef.pkl", "wb") as f:
+    np.savez(checkpoint / f"step-{step}.npz", *[np.asarray(l) for l in leaves])
+    with open(checkpoint / f"step-{step}.treedef.pkl", "wb") as f:
         pickle.dump(treedef, f)
-    with open(outdir / f"step-{step}.config.json", "w") as f:
+    full_leaves, full_treedef = jax.tree_util.tree_flatten(
+        {"params": params, "m": m, "v": v, "ema": ema})
+    np.savez(checkpoint / "state.npz",
+             **{f"arr_{i}": np.asarray(x) for i, x in enumerate(full_leaves)})
+    with open(checkpoint / "state.treedef.pkl", "wb") as f:
+        pickle.dump(full_treedef, f)
+    with open(checkpoint / "rng.pkl", "wb") as f:
+        pickle.dump(rng_state.bit_generator.state, f)
+    with open(checkpoint / "config.json", "w") as f:
         json.dump({"dim": args.dim, "layers": args.layers, "heads": args.heads,
-                   "step": step, "loss": loss}, f)
-    print(f"[train] saved ckpt step-{step}", flush=True)
+                   "step": step, "loss": loss, "seed": args.seed}, f)
+    print(f"[train] saved complete checkpoint-{step}", flush=True)
+    return checkpoint
+
+
+def load_state(checkpoint, jax, jnp):
+    with open(checkpoint / "state.treedef.pkl", "rb") as f:
+        treedef = pickle.load(f)
+    arrays = np.load(checkpoint / "state.npz")
+    leaves = [jnp.asarray(arrays[k]) for k in
+              sorted(arrays.files, key=lambda x: int(x.split("_")[1]))]
+    state = jax.tree_util.tree_unflatten(treedef, leaves)
+    with open(checkpoint / "config.json", encoding="utf-8") as f:
+        step = int(json.load(f)["step"])
+    with open(checkpoint / "rng.pkl", "rb") as f:
+        rng_state = np.random.default_rng()
+        rng_state.bit_generator.state = pickle.load(f)
+    return state["params"], state["m"], state["v"], state["ema"], step, rng_state
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        # A Kaggle kernel can disappear before local logs are copied out. Try
+        # to leave a short, actionable failure marker in the same HF run.
+        try:
+            import traceback
+            def _flag(name, default):
+                flag = f"--{name}"
+                return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
+            client = make_hf_api(ROOT)
+            write_status(
+                client, _flag("hf-repo", "vedangfake/chess-slm-benchmark"),
+                _flag("hf-run", "student-5m"),
+                type(exc).__name__ + ": " + str(exc) + "\n" +
+                traceback.format_exc()[-4000:],
+            )
+        except Exception as status_exc:
+            print(f"[hf] could not upload failure status: {status_exc}", flush=True)
+        raise

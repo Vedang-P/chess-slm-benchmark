@@ -9,8 +9,9 @@ reasoning — no external search, no engine at inference time. Chess is the
 probe: state, legal actions, and oracles are explicit, making it a clean
 testbed for reasoning in small models.
 
-Compute constraint: Kaggle free tier only (P100, ~30h/week/account, 2
-accounts). Everything in this repo is designed to fit that budget.
+Compute constraint: Kaggle free tier only (T4/P100, ~30h/week/account, 3
+accounts). Everything in this repo is designed to fit that budget (~90 GPU
+hours/week).
 
 Honesty protocol: evaluation always uses the exact noexplain-1000 test set
 (same 1000 positions used to score gemma base = 58.1% and DeepSeek V4 Flash).
@@ -68,9 +69,9 @@ measured locally with the official ActionValueEngine (2026-08-27).
 | deepseek-v4-flash (thinking, unbounded) | frontier | **85.8%** | **92.2%** | **94.0%** | **92.8%** | — | ✅ complete |
 | gemma4-e2b (thinking, 32768) | 2B | **58.1%** | **60.5%** | **61.5%** | **60.8%** | — | ✅ complete |
 | gemma4-e2b caveman-SFT | 2B | **55.4%** | — | — | — | — | ✅ complete (regressed) |
-| **searchless 9M** (Ruoss) | 9M | **98.2%** | TBD | TBD | TBD | TBD | 🔵 noexplain done |
-| **searchless 136M** (Ruoss) | 136M | TBD | TBD | TBD | TBD | TBD | ⬜ pending |
-| **searchless 270M** (Ruoss) | 270M | TBD | TBD | TBD | TBD | TBD | ⬜ pending |
+| **searchless 9M** (Ruoss) | 9M | **98.2%** | **98.9%** | **98.9%** | **98.9%** | **86.1%** | ✅ MATE + puzzle measured |
+| **searchless 136M** (Ruoss) | 136M | **99.4%** | **99.4%** | **99.4%** | **99.4%** | TBD | ✅ MATE measured |
+| **searchless 270M** (Ruoss) | 270M | **99.4%** | **99.4%** | **99.4%** | **99.5%** | TBD | ✅ MATE measured |
 
 Reference points:
 - MATE paper (fine-tuned LLaMA-3-8B zero-shot): 63.5% (N), 89.7% (S),
@@ -85,16 +86,26 @@ Flash (85.8%) at expert 2-choice chess judgment — at 1/300th of gemma's
 params, no engine at inference. The transfer question is answered:
 ChessBench-trained action-values transfer to MATE-style expert tasks.
 
-**Next:** score 136M + 270M on all 4 exact subsets (expect ≥98%). Novelty
-design for the paper comes after the full benchmark.
+**Next:** establish a valid sub-9M frontier. The first priority is a repaired
+5M controlled baseline, followed by a square-token geometric action-value
+model in the 3–6M range. Final training must use the ChessBench training
+distribution, frozen held-out evaluation, and resumable Hugging Face
+checkpoints.
 
 ---
 
 ## The plan (current)
 
-Benchmark the three open searchless models (9M/136M/270M) on all 4 MATE
-subsets (exact 1000s), then redesign the novelty contribution from the
-results.
+1. Freeze the measured Ruoss 9M/136M/270M baselines and evaluation protocol.
+2. Repair and fully validate the existing 5M distillation baseline.
+3. Train and ablate a 3–6M square-token Geometric Action-Value Network
+   (GAVN): chess-aware geometry, action factorization, value-distribution
+   distillation, scalar-Q and ranking losses.
+4. Run the best configurations across the three Kaggle accounts, with every
+   run resumable from Hugging Face.
+5. Report the parameter/accuracy/latency frontier with confidence intervals,
+   calibration, error overlap, and an ablation table suitable for a workshop
+   paper.
 ## External resources
 
 - Paper: Ruoss et al., arXiv:2402.04494 (NeurIPS 2024)
@@ -108,9 +119,17 @@ results.
 ```
 scripts/
   eval_searchless_mate.py   ACTIVE — MATE 2-choice eval for searchless models
+  train_gavn.py              ACTIVE — square-token geometric student trainer
+  eval_gavn.py               ACTIVE — frozen MATE + puzzle evaluator for GAVN
   build_search_traces.py    ACTIVE — verbalized search traces (5000 built)
   train_mate_lora.py        SFT trainer (reusable)
   run_mate_eval.py          eval protocol (gemma/DeepSeek baseline scoring)
+notebooks/
+  00_kaggle_setup_audit.ipynb
+  01_kaggle_baseline_5m.ipynb
+  02_kaggle_train_gavn.ipynb
+  03_kaggle_eval_frontier.ipynb
+  04_kaggle_prepare_full_data.ipynb
 src/                        eval/SFT support (models, mate_metrics, report)
 data/positions/             the 4 MATE eval sets (noexplain/both/tactic/full)
 results/                    searchlang traces + rlvr-pool (reusable data)
@@ -131,6 +150,7 @@ engineering-decisions.md    decision log
 
 ## Status
 
-See `PROJECT-STATUS.md` for the current snapshot. Short version: 9M scored
-98.2% on the exact noexplain-1000 (vs gemma 58.1%); 136M/270M eval
-across all 4 subsets is next.
+See `PROJECT-STATUS.md` for the current snapshot. Short version: Ruoss 9M,
+136M, and 270M are now measured on the exact MATE subsets; the research target
+is to match or exceed the 9M frontier below 9M parameters and then push the
+same design toward the 136M/270M accuracy level.

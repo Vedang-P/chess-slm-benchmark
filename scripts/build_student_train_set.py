@@ -19,14 +19,21 @@ from pathlib import Path
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bag", required=True, help="action_value_data.bag path")
+    ap.add_argument("--sl-repo", default="",
+                    help="official searchless_chess repo root; required when the bag is mounted elsewhere")
     ap.add_argument("--max-records", type=int, default=0)
     ap.add_argument("--out", default="", help="output npz (default: <bag dir>/train_set.npz)")
     args = ap.parse_args()
 
     import numpy as np
 
-    # package root is the parent of the searchless_chess repo dir
-    sys.path.insert(0, str(Path(args.bag).parents[3]))
+    # A Kaggle Dataset path does not have the source-tree depth assumed by the
+    # original local-only script. Accept the repo explicitly and retain the
+    # old path convention as a fallback.
+    if args.sl_repo:
+        sys.path.insert(0, str(Path(args.sl_repo).parent))
+    else:
+        sys.path.insert(0, str(Path(args.bag).parents[3]))
     from searchless_chess.src import bagz, constants, tokenizer, utils
 
     reader = bagz.BagFileReader(args.bag)
