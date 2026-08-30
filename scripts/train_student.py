@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pickle
 import sys
 import time
 from pathlib import Path
-
 import numpy as np
 
 
@@ -42,6 +42,7 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=15000)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--warmup", type=int, default=500)
+    ap.add_argument("--w-kl", type=float, default=1.0)
     ap.add_argument("--w-ce", type=float, default=0.5)
     ap.add_argument("--w-rank", type=float, default=0.5)
     ap.add_argument("--rank-margin", type=float, default=0.05)
@@ -63,7 +64,8 @@ def main() -> None:
     import jax.numpy as jnp
     import haiku as hk  # noqa: F401  (imported by transformer module graph)
 
-    sys.path.insert(0, str(Path(args.npz).parents[3]))  # package root
+    sl_repo = Path(__import__("os").environ.get("SL_REPO", "C:/tmp/searchless_chess"))
+    sys.path.insert(0, str(sl_repo.parent))
     from searchless_chess.src import tokenizer, transformer, utils
 
     outdir = Path(args.outdir)
@@ -73,11 +75,12 @@ def main() -> None:
     d = np.load(args.npz)
     tokens = d["tokens"]
     actions = d["actions"]
-    winprob = d["winprob"]
+    winprob = d["winprob"] if "winprob" in d else None
+    if args.max_records and winprob is not None:
+        winprob = winprob[: args.max_records]
     if args.max_records:
         tokens = tokens[: args.max_records]
         actions = actions[: args.max_records]
-        winprob = winprob[: args.max_records]
     n = len(tokens)
     tdata = np.load(args.teacher)
     t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
@@ -133,7 +136,8 @@ def main() -> None:
         rng=jax.random.PRNGKey(args.seed),
         targets=np.ones((1, 1), dtype=np.uint32))
     n_params = sum(int(p.size) for p in jax.tree_util.tree_leaves(params))
-    assert 4.5e6 <= n_params <= 5.9e6, f"expected ~5M, got {n_params}"
+    if not args.init:
+        assert 4.5e6 <= n_params <= 5.9e6, f"expected ~5M, got {n_params}"
     print(f"[train] student params: {n_params:,}", flush=True)
     if args.init:
         base = Path(args.init)
@@ -182,7 +186,7 @@ def main() -> None:
                 q2 = q_of(make_seq(r2_tok, r2_idx))
                 l_rank = jnp.mean(
                     jnp.maximum(0.0, args.rank_margin - (q1 - q2)))
-            return l_kl + args.w_ce * l_ce + args.w_rank * l_rank, (l_kl, l_ce, l_rank)
+            return args.w_kl * l_kl + args.w_ce * l_ce + args.w_rank * l_rank, (l_kl, l_ce, l_rank)
 
         (loss, _aux), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
         grads = jax.tree_util.tree_map(lambda g: jnp.clip(g, -1.0, 1.0), grads)

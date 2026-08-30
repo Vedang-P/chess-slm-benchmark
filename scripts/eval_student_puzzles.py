@@ -65,7 +65,10 @@ def main() -> None:
     engine = neural_engines.ActionValueEngine(
         return_buckets_values=np.asarray(bucket_vals, dtype=np.float32),
         predict_fn=neural_engines.wrap_predict_fn(predictor, params))
-    print(f"[eval] student step-{c['step']} (dim={c['dim']} L={c['layers']})",
+    step = c.get("step", 0)
+    mode = c.get("mode", "student")
+    eff = c.get("effective_params", c.get("params", "?"))
+    print(f"[eval] {mode} step-{step} (dim={c['dim']} L={c['layers']} eff={eff})",
           flush=True)
 
     puzzles = pd.read_csv(args.data, nrows=args.num_puzzles)
