@@ -67,50 +67,65 @@ def main():
     prefix = args.hf_run.strip("/")
     n_shards = args.n_shards
 
-    # 1. download per-shard pieces from HF (skip existing)
+    # 1. get total rows via HF file list (no download)
+    from huggingface_hub import HfApi
+    api = HfApi(token=client.token)
+    files = set(api.list_repo_files(args.hf_repo, repo_type="dataset"))
     rows_total = 0
+    # Use manifest if available for row counts, else estimate via file exists
+    # For disk-efficiency, we first collect row counts by downloading only train_set.npz headers
+    shard_rows = {}
     for i in range(n_shards):
         tag = f"{i:05d}"
-        shard_dir = stage / f"shard-{tag}"
-        shard_dir.mkdir(parents=True, exist_ok=True)
-        for fname in ("train_set.npz", "teacher_logp.npy"):
-            dest = shard_dir / fname
-            if dest.exists() and dest.stat().st_size > 0:
-                continue
-            hf_hub_download(
-                repo_id=args.hf_repo, repo_type="dataset", token=client.token,
-                filename=f"{prefix}/shard-{tag}/{fname}",
-                local_dir=str(shard_dir))
-            # hf_hub_download writes into a cache; move the file into place
-            cached = shard_dir / f"{prefix}" / f"shard-{tag}" / fname
-            if cached.exists():
-                cached.replace(dest)
-        d = np.load(shard_dir / "train_set.npz")
-        rows_total += int(d["tokens"].shape[0])
-        print(f"[assemble] shard {tag}: {d['tokens'].shape[0]} rows", flush=True)
-
-    # 2. memmap merge
-    tokens = np.lib.format.open_memmap(str(out / "tokens.mem"), mode="w+",
-                                       dtype=np.uint8, shape=(rows_total, 77))
-    actions = np.lib.format.open_memmap(str(out / "actions.mem"), mode="w+",
-                                        dtype=np.uint16, shape=(rows_total,))
-    winprob = np.lib.format.open_memmap(str(out / "winprob.mem"), mode="w+",
-                                        dtype=np.float32, shape=(rows_total,))
-    teacher = np.lib.format.open_memmap(str(out / "teacher.mem"), mode="w+",
-                                        dtype=np.float16, shape=(rows_total, 128))
+        # quick check if shard exists on HF
+        if f"{prefix}/shard-{tag}/train_set.npz" not in files:
+            raise RuntimeError(f"shard {tag} missing on HF")
+        # download only the train_set.npz to get row count, then keep for merge
+        dest = shard_dir / "train_set.npz"
+        if not dest.exists():
+            from huggingface_hub import hf_hub_url
+            import urllib.request
+            url = hf_hub_url(args.hf_repo, f"{prefix}/shard-{tag}/train_set.npz", repo_type="dataset")
+            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {client.token}"} if client.token else {})
+            with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
+                import shutil
+                shutil.copyfileobj(r, f)
+        d = np.load(dest)
+        n = int(d["tokens"].shape[0])
+        shard_rows[tag] = n
+        rows_total += n
+        print(f"[assemble] shard {tag}: {n} rows (counted, {rows_total} total)", flush=True)
+    print(f"[assemble] total rows {rows_total:,}", flush=True)
+    # 2. create memmaps
+    tokens = np.lib.format.open_memmap(str(out / "tokens.mem"), mode="w+", dtype=np.uint8, shape=(rows_total, 77))
+    actions = np.lib.format.open_memmap(str(out / "actions.mem"), mode="w+", dtype=np.uint16, shape=(rows_total,))
+    winprob = np.lib.format.open_memmap(str(out / "winprob.mem"), mode="w+", dtype=np.float32, shape=(rows_total,))
+    teacher = np.lib.format.open_memmap(str(out / "teacher.mem"), mode="w+", dtype=np.float16, shape=(rows_total, 128))
     pos = 0
     for i in range(n_shards):
         tag = f"{i:05d}"
         shard_dir = stage / f"shard-{tag}"
+        # ensure teacher present (direct download, no HF cache)
+        dest = shard_dir / "teacher_logp.npy"
+        if not dest.exists():
+            from huggingface_hub import hf_hub_url
+            import urllib.request
+            url = hf_hub_url(args.hf_repo, f"{prefix}/shard-{tag}/teacher_logp.npy", repo_type="dataset")
+            req = urllib.request.Request(url, headers={"Authorization": f"Bearer {client.token}"} if client.token else {})
+            with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
+                import shutil
+                shutil.copyfileobj(r, f)
         d = np.load(shard_dir / "train_set.npz")
         n = int(d["tokens"].shape[0])
-        tokens[pos:pos + n] = d["tokens"]
-        actions[pos:pos + n] = d["actions"]
-        winprob[pos:pos + n] = d["winprob"]
-        teacher[pos:pos + n] = np.load(shard_dir / "teacher_logp.npy", mmap_mode="r")
+        tokens[pos:pos+n] = d["tokens"]
+        actions[pos:pos+n] = d["actions"]
+        winprob[pos:pos+n] = d["winprob"]
+        teacher[pos:pos+n] = np.load(shard_dir / "teacher_logp.npy", mmap_mode="r")
         pos += n
         print(f"[assemble] merged shard {tag} -> {pos}/{rows_total}", flush=True)
-
+        # free disk: delete shard files after merge
+        import shutil
+        shutil.rmtree(shard_dir, ignore_errors=True)
     # 3. pack into the runbook contract files (streamed, no big RAM copies)
     with zipfile.ZipFile(out / "train_set.npz", "w",
                          compression=zipfile.ZIP_STORED) as zf:
