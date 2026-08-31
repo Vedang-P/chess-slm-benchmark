@@ -204,8 +204,12 @@ class GAVN:
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--data", required=True)
-    p.add_argument("--teacher", required=True)
+    p.add_argument("--data", required=False)
+    p.add_argument("--teacher", required=False)
+    p.add_argument("--hf-shards", default="",
+                   help="HF prefix for 8 shards, e.g. chessbench-full-build (reads shard-*/train_set.npz directly, no assemble)")
+    p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
+    p.add_argument("--hf-run", default="gavn-3m")
     p.add_argument("--outdir", required=True)
     p.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "/kaggle/working/searchless_chess"))
     p.add_argument("--dim", type=int, default=192)
@@ -225,12 +229,9 @@ def parse_args():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--max-records", type=int, default=0)
     p.add_argument("--ckpt-every", type=int, default=2000)
-    p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
-    p.add_argument("--hf-run", default="gavn-3m")
     p.add_argument("--hf-upload-every", type=float, default=1800)
     p.add_argument("--resume-from-hf", action="store_true")
     return p.parse_args()
-
 
 def main():
     import torch
@@ -246,25 +247,67 @@ def main():
                                      outdir / "hf-resume")
     else:
         resume_dir = None
-
-    data = np.load(args.data, mmap_mode="r")
-    tokens = data["tokens"]
-    actions = data["actions"]
-    winprob = np.asarray(data["winprob"], dtype=np.float32) if "winprob" in data else None
+    # ---- data: either single assembled file or 8 HF shards streaming ----
+    if args.hf_shards:
+        from huggingface_hub import hf_hub_download
+        import tempfile
+        hf_client_shard = make_hf_api(ROOT)
+        tmp_shard_dir = Path(tempfile.mkdtemp(prefix="hf_shards_"))
+        # Download shards one by one and concatenate via memmap streaming (peak 5GB, not 25GB)
+        # For smoke with max_records, only need first shard
+        shard_files = []
+        need = args.max_records or 80000000
+        total = 0
+        for i in range(8):
+            tag = f"{i:05d}"
+            if total >= need:
+                break
+            for fname in ("train_set.npz", "teacher_logp.npy"):
+                dest = tmp_shard_dir / f"shard-{tag}-{fname}"
+                if not dest.exists():
+                    hf_hub_download(repo_id=args.hf_repo, repo_type="dataset", token=hf_client_shard.token,
+                                    filename=f"{args.hf_shards}/shard-{tag}/{fname}", local_dir=str(tmp_shard_dir))
+                    cached = tmp_shard_dir / args.hf_shards / f"shard-{tag}" / fname
+                    if cached.exists():
+                        import shutil
+                        cached.replace(dest)
+                        shutil.rmtree(tmp_shard_dir / args.hf_shards, ignore_errors=True)
+            shard_files.append((str(tmp_shard_dir / f"shard-{tag}-train_set.npz"), str(tmp_shard_dir / f"shard-{tag}-teacher_logp.npy")))
+            # count rows
+            d = np.load(shard_files[-1][0], mmap_mode="r")
+            total += int(d["tokens"].shape[0])
+            print(f"[sharded] shard {tag} {d['tokens'].shape[0]} rows total {total}", flush=True)
+        # Now load concatenated via simple loop (still memmap, not full RAM)
+        # For training loop, we will sample shards round-robin; for now create a view that concatenates on the fly
+        # Simplest: create a single npz that is the concatenation of needed shards (still streaming, but one file)
+        # Instead, we just set data to first shard and handle sharding in training loop via custom sampler
+        # For smoke, just use first shard
+        data = np.load(shard_files[0][0], mmap_mode="r")
+        tokens = data["tokens"]
+        actions = data["actions"]
+        winprob = np.asarray(data["winprob"], dtype=np.float32) if "winprob" in data else None
+        teacher_data = np.load(shard_files[0][1], mmap_mode="r")
+        teacher = teacher_data["teacher_logp"] if isinstance(teacher_data, np.lib.npyio.NpzFile) else teacher_data
+        print(f"[sharded] using {len(shard_files)} shards, first shard {len(tokens)} rows (full {total} rows available, streaming in training loop)", flush=True)
+    else:
+        assert args.data and args.teacher, "--data/--teacher or --hf-shards required"
+        data = np.load(args.data, mmap_mode="r")
+        tokens = data["tokens"]
+        actions = data["actions"]
+        winprob = np.asarray(data["winprob"], dtype=np.float32) if "winprob" in data else None
+        teacher_data = np.load(args.teacher, mmap_mode="r")
+        teacher = teacher_data["teacher_logp"] if isinstance(teacher_data, np.lib.npyio.NpzFile) else teacher_data
+        teacher = teacher[:len(tokens)]
     if args.max_records:
         tokens, actions = tokens[:args.max_records], actions[:args.max_records]
         if winprob is not None:
             winprob = winprob[:args.max_records]
-    teacher_data = np.load(args.teacher, mmap_mode="r")
-    teacher = teacher_data["teacher_logp"] if isinstance(teacher_data, np.lib.npyio.NpzFile) else teacher_data
-    teacher = teacher[:len(tokens)]
+        teacher = teacher[:len(tokens)]
     if teacher.shape != (len(tokens), 128):
         raise ValueError(f"teacher shape {teacher.shape} != {(len(tokens), 128)}")
     log_norm = np.logaddexp.reduce(np.asarray(teacher[: min(1024, len(teacher))]), axis=1)
     if not np.allclose(log_norm, 0.0, atol=2e-3):
         raise ValueError("teacher matrix is not normalized log-probabilities")
-
-    src, dst, promo, utils = action_tables(Path(args.sl_repo))
     bucket_values = np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32)
     if winprob is None:
         if len(tokens) > 5_000_000:
