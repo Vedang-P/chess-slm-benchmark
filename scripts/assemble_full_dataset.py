@@ -121,7 +121,7 @@ def main():
     with open(out / "teacher_logp.npy", "wb") as f:
         np.lib.format.write_array(f, teacher)
 
-    # 4. verify
+# 4. verify
     d = np.load(out / "train_set.npz")
     t = np.load(out / "teacher_logp.npy", mmap_mode="r")
     assert d["tokens"].shape == (rows_total, 77)
@@ -130,6 +130,17 @@ def main():
     assert np.allclose(norm, 0, atol=2e-3), "teacher not normalized"
     sizes = {p.name: p.stat().st_size / 2**30 for p in out.iterdir() if p.is_file()}
     print(f"[assemble] DONE: {rows_total:,} rows; {json.dumps(sizes, indent=2)}",
+          flush=True)
+
+    # 4b. upload the assembled files to HF so training kernels can fetch them
+    # without a Kaggle dataset dependency
+    for fname in ("train_set.npz", "teacher_logp.npy"):
+        client.upload_file(
+            path_or_fileobj=str(out / fname),
+            path_in_repo=f"{prefix}/assembled/{fname}",
+            repo_id=args.hf_repo, repo_type="dataset")
+        print(f"[assemble] uploaded {fname} to HF", flush=True)
+    print(f"[assemble] publish {out} as the Kaggle dataset 'chessbench-full'",
           flush=True)
     print(f"[assemble] publish {out} as the Kaggle dataset 'chessbench-full'",
           flush=True)
