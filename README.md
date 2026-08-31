@@ -164,21 +164,18 @@ control + 3-5M GAVN square-token geometry model) from the released **9M**
 teacher on the full ChessBench train distribution, run on Kaggle free tier
 across three accounts.
 
-### Decision record — subset-first, full data later (2026-08-31)
+### Decision record — training phasing (2026-08-31)
 
-The planned full dataset is 8 train shards (~80M rows, ~25GB processed;
-shards vary in size, so shard count does not map linearly to rows). To
-validate the pipeline and get first results quickly, we run the first
-training wave on a small subset of the already-built shards (shards 4+6,
-~3M rows, ~1GB) while the full build continues in parallel.
+The full dataset is 8 train shards (~80M rows, ~25GB processed; shards vary
+in size, so shard count does not map linearly to rows).
 
-- **Now:** first wave trains on the ~3M-row subset (`subset-3m` on HF).
-  This validates the trainer, HF persistence/resume, and eval end-to-end
-  and produces the first comparable numbers.
-- **Later (required):** re-run the same six configurations on the full
-  8-shard dataset (`assembled` on HF, ~25GB) before any final claim. A
-  subset result is NOT a paper result — it is pipeline validation and
-  iteration material only.
+- **Wave 1 (now):** the six training configurations run on the full 8-shard
+  dataset (`assembled` on HF / the `chessbench-full` Kaggle dataset, ~25GB).
+  This validates the trainer, HF persistence/resume, and eval end-to-end and
+  produces the first comparable numbers.
+- **Later (required):** extend the dataset to ~45GB (~14 shards, wave-2 build)
+  and re-run before any final claim. Wave-1 numbers are pipeline validation
+  and iteration material; only full-data results are paper material.
 
-This is a deliberate phasing decision, not a quality reduction: the full
+This is a deliberate phasing decision, not a quality reduction: the larger
 dataset remains the target for final measurements.
