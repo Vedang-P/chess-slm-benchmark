@@ -48,6 +48,12 @@ def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--n-shards", type=int, default=8,
                    help="how many train shards to process (00000 .. n-1)")
+    p.add_argument("--shard-start", type=int, default=0,
+                   help="first shard index to consider")
+    p.add_argument("--shard-end", type=int, default=-1,
+                   help="last shard index to consider (exclusive; -1 = n-shards)")
+    p.add_argument("--force-shard", type=int, default=-1,
+                   help="process exactly this shard index even if done (repair)")
     p.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "/kaggle/working/searchless_chess"))
     p.add_argument("--workdir", default="/kaggle/working/chessbench-build")
     p.add_argument("--teacher-checkpoint", required=True,
@@ -108,6 +114,17 @@ def download(url: str, dest: Path) -> None:
                    check=True)
 
 
+def shard_done_on_hf(client, args, tag: str) -> bool:
+    """Source of truth: both shard artifacts exist on HF (race-safe for
+    parallel kernels; the manifest is advisory only)."""
+    try:
+        files = set(client.list_repo_files(args.hf_repo, repo_type="dataset"))
+    except Exception:
+        return False
+    pre = f"{args.hf_run.strip('/')}/shard-{tag}/"
+    return f"{pre}train_set.npz" in files and f"{pre}teacher_logp.npy" in files
+
+
 def main() -> None:
     args = parse_args()
     client = make_hf_api(ROOT)
@@ -116,15 +133,17 @@ def main() -> None:
     shard_root = workdir / "shards"
     manifest = read_manifest(client, args)
     done = set(manifest.get("shards", {}))
-    print(f"[build] {len(done)}/{args.n_shards} shards done, resume={args.resume_from_hf}",
+    print(f"[build] {len(done)}/{args.n_shards} shards in manifest, resume={args.resume_from_hf}",
           flush=True)
 
-    targets = [args.force_shard] if args.force_shard >= 0 else range(args.n_shards)
+    end = args.shard_end if args.shard_end >= 0 else args.n_shards
+    targets = ([args.force_shard] if args.force_shard >= 0
+               else range(args.shard_start, min(end, args.n_shards)))
     for i in targets:
         name = shard_name(i)
         tag = f"{i:05d}"
-        if tag in done and args.force_shard < 0:
-            print(f"[build] shard {tag} done, skip", flush=True)
+        if args.force_shard < 0 and (tag in done or shard_done_on_hf(client, args, tag)):
+            print(f"[build] shard {tag} done (manifest/HF), skip", flush=True)
             continue
 
         t0 = time.time()
