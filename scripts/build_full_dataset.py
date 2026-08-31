@@ -102,14 +102,42 @@ def write_manifest(client, args, manifest) -> None:
         os.unlink(tmp)
 
 
-def download(url: str, dest: Path) -> None:
-    if dest.exists() and dest.stat().st_size > 0:
-        print(f"[dl] {dest.name} already present", flush=True)
+def download(url: str, dest: Path, min_size: int = 1_000_000_000) -> None:
+    """Download with --fail and resume; a partial file is deleted and retried."""
+    if dest.exists() and validate_bag(dest, min_rows=0, min_size=min_size):
+        print(f"[dl] {dest.name} already present and valid", flush=True)
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
-    print(f"[dl] {url}", flush=True)
-    subprocess.run(["curl", "-sL", "--retry", "5", "-o", str(dest), url],
-                   check=True)
+    for attempt in range(4):
+        dest.unlink(missing_ok=True)
+        print(f"[dl] attempt {attempt + 1}: {url}", flush=True)
+        r = subprocess.run(["curl", "-sL", "--fail", "--retry", "5", "-C", "-",
+                            "-o", str(dest), url])
+        if r.returncode == 0 and validate_bag(dest, min_rows=0, min_size=min_size):
+            print(f"[dl] valid ({dest.stat().st_size} bytes)", flush=True)
+            return
+        print(f"[dl] attempt {attempt + 1} invalid/partial; retrying", flush=True)
+    raise RuntimeError(f"download failed for {url}")
+
+
+def validate_bag(path: Path, min_rows: int = 10_000_000,
+                 min_size: int = 1_000_000_000) -> int:
+    """Return record count from the bagz index tail; 0 if the file is not a
+    complete bag. Guards against silently truncated downloads."""
+    try:
+        import struct
+        size = path.stat().st_size
+        if size < min_size:
+            return 0
+        with open(path, "rb") as f:
+            f.seek(size - 8)
+            (index_start,) = struct.unpack("<Q", f.read(8))
+        rows = (size - index_start) // 8
+        if rows < min_rows:
+            return 0
+        return rows
+    except Exception:
+        return 0
 
 
 def shard_done_on_hf(client, args, tag: str) -> bool:
@@ -151,8 +179,10 @@ def main() -> None:
         npz_out = shard_dir / "train_set.npz"
         teacher_out = shard_dir / "teacher_logp.npy"
 
-        # 1. download raw shard
+        # 1. download raw shard (validated: truncated bags are rejected)
         download(f"{GCS_BASE}/{name}", raw_bag)
+        expected_rows = validate_bag(raw_bag)
+        print(f"[build] shard {tag}: bag valid, {expected_rows:,} records", flush=True)
 
         # 2. parse -> tokens/actions/winprob
         cmd = [sys.executable, "scripts/build_student_train_set.py",
@@ -162,6 +192,14 @@ def main() -> None:
             cmd += ["--max-records", str(args.max_shard_records)]
         print(f"[build] shard {tag}: parsing", flush=True)
         subprocess.run(cmd, check=True)
+        n_parsed = int(np.load(npz_out)["tokens"].shape[0])
+        if args.max_shard_records:
+            expected_rows = args.max_shard_records
+        if n_parsed < expected_rows:
+            raise RuntimeError(
+                f"shard {tag}: parsed {n_parsed} rows but bag has "
+                f"{expected_rows} (truncated or corrupt); aborting shard")
+        print(f"[build] shard {tag}: parsed {n_parsed} rows", flush=True)
 
         # 3. teacher label with the 9M
         cmd = [sys.executable, "scripts/teacher_label.py",
