@@ -156,3 +156,29 @@ See `PROJECT-STATUS.md` for the current snapshot. Short version: Ruoss 9M,
 136M, and 270M are now measured on the exact MATE subsets; the research target
 is to match or exceed the 9M frontier below 9M parameters and then push the
 same design toward the 136M/270M accuracy level.
+
+## Current direction: sub-9M student (searchless_chess)
+
+Active work (2026-08-31): distilling a sub-9M student (5M FEN/action-ID
+control + 3-5M GAVN square-token geometry model) from the released **9M**
+teacher on the full ChessBench train distribution, run on Kaggle free tier
+across three accounts.
+
+### Decision record — subset-first, full data later (2026-08-31)
+
+The planned full dataset is 8 train shards (~80M rows, ~25GB processed;
+shards vary in size, so shard count does not map linearly to rows). To
+validate the pipeline and get first results quickly, we run the first
+training wave on a small subset of the already-built shards (shards 4+6,
+~3M rows, ~1GB) while the full build continues in parallel.
+
+- **Now:** first wave trains on the ~3M-row subset (`subset-3m` on HF).
+  This validates the trainer, HF persistence/resume, and eval end-to-end
+  and produces the first comparable numbers.
+- **Later (required):** re-run the same six configurations on the full
+  8-shard dataset (`assembled` on HF, ~25GB) before any final claim. A
+  subset result is NOT a paper result — it is pipeline validation and
+  iteration material only.
+
+This is a deliberate phasing decision, not a quality reduction: the full
+dataset remains the target for final measurements.
