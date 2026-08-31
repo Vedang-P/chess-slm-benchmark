@@ -52,6 +52,14 @@ This model is a control, not the proposed final architecture.
 The final experiment must use the full ChessBench training distribution. Do
 not use the old `data/test/action_value_data.bag` derivative for final claims.
 
+Decision record (2026-08-31): teacher = released **9M** checkpoint
+(`9M/6400000/params_ema`, dim 256 / layers 8 / heads 8), dataset = **8 train
+shards** (~134M rows, ~45GB processed). The 270M was the original runbook
+choice; the user switched to the 9M teacher (cheaper labeling, directly
+targets the "beat 9M" criterion). 8 shards are processed across multiple
+resumable Kaggle sessions (Kaggle kernels die at ~12h; progress is saved to HF
+after every shard).
+
 Every training kernel should have a Kaggle Dataset mounted at:
 
 ```text
@@ -62,7 +70,7 @@ It must contain:
 
 ```text
 train_set.npz       # full training positions/actions/win probabilities
-teacher_logp.npy    # 270M teacher labels, shape [N, 128]
+teacher_logp.npy    # 9M teacher labels, shape [N, 128], fp16
 ```
 
 `train_set.npz` must contain:
@@ -74,23 +82,31 @@ winprob   float array, shape [N]
 ```
 
 `teacher_logp.npy` must contain normalized log-probabilities over 128 return
- buckets, with the same number of rows as `tokens`.
+buckets, with the same number of rows as `tokens`.
 
-### Creating the full-data Dataset
+### Creating the full-data Dataset (multi-session)
 
-If the full export does not already exist:
+The full ChessBench train bag is ~2.9TB (2,148 shards); the dataset target is 8
+shards (~45GB), built with a resumable pipeline because one Kaggle session
+cannot finish it:
 
-1. Attach the official ChessBench training action-value bag to a Kaggle kernel.
-2. Attach or mount the released 270M checkpoint.
-3. Pull this repository.
-4. Open `notebooks/04_kaggle_prepare_full_data.ipynb`.
-5. Set `CHESSBENCH` and `TEACHER_PARAMS` to the mounted paths.
-6. Run the tokenizer conversion and teacher-labeling cells.
-7. Verify that `chessbench-full/train_set.npz` and
-   `chessbench-full/teacher_logp.npy` have matching row counts.
-8. Publish `/kaggle/working/chessbench-full` as a Kaggle Dataset named
-   `chessbench-full`.
-9. Attach that Dataset to every training kernel.
+1. Push `notebooks/05_kaggle_build_full_data.ipynb` to a Kaggle kernel
+   (account 1). It installs the era JAX stack, downloads the 9M teacher, and
+   runs `scripts/build_full_dataset.py`.
+2. `build_full_dataset.py` processes shards one at a time: download raw shard
+   from GCS -> parse (tokens/actions/winprob) -> 9M teacher label (fp16) ->
+   upload shard artifacts to HF (`vedangfake/chess-slm-benchmark` under
+   `chessbench-full-build/shard-XXXXX/`) -> update the manifest (uploaded after
+   every shard). A killed kernel resumes from the manifest and loses at most
+   one shard.
+3. Rerun the same notebook (or just the production cell) until all 8 shards
+   are done. Progress check: the manifest at
+   `chessbench-full-build/manifest.json` on HF.
+4. Run `notebooks/06_kaggle_assemble_publish.ipynb` once: it downloads all 8
+   shard pieces, merges them via memmap into `train_set.npz` +
+   `teacher_logp.npy` (streamed, no full-RAM copies), validates, and publishes
+   the Kaggle Dataset `chessbench-full` (public, so all three accounts can
+   mount it).
 
 The full bag and teacher labels are intentionally not committed to GitHub.
 They are too large for a normal repository and should be stored as Kaggle/HF
@@ -109,6 +125,12 @@ The token needs write access to:
 ```text
 vedangfake/chess-slm-benchmark
 ```
+
+Note: there is no public API to create or attach Kaggle secrets (UI only:
+Notebook Editor > Add-ons > Secrets). The pushed launch variants therefore
+embed the token as an environment fallback constant (kernels are private).
+Rotate the token if any kernel is ever published; never commit the token to
+GitHub.
 
 In a fresh Kaggle kernel, run:
 

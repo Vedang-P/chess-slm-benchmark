@@ -60,6 +60,9 @@ def main() -> None:
     ap.add_argument("--w-rank", type=float, default=0.5)
     ap.add_argument("--rank-margin", type=float, default=0.05)
     ap.add_argument("--rank-min-delta", type=float, default=0.05)
+    ap.add_argument("--rank-subsample", type=int, default=0,
+                    help="build rank pairs from this many random rows (bounded "
+                         "table on full-scale datasets; 0 = all rows)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--ckpt-every", type=int, default=2000)
     ap.add_argument("--max-records", type=int, default=0,
@@ -98,8 +101,8 @@ def main() -> None:
         hf_resume_dir = download_latest(hf_client, args.hf_repo, args.hf_run,
                                          outdir / "hf-resume")
 
-    # ---- data ----
-    d = np.load(args.npz)
+    # ---- data (mmap-backed so the full multi-GB dataset stays out of RAM) ----
+    d = np.load(args.npz, mmap_mode="r")
     tokens = d["tokens"]
     actions = d["actions"]
     winprob = d["winprob"] if "winprob" in d else None
@@ -109,43 +112,58 @@ def main() -> None:
         tokens = tokens[: args.max_records]
         actions = actions[: args.max_records]
     n = len(tokens)
-    tdata = np.load(args.teacher)
+    tdata = np.load(args.teacher, mmap_mode="r")
     t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
-    t_logp = np.asarray(t_logp, dtype=np.float32)
-    if args.max_records:
-        t_logp = t_logp[:n]
+    t_logp = t_logp[:n]
     assert t_logp.shape[0] == n, (t_logp.shape, n)
     if args.winprob_source == "teacher":
+        if n > 5_000_000:
+            raise ValueError("winprob_source=teacher on a large set requires eager Q; "
+                             "provide an npz with a winprob column instead")
         from searchless_chess.src import utils as _u
         z = np.asarray(_u.get_uniform_buckets_edges_values(128)[1], dtype=np.float32)
-        p = np.exp(t_logp)
+        p = np.exp(np.asarray(t_logp, dtype=np.float32))
         p /= p.sum(axis=-1, keepdims=True)
         winprob = p @ z
         print("[train] winprob derived from teacher Q", flush=True)
     print(f"[train] N={n} teacher={t_logp.shape}", flush=True)
 
     # ---- rank pairs: group rows by FEN (72-token prefix is unique) ----
-    prefix = tokens[:, :72].view(np.uint64)
-    _, fen_id = np.unique(prefix, axis=0, return_inverse=True)
-    order = np.argsort(fen_id, kind="stable")
-    pairs = []
-    s = 0
-    while s < n:
-        e = s + 1
-        while e < n and fen_id[order[e]] == fen_id[order[s]]:
-            e += 1
-        run = order[s:e]
-        if len(run) >= 2:
-            wp_run = winprob[run]
-            for i in range(len(run)):
-                for j in range(i + 1, len(run)):
-                    if wp_run[i] - wp_run[j] >= args.rank_min_delta:
-                        pairs.append((run[i], run[j]))
-                    elif wp_run[j] - wp_run[i] >= args.rank_min_delta:
-                        pairs.append((run[j], run[i]))
-        s = e
-    pairs = np.asarray(pairs, dtype=np.int32)
-    print(f"[train] rank pairs: {len(pairs)}", flush=True)
+    # On the full multi-shard dataset, build pairs from a bounded random
+    # subsample so the pair table stays small; the rank loss itself is unchanged.
+    if args.w_rank > 0:
+        if args.rank_subsample and args.rank_subsample < n:
+            rng_pick = np.random.default_rng(args.seed)
+            pick = np.sort(rng_pick.choice(n, size=args.rank_subsample, replace=False))
+            pair_tokens, pair_actions, pair_winprob = tokens[pick], actions[pick], winprob[pick]
+            print(f"[train] rank pairs from subsample of {args.rank_subsample} rows", flush=True)
+        else:
+            pair_tokens, pair_actions, pair_winprob = tokens, actions, winprob
+        prefix = np.asarray(pair_tokens[:, :72]).view(np.uint64)
+        _, fen_id = np.unique(prefix, axis=0, return_inverse=True)
+        order = np.argsort(fen_id, kind="stable")
+        pairs = []
+        s = 0
+        m = len(order)
+        while s < m:
+            e = s + 1
+            while e < m and fen_id[order[e]] == fen_id[order[s]]:
+                e += 1
+            run = order[s:e]
+            if len(run) >= 2:
+                wp_run = pair_winprob[run]
+                for i in range(len(run)):
+                    for j in range(i + 1, len(run)):
+                        if wp_run[i] - wp_run[j] >= args.rank_min_delta:
+                            pairs.append((run[i], run[j]))
+                        elif wp_run[j] - wp_run[i] >= args.rank_min_delta:
+                            pairs.append((run[j], run[i]))
+            s = e
+        pairs = np.asarray(pairs, dtype=np.int32)
+        print(f"[train] rank pairs: {len(pairs)}", flush=True)
+    else:
+        pairs = np.zeros((0, 2), dtype=np.int32)
+        print("[train] rank pairs: disabled (w_rank=0)", flush=True)
 
     # ---- model ----
     cfg = transformer.TransformerConfig(
@@ -240,18 +258,18 @@ def main() -> None:
     t0 = time.time()
     for step in range(start_step, args.steps):
         idx = rng_state.integers(0, n, size=args.batch)
-        b_tok = jnp.asarray(tokens[idx], dtype=jnp.int32)
-        b_act = jnp.asarray(actions[idx], dtype=jnp.int32)
-        b_hl = hl_gauss_batch(jnp.asarray(winprob[idx], dtype=jnp.float32))
-        b_tp = jnp.asarray(t_logp[idx])
+        b_tok = jnp.asarray(np.asarray(tokens[idx], dtype=np.int32), dtype=jnp.int32)
+        b_act = jnp.asarray(np.asarray(actions[idx], dtype=np.int32), dtype=jnp.int32)
+        b_hl = hl_gauss_batch(jnp.asarray(np.asarray(winprob[idx], dtype=np.float32), dtype=jnp.float32))
+        b_tp = jnp.asarray(np.asarray(t_logp[idx], dtype=np.float32), dtype=jnp.float32)
         n_pair = args.batch if args.w_rank > 0 and len(pairs) else 0
         if n_pair:
             pi = rng_state.integers(0, len(pairs), size=n_pair)
             r1, r2 = pairs[pi, 0], pairs[pi, 1]
-            r1_tok = jnp.asarray(tokens[r1], dtype=jnp.int32)
-            r1_idx = jnp.asarray(actions[r1], dtype=jnp.int32)
-            r2_tok = jnp.asarray(tokens[r2], dtype=jnp.int32)
-            r2_idx = jnp.asarray(actions[r2], dtype=jnp.int32)
+            r1_tok = jnp.asarray(np.asarray(tokens[r1], dtype=np.int32), dtype=jnp.int32)
+            r1_idx = jnp.asarray(np.asarray(actions[r1], dtype=np.int32), dtype=jnp.int32)
+            r2_tok = jnp.asarray(np.asarray(tokens[r2], dtype=np.int32), dtype=jnp.int32)
+            r2_idx = jnp.asarray(np.asarray(actions[r2], dtype=np.int32), dtype=jnp.int32)
         else:
             r1_tok = b_tok[:0]
             r1_idx = b_act[:0]

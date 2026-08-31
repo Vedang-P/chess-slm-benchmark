@@ -73,7 +73,7 @@ def action_tables(sl_repo: Path):
 
 class GeometricBlock:
     def __init__(self, torch, dim: int, heads: int, relation_count: int,
-                 dropout: float = 0.0):
+                 dropout: float = 0.0, bias_mode: str = "both"):
         self.nn = torch.nn
         self.norm1 = torch.nn.LayerNorm(dim)
         self.qkv = torch.nn.Linear(dim, dim * 3)
@@ -86,6 +86,7 @@ class GeometricBlock:
         self.heads = heads
         self.dim = dim
         self.dropout = torch.nn.Dropout(dropout)
+        self.bias_mode = bias_mode
 
     def parameters(self):
         for module in (self.norm1, self.qkv, self.proj, self.norm2,
@@ -103,11 +104,14 @@ class GeometricBlock:
         k = k.view(bsz, n, self.heads, head_dim).transpose(1, 2)
         v = v.view(bsz, n, self.heads, head_dim).transpose(1, 2)
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(head_dim)
-        static = self.rel[:, rel_index].unsqueeze(0)
-        pooled = h.mean(dim=1)
-        dynamic = self.dynamic(pooled).view(bsz, self.heads, 2, 64)
-        dynamic_bias = dynamic[:, :, 0, :, None] + dynamic[:, :, 1, None, :]
-        scores = scores + static + dynamic_bias / math.sqrt(dim)
+        if self.bias_mode in ("both", "fixed"):
+            static = self.rel[:, rel_index].unsqueeze(0)
+            scores = scores + static
+        if self.bias_mode in ("both", "dynamic"):
+            pooled = h.mean(dim=1)
+            dynamic = self.dynamic(pooled).view(bsz, self.heads, 2, 64)
+            dynamic_bias = dynamic[:, :, 0, :, None] + dynamic[:, :, 1, None, :]
+            scores = scores + dynamic_bias / math.sqrt(dim)
         attn = torch.softmax(scores, dim=-1)
         y = torch.matmul(self.dropout(attn), v)
         y = y.transpose(1, 2).contiguous().view(bsz, n, dim)
@@ -120,18 +124,20 @@ class GAVN:
     """nn.Module wrapper kept as a class factory for clean torch imports."""
     def __new__(cls, torch, dim: int, layers: int, heads: int,
                 action_src: np.ndarray, action_dst: np.ndarray,
-                action_promo: np.ndarray, relation_index: np.ndarray):
+                action_promo: np.ndarray, relation_index: np.ndarray,
+                bias_mode: str = "both"):
         class _Model(torch.nn.Module):
             def __init__(self):
                 super().__init__()
                 self.dim = dim
+                self.bias_mode = bias_mode
                 self.board_embed = torch.nn.Embedding(32, dim)
                 self.square_embed = torch.nn.Parameter(torch.zeros(64, dim))
                 self.global_embed = torch.nn.Embedding(32, dim)
                 self.global_pos = torch.nn.Parameter(torch.zeros(13, dim))
                 self.blocks = torch.nn.ModuleList()
                 for _ in range(layers):
-                    block = GeometricBlock(torch, dim, heads, 8)
+                    block = GeometricBlock(torch, dim, heads, 8, bias_mode=bias_mode)
                     self.blocks.append(torch.nn.ModuleDict({
                         "norm1": block.norm1, "qkv": block.qkv,
                         "proj": block.proj, "norm2": block.norm2,
@@ -168,9 +174,12 @@ class GAVN:
                     v = v.view(-1, 64, heads, hd).transpose(1, 2)
                     scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(hd)
                     rel = getattr(self, f"rel_{i}")[:, self.relation_index]
-                    dyn = block["dynamic"](h.mean(1)).view(-1, heads, 2, 64)
-                    scores = scores + rel.unsqueeze(0) + (
-                        dyn[:, :, 0, :, None] + dyn[:, :, 1, None, :]) / math.sqrt(dim)
+                    if self.bias_mode in ("both", "fixed"):
+                        scores = scores + rel.unsqueeze(0)
+                    if self.bias_mode in ("both", "dynamic"):
+                        dyn = block["dynamic"](h.mean(1)).view(-1, heads, 2, 64)
+                        scores = scores + (
+                            dyn[:, :, 0, :, None] + dyn[:, :, 1, None, :]) / math.sqrt(dim)
                     attn = torch.softmax(scores, -1)
                     y = torch.matmul(block["dropout"](attn), v)
                     x = x + block["dropout"](block["proj"](
@@ -207,6 +216,9 @@ def parse_args():
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--warmup", type=int, default=1000)
     p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument("--bias-mode", default="both",
+                   choices=["both", "fixed", "dynamic", "none"],
+                   help="attention relation bias: static rel + dynamic, or ablations")
     p.add_argument("--w-dist", type=float, default=1.0)
     p.add_argument("--w-q", type=float, default=0.5)
     p.add_argument("--w-ce", type=float, default=0.25)
@@ -235,36 +247,37 @@ def main():
     else:
         resume_dir = None
 
-    data = np.load(args.data)
-    tokens = np.asarray(data["tokens"], dtype=np.int64)
-    actions = np.asarray(data["actions"], dtype=np.int64)
+    data = np.load(args.data, mmap_mode="r")
+    tokens = data["tokens"]
+    actions = data["actions"]
     winprob = np.asarray(data["winprob"], dtype=np.float32) if "winprob" in data else None
     if args.max_records:
         tokens, actions = tokens[:args.max_records], actions[:args.max_records]
         if winprob is not None:
             winprob = winprob[:args.max_records]
-    teacher_data = np.load(args.teacher)
-    teacher = np.asarray(teacher_data["teacher_logp"] if isinstance(teacher_data, np.lib.npyio.NpzFile) else teacher_data,
-                         dtype=np.float32)
+    teacher_data = np.load(args.teacher, mmap_mode="r")
+    teacher = teacher_data["teacher_logp"] if isinstance(teacher_data, np.lib.npyio.NpzFile) else teacher_data
     teacher = teacher[:len(tokens)]
     if teacher.shape != (len(tokens), 128):
         raise ValueError(f"teacher shape {teacher.shape} != {(len(tokens), 128)}")
-    log_norm = np.logaddexp.reduce(teacher[: min(1024, len(teacher))], axis=1)
+    log_norm = np.logaddexp.reduce(np.asarray(teacher[: min(1024, len(teacher))]), axis=1)
     if not np.allclose(log_norm, 0.0, atol=2e-3):
         raise ValueError("teacher matrix is not normalized log-probabilities")
 
     src, dst, promo, utils = action_tables(Path(args.sl_repo))
     bucket_values = np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32)
-    teacher_probs = np.exp(teacher)
-    teacher_q = teacher_probs @ bucket_values
     if winprob is None:
-        winprob = teacher_q.astype(np.float32)
+        if len(tokens) > 5_000_000:
+            raise ValueError("winprob absent and dataset too large to derive teacher Q eagerly; "
+                             "provide an npz with a winprob column")
+        teacher_probs = np.exp(np.asarray(teacher))
+        winprob = (teacher_probs @ bucket_values).astype(np.float32)
     if len(src) <= actions.max():
         raise ValueError("action id exceeds official action table")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = GAVN(torch, args.dim, args.layers, args.heads, src, dst, promo,
-                 relation_types()).to(device)
+                 relation_types(), bias_mode=args.bias_mode).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95),
                                   weight_decay=0.01)
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
@@ -288,10 +301,11 @@ def main():
     t0 = time.time()
     for step in range(start_step, args.steps):
         idx = np_rng.integers(0, len(tokens), size=args.batch)
-        bt = torch.as_tensor(tokens[idx], dtype=torch.long, device=device)
-        ba = torch.as_tensor(actions[idx], dtype=torch.long, device=device)
-        tlogp = torch.as_tensor(teacher[idx], dtype=torch.float32, device=device)
-        tq = torch.as_tensor(teacher_q[idx], dtype=torch.float32, device=device)
+        bt = torch.as_tensor(np.asarray(tokens[idx], dtype=np.int64), dtype=torch.long, device=device)
+        ba = torch.as_tensor(np.asarray(actions[idx], dtype=np.int64), dtype=torch.long, device=device)
+        tp_batch = np.asarray(teacher[idx], dtype=np.float32)
+        tlogp = torch.as_tensor(tp_batch, dtype=torch.float32, device=device)
+        tq = torch.as_tensor(np.exp(tp_batch) @ bucket_values, dtype=torch.float32, device=device)
         wp = torch.as_tensor(winprob[idx], dtype=torch.float32, device=device)
         lr = args.lr * min(1.0, (step + 1) / max(1, args.warmup))
         if step >= args.warmup:
