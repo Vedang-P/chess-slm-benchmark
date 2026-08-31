@@ -81,6 +81,7 @@ def main():
         if f"{prefix}/shard-{tag}/train_set.npz" not in files:
             raise RuntimeError(f"shard {tag} missing on HF")
         # download only the train_set.npz to get row count, then keep for merge
+        shard_dir = stage / f"shard-{tag}"
         dest = shard_dir / "train_set.npz"
         if not dest.exists():
             from huggingface_hub import hf_hub_url
