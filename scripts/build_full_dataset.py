@@ -102,9 +102,9 @@ def write_manifest(client, args, manifest) -> None:
         os.unlink(tmp)
 
 
-def download(url: str, dest: Path, min_size: int = 1_000_000_000) -> None:
-    """Download with --fail and resume; a partial file is deleted and retried."""
-    if dest.exists() and validate_bag(dest, min_rows=0, min_size=min_size):
+def download(url: str, dest: Path) -> None:
+    """Download with --fail and resume; a truncated bag is rejected and retried."""
+    if dest.exists() and validate_bag(dest) > 0:
         print(f"[dl] {dest.name} already present and valid", flush=True)
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -113,29 +113,29 @@ def download(url: str, dest: Path, min_size: int = 1_000_000_000) -> None:
         print(f"[dl] attempt {attempt + 1}: {url}", flush=True)
         r = subprocess.run(["curl", "-sL", "--fail", "--retry", "5", "-C", "-",
                             "-o", str(dest), url])
-        if r.returncode == 0 and validate_bag(dest, min_rows=0, min_size=min_size):
+        if r.returncode == 0 and validate_bag(dest) > 0:
             print(f"[dl] valid ({dest.stat().st_size} bytes)", flush=True)
             return
         print(f"[dl] attempt {attempt + 1} invalid/partial; retrying", flush=True)
     raise RuntimeError(f"download failed for {url}")
 
 
-def validate_bag(path: Path, min_rows: int = 10_000_000,
-                 min_size: int = 1_000_000_000) -> int:
-    """Return record count from the bagz index tail; 0 if the file is not a
-    complete bag. Guards against silently truncated downloads."""
+def validate_bag(path: Path) -> int:
+    """Return the record count from the bagz index tail; 0 if the file is not
+    a complete bag. Shard sizes vary a lot (20MB..1.7GB), so there is no fixed
+    size threshold: a truncated download fails the index sanity checks."""
     try:
         import struct
         size = path.stat().st_size
-        if size < min_size:
+        if size < 1024:
             return 0
         with open(path, "rb") as f:
             f.seek(size - 8)
             (index_start,) = struct.unpack("<Q", f.read(8))
-        rows = (size - index_start) // 8
-        if rows < min_rows:
+        index_size = size - index_start
+        if index_size <= 0 or index_size % 8 != 0:
             return 0
-        return rows
+        return index_size // 8
     except Exception:
         return 0
 
