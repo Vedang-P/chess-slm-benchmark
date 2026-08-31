@@ -52,8 +52,6 @@ def parse_args():
                    help="first shard index to consider")
     p.add_argument("--shard-end", type=int, default=-1,
                    help="last shard index to consider (exclusive; -1 = n-shards)")
-    p.add_argument("--force-shard", type=int, default=-1,
-                   help="process exactly this shard index even if done (repair)")
     p.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "/kaggle/working/searchless_chess"))
     p.add_argument("--workdir", default="/kaggle/working/chessbench-build")
     p.add_argument("--teacher-checkpoint", required=True,
