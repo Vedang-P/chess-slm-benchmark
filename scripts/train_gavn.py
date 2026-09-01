@@ -236,6 +236,7 @@ def parse_args():
 def main():
     import torch
     args = parse_args()
+    src, dst, promo, utils = action_tables(Path(args.sl_repo))
     torch.manual_seed(args.seed)
     np_rng = np.random.default_rng(args.seed)
     outdir = Path(args.outdir)
