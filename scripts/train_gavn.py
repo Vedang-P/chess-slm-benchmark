@@ -253,7 +253,7 @@ def main():
         import tempfile
         try:
             hf_client_shard = make_hf_api(ROOT)
-            hf_token_shard = hf_client_shard.token
+            hf_token_shard = hf_client_shard.token  # type: ignore[union-attr]
         except Exception:
             hf_client_shard = None
             hf_token_shard = None

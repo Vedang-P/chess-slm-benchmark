@@ -31,6 +31,7 @@ import pickle
 import sys
 import time
 from pathlib import Path
+import pathlib
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,7 +44,13 @@ from scripts.kaggle_checkpoint import (  # noqa: E402
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--npz", required=False)
+    ap.add_argument("--teacher", required=False, help="teacher log-probs (.npy [N,128])")
     ap.add_argument("--outdir", required=True)
+    ap.add_argument("--hf-shards", default="",
+                    help="HF prefix for 8 shards, e.g. chessbench-full-build")
+    ap.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "/kaggle/working/searchless_chess"),
+                    help="local checkout of the official searchless_chess repo")
     ap.add_argument("--dim", type=int, default=224)
     ap.add_argument("--layers", type=int, default=6)
     ap.add_argument("--heads", type=int, default=8)
@@ -60,12 +67,26 @@ def main() -> None:
                     help="build rank pairs from this many random rows (bounded "
                          "table on full-scale datasets; 0 = all rows)")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--npz", required=False)
-    ap.add_argument("--teacher", required=False)
-    ap.add_argument("--hf-shards", default="",
-                    help="HF prefix for 8 shards, e.g. chessbench-full-build")
-    ap.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
-    ap.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "/kaggle/working/searchless_chess"))
+    ap.add_argument("--ckpt-every", type=int, default=2000)
+    ap.add_argument("--max-records", type=int, default=0,
+                    help="truncate dataset (for smoke tests)")
+    ap.add_argument("--winprob-source", default="npz",
+                    choices=["npz", "teacher"],
+                    help="'teacher' = Q(teacher) derived from t_logp "
+                         "(for sets without SF winprob labels)")
+    ap.add_argument("--init", default="",
+                     help="base path of a previous checkpoint to continue from "
+                         "(e.g. results/student/step-15000)")
+    ap.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark",
+                    help="HF dataset repo for complete checkpoint persistence")
+    ap.add_argument("--hf-run", default="student-5m",
+                    help="remote directory for this run")
+    ap.add_argument("--hf-upload-every", type=float, default=1800,
+                    help="minimum seconds between checkpoint uploads")
+    ap.add_argument("--resume-from-hf", action="store_true",
+                    help="download and resume the latest complete HF checkpoint")
+    args = ap.parse_args()
+
     import jax
     import jax.numpy as jnp
     sl_repo = Path(args.sl_repo)
@@ -84,31 +105,17 @@ def main() -> None:
                                          outdir / "hf-resume")
 
     # ---- data (mmap-backed so the full multi-GB dataset stays out of RAM) ----
-    d = np.load(args.npz, mmap_mode="r")
-    tokens = d["tokens"]
-    actions = d["actions"]
-    winprob = d["winprob"] if "winprob" in d else None
-    if args.max_records and winprob is not None:
-        winprob = winprob[: args.max_records]
-    if args.max_records:
-        tokens = tokens[: args.max_records]
-        actions = actions[: args.max_records]
-    n = len(tokens)
-    tdata = np.load(args.teacher, mmap_mode="r")
-    t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
-    t_logp = t_logp[:n]
-    # ---- data: either single file or HF shards ----
+    # ---- data: either single assembled file or 8 HF shards streaming ----
     if args.hf_shards:
         from huggingface_hub import hf_hub_download
         import tempfile
         try:
             hf_client_shard = make_hf_api(ROOT)
-            hf_token_shard = hf_client_shard.token
+            hf_token_shard = hf_client_shard.token  # type: ignore[union-attr]
         except Exception:
             hf_client_shard = None
             hf_token_shard = None
-        tmp_shard_dir = Path(tempfile.mkdtemp(prefix="hf_shards_"))
-        # Use first shard for smoke, real training will stream shards round-robin
+        tmp_shard_dir = pathlib.Path(tempfile.mkdtemp(prefix="hf_shards_"))
         tag = "00000"
         for fname in ("train_set.npz", "teacher_logp.npy"):
             dest = tmp_shard_dir / f"shard-{tag}-{fname}"
@@ -120,30 +127,52 @@ def main() -> None:
                     import shutil
                     cached.replace(dest)
                     shutil.rmtree(tmp_shard_dir / args.hf_shards, ignore_errors=True)
-        d = np.load(str(tmp_shard_dir / f"shard-{tag}-train_set.npz"), mmap_mode="r")
-        tokens = d["tokens"]
-        actions = d["actions"]
-        winprob = d["winprob"] if "winprob" in d else None
+        dd = np.load(str(tmp_shard_dir / f"shard-{tag}-train_set.npz"), mmap_mode="r")
+        tokens = dd["tokens"]
+        actions = dd["actions"]
+        winprob = dd["winprob"] if "winprob" in dd else None
         tdata = np.load(str(tmp_shard_dir / f"shard-{tag}-teacher_logp.npy"), mmap_mode="r")
         t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
         print(f"[sharded] using shard {tag} {len(tokens)} rows", flush=True)
+        if args.max_records and winprob is not None:
+            winprob = winprob[: args.max_records]
+        if args.max_records:
+            tokens = tokens[: args.max_records]
+            actions = actions[: args.max_records]
+            t_logp = t_logp[: len(tokens)]
+        n = len(tokens)
+        assert t_logp.shape[0] == n, (t_logp.shape, n)
     else:
         assert args.npz and args.teacher, "--npz/--teacher or --hf-shards required"
         d = np.load(args.npz, mmap_mode="r")
         tokens = d["tokens"]
         actions = d["actions"]
         winprob = d["winprob"] if "winprob" in d else None
+        if args.max_records and winprob is not None:
+            winprob = winprob[: args.max_records]
+        if args.max_records:
+            tokens = tokens[: args.max_records]
+            actions = actions[: args.max_records]
+        n = len(tokens)
         tdata = np.load(args.teacher, mmap_mode="r")
         t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
-        t_logp = t_logp[:len(tokens)]
-    if args.max_records and winprob is not None:
-        winprob = winprob[: args.max_records]
-    if args.max_records:
-        tokens = tokens[: args.max_records]
-        actions = actions[: args.max_records]
-        t_logp = t_logp[:len(tokens)]
-    n = len(tokens)
-    assert t_logp.shape[0] == n, (t_logp.shape, n)
+        t_logp = t_logp[:n]
+        assert t_logp.shape[0] == n, (t_logp.shape, n)
+    if args.winprob_source == "teacher":
+        if n > 5_000_000:
+            raise ValueError("winprob_source=teacher on a large set requires eager Q; "
+                             "provide an npz with a winprob column instead")
+        from searchless_chess.src import utils as _u
+        z = np.asarray(_u.get_uniform_buckets_edges_values(128)[1], dtype=np.float32)
+        p = np.exp(np.asarray(t_logp, dtype=np.float32))
+        p /= p.sum(axis=-1, keepdims=True)
+        winprob = p @ z
+        print("[train] winprob derived from teacher Q", flush=True)
+    print(f"[train] N={n} teacher={t_logp.shape}", flush=True)
+
+    # ---- rank pairs: group rows by FEN (72-token prefix is unique) ----
+    # On the full multi-shard dataset, build pairs from a bounded random
+    # subsample so the pair table stays small; the rank loss itself is unchanged.
     if args.w_rank > 0:
         if args.rank_subsample and args.rank_subsample < n:
             rng_pick = np.random.default_rng(args.seed)
