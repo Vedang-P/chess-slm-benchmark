@@ -251,7 +251,12 @@ def main():
     if args.hf_shards:
         from huggingface_hub import hf_hub_download
         import tempfile
-        hf_client_shard = make_hf_api(ROOT)
+        try:
+            hf_client_shard = make_hf_api(ROOT)
+            hf_token_shard = hf_client_shard.token
+        except Exception:
+            hf_client_shard = None
+            hf_token_shard = None
         tmp_shard_dir = Path(tempfile.mkdtemp(prefix="hf_shards_"))
         # Download shards one by one and concatenate via memmap streaming (peak 5GB, not 25GB)
         # For smoke with max_records, only need first shard
@@ -265,7 +270,7 @@ def main():
             for fname in ("train_set.npz", "teacher_logp.npy"):
                 dest = tmp_shard_dir / f"shard-{tag}-{fname}"
                 if not dest.exists():
-                    hf_hub_download(repo_id=args.hf_repo, repo_type="dataset", token=hf_client_shard.token,
+                    hf_hub_download(repo_id=args.hf_repo, repo_type="dataset", token=hf_token_shard,
                                     filename=f"{args.hf_shards}/shard-{tag}/{fname}", local_dir=str(tmp_shard_dir))
                     cached = tmp_shard_dir / args.hf_shards / f"shard-{tag}" / fname
                     if cached.exists():

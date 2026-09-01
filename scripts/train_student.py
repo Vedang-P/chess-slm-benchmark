@@ -43,11 +43,7 @@ from scripts.kaggle_checkpoint import (  # noqa: E402
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--npz", required=True)
-    ap.add_argument("--teacher", required=True, help="teacher log-probs (.npy [N,128])")
     ap.add_argument("--outdir", required=True)
-    ap.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "C:/tmp/searchless_chess"),
-                    help="local checkout of the official searchless_chess repo")
     ap.add_argument("--dim", type=int, default=224)
     ap.add_argument("--layers", type=int, default=6)
     ap.add_argument("--heads", type=int, default=8)
@@ -105,14 +101,19 @@ def main() -> None:
     if args.hf_shards:
         from huggingface_hub import hf_hub_download
         import tempfile
-        hf_client_shard = make_hf_api(ROOT)
+        try:
+            hf_client_shard = make_hf_api(ROOT)
+            hf_token_shard = hf_client_shard.token
+        except Exception:
+            hf_client_shard = None
+            hf_token_shard = None
         tmp_shard_dir = Path(tempfile.mkdtemp(prefix="hf_shards_"))
         # Use first shard for smoke, real training will stream shards round-robin
         tag = "00000"
         for fname in ("train_set.npz", "teacher_logp.npy"):
             dest = tmp_shard_dir / f"shard-{tag}-{fname}"
             if not dest.exists():
-                hf_hub_download(repo_id=args.hf_repo, repo_type="dataset", token=hf_client_shard.token,
+                hf_hub_download(repo_id=args.hf_repo, repo_type="dataset", token=hf_token_shard,
                                 filename=f"{args.hf_shards}/shard-{tag}/{fname}", local_dir=str(tmp_shard_dir))
                 cached = tmp_shard_dir / args.hf_shards / f"shard-{tag}" / fname
                 if cached.exists():
