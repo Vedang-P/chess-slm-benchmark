@@ -40,6 +40,7 @@ from scripts.kaggle_checkpoint import (  # noqa: E402
     UploadTimer, api as make_hf_api, download_latest, upload_checkpoint,
     write_status,
 )
+from scripts.shard_data import ShardManager  # noqa: E402
 
 
 def main() -> None:
@@ -54,10 +55,10 @@ def main() -> None:
     ap.add_argument("--dim", type=int, default=224)
     ap.add_argument("--layers", type=int, default=6)
     ap.add_argument("--heads", type=int, default=8)
-    ap.add_argument("--batch", type=int, default=512)
-    ap.add_argument("--steps", type=int, default=15000)
-    ap.add_argument("--lr", type=float, default=3e-4)
-    ap.add_argument("--warmup", type=int, default=500)
+    ap.add_argument("--batch", type=int, default=2048)
+    ap.add_argument("--steps", type=int, default=120000)
+    ap.add_argument("--lr", type=float, default=5e-4)
+    ap.add_argument("--warmup", type=int, default=2000)
     ap.add_argument("--w-kl", type=float, default=1.0)
     ap.add_argument("--w-ce", type=float, default=0.5)
     ap.add_argument("--w-rank", type=float, default=0.5)
@@ -104,44 +105,25 @@ def main() -> None:
         hf_resume_dir = download_latest(hf_client, args.hf_repo, args.hf_run,
                                          outdir / "hf-resume")
 
-    # ---- data (mmap-backed so the full multi-GB dataset stays out of RAM) ----
-    # ---- data: either single assembled file or 8 HF shards streaming ----
+    rng_state = np.random.default_rng(args.seed)
+    # ---- data: either single assembled file or 8 HF shards (ALL of them) ----
+    pair_tokens = pair_actions = pair_winprob = None
     if args.hf_shards:
-        from huggingface_hub import hf_hub_download
-        import tempfile
         try:
             hf_client_shard = make_hf_api(ROOT)
             hf_token_shard = hf_client_shard.token  # type: ignore[union-attr]
         except Exception:
-            hf_client_shard = None
             hf_token_shard = None
-        tmp_shard_dir = pathlib.Path(tempfile.mkdtemp(prefix="hf_shards_"))
-        tag = "00000"
-        for fname in ("train_set.npz", "teacher_logp.npy"):
-            dest = tmp_shard_dir / f"shard-{tag}-{fname}"
-            if not dest.exists():
-                hf_hub_download(repo_id=args.hf_repo, repo_type="dataset", token=hf_token_shard,
-                                filename=f"{args.hf_shards}/shard-{tag}/{fname}", local_dir=str(tmp_shard_dir))
-                cached = tmp_shard_dir / args.hf_shards / f"shard-{tag}" / fname
-                if cached.exists():
-                    import shutil
-                    cached.replace(dest)
-                    shutil.rmtree(tmp_shard_dir / args.hf_shards, ignore_errors=True)
-        dd = np.load(str(tmp_shard_dir / f"shard-{tag}-train_set.npz"), mmap_mode="r")
-        tokens = dd["tokens"]
-        actions = dd["actions"]
-        winprob = dd["winprob"] if "winprob" in dd else None
-        tdata = np.load(str(tmp_shard_dir / f"shard-{tag}-teacher_logp.npy"), mmap_mode="r")
-        t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
-        print(f"[sharded] using shard {tag} {len(tokens)} rows", flush=True)
-        if args.max_records and winprob is not None:
-            winprob = winprob[: args.max_records]
-        if args.max_records:
-            tokens = tokens[: args.max_records]
-            actions = actions[: args.max_records]
-            t_logp = t_logp[: len(tokens)]
-        n = len(tokens)
-        assert t_logp.shape[0] == n, (t_logp.shape, n)
+        mgr = ShardManager(args.hf_repo, args.hf_shards,
+                           pathlib.Path(os.environ.get("SHARD_CACHE", "/kaggle/tmp/shards")),
+                           token=hf_token_shard)
+        print(f"[sharded] {len(mgr.tags)} shards on HF: {mgr.tags}", flush=True)
+        mgr.ensure_downloaded(max_records=args.max_records)
+        mgr.count_rows(max_records=args.max_records)
+        print(f"[sharded] rows per shard: {mgr.rows} total={mgr.total:,}", flush=True)
+        sched = mgr.schedule(args.steps, rng_state, args.max_records)
+        tokens = actions = winprob = t_logp = None
+        seg_tag = None
     else:
         assert args.npz and args.teacher, "--npz/--teacher or --hf-shards required"
         d = np.load(args.npz, mmap_mode="r")
@@ -157,8 +139,8 @@ def main() -> None:
         tdata = np.load(args.teacher, mmap_mode="r")
         t_logp = tdata["teacher_logp"] if isinstance(tdata, np.lib.npyio.NpzFile) else tdata
         t_logp = t_logp[:n]
-        assert t_logp.shape[0] == n, (t_logp.shape, n)
-    if args.winprob_source == "teacher":
+        seg_tag = "single"
+    if args.winprob_source == "teacher" and not args.hf_shards:
         if n > 5_000_000:
             raise ValueError("winprob_source=teacher on a large set requires eager Q; "
                              "provide an npz with a winprob column instead")
@@ -168,19 +150,27 @@ def main() -> None:
         p /= p.sum(axis=-1, keepdims=True)
         winprob = p @ z
         print("[train] winprob derived from teacher Q", flush=True)
-    print(f"[train] N={n} teacher={t_logp.shape}", flush=True)
+    if args.hf_shards:
+        print(f"[train] N={mgr.total:,} teacher=per-shard [rows,128]", flush=True)
+    else:
+        print(f"[train] N={n} teacher={t_logp.shape}", flush=True)
 
     # ---- rank pairs: group rows by FEN (72-token prefix is unique) ----
-    # On the full multi-shard dataset, build pairs from a bounded random
-    # subsample so the pair table stays small; the rank loss itself is unchanged.
+    # Pairs are mined from shard 0 (a bounded random subsample keeps the pair
+    # table small); the (tokens, actions, winprob) copies are kept resident for
+    # the whole run so pair lookups survive segment switching.
     if args.w_rank > 0:
-        if args.rank_subsample and args.rank_subsample < n:
+        if args.hf_shards:
+            base_tokens, base_actions, base_winprob, _ = mgr.load(mgr.tags[0], args.max_records)
+        else:
+            base_tokens, base_actions, base_winprob = tokens, actions, winprob
+        if args.rank_subsample and args.rank_subsample < len(base_tokens):
             rng_pick = np.random.default_rng(args.seed)
-            pick = np.sort(rng_pick.choice(n, size=args.rank_subsample, replace=False))
-            pair_tokens, pair_actions, pair_winprob = tokens[pick], actions[pick], winprob[pick]
+            pick = np.sort(rng_pick.choice(len(base_tokens), size=args.rank_subsample, replace=False))
+            pair_tokens, pair_actions, pair_winprob = base_tokens[pick], base_actions[pick], base_winprob[pick]
             print(f"[train] rank pairs from subsample of {args.rank_subsample} rows", flush=True)
         else:
-            pair_tokens, pair_actions, pair_winprob = tokens, actions, winprob
+            pair_tokens, pair_actions, pair_winprob = base_tokens, base_actions, base_winprob
         prefix = np.asarray(pair_tokens[:, :72]).view(np.uint64)
         _, fen_id = np.unique(prefix, axis=0, return_inverse=True)
         order = np.argsort(fen_id, kind="stable")
@@ -201,10 +191,10 @@ def main() -> None:
                         elif wp_run[j] - wp_run[i] >= args.rank_min_delta:
                             pairs.append((run[j], run[i]))
             s = e
-        pairs = np.asarray(pairs, dtype=np.int32)
+        pairs = np.asarray(pairs, dtype=np.int64)
         print(f"[train] rank pairs: {len(pairs)}", flush=True)
     else:
-        pairs = np.zeros((0, 2), dtype=np.int32)
+        pairs = np.zeros((0, 2), dtype=np.int64)
         print("[train] rank pairs: disabled (w_rank=0)", flush=True)
 
     # ---- model ----
@@ -291,7 +281,6 @@ def main() -> None:
     v = jax.tree_util.tree_map(jnp.zeros_like, params)
     ema = jax.tree_util.tree_map(jnp.array, params)
 
-    rng_state = np.random.default_rng(args.seed)
     start_step = 0
     if hf_resume_dir is not None and (hf_resume_dir / "state.npz").exists():
         params, m, v, ema, start_step, rng_state = load_state(
@@ -299,7 +288,18 @@ def main() -> None:
         print(f"[resume] restored full state at step {start_step}", flush=True)
     t0 = time.time()
     for step in range(start_step, args.steps):
-        idx = rng_state.integers(0, n, size=args.batch)
+        if args.hf_shards:
+            tag = sched[step]
+            if tag != seg_tag:
+                tokens, actions, winprob, t_logp = mgr.load(tag, args.max_records)
+                seg_tag = tag
+                if winprob is None and args.winprob_source == "teacher":
+                    z = np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32)
+                    p = np.exp(np.asarray(t_logp, dtype=np.float32))
+                    p /= p.sum(axis=-1, keepdims=True)
+                    winprob = p @ z
+                print(f"[sharded] step {step}: segment {tag} rows={len(tokens):,}", flush=True)
+        idx = rng_state.integers(0, len(tokens), size=args.batch)
         b_tok = jnp.asarray(np.asarray(tokens[idx], dtype=np.int32), dtype=jnp.int32)
         b_act = jnp.asarray(np.asarray(actions[idx], dtype=np.int32), dtype=jnp.int32)
         b_hl = hl_gauss_batch(jnp.asarray(np.asarray(winprob[idx], dtype=np.float32), dtype=jnp.float32))
@@ -308,10 +308,10 @@ def main() -> None:
         if n_pair:
             pi = rng_state.integers(0, len(pairs), size=n_pair)
             r1, r2 = pairs[pi, 0], pairs[pi, 1]
-            r1_tok = jnp.asarray(np.asarray(tokens[r1], dtype=np.int32), dtype=jnp.int32)
-            r1_idx = jnp.asarray(np.asarray(actions[r1], dtype=np.int32), dtype=jnp.int32)
-            r2_tok = jnp.asarray(np.asarray(tokens[r2], dtype=np.int32), dtype=jnp.int32)
-            r2_idx = jnp.asarray(np.asarray(actions[r2], dtype=np.int32), dtype=jnp.int32)
+            r1_tok = jnp.asarray(np.asarray(pair_tokens[r1], dtype=np.int32), dtype=jnp.int32)
+            r1_idx = jnp.asarray(np.asarray(pair_actions[r1], dtype=np.int32), dtype=jnp.int32)
+            r2_tok = jnp.asarray(np.asarray(pair_tokens[r2], dtype=np.int32), dtype=jnp.int32)
+            r2_idx = jnp.asarray(np.asarray(pair_actions[r2], dtype=np.int32), dtype=jnp.int32)
         else:
             r1_tok = b_tok[:0]
             r1_idx = b_act[:0]

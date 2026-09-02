@@ -33,20 +33,30 @@ def api(root: Path | None = None):
 
 
 def upload_checkpoint(api_client, repo_id: str, local_dir: Path,
-                      remote_prefix: str, checkpoint_name: str) -> None:
+                      remote_prefix: str, checkpoint_name: str,
+                      attempts: int = 3) -> None:
     checkpoint = local_dir / checkpoint_name
     if not checkpoint.is_dir():
         raise FileNotFoundError(checkpoint)
     files = [p for p in checkpoint.rglob("*") if p.is_file()]
-    for path in files:
-        remote = f"{remote_prefix.strip('/')}/{checkpoint_name}/{path.relative_to(checkpoint)}"
-        api_client.upload_file(
-            path_or_fileobj=str(path),
-            path_in_repo=remote,
-            repo_id=repo_id,
-            repo_type="dataset",
-        )
-    print(f"[hf] uploaded {checkpoint_name} ({len(files)} files)", flush=True)
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            for path in files:
+                remote = f"{remote_prefix.strip('/')}/{checkpoint_name}/{path.relative_to(checkpoint)}"
+                api_client.upload_file(
+                    path_or_fileobj=str(path),
+                    path_in_repo=remote,
+                    repo_id=repo_id,
+                    repo_type="dataset",
+                )
+            print(f"[hf] uploaded {checkpoint_name} ({len(files)} files)", flush=True)
+            return
+        except Exception as exc:  # Kaggle network flaps; retry the whole dir
+            last_exc = exc
+            print(f"[hf] upload attempt {attempt}/{attempts} failed: {exc}", flush=True)
+            time.sleep(10 * attempt)
+    raise RuntimeError(f"upload failed after {attempts} attempts") from last_exc
 
 
 def latest_local_checkpoint(root: Path) -> Path | None:

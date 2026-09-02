@@ -24,6 +24,7 @@ from scripts.kaggle_checkpoint import (  # noqa: E402
     UploadTimer, api as make_hf_api, download_latest, upload_checkpoint,
     write_status,
 )
+from scripts.shard_data import ShardManager  # noqa: E402
 
 
 def relation_types() -> np.ndarray:
@@ -215,8 +216,8 @@ def parse_args():
     p.add_argument("--dim", type=int, default=192)
     p.add_argument("--layers", type=int, default=8)
     p.add_argument("--heads", type=int, default=8)
-    p.add_argument("--batch", type=int, default=1024)
-    p.add_argument("--steps", type=int, default=30000)
+    p.add_argument("--batch", type=int, default=2048)
+    p.add_argument("--steps", type=int, default=150000)
     p.add_argument("--lr", type=float, default=3e-4)
     p.add_argument("--warmup", type=int, default=1000)
     p.add_argument("--temperature", type=float, default=1.0)
@@ -248,53 +249,26 @@ def main():
                                      outdir / "hf-resume")
     else:
         resume_dir = None
-    # ---- data: either single assembled file or 8 HF shards streaming ----
+    # ---- data: either single assembled file or 8 HF shards (ALL of them) ----
     if args.hf_shards:
-        from huggingface_hub import hf_hub_download
-        import tempfile
         try:
             hf_client_shard = make_hf_api(ROOT)
             hf_token_shard = hf_client_shard.token  # type: ignore[union-attr]
         except Exception:
-            hf_client_shard = None
             hf_token_shard = None
-        tmp_shard_dir = Path(tempfile.mkdtemp(prefix="hf_shards_"))
-        # Download shards one by one and concatenate via memmap streaming (peak 5GB, not 25GB)
-        # For smoke with max_records, only need first shard
-        shard_files = []
-        need = args.max_records or 80000000
-        total = 0
-        for i in range(8):
-            tag = f"{i:05d}"
-            if total >= need:
-                break
-            for fname in ("train_set.npz", "teacher_logp.npy"):
-                dest = tmp_shard_dir / f"shard-{tag}-{fname}"
-                if not dest.exists():
-                    hf_hub_download(repo_id=args.hf_repo, repo_type="dataset", token=hf_token_shard,
-                                    filename=f"{args.hf_shards}/shard-{tag}/{fname}", local_dir=str(tmp_shard_dir))
-                    cached = tmp_shard_dir / args.hf_shards / f"shard-{tag}" / fname
-                    if cached.exists():
-                        import shutil
-                        cached.replace(dest)
-                        shutil.rmtree(tmp_shard_dir / args.hf_shards, ignore_errors=True)
-            shard_files.append((str(tmp_shard_dir / f"shard-{tag}-train_set.npz"), str(tmp_shard_dir / f"shard-{tag}-teacher_logp.npy")))
-            # count rows
-            d = np.load(shard_files[-1][0], mmap_mode="r")
-            total += int(d["tokens"].shape[0])
-            print(f"[sharded] shard {tag} {d['tokens'].shape[0]} rows total {total}", flush=True)
-        # Now load concatenated via simple loop (still memmap, not full RAM)
-        # For training loop, we will sample shards round-robin; for now create a view that concatenates on the fly
-        # Simplest: create a single npz that is the concatenation of needed shards (still streaming, but one file)
-        # Instead, we just set data to first shard and handle sharding in training loop via custom sampler
-        # For smoke, just use first shard
-        data = np.load(shard_files[0][0], mmap_mode="r")
-        tokens = data["tokens"]
-        actions = data["actions"]
-        winprob = np.asarray(data["winprob"], dtype=np.float32) if "winprob" in data else None
-        teacher_data = np.load(shard_files[0][1], mmap_mode="r")
-        teacher = teacher_data["teacher_logp"] if isinstance(teacher_data, np.lib.npyio.NpzFile) else teacher_data
-        print(f"[sharded] using {len(shard_files)} shards, first shard {len(tokens)} rows (full {total} rows available, streaming in training loop)", flush=True)
+        mgr = ShardManager(args.hf_repo, args.hf_shards,
+                           Path(os.environ.get("SHARD_CACHE", "/kaggle/tmp/shards")),
+                           token=hf_token_shard)
+        print(f"[sharded] {len(mgr.tags)} shards on HF: {mgr.tags}", flush=True)
+        mgr.ensure_downloaded(max_records=args.max_records)
+        mgr.count_rows(max_records=args.max_records)
+        print(f"[sharded] rows per shard: {mgr.rows} total={mgr.total:,}", flush=True)
+        sched = mgr.schedule(args.steps, np_rng, args.max_records)
+        tokens = actions = winprob = teacher = None
+        seg_tag = None
+
+        def segment(tag):
+            return mgr.load(tag, args.max_records)
     else:
         assert args.data and args.teacher, "--data/--teacher or --hf-shards required"
         data = np.load(args.data, mmap_mode="r")
@@ -304,31 +278,48 @@ def main():
         teacher_data = np.load(args.teacher, mmap_mode="r")
         teacher = teacher_data["teacher_logp"] if isinstance(teacher_data, np.lib.npyio.NpzFile) else teacher_data
         teacher = teacher[:len(tokens)]
-    if args.max_records:
-        tokens, actions = tokens[:args.max_records], actions[:args.max_records]
-        if winprob is not None:
-            winprob = winprob[:args.max_records]
-        teacher = teacher[:len(tokens)]
-    if teacher.shape != (len(tokens), 128):
-        raise ValueError(f"teacher shape {teacher.shape} != {(len(tokens), 128)}")
-    log_norm = np.logaddexp.reduce(np.asarray(teacher[: min(1024, len(teacher))]), axis=1)
-    if not np.allclose(log_norm, 0.0, atol=2e-3):
-        raise ValueError("teacher matrix is not normalized log-probabilities")
+        if args.max_records:
+            tokens, actions = tokens[:args.max_records], actions[:args.max_records]
+            if winprob is not None:
+                winprob = winprob[:args.max_records]
+            teacher = teacher[:len(tokens)]
+        seg_tag = "single"
+
+    def check_teacher(teacher):
+        # fp16 storage: normalize in fp32 or rounding noise false-trips the gate
+        log_norm = np.logaddexp.reduce(np.asarray(teacher[:1024], dtype=np.float32), axis=1)
+        if not np.allclose(log_norm, 0.0, atol=2e-3):
+            raise ValueError("teacher matrix is not normalized log-probabilities")
+
     bucket_values = np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32)
-    if winprob is None:
-        if len(tokens) > 5_000_000:
-            raise ValueError("winprob absent and dataset too large to derive teacher Q eagerly; "
-                             "provide an npz with a winprob column")
-        teacher_probs = np.exp(np.asarray(teacher))
-        winprob = (teacher_probs @ bucket_values).astype(np.float32)
-    if len(src) <= actions.max():
-        raise ValueError("action id exceeds official action table")
+
+    if not args.hf_shards:
+        check_teacher(teacher)
+        if teacher.shape != (len(tokens), 128):
+            raise ValueError(f"teacher shape {teacher.shape} != {(len(tokens), 128)}")
+        if winprob is None:
+            if len(tokens) > 5_000_000:
+                raise ValueError("winprob absent and dataset too large to derive teacher Q eagerly; "
+                                 "provide an npz with a winprob column")
+            winprob = (np.exp(np.asarray(teacher)) @ bucket_values).astype(np.float32)
+        if len(src) <= actions.max():
+            raise ValueError("action id exceeds official action table")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = GAVN(torch, args.dim, args.layers, args.heads, src, dst, promo,
-                 relation_types(), bias_mode=args.bias_mode).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95),
-                                  weight_decay=0.01)
+    raw_model = GAVN(torch, args.dim, args.layers, args.heads, src, dst, promo,
+                     relation_types(), bias_mode=args.bias_mode).to(device)
+    model = raw_model
+    if device.type == "cuda" and torch.cuda.device_count() > 1:
+        model = torch.nn.DataParallel(raw_model)
+        print(f"[train] DataParallel over {torch.cuda.device_count()} GPUs", flush=True)
+    no_decay, decay = [], []
+    for name, prm in raw_model.named_parameters():
+        (no_decay if prm.ndim <= 1 or "rel_" in name or "embed" in name
+         else decay).append(prm)
+    optimizer = torch.optim.AdamW(
+        [{"params": decay, "weight_decay": 0.01},
+         {"params": no_decay, "weight_decay": 0.0}],
+        lr=args.lr, betas=(0.9, 0.95))
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
         scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
     else:
@@ -337,18 +328,32 @@ def main():
     if resume_dir is not None and (resume_dir / "state.pt").exists():
         state = torch.load(resume_dir / "state.pt", map_location=device,
                            weights_only=False)
-        model.load_state_dict(state["model"])
+        raw_model.load_state_dict(state["model"])
         optimizer.load_state_dict(state["optimizer"])
         scaler.load_state_dict(state.get("scaler", {}))
         start_step = int(state["step"])
         np_rng.bit_generator.state = state["numpy_rng"]
         torch.set_rng_state(state["torch_rng"])
         print(f"[resume] step={start_step}", flush=True)
-    print(f"[train] device={device} N={len(tokens)} params={sum(p.numel() for p in model.parameters()):,}", flush=True)
+    n_total = mgr.total if args.hf_shards else len(tokens)
+    print(f"[train] device={device} N={n_total:,} params={sum(p.numel() for p in raw_model.parameters()):,}", flush=True)
 
     timer = UploadTimer(args.hf_upload_every)
     t0 = time.time()
     for step in range(start_step, args.steps):
+        if args.hf_shards:
+            tag = sched[step]
+            if tag != seg_tag:
+                tokens, actions, winprob, teacher = segment(tag)
+                seg_tag = tag
+                check_teacher(teacher)
+                if len(src) <= int(actions.max()):
+                    raise ValueError(f"shard {tag}: action id exceeds official action table")
+                if winprob is None:
+                    if len(tokens) > 5_000_000:
+                        raise ValueError("winprob absent; cannot derive teacher Q eagerly")
+                    winprob = (np.exp(np.asarray(teacher)) @ bucket_values).astype(np.float32)
+                print(f"[sharded] step {step}: segment {tag} rows={len(tokens):,}", flush=True)
         idx = np_rng.integers(0, len(tokens), size=args.batch)
         bt = torch.as_tensor(np.asarray(tokens[idx], dtype=np.int64), dtype=torch.long, device=device)
         ba = torch.as_tensor(np.asarray(actions[idx], dtype=np.int64), dtype=torch.long, device=device)
@@ -388,7 +393,7 @@ def main():
         if (step + 1) % args.ckpt_every == 0 or step + 1 == args.steps:
             cp = outdir / f"checkpoint-{step+1}"
             cp.mkdir(parents=True, exist_ok=True)
-            torch.save({"model": model.state_dict(), "optimizer": optimizer.state_dict(),
+            torch.save({"model": raw_model.state_dict(), "optimizer": optimizer.state_dict(),
                         "scaler": scaler.state_dict(), "step": step + 1,
                         "numpy_rng": np_rng.bit_generator.state,
                         "torch_rng": torch.get_rng_state()}, cp / "state.pt")
