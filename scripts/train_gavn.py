@@ -325,6 +325,17 @@ def main():
     else:
         scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
     start_step = 0
+    if resume_dir is not None and (resume_dir / "config.json").exists():
+        try:
+            rcfg = json.loads((resume_dir / "config.json").read_text(encoding="utf-8"))
+            if (rcfg.get("dim") != args.dim or rcfg.get("layers") != args.layers
+                    or rcfg.get("heads") != args.heads):
+                print(f"[resume] remote ckpt dim/layers mismatch "
+                      f"({rcfg.get('dim')}/{rcfg.get('layers')} vs {args.dim}/{args.layers}); starting fresh",
+                      flush=True)
+                resume_dir = None
+        except Exception:
+            pass
     if resume_dir is not None and (resume_dir / "state.pt").exists():
         state = torch.load(resume_dir / "state.pt", map_location=device,
                            weights_only=False)

@@ -282,6 +282,17 @@ def main() -> None:
     ema = jax.tree_util.tree_map(jnp.array, params)
 
     start_step = 0
+    if hf_resume_dir is not None and (hf_resume_dir / "config.json").exists():
+        try:
+            rcfg = json.loads((hf_resume_dir / "config.json").read_text(encoding="utf-8"))
+            if (rcfg.get("dim") != args.dim or rcfg.get("layers") != args.layers
+                    or rcfg.get("heads") != args.heads):
+                print(f"[resume] remote ckpt dim/layers mismatch "
+                      f"({rcfg.get('dim')}/{rcfg.get('layers')} vs {args.dim}/{args.layers}); starting fresh",
+                      flush=True)
+                hf_resume_dir = None
+        except Exception:
+            pass
     if hf_resume_dir is not None and (hf_resume_dir / "state.npz").exists():
         params, m, v, ema, start_step, rng_state = load_state(
             hf_resume_dir, jax, jnp)

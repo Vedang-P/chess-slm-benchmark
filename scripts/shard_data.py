@@ -115,14 +115,18 @@ class ShardManager:
     # ---- schedule ----
     def schedule(self, steps: int, rng: np.random.Generator,
                  max_records: int = 0) -> np.ndarray:
-        """Deterministic step -> tag array, steps allocated ~ rows per shard."""
-        wanted = self.tags if not max_records else self.tags[:1]
+        """Deterministic step -> tag array. Steps are allocated ~ rows per
+        shard as CONTIGUOUS blocks (materializing a shard costs seconds, so
+        consecutive steps must stay on one shard); only the block order is
+        shuffled by the seeded rng, which makes the schedule identical on
+        resume."""
+        wanted = list(self.tags if not max_records else self.tags[:1])
         rows = np.array([self.rows[t] for t in wanted], dtype=np.float64)
         frac = rows / rows.sum()
         counts = np.maximum(1, np.round(frac * steps).astype(int))
         counts[-1] += steps - counts.sum()
-        sched = np.repeat(np.array(wanted), counts)
-        rng.shuffle(sched)  # segment order varies by seed; identical on resume
+        order = rng.permutation(len(wanted))
+        sched = np.concatenate([np.repeat(wanted[i], counts[i]) for i in order])
         return sched
 
     # ---- materialize one shard ----
