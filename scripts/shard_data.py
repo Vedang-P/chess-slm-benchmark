@@ -63,7 +63,8 @@ class ShardManager:
         tags = set()
         for f in files:
             if f.startswith(f"{prefix}/shard-") and f.endswith("train_set.npz"):
-                tags.add(f.split("/")[1])
+                name = f.split("/")[1]
+                tags.add(name[len("shard-"):])
         self.tags = sorted(tags)
         if len(self.tags) < expect_tags:
             raise RuntimeError(
