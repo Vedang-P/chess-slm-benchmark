@@ -77,6 +77,20 @@ Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
 - **Gemma-4-E2B baselines — SAFE**: HF dataset `eval-results/caveman-sft-{a1,a2,b1,b2,pretest}/` (5 variants, noexplain samples+summary), restored locally to `results/baselines/`. Note: these are 250-row win-condition slices (examples), NOT full-1000 accuracy.
 - **Full clean-1000 (gemma 58.1% + DeepSeek V4 Flash samples) — LOST 2026-08-27** (deleted during cleanup; never git-tracked, not on HF). MUST re-run on the exact noexplain-1000 via `scripts/run_mate_eval.py` (gemma local, DeepSeek API) and store on HF + a non-gitignored location.
 
+## Wave-1 training status (2026-09-03)
+
+All 6 sharded trainers (GAVN-3M seed0/seed1, GAVN-5M, geometry ablation,
+loss ablation, 5M JAX baseline) reached HF `checkpoint-5000` on 80.27M-row
+ChessBench, then stopped on the 2026-09-03 GPU quota exhaustion (all 3
+accounts 0.0h; reset 2026-09-05T00:00Z). Auto-relaunch armed via
+`scripts/quota_relaunch.py` (resumes from step 5000).
+
+Checkpoint-5000 eval probe (`scripts/eval_gavn.py`, local CPU, GAVN-3M seed0):
+- noexplain-1000: **538/1000 = 53.8%**
+- tactic 200-row probe: 104/200 = 52.0%
+- Step 5000/160000 (~3%), train loss 5.64 -> ~4.4. At chance as expected;
+  the number that matters is the same eval at checkpoint-50000+.
+
 ## Remaining work
 1. Repair the controlled 5M student: fix the double-log-softmax bug, use the
    real training distribution rather than a test-bag derivative, and add full
