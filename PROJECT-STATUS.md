@@ -85,9 +85,12 @@ ChessBench, then stopped on the 2026-09-03 GPU quota exhaustion (all 3
 accounts 0.0h; reset 2026-09-05T00:00Z). Auto-relaunch armed via
 `scripts/quota_relaunch.py` (resumes from step 5000).
 
-Checkpoint-5000 eval probe (`scripts/eval_gavn.py`, local CPU, GAVN-3M seed0):
-- noexplain-1000: **538/1000 = 53.8%**
-- tactic 200-row probe: 104/200 = 52.0%
+Checkpoint-5000 eval probes (`scripts/eval_gavn.py`, local CPU):
+- noexplain-1000, GAVN-3M seed0: **538/1000 = 53.8%**
+- tactic 200-row probe, GAVN-3M seed0: 104/200 = 52.0%
+- noexplain 100-row probes: GAVN-5M 63%, loss-ablation 60%,
+  geometry-ablation 59%, GAVN-3M seed0 58%, GAVN-3M seed1 55%.
+  All arms above chance at ~3% training; train losses 4.49-4.55 clustered.
 - Step 5000/160000 (~3%), train loss 5.64 -> ~4.4. At chance as expected;
   the number that matters is the same eval at checkpoint-50000+.
 
