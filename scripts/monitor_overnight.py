@@ -32,9 +32,11 @@ LOG_DIR = ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "monitor_overnight.log"
 NTFY_TOPIC_DEFAULT = "chess-vedang-8shards-4k9p2x7q"
-NTFY_INTERVAL_S = 1800  # health ping every 30m
+NTFY_INTERVAL_S = 1800  # legacy health ping interval (disabled below; keep for manual use)
 _last_ntfy_health = 0
 _last_shards_ok: set = set()
+_ntfy_failed_sent: set = set()   # kernels already alerted as FAILED (alert once)
+_ntfy_status_sent: str = ""      # last run-status error text already alerted
 KERNELS = [
     # builders
     ("vedanggggg/chessbench-full-build", "vedanggggg", "builder 0+1 (0..8 resume)"),
@@ -416,27 +418,31 @@ def once():
         log(f"HEALTH: {n_ok}/8 shards done, {len(missing)} missing: {missing} -> ETA 1-2h for remaining")
     else:
         log(f"HEALTH: {n_ok}/8 shards done -> still building")
-    # ntfy notifications
-    global _last_ntfy_health, _last_shards_ok
+    # ntfy notifications — IMPORTANT-ONLY policy:
+    #   * FAILED kernel: alert ONCE per kernel (deduped), never repeat.
+    #   * run-status error: alert ONCE per distinct error text.
+    #   * NO periodic health pings (logs carry that detail).
+    #   * milestone alerts (new shard, 8/8, pushed trainers) still fire once.
+    global _last_ntfy_health, _last_shards_ok, _ntfy_failed_sent, _ntfy_status_sent
     try:
         now = time.time()
         new_ok = set(ok) - _last_shards_ok
         if new_ok:
             ntfy_send(f"Shard done: {sorted(new_ok)}", f"{len(ok)}/8 shards present: {ok}\nmissing: {missing}", priority="high", tags="white_check_mark")
-        # FAILED kernels
-        failed = [r for r,s in statuses.items() if s=="FAILED"]
-        if failed:
-            ntfy_send("Kaggle FAILED", f"{failed}", priority="urgent", tags="rotating_light")
-        # stale run-status.txt (only alert once per new error)
-        if status_txt and "ArgumentError" not in status_txt[:200]:  # ignore old duplicate shard error
-            # status_txt is real failure
-            ntfy_send("HF run-status error", status_txt[:800], priority="high", tags="warning")
-        # periodic health ping every 30m
-        if now - _last_ntfy_health > NTFY_INTERVAL_S:
-            _last_ntfy_health = now
-            ntfy_send(f"Chess {n_ok}/8 shards", f"present {ok} missing {missing}\n" + "\n".join(f"{k}: {v}" for k,v in list(statuses.items())[:4]), priority="default", tags="chess")
+        # FAILED kernels — alert once per kernel only
+        failed = [r for r, s in statuses.items() if s == "FAILED"]
+        new_failed = [r for r in failed if r not in _ntfy_failed_sent]
+        if new_failed:
+            ntfy_send("Kaggle FAILED (new)", f"{new_failed}", priority="urgent", tags="rotating_light")
+            _ntfy_failed_sent.update(new_failed)
+        # run-status.txt — alert once per distinct error text
+        if status_txt and "ArgumentError" not in status_txt[:200]:
+            if status_txt[:800] != _ntfy_status_sent:
+                ntfy_send("HF run-status error", status_txt[:800], priority="high", tags="warning")
+                _ntfy_status_sent = status_txt[:800]
+        # NOTE: 30-min health ping DISABLED (was phone spam). Health stays in the log.
         # 8/8 celebration
-        if n_ok==8 and len(_last_shards_ok)!=8:
+        if n_ok == 8 and len(_last_shards_ok) != 8:
             ntfy_send("All 8 shards DONE!", "Ready for assemble -> 25GB dataset", priority="high", tags="tada")
         _last_shards_ok = set(ok)
     except Exception as e:
