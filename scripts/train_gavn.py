@@ -28,7 +28,15 @@ from scripts.shard_data import ShardManager  # noqa: E402
 
 
 def relation_types() -> np.ndarray:
-    """Return a fixed 64x64 chess relation category matrix."""
+    """Return a fixed 64x64 chess relation category matrix.
+
+    NOTE (2026-09-03): categories 5 (king adjacency) and 6 are unreachable —
+    rank/file/diagonal branches catch those pairs first. The two dead rows
+    cost 512 params (0.01%) and carry no gradient, so the table is frozen
+    as-is for the current runs; the next generation should reorder to
+    knight -> king-adjacency -> rank/file/diagonal (which yields all live
+    categories: 0:64, 1:336, 2:336, 3:364, 4:336, 5:420, 7:2240).
+    """
     out = np.zeros((64, 64), dtype=np.int64)
     for a in range(64):
         ar, af = divmod(a, 8)
@@ -379,11 +387,14 @@ def main():
         for group in optimizer.param_groups:
             group["lr"] = lr
         optimizer.zero_grad(set_to_none=True)
-        with torch.autocast(device_type="cuda", dtype=torch.float16,
+        with torch.autocast(device_type=device.type, dtype=torch.float16,
                             enabled=device.type == "cuda"):
             logits, q = model(bt, ba)
             temp = args.temperature
             student_logp = torch.log_softmax(logits / temp, dim=-1)
+            # NOTE: torch.exp(tlogp/temp) is the tempered teacher only when it
+            # renormalizes to 1; all runs pin temperature=1.0 so this is exact.
+            # Any future temperature sweep must use softmax(tlogp/temp) here.
             dist = -(torch.exp(tlogp / temp) * student_logp).sum(-1) * temp * temp
             q_loss = torch.nn.functional.smooth_l1_loss(q, tq)
             idx128 = torch.clamp(torch.round(wp * 128).long(), 0, 127)

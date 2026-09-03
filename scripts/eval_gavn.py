@@ -61,7 +61,8 @@ def main():
     src, dst, promo, _ = action_tables(Path(args.sl_repo))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = GAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
-                 src, dst, promo, relation_types()).to(device)
+                 src, dst, promo, relation_types(),
+                 bias_mode=cfg.get("bias_mode", "both")).to(device)
     state = torch.load(cp / "state.pt", map_location=device, weights_only=False)
     model.load_state_dict(state["model"])
     model.eval()
@@ -106,7 +107,10 @@ def main():
             pred = "A" if by_uci[ca] > by_uci[cb] else "B"
             total += 1
             correct += pred == truth
-        print(f"[gavn] MATE: {correct}/{total} = {100*correct/total:.2f}%")
+        if total == 0:
+            print("[gavn] MATE: no parseable rows (check eval file schema)")
+        else:
+            print(f"[gavn] MATE: {correct}/{total} = {100*correct/total:.2f}%")
 
     if args.puzzles:
         puzzles = pd.read_csv(args.puzzles, nrows=args.num_puzzles)

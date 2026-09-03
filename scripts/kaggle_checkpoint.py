@@ -87,7 +87,7 @@ def latest_remote_checkpoint(api_client, repo_id: str, remote_prefix: str) -> st
 
 
 def download_latest(api_client, repo_id: str, remote_prefix: str,
-                    local_root: Path) -> Path | None:
+                    local_root: Path, attempts: int = 3) -> Path | None:
     from huggingface_hub import hf_hub_download
     name = latest_remote_checkpoint(api_client, repo_id, remote_prefix)
     if name is None:
@@ -97,13 +97,21 @@ def download_latest(api_client, repo_id: str, remote_prefix: str,
     destination.mkdir(parents=True, exist_ok=True)
     files = api_client.list_repo_files(repo_id=repo_id, repo_type="dataset")
     prefix = f"{remote_prefix.strip('/')}/{name}/"
-    for filename in files:
-        if filename.startswith(prefix):
-            hf_hub_download(repo_id=repo_id, filename=filename,
-                            repo_type="dataset", local_dir=str(local_root),
-                            token=api_client.token)
-    print(f"[hf] downloaded {name} -> {destination}", flush=True)
-    return destination
+    last_exc: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            for filename in files:
+                if filename.startswith(prefix):
+                    hf_hub_download(repo_id=repo_id, filename=filename,
+                                    repo_type="dataset", local_dir=str(local_root),
+                                    token=api_client.token)
+            print(f"[hf] downloaded {name} -> {destination}", flush=True)
+            return destination
+        except Exception as exc:  # network flap at resume must not kill the run
+            last_exc = exc
+            print(f"[hf] download attempt {attempt}/{attempts} failed: {exc}", flush=True)
+            time.sleep(10 * attempt)
+    raise RuntimeError(f"download failed after {attempts} attempts") from last_exc
 
 
 def write_status(api_client, repo_id: str, remote_prefix: str, status: str) -> None:

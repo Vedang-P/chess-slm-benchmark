@@ -86,8 +86,11 @@ class ShardManager:
         for tag in wanted:
             for fname in ("train_set.npz", "teacher_logp.npy"):
                 dest = self._dest(tag, fname)
-                if dest.exists() and dest.stat().st_size > 0:
+                if dest.exists() and self._verify(dest, tag, fname):
                     continue
+                if dest.exists():
+                    self.log(f"[shards] {tag}/{fname} failed integrity check; re-downloading")
+                    dest.unlink()
                 t0 = time.time()
                 self.log(f"[shards] downloading {prefix_str(self.prefix, tag, fname)}")
                 hf_hub_download(repo_id=self.repo, repo_type="dataset",
@@ -97,8 +100,22 @@ class ShardManager:
                 if cached.exists():
                     cached.replace(dest)
                     shutil.rmtree(self.cache_dir / self.prefix, ignore_errors=True)
+                if not self._verify(dest, tag, fname):
+                    raise RuntimeError(f"[shards] {tag}/{fname} failed integrity check after download")
                 mb = dest.stat().st_size / 1e6
                 self.log(f"[shards] {tag}/{fname}: {mb:.0f}MB in {time.time()-t0:.0f}s")
+
+    def _verify(self, dest: Path, tag: str, fname: str) -> bool:
+        """Integrity gate: npz must open with a tokens member; npy must have a
+        valid header. Catches truncated downloads from killed kernels."""
+        try:
+            if fname.endswith(".npz"):
+                npz_member_shape(dest, "tokens")
+            else:
+                npy_shape(dest)
+            return True
+        except Exception:
+            return False
 
     # ---- row counts (no decompress) ----
     def count_rows(self, tags=None, max_records: int = 0) -> None:
@@ -122,6 +139,9 @@ class ShardManager:
         resume."""
         wanted = list(self.tags if not max_records else self.tags[:1])
         rows = np.array([self.rows[t] for t in wanted], dtype=np.float64)
+        if steps < len(wanted):
+            # degenerate regime (smoke): round-robin, no minimum-1 rule
+            return np.array([wanted[i % len(wanted)] for i in range(steps)])
         frac = rows / rows.sum()
         counts = np.maximum(1, np.round(frac * steps).astype(int))
         counts[-1] += steps - counts.sum()

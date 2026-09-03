@@ -161,9 +161,16 @@ def main() -> None:
     # the whole run so pair lookups survive segment switching.
     if args.w_rank > 0:
         if args.hf_shards:
-            base_tokens, base_actions, base_winprob, _ = mgr.load(mgr.tags[0], args.max_records)
+            base_tokens, base_actions, base_winprob, _t0 = mgr.load(mgr.tags[0], args.max_records)
+            if base_winprob is None and args.winprob_source == "teacher":
+                z = np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32)
+                p = np.exp(np.asarray(_t0, dtype=np.float32))
+                p /= p.sum(axis=-1, keepdims=True)
+                base_winprob = p @ z
         else:
             base_tokens, base_actions, base_winprob = tokens, actions, winprob
+        if base_winprob is None:
+            raise ValueError("rank loss needs winprob; provide an npz with a winprob column or use winprob-source=teacher")
         if args.rank_subsample and args.rank_subsample < len(base_tokens):
             rng_pick = np.random.default_rng(args.seed)
             pick = np.sort(rng_pick.choice(len(base_tokens), size=args.rank_subsample, replace=False))
@@ -171,7 +178,7 @@ def main() -> None:
             print(f"[train] rank pairs from subsample of {args.rank_subsample} rows", flush=True)
         else:
             pair_tokens, pair_actions, pair_winprob = base_tokens, base_actions, base_winprob
-        prefix = np.asarray(pair_tokens[:, :72]).view(np.uint64)
+        prefix = np.ascontiguousarray(np.asarray(pair_tokens[:, :72])).view(np.uint64)
         _, fen_id = np.unique(prefix, axis=0, return_inverse=True)
         order = np.argsort(fen_id, kind="stable")
         pairs = []
@@ -193,6 +200,9 @@ def main() -> None:
             s = e
         pairs = np.asarray(pairs, dtype=np.int64)
         print(f"[train] rank pairs: {len(pairs)}", flush=True)
+        if args.w_rank > 0 and len(pairs) == 0:
+            args.w_rank = 0.0
+            print("[train] no rank pairs found; rank loss disabled to avoid NaN", flush=True)
     else:
         pairs = np.zeros((0, 2), dtype=np.int64)
         print("[train] rank pairs: disabled (w_rank=0)", flush=True)
@@ -328,7 +338,7 @@ def main() -> None:
             r1_idx = b_act[:0]
             r2_tok = b_tok[:0]
             r2_idx = b_act[:0]
-        lr = args.lr * min(1.0, (step + 1) / args.warmup)
+        lr = args.lr * min(1.0, (step + 1) / max(1, args.warmup))
         if step > args.warmup:
             frac = (step - args.warmup) / max(1, args.steps - args.warmup)
             lr = args.lr * 0.5 * (1 + np.cos(np.pi * frac))
