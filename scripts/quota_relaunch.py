@@ -61,28 +61,67 @@ def kernel_status(ref: str, account: str) -> str:
 
 
 def main() -> None:
-    log("quota_relaunch armed: waiting for GPU quota reset")
+    log("quota_relaunch armed: waiting for GPU quota reset (per-account relaunch)")
+    launched: set = set()  # slugs already relaunched this process lifetime
     while True:
         remaining = {a: gpu_remaining(a) for a in ACCOUNTS}
         log(f"quota remaining: {remaining}")
-        if all(v is not None and v > 0 for v in remaining.values()):
-            # safety: don't double-launch if kernels are already running
-            running = []
-            for owner, slug, *_ in TRAINER_CONFIGS:
-                st = kernel_status(f"{owner}/{slug}", owner)
-                if "RUNNING" in st:
-                    running.append(f"{owner}/{slug}")
-            if running:
-                log(f"kernels already RUNNING ({running}); nothing to push. exiting.")
-                return
-            log("quota available on all accounts — relaunching wave")
-            r = subprocess.run([sys.executable, str(ROOT / "scripts" / "launch_trainers.py")],
-                               capture_output=True, text=True, timeout=600)
-            log(f"launch_trainers rc={r.returncode}\n{r.stdout[-2000:]}\n{r.stderr[-2000:]}")
-            if r.returncode == 0:
-                log("relaunch done. exiting.")
-                return
-            log("relaunch failed; will retry next poll")
+        for owner, slug, *_ in TRAINER_CONFIGS:
+            if slug in launched:
+                continue
+            quota = remaining.get(owner)
+            if quota is None or quota <= 0:
+                continue
+            st = kernel_status(f"{owner}/{slug}", owner)
+            if "RUNNING" in st:
+                log(f"{owner}/{slug} already RUNNING; marking launched")
+                launched.add(slug)
+                continue
+            log(f"quota on {owner} ({quota}h) — relaunching {owner}/{slug}")
+            import launch_trainers
+            try:
+                # push just this kernel via the launcher's own machinery
+                import tempfile, json, shutil
+                cfg = next(c for c in TRAINER_CONFIGS if c[1] == slug)
+                _, _, tmpl, desc, repls = cfg
+                template = ROOT / f"notebooks/{tmpl}_kaggle_{'baseline_5m' if tmpl == '01' else 'train_gavn'}.ipynb"
+                push_dir = Path(tempfile.mkdtemp(prefix=f"kaggle_push_{slug}_"))
+                txt = template.read_text()
+                for o, n in repls.items():
+                    assert o in txt, f"{slug}: replacement source missing: {o!r}"
+                    txt = txt.replace(o, n)
+                (push_dir / f"{slug}.ipynb").write_text(txt)
+                meta = {
+                    "id": f"{owner}/{slug}",
+                    "title": slug,
+                    "code_file": f"{slug}.ipynb",
+                    "language": "python",
+                    "kernel_type": "notebook",
+                    "is_private": True,
+                    "enable_gpu": True,
+                    "enable_tpu": False,
+                    "enable_internet": True,
+                    "machine_shape": "NvidiaTeslaT4",
+                    "dataset_sources": [f"{owner}/chess-creds"],
+                    "competition_sources": [],
+                    "kernel_sources": [],
+                }
+                (push_dir / "kernel-metadata.json").write_text(json.dumps(meta, indent=2))
+                r = subprocess.run(
+                    [sys.executable, "-m", "kaggle", "kernels", "push", "-p", str(push_dir)],
+                    capture_output=True, text=True, env=env_for_account(owner), timeout=180)
+                out = (r.stdout + r.stderr).strip()
+                if r.returncode == 0:
+                    log(f"[push] OK {owner}/{slug}")
+                    launched.add(slug)
+                else:
+                    log(f"[push] FAIL {owner}/{slug}: {out[:400]} (will retry)")
+                shutil.rmtree(push_dir, ignore_errors=True)
+            except Exception as e:
+                log(f"[push] EXC {owner}/{slug}: {e} (will retry)")
+        if len(launched) == len(TRAINER_CONFIGS):
+            log("all 6 kernels relaunched. exiting.")
+            return
         time.sleep(POLL_S)
 
 
