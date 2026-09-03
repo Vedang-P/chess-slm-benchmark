@@ -386,6 +386,8 @@ def save_ckpt(outdir, params, m, v, ema, rng_state, args, step, loss):
     with open(checkpoint / "config.json", "w") as f:
         json.dump({"dim": args.dim, "layers": args.layers, "heads": args.heads,
                    "step": step, "loss": loss, "seed": args.seed}, f)
+    with open(checkpoint / "metrics.json", "w") as f:
+        json.dump({"step": step, "loss": loss}, f)
     print(f"[train] saved complete checkpoint-{step}", flush=True)
     return checkpoint
 
