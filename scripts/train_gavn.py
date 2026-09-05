@@ -251,6 +251,18 @@ def main():
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     hf_client = None
+
+    def _save_torch_rng() -> bytes:
+        # bytes survive torch version changes; a raw uint8 Tensor trips the
+        # strict isinstance(t, torch.ByteTensor) check in some torch builds
+        return torch.get_rng_state().cpu().numpy().tobytes()
+
+    def _restore_torch_rng(raw) -> None:
+        if hasattr(raw, "cpu"):  # legacy checkpoints saved a uint8 Tensor
+            raw = raw.cpu().numpy().tobytes()
+        state_t = torch.ByteTensor(torch.frombuffer(raw, dtype=torch.uint8))
+        torch.set_rng_state(state_t)
+
     if args.resume_from_hf:
         hf_client = make_hf_api(ROOT)
         resume_dir = download_latest(hf_client, args.hf_repo, args.hf_run,
@@ -352,7 +364,7 @@ def main():
         scaler.load_state_dict(state.get("scaler", {}))
         start_step = int(state["step"])
         np_rng.bit_generator.state = state["numpy_rng"]
-        torch.set_rng_state(state["torch_rng"])
+        _restore_torch_rng(state["torch_rng"])
         print(f"[resume] step={start_step}", flush=True)
     n_total = mgr.total if args.hf_shards else len(tokens)
     print(f"[train] device={device} N={n_total:,} params={sum(p.numel() for p in raw_model.parameters()):,}", flush=True)
@@ -418,7 +430,7 @@ def main():
             torch.save({"model": raw_model.state_dict(), "optimizer": optimizer.state_dict(),
                         "scaler": scaler.state_dict(), "step": step + 1,
                         "numpy_rng": np_rng.bit_generator.state,
-                        "torch_rng": torch.get_rng_state()}, cp / "state.pt")
+                        "torch_rng": _save_torch_rng()}, cp / "state.pt")
             (cp / "config.json").write_text(json.dumps(vars(args), indent=2), encoding="utf-8")
             (cp / "metrics.json").write_text(json.dumps({"step": step + 1, "loss": float(loss.detach())}, indent=2), encoding="utf-8")
             if hf_client is None and os.environ.get("HF_WRITE_TOKEN"):
