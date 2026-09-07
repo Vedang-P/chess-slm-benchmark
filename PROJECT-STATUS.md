@@ -77,6 +77,31 @@ Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
 - **Gemma-4-E2B baselines — SAFE**: HF dataset `eval-results/caveman-sft-{a1,a2,b1,b2,pretest}/` (5 variants, noexplain samples+summary), restored locally to `results/baselines/`. Note: these are 250-row win-condition slices (examples), NOT full-1000 accuracy.
 - **Full clean-1000 (gemma 58.1% + DeepSeek V4 Flash samples) — LOST 2026-08-27** (deleted during cleanup; never git-tracked, not on HF). MUST re-run on the exact noexplain-1000 via `scripts/run_mate_eval.py` (gemma local, DeepSeek API) and store on HF + a non-gitignored location.
 
+## Wave-2 results: completed GAVN arms (2026-09-07)
+
+Three GAVN arms reached the full 160k-step target before the Sept-12 quota
+exhaustion. Frozen noexplain-1000 MATE (`scripts/eval_gavn.py`, local CPU):
+
+| arm | config | final loss | MATE /1000 |
+|---|---|---|---|
+| gavn-5m-seed0 | 5M, bias both, full loss | 3.893 | 634 = 63.4% |
+| gavn-5m-loss | 5M, no Q-loss | 3.883* | 679 = **67.9%** |
+| gavn-5m-geometry | 5M, fixed bias | ~3.9 | 589 = 58.9% |
+
+*metrics.json at 160k for the loss arm was read from its 105k sample; losses
+all converged to ~3.88-3.92.
+
+Result: trained-to-completion 5M chess models **beat gemma-4-E2B (58.1%)** at
+1/400 the params but fall far short of the 9M teacher (98.2%). Distillation
+transfer was real but weak — curves flattened after ~85k steps. The loss
+ablation (no Q-term) is the best arm, suggesting the extra Q regression term
+slightly hurt the ranking objective.
+
+Still paused on HF (stranded by quota, resume ready):
+gavn-3m-seed0 @ 105k (best probe so far: 68% at 105k), gavn-3m-seed1 @ 110k,
+baseline @ 55k/120k. vedanggggg / vedangpandeyyy / softmaxsimp all 0.0h GPU
+until 2026-09-12T00:00Z.
+
 ## Wave-1 training status (2026-09-03)
 
 All 6 sharded trainers (GAVN-3M seed0/seed1, GAVN-5M, geometry ablation,
