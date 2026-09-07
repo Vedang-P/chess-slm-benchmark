@@ -97,6 +97,13 @@ transfer was real but weak — curves flattened after ~85k steps. The loss
 ablation (no Q-term) is the best arm, suggesting the extra Q regression term
 slightly hurt the ranking objective.
 
+**Official 10k-puzzle protocol** (full-solution-sequence, on best arm
+gavn-5m-loss): **48/1000 = 4.8%** on a 1000-row slice. MATE 67.9% but puzzle
+4.8% — the model cannot reliably output exact correct moves across multi-move
+solutions. Decisive negative result: sub-9M GAVN distillation does not reach
+the 9M teacher on the frozen protocol. (Reference: 9M teacher 86.1% puzzles,
+98.2% MATE.)
+
 Still paused on HF (stranded by quota, resume ready):
 gavn-3m-seed0 @ 105k (best probe so far: 68% at 105k), gavn-3m-seed1 @ 110k,
 baseline @ 55k/120k. vedanggggg / vedangpandeyyy / softmaxsimp all 0.0h GPU
