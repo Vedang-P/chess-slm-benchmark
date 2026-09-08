@@ -94,6 +94,14 @@ model in the 3–6M range. Final training must use the ChessBench training
 distribution, frozen held-out evaluation, and resumable Hugging Face
 checkpoints.
 
+Update (2026-09-09): after correcting an evaluator that selected an untrained
+auxiliary head for one arm, the three completed legacy 5.30M GAVN checkpoints
+score 85.9%, 85.8%, and 85.0% on the canonical noexplain-1000 MATE set using
+their trained return distributions. These are below the 9M teacher (98.2%)
+and do not establish a new frontier. The next preregistered candidate is
+CC-GAVN, a 4,762,088-parameter candidate-conditioned geometric model; see
+`PROJECT-STATUS.md` for the complete, current result record.
+
 ---
 
 ## The plan (current)
@@ -122,6 +130,7 @@ checkpoints.
 scripts/
   eval_searchless_mate.py   ACTIVE — MATE 2-choice eval for searchless models
   train_gavn.py              ACTIVE — square-token geometric student trainer
+  train_ccgavn.py            ACTIVE — 4.76M candidate-conditioned GAVN trainer
   eval_gavn.py               ACTIVE — frozen MATE + puzzle evaluator for GAVN
   build_search_traces.py    ACTIVE — verbalized search traces (5000 built)
   train_mate_lora.py        SFT trainer (reusable)
@@ -132,6 +141,7 @@ notebooks/
   02_kaggle_train_gavn.ipynb
   03_kaggle_eval_frontier.ipynb
   04_kaggle_prepare_full_data.ipynb
+  07_kaggle_train_ccgavn.ipynb
 src/                        eval/SFT support (models, mate_metrics, report)
 data/positions/             the 4 MATE eval sets (noexplain/both/tactic/full)
 results/                    searchlang traces + rlvr-pool (reusable data)

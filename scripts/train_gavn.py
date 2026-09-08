@@ -27,15 +27,14 @@ from scripts.kaggle_checkpoint import (  # noqa: E402
 from scripts.shard_data import ShardManager  # noqa: E402
 
 
-def relation_types() -> np.ndarray:
+def relation_types(legacy: bool = False) -> np.ndarray:
     """Return a fixed 64x64 chess relation category matrix.
 
-    NOTE (2026-09-03): categories 5 (king adjacency) and 6 are unreachable —
-    rank/file/diagonal branches catch those pairs first. The two dead rows
-    cost 512 params (0.01%) and carry no gradient, so the table is frozen
-    as-is for the current runs; the next generation should reorder to
-    knight -> king-adjacency -> rank/file/diagonal (which yields all live
-    categories: 0:64, 1:336, 2:336, 3:364, 4:336, 5:420, 7:2240).
+    Categories are mutually exclusive. Earlier experiments classified rank,
+    file, and diagonal before king adjacency, silently leaving the adjacency
+    category without any gradient.  The corrected table exposes every intended
+    relation type: same square, knight, king adjacency, rank, file, diagonal,
+    and other.
     """
     out = np.zeros((64, 64), dtype=np.int64)
     for a in range(64):
@@ -45,20 +44,32 @@ def relation_types() -> np.ndarray:
             dr, df = abs(ar - br), abs(af - bf)
             if a == b:
                 rel = 0
-            elif ar == br:
+            elif legacy and ar == br:
                 rel = 1
-            elif af == bf:
+            elif legacy and af == bf:
                 rel = 2
-            elif dr == df:
+            elif legacy and dr == df:
                 rel = 3
-            elif (dr, df) in ((1, 2), (2, 1)):
+            elif legacy and (dr, df) in ((1, 2), (2, 1)):
                 rel = 4
-            elif max(dr, df) == 1:
+            elif legacy and max(dr, df) == 1:
                 rel = 5
-            elif dr == 0 or df == 0 or dr == df:
+            elif legacy and (dr == 0 or df == 0 or dr == df):
                 rel = 6
-            else:
+            elif legacy:
                 rel = 7
+            elif (dr, df) in ((1, 2), (2, 1)):
+                rel = 1
+            elif max(dr, df) == 1:
+                rel = 2
+            elif ar == br:
+                rel = 3
+            elif af == bf:
+                rel = 4
+            elif dr == df:
+                rel = 5
+            else:
+                rel = 6
             out[a, b] = rel
     return out
 
@@ -145,8 +156,9 @@ class GAVN:
                 self.global_embed = torch.nn.Embedding(32, dim)
                 self.global_pos = torch.nn.Parameter(torch.zeros(13, dim))
                 self.blocks = torch.nn.ModuleList()
+                relation_count = int(np.max(relation_index)) + 1
                 for _ in range(layers):
-                    block = GeometricBlock(torch, dim, heads, 8, bias_mode=bias_mode)
+                    block = GeometricBlock(torch, dim, heads, relation_count, bias_mode=bias_mode)
                     self.blocks.append(torch.nn.ModuleDict({
                         "norm1": block.norm1, "qkv": block.qkv,
                         "proj": block.proj, "norm2": block.norm2,
@@ -233,7 +245,9 @@ def parse_args():
                    choices=["both", "fixed", "dynamic", "none"],
                    help="attention relation bias: static rel + dynamic, or ablations")
     p.add_argument("--w-dist", type=float, default=1.0)
-    p.add_argument("--w-q", type=float, default=0.5)
+    p.add_argument("--w-q", type=float, default=0.0,
+                   help="Optional auxiliary scalar-Q regression. The canonical\n"
+                        "decision output is always the 128-bin distribution.")
     p.add_argument("--w-ce", type=float, default=0.25)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--max-records", type=int, default=0)
@@ -250,7 +264,9 @@ def main():
     np_rng = np.random.default_rng(args.seed)
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    hf_client = None
+    # Authenticate before spending compute.  A run without durable remote
+    # checkpoint storage is not a valid experiment on disposable Kaggle VMs.
+    hf_client = make_hf_api(ROOT)
 
     def _save_torch_rng() -> bytes:
         # bytes survive torch version changes; a raw uint8 Tensor trips the
@@ -264,11 +280,40 @@ def main():
         torch.set_rng_state(state_t)
 
     if args.resume_from_hf:
-        hf_client = make_hf_api(ROOT)
         resume_dir = download_latest(hf_client, args.hf_repo, args.hf_run,
                                      outdir / "hf-resume")
     else:
         resume_dir = None
+    # Check the remote checkpoint before constructing the model.  Original
+    # GAVN runs had eight relation categories and no schema marker; v2 has
+    # seven corrected live-geometry categories.  Resuming an old checkpoint
+    # must recreate its original parameter shapes exactly.
+    resume_config = None
+    active_relation_schema = "v2-live-knight-king-rank-file-diagonal-other"
+    if resume_dir is not None and (resume_dir / "config.json").exists():
+        try:
+            resume_config = json.loads(
+                (resume_dir / "config.json").read_text(encoding="utf-8"))
+            scientific_fields = ("dim", "layers", "heads", "bias_mode",
+                                 "w_dist", "w_q", "w_ce", "temperature")
+            mismatches = [
+                f"{key}: checkpoint={resume_config.get(key)!r}, requested={getattr(args, key)!r}"
+                for key in scientific_fields
+                if key in resume_config and resume_config.get(key) != getattr(args, key)
+            ]
+            if mismatches:
+                raise ValueError(
+                    "Refusing to resume with a changed model or loss configuration: "
+                    + "; ".join(mismatches)
+                    + ". Start a fresh --hf-run for a new experiment.")
+            elif resume_config.get("relation_schema") is None:
+                active_relation_schema = "legacy-v1-eight-relation-types"
+        except ValueError:
+            raise
+        except Exception as exc:
+            print(f"[resume] unreadable remote config ({exc}); starting fresh",
+                  flush=True)
+            resume_dir = None
     # ---- data: either single assembled file or 8 HF shards (ALL of them) ----
     if args.hf_shards:
         try:
@@ -327,7 +372,8 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     raw_model = GAVN(torch, args.dim, args.layers, args.heads, src, dst, promo,
-                     relation_types(), bias_mode=args.bias_mode).to(device)
+                     relation_types(legacy=active_relation_schema.startswith("legacy-")),
+                     bias_mode=args.bias_mode).to(device)
     model = raw_model
     if device.type == "cuda" and torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(raw_model)
@@ -345,17 +391,6 @@ def main():
     else:
         scaler = torch.cuda.amp.GradScaler(enabled=device.type == "cuda")
     start_step = 0
-    if resume_dir is not None and (resume_dir / "config.json").exists():
-        try:
-            rcfg = json.loads((resume_dir / "config.json").read_text(encoding="utf-8"))
-            if (rcfg.get("dim") != args.dim or rcfg.get("layers") != args.layers
-                    or rcfg.get("heads") != args.heads):
-                print(f"[resume] remote ckpt dim/layers mismatch "
-                      f"({rcfg.get('dim')}/{rcfg.get('layers')} vs {args.dim}/{args.layers}); starting fresh",
-                      flush=True)
-                resume_dir = None
-        except Exception:
-            pass
     if resume_dir is not None and (resume_dir / "state.pt").exists():
         state = torch.load(resume_dir / "state.pt", map_location=device,
                            weights_only=False)
@@ -370,6 +405,7 @@ def main():
     print(f"[train] device={device} N={n_total:,} params={sum(p.numel() for p in raw_model.parameters()):,}", flush=True)
 
     timer = UploadTimer(args.hf_upload_every)
+    timer.mark()
     t0 = time.time()
     for step in range(start_step, args.steps):
         if args.hf_shards:
@@ -404,12 +440,15 @@ def main():
             logits, q = model(bt, ba)
             temp = args.temperature
             student_logp = torch.log_softmax(logits / temp, dim=-1)
-            # NOTE: torch.exp(tlogp/temp) is the tempered teacher only when it
-            # renormalizes to 1; all runs pin temperature=1.0 so this is exact.
-            # Any future temperature sweep must use softmax(tlogp/temp) here.
-            dist = -(torch.exp(tlogp / temp) * student_logp).sum(-1) * temp * temp
+            # ``tlogp`` stores normalized log-probabilities.  Dividing logits
+            # by a temperature requires normalization again; exponentiating
+            # alone only works accidentally at temperature 1.
+            teacher_probs = torch.softmax(tlogp / temp, dim=-1)
+            dist = -(teacher_probs * student_logp).sum(-1) * temp * temp
             q_loss = torch.nn.functional.smooth_l1_loss(q, tq)
-            idx128 = torch.clamp(torch.round(wp * 128).long(), 0, 127)
+            # Matches searchless_chess.utils.compute_return_buckets_from_returns:
+            # edge ties belong to the preceding bucket, hence floor not round.
+            idx128 = torch.clamp(torch.ceil(wp * 128).long() - 1, 0, 127)
             bins = torch.arange(128, device=device, dtype=torch.float32)[None]
             hard = torch.exp(-(bins - idx128[:, None]) ** 2 / (2 * 0.75 ** 2))
             hard = hard / hard.sum(-1, keepdim=True)
@@ -424,23 +463,28 @@ def main():
             print(f"[train] step={step+1}/{args.steps} loss={loss.item():.4f} "
                   f"dist={dist.mean().item():.4f} q={q_loss.item():.4f} "
                   f"elapsed={(time.time()-t0)/60:.1f}m", flush=True)
-        if (step + 1) % args.ckpt_every == 0 or step + 1 == args.steps:
+        # Persist a fully resumable state on the configured wall-clock cadence,
+        # rather than waiting for a potentially much slower step checkpoint.
+        checkpoint_due = ((step + 1) % args.ckpt_every == 0
+                          or step + 1 == args.steps or timer.due())
+        if checkpoint_due:
             cp = outdir / f"checkpoint-{step+1}"
             cp.mkdir(parents=True, exist_ok=True)
             torch.save({"model": raw_model.state_dict(), "optimizer": optimizer.state_dict(),
                         "scaler": scaler.state_dict(), "step": step + 1,
                         "numpy_rng": np_rng.bit_generator.state,
                         "torch_rng": _save_torch_rng()}, cp / "state.pt")
-            (cp / "config.json").write_text(json.dumps(vars(args), indent=2), encoding="utf-8")
+            config = vars(args) | {
+                "relation_schema": active_relation_schema,
+                "canonical_decision_head": "distribution_expectation",
+                "q_head_trained": bool(args.w_q),
+            }
+            (cp / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
             (cp / "metrics.json").write_text(json.dumps({"step": step + 1, "loss": float(loss.detach())}, indent=2), encoding="utf-8")
-            if hf_client is None and os.environ.get("HF_WRITE_TOKEN"):
-                hf_client = make_hf_api(ROOT)
-            if hf_client is not None and (timer.due() or step + 1 == args.steps):
-                try:
-                    upload_checkpoint(hf_client, args.hf_repo, outdir, args.hf_run, cp.name)
-                    timer.mark()
-                except Exception as exc:
-                    print(f"[hf] upload failed; local copy retained: {exc}", flush=True)
+            # A failed upload is fatal: carrying on would make a preempted
+            # Kaggle job irreproducible and violate the persistence contract.
+            upload_checkpoint(hf_client, args.hf_repo, outdir, args.hf_run, cp.name)
+            timer.mark()
     print(f"[train] done in {(time.time()-t0)/3600:.2f}h", flush=True)
 
 

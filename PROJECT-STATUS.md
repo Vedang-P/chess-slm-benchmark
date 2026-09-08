@@ -77,32 +77,54 @@ Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
 - **Gemma-4-E2B baselines — SAFE**: HF dataset `eval-results/caveman-sft-{a1,a2,b1,b2,pretest}/` (5 variants, noexplain samples+summary), restored locally to `results/baselines/`. Note: these are 250-row win-condition slices (examples), NOT full-1000 accuracy.
 - **Full clean-1000 (gemma 58.1% + DeepSeek V4 Flash samples) — LOST 2026-08-27** (deleted during cleanup; never git-tracked, not on HF). MUST re-run on the exact noexplain-1000 via `scripts/run_mate_eval.py` (gemma local, DeepSeek API) and store on HF + a non-gitignored location.
 
-## Wave-2 results: completed GAVN arms (2026-09-07)
+## Wave-2 results: completed GAVN arms (2026-09-07; corrected 2026-09-09)
 
 Three GAVN arms reached the full 160k-step target before the Sept-12 quota
 exhaustion. Frozen noexplain-1000 MATE (`scripts/eval_gavn.py`, local CPU):
 
-| arm | config | final loss | MATE /1000 |
+| arm | config | final loss | historical MATE /1000 |
 |---|---|---|---|
-| gavn-5m-seed0 | 5M, bias both, full loss | 3.893 | 634 = 63.4% |
-| gavn-5m-loss | 5M, no Q-loss | 3.883* | 679 = **67.9%** |
-| gavn-5m-geometry | 5M, fixed bias | ~3.9 | 589 = 58.9% |
+| gavn-5m-seed0 | 5M, bias both, full loss | 3.893 | 634 = 63.4% via scalar-q |
+| gavn-5m-loss | 5M, no Q-loss | 3.883* | **INVALID: 679 = 67.9% via untrained q head** |
+| gavn-5m-geometry | 5M, fixed bias | ~3.9 | 589 = 58.9% via scalar-q |
 
 *metrics.json at 160k for the loss arm was read from its 105k sample; losses
 all converged to ~3.88-3.92.
 
-Result: trained-to-completion 5M chess models **beat gemma-4-E2B (58.1%)** at
-1/400 the params but fall far short of the 9M teacher (98.2%). Distillation
-transfer was real but weak — curves flattened after ~85k steps. The loss
-ablation (no Q-term) is the best arm, suggesting the extra Q regression term
-slightly hurt the ranking objective.
+### Evaluation correction (2026-09-09)
 
-**Official 10k-puzzle protocol** (full-solution-sequence, on best arm
-gavn-5m-loss): **48/1000 = 4.8%** on a 1000-row slice. MATE 67.9% but puzzle
-4.8% — the model cannot reliably output exact correct moves across multi-move
-solutions. Decisive negative result: sub-9M GAVN distillation does not reach
-the 9M teacher on the frozen protocol. (Reference: 9M teacher 86.1% puzzles,
-98.2% MATE.)
+The no-Q arm's `q_head` received **zero gradient** (`--w-q 0`), but both the
+historical MATE and puzzle jobs forced `--score q`. The 67.9% MATE and 4.8%
+puzzle figures therefore scored an untrained random head and are invalid. The
+same preserved HF checkpoint (`account3-gavn-5m-loss/checkpoint-160000`),
+rescored through its trained 128-bin return distribution, gives:
+
+| checkpoint | canonical score | result |
+|---|---|---|
+| gavn-5m-seed0 (legacy 5.30M params) | distribution expectation | **859/1000 = 85.9%** noexplain MATE |
+| gavn-5m-loss (legacy 5.30M params) | distribution expectation | **850/1000 = 85.0%** noexplain MATE |
+| gavn-5m-geometry (legacy 5.30M params) | distribution expectation | **858/1000 = 85.8%** noexplain MATE |
+| gavn-5m-loss (legacy 5.30M params) | distribution expectation | **401/1000 = 40.1%** exact full-sequence puzzles (same historical slice) |
+
+This replaces the former decisive-negative claim. It is a real but incomplete
+recovery: the corrected 1,000-position MATE results are tightly clustered
+(85.0%–85.9%) and remain below the 9M teacher's 98.2% MATE reference. Only
+the no-Q arm has been recomputed on the historical 1,000-puzzle slice, where
+it reaches 40.1% versus the teacher's 86.1% official-10K reference; the
+cross-arm puzzle comparison remains incomplete.
+
+`scripts/eval_gavn.py` now defaults to the distribution score, rejects
+untrained scalar heads, uses the official legal-move order, and applies the
+official repetition rule. The evaluation notebook no longer hard-codes q mode.
+
+### CC-GAVN follow-up (ready, not yet measured)
+
+`scripts/train_ccgavn.py` implements Candidate-Conditioned GAVN v1: a
+4,762,088-parameter model in which the candidate move is a token in every
+geometric attention layer, with exact horizontal FEN/action reflection, a
+position-disjoint development split, and full HF-resume checkpoints. It must
+beat the corrected GAVN by development selection and then pass the full frozen
+protocol before any frontier claim is made.
 
 Still paused on HF (stranded by quota, resume ready):
 gavn-3m-seed0 @ 105k (best probe so far: 68% at 105k), gavn-3m-seed1 @ 110k,

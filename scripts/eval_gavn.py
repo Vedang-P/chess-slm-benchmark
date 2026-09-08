@@ -53,37 +53,71 @@ def main():
     p.add_argument("--max-rows", type=int, default=0)
     p.add_argument("--puzzles", default="", help="official puzzles.csv path")
     p.add_argument("--num-puzzles", type=int, default=10000)
-    p.add_argument("--score", choices=["q", "dist"], default="q")
+    p.add_argument("--score", choices=["auto", "q", "dist"], default="auto",
+                   help="Decision score. auto/dist uses the trained return\n"
+                        "distribution expectation; q is only a diagnostic\n"
+                        "for checkpoints trained with a nonzero --w-q.")
     args = p.parse_args()
 
     cp = Path(args.checkpoint)
     cfg = json.loads((cp / "config.json").read_text(encoding="utf-8"))
     src, dst, promo, _ = action_tables(Path(args.sl_repo))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = GAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
-                 src, dst, promo, relation_types(),
-                 bias_mode=cfg.get("bias_mode", "both")).to(device)
+    if cfg.get("architecture") == "cc-gavn-v1":
+        from scripts.train_ccgavn import CCGAVN, candidate_relation_types
+        model = CCGAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
+                      src, dst, promo, candidate_relation_types()).to(device)
+        architecture = "cc-gavn-v1"
+    else:
+        legacy_relations = cfg.get("relation_schema") is None
+        model = GAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
+                     src, dst, promo, relation_types(legacy=legacy_relations),
+                     bias_mode=cfg.get("bias_mode", "both")).to(device)
+        architecture = "gavn"
     state = torch.load(cp / "state.pt", map_location=device, weights_only=False)
     model.load_state_dict(state["model"])
     model.eval()
     sys.path.insert(0, str(Path(args.sl_repo).parent))
     from searchless_chess.src import utils  # type: ignore
+    from searchless_chess.src.engines import engine as engine_lib  # type: ignore
     bucket_values = torch.as_tensor(
         np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32),
         device=device)
 
+    score_mode = "dist" if args.score == "auto" else args.score
+    if score_mode == "q" and not cfg.get("q_head_trained", cfg.get("w_q", 0.0)):
+        raise ValueError(
+            "This checkpoint's q_head was not trained (w_q=0). "
+            "Use --score dist, which is the canonical action-value output.")
+    if architecture == "cc-gavn-v1" and score_mode == "q":
+        raise ValueError("CC-GAVN has no scalar q_head; use --score dist")
+    print(f"[gavn] architecture={architecture} decision score={score_mode}", flush=True)
+
     def scores(board):
-        moves = list(board.legal_moves)
+        # The official engine specifies its own stable ordering.  Ordering only
+        # affects ties, but exact puzzle sequences make those ties observable.
+        moves = engine_lib.get_ordered_legal_moves(board)
         action_ids = [utils.MOVE_TO_ACTION[m.uci()] for m in moves]
         tokens = np.repeat(tokenize_fen(board.fen())[None, :], len(moves), axis=0)
         with torch.inference_mode():
-            logits, q = model(torch.as_tensor(tokens, dtype=torch.long, device=device),
-                              torch.as_tensor(action_ids, dtype=torch.long, device=device))
-            if args.score == "q":
+            outputs = model(torch.as_tensor(tokens, dtype=torch.long, device=device),
+                            torch.as_tensor(action_ids, dtype=torch.long, device=device))
+            if architecture == "cc-gavn-v1":
+                logits, q = outputs, None
+            else:
+                logits, q = outputs
+            if score_mode == "q":
                 values = q
             else:
                 values = torch.softmax(logits, -1) @ bucket_values
-        return moves, values.detach().cpu().numpy()
+        values = values.detach().cpu().numpy()
+        # Match ActionValueEngine's rule-based score for claimable repetitions.
+        for i, move in enumerate(moves):
+            board.push(move)
+            if board.is_fivefold_repetition() or board.can_claim_threefold_repetition():
+                values[i] = 0.5
+            board.pop()
+        return moves, values
 
     if args.eval:
         rows = []
