@@ -97,9 +97,12 @@ checkpoints.
 Update (2026-09-09): after correcting an evaluator that selected an untrained
 auxiliary head for one arm, the three completed legacy 5.30M GAVN checkpoints
 score 85.9%, 85.8%, and 85.0% on the canonical noexplain-1000 MATE set using
-their trained return distributions. These are below the 9M teacher (98.2%)
-and do not establish a new frontier. The next preregistered candidate is
-CC-GAVN, a 4,762,088-parameter candidate-conditioned geometric model; see
+their trained return distributions. The full frozen protocol is now complete
+for all three arms: MATE 4,000 rows 85.35% (seed0) / 85.25% (no-Q) / 84.72%
+(fixed geometry), official 10K puzzles 43.83% / 41.59% / 43.88% — a three-way
+tie far below the 9M teacher (98.7% MATE, 86.1% puzzles): a decisive negative
+for legacy GAVN at 5M. The next preregistered candidate is CC-GAVN, a
+4,762,088-parameter candidate-conditioned geometric model; see
 `PROJECT-STATUS.md` for the complete, current result record.
 
 ---

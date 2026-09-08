@@ -106,12 +106,32 @@ rescored through its trained 128-bin return distribution, gives:
 | gavn-5m-geometry (legacy 5.30M params) | distribution expectation | **858/1000 = 85.8%** noexplain MATE |
 | gavn-5m-loss (legacy 5.30M params) | distribution expectation | **401/1000 = 40.1%** exact full-sequence puzzles (same historical slice) |
 
-This replaces the former decisive-negative claim. It is a real but incomplete
-recovery: the corrected 1,000-position MATE results are tightly clustered
-(85.0%–85.9%) and remain below the 9M teacher's 98.2% MATE reference. Only
-the no-Q arm has been recomputed on the historical 1,000-puzzle slice, where
-it reaches 40.1% versus the teacher's 86.1% official-10K reference; the
-cross-arm puzzle comparison remains incomplete.
+### Full frozen protocol complete (2026-09-09): all three 5M arms
+
+All three completed 5M arms then ran the complete frozen protocol on local
+CPU (commit `c69aed1`): all four MATE sets (4,000 rows) plus the official
+10,000-puzzle full-solution-sequence protocol, canonical distribution score.
+Full logs, commands, and checkpoint configs:
+`results/frozen-evals-2026-09-09/` (local) and HF
+`eval-results/gavn-5m-full-frozen-2026-09-09/`.
+
+| arm | MATE 4,000 rows | puzzles 10,000 |
+|---|---|---|
+| gavn-5m-seed0 | **3,414/4,000 = 85.35%** | **4,383/10,000 = 43.83%** |
+| gavn-5m-loss (no Q-loss) | 3,410/4,000 = 85.25% | 4,159/10,000 = 41.59% |
+| gavn-5m-geometry (fixed bias) | 3,389/4,000 = 84.72% | **4,388/10,000 = 43.88%** |
+
+References (same protocol where measured): Ruoss 9M = 3,949/4,000 = 98.725%
+MATE, 8,613/10,000 = 86.13% puzzles; 136M/270M = 99.4% MATE; paper puzzles:
+9M 88.9%, 136M 94.5%, 270M 95.4%.
+
+Reading: the three arms are a statistical tie on both measurements (≤0.6pp
+MATE, ≤2.3pp puzzles; MATE and puzzle orderings disagree), so neither the
+Q-loss ablation nor the geometry ablation separates at this scale. Against
+the 9M teacher the gap is ~13pp MATE and ~42pp puzzles — a decisive negative
+for legacy-GAVN at 5M params on this compute. The corrected numbers replace
+both the invalid scalar-q figures (63.4/67.9/58.9%) and the first-1,000-puzzle
+40.1% slice.
 
 `scripts/eval_gavn.py` now defaults to the distribution score, rejects
 untrained scalar heads, uses the official legal-move order, and applies the
