@@ -105,17 +105,32 @@ for legacy GAVN at 5M. The next preregistered candidate is CC-GAVN, a
 4,762,088-parameter candidate-conditioned geometric model; see
 `PROJECT-STATUS.md` for the complete, current result record.
 
+**Decision (2026-09-09): two-model endgame.** All further work focuses on
+exactly two models — CC-GAVN (parked, untouched until called) and the
+fixed-bias geometry arm trimmed to its true trained size. The full ablation
+matrix showed the other arms' distinguishing ingredients add nothing, and the
+geometry arm's `bias_mode="fixed"` never reads its dynamic projection: that
+module (~1.84M params) sits at random init with zero gradient. The trimmed
+`fixed-slim` variant (`notebooks/08_kaggle_train_gavn_slim.ipynb`) removes
+it — **3,461,377 trained parameters** instead of 5,304,577 — verified
+bitwise-identical in forward pass on the trained checkpoint. First gate:
+retrain the slim arm under the identical recipe and confirm it matches the
+5.30M arm (84.72% MATE / 43.88% puzzles) before any improvement variants.
+
 ---
 
 ## The plan (current)
 
-1. Freeze the measured Ruoss 9M/136M/270M baselines and evaluation protocol.
-2. Repair and fully validate the existing 5M distillation baseline.
-3. Train and ablate a 3–6M square-token Geometric Action-Value Network
-   (GAVN): chess-aware geometry, action factorization, value-distribution
-   distillation, scalar-Q and ranking losses.
-4. Run the best configurations across the three Kaggle accounts, with every
-   run resumable from Hugging Face.
+1. ~~Freeze the measured Ruoss 9M/136M/270M baselines and evaluation
+   protocol.~~ ✅ done
+2. ~~Repair and fully validate the existing 5M distillation baseline.~~
+   ✅ done (three completed arms, full frozen protocol, decisive negative)
+3. ~~Train and ablate a 3–6M square-token Geometric Action-Value Network
+   (GAVN).~~ ✅ done (ablation matrix closed 2026-09-09)
+4. Two-model focus: (a) trimmed fixed-bias geometry `fixed-slim` @ 3,461,377
+   params — replicate the 5.30M arm exactly, then improve one change at a
+   time (e.g. corrected v2 relation schema); (b) CC-GAVN @ 4,762,088 params
+   (parked until its turn; do not modify).
 5. Report the parameter/accuracy/latency frontier with confidence intervals,
    calibration, error overlap, and an ablation table suitable for a workshop
    paper.

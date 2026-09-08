@@ -42,7 +42,15 @@ TRAINER_CONFIGS = [
         "RUN_ID = 'account1-gavn-3m-seed0'": "RUN_ID = 'account3-gavn-5m-loss'",
         "DIM = 192": "DIM = 224",
         "'--w-q', '0.5'": "'--w-q', '0.0'"}),
+    ("softmaxsimp", "gavn-5m-geometry-slim", "08", "trimmed fixed-bias geometry (3.46M)", {}),
 ]
+
+# Notebook template filenames that do not follow the {NN}_kaggle_train_gavn
+# convention.
+TEMPLATE_OVERRIDES = {
+    "01": "01_kaggle_baseline_5m.ipynb",
+    "08": "08_kaggle_train_gavn_slim.ipynb",
+}
 
 
 def env_for_account(account: str) -> dict:
@@ -91,7 +99,10 @@ def main() -> None:
 
     failures = []
     for owner, slug, tmpl, desc, repls in configs:
-        template = ROOT / f"notebooks/{tmpl}_kaggle_{'baseline_5m' if tmpl == '01' else 'train_gavn'}.ipynb"
+        if tmpl in TEMPLATE_OVERRIDES:
+            template = ROOT / "notebooks" / TEMPLATE_OVERRIDES[tmpl]
+        else:
+            template = ROOT / f"notebooks/{tmpl}_kaggle_{'baseline_5m' if tmpl == '01' else 'train_gavn'}.ipynb"
         push_dir = Path(tempfile.mkdtemp(prefix=f"kaggle_push_{slug}_"))
         txt = template.read_text()
         for old, new in repls.items():

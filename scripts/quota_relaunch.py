@@ -21,7 +21,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-from launch_trainers import env_for_account, TRAINER_CONFIGS  # noqa: E402
+from launch_trainers import (env_for_account, TRAINER_CONFIGS,  # noqa: E402
+                             TEMPLATE_OVERRIDES)
 
 ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp"]
 LOG = ROOT / "logs" / "quota_relaunch.log"
@@ -84,7 +85,10 @@ def main() -> None:
                 import tempfile, json, shutil
                 cfg = next(c for c in TRAINER_CONFIGS if c[1] == slug)
                 _, _, tmpl, desc, repls = cfg
-                template = ROOT / f"notebooks/{tmpl}_kaggle_{'baseline_5m' if tmpl == '01' else 'train_gavn'}.ipynb"
+                if tmpl in TEMPLATE_OVERRIDES:
+                    template = ROOT / "notebooks" / TEMPLATE_OVERRIDES[tmpl]
+                else:
+                    template = ROOT / f"notebooks/{tmpl}_kaggle_{'baseline_5m' if tmpl == '01' else 'train_gavn'}.ipynb"
                 push_dir = Path(tempfile.mkdtemp(prefix=f"kaggle_push_{slug}_"))
                 txt = template.read_text()
                 for o, n in repls.items():

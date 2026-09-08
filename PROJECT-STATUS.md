@@ -146,6 +146,37 @@ position-disjoint development split, and full HF-resume checkpoints. It must
 beat the corrected GAVN by development selection and then pass the full frozen
 protocol before any frontier claim is made.
 
+## Two-model endgame + fixed-slim geometry arm (2026-09-09, user decision)
+
+Focus narrows to exactly two models: CC-GAVN (parked, do not modify) and the
+fixed-bias geometry arm trimmed to its true trained size. The ablation matrix
+justified this: the no-Q and dynamic-bias ingredients changed nothing, and the
+geometry arm's `bias_mode="fixed"` forward never reads the dynamic projection
+— those ~1.84M parameters sit at random init with zero gradient.
+
+- `scripts/train_gavn.py` gains `--bias-mode fixed-slim` (physically omits the
+  dynamic module; plain `fixed` still allocates it so legacy checkpoints load
+  strictly) and `--relation-schema {v2,legacy-v1}` for fresh runs (resume
+  auto-detects as before). Config checkpoints record both.
+- **Verified equivalence** on the trained geometry checkpoint
+  (`account3-gavn-5m-geometry/checkpoint-160000`): slim = 3,461,377 vs
+  full = 5,304,577 params; dropping exactly the 16 dead dynamic tensors and
+  loading strictly, the slim forward is **bitwise identical** (max |Δlogit| =
+  0.0 over 200 MATE positions × all legal moves, 6,447 pairs). The slim
+  trainer also passed an end-to-end CPU training smoke with real HF upload
+  and evals through `scripts/eval_gavn.py` unchanged.
+- `notebooks/08_kaggle_train_gavn_slim.ipynb` trains the slim arm with the
+  identical recipe (dim 224, 8 layers, legacy-v1 relations, w-q 0.5, seed 0,
+  160k steps, HF-resumable) as RUN_ID `account3-gavn-5m-geometry-slim`;
+  registered in `scripts/launch_trainers.py`
+  (`--only gavn-5m-geometry-slim`). Its smoke gate asserts the exact slim
+  parameter count before spending GPU.
+- **Replication gate:** the slim arm must first match the 5.30M arm (84.72%
+  MATE / 43.88% puzzles) on the frozen protocol before any improvement
+  variant (e.g. corrected v2 relation schema, which fixes the two dead
+  relation categories) is trained. All GPU accounts are quota-blocked until
+  2026-09-12T00:00Z.
+
 Still paused on HF (stranded by quota, resume ready):
 gavn-3m-seed0 @ 105k (best probe so far: 68% at 105k), gavn-3m-seed1 @ 110k,
 baseline @ 55k/120k. vedanggggg / vedangpandeyyy / softmaxsimp all 0.0h GPU

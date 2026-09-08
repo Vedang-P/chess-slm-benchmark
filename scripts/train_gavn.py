@@ -102,15 +102,23 @@ class GeometricBlock:
         self.ff1 = torch.nn.Linear(dim, dim * 2)
         self.ff2 = torch.nn.Linear(dim * 2, dim)
         self.rel = torch.nn.Parameter(torch.zeros(heads, relation_count))
-        self.dynamic = torch.nn.Linear(dim, heads * 128)
+        # fixed-slim physically omits the dynamic projection: the fixed mode
+        # never reads it, so the function is identical but ~1.84M parameters
+        # (at dim 224 / 8 layers) are no longer allocated untrained.  fixed
+        # keeps allocating it so legacy checkpoints load strictly.
+        if bias_mode != "fixed-slim":
+            self.dynamic = torch.nn.Linear(dim, heads * 128)
         self.heads = heads
         self.dim = dim
         self.dropout = torch.nn.Dropout(dropout)
         self.bias_mode = bias_mode
 
     def parameters(self):
-        for module in (self.norm1, self.qkv, self.proj, self.norm2,
-                       self.ff1, self.ff2, self.dynamic, self.dropout):
+        modules = [self.norm1, self.qkv, self.proj, self.norm2,
+                   self.ff1, self.ff2, self.dropout]
+        if hasattr(self, "dynamic"):
+            modules.append(self.dynamic)
+        for module in modules:
             yield from module.parameters()
         yield self.rel
 
@@ -124,7 +132,7 @@ class GeometricBlock:
         k = k.view(bsz, n, self.heads, head_dim).transpose(1, 2)
         v = v.view(bsz, n, self.heads, head_dim).transpose(1, 2)
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(head_dim)
-        if self.bias_mode in ("both", "fixed"):
+        if self.bias_mode in ("both", "fixed", "fixed-slim"):
             static = self.rel[:, rel_index].unsqueeze(0)
             scores = scores + static
         if self.bias_mode in ("both", "dynamic"):
@@ -159,12 +167,15 @@ class GAVN:
                 relation_count = int(np.max(relation_index)) + 1
                 for _ in range(layers):
                     block = GeometricBlock(torch, dim, heads, relation_count, bias_mode=bias_mode)
-                    self.blocks.append(torch.nn.ModuleDict({
+                    entries = {
                         "norm1": block.norm1, "qkv": block.qkv,
                         "proj": block.proj, "norm2": block.norm2,
                         "ff1": block.ff1, "ff2": block.ff2,
-                        "dynamic": block.dynamic, "dropout": block.dropout,
-                    }))
+                        "dropout": block.dropout,
+                    }
+                    if bias_mode != "fixed-slim":
+                        entries["dynamic"] = block.dynamic
+                    self.blocks.append(torch.nn.ModuleDict(entries))
                     self.register_parameter(f"rel_{_}", block.rel)
                 self.register_buffer("action_src", torch.tensor(action_src, dtype=torch.long))
                 self.register_buffer("action_dst", torch.tensor(action_dst, dtype=torch.long))
@@ -195,7 +206,7 @@ class GAVN:
                     v = v.view(-1, 64, heads, hd).transpose(1, 2)
                     scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(hd)
                     rel = getattr(self, f"rel_{i}")[:, self.relation_index]
-                    if self.bias_mode in ("both", "fixed"):
+                    if self.bias_mode in ("both", "fixed", "fixed-slim"):
                         scores = scores + rel.unsqueeze(0)
                     if self.bias_mode in ("both", "dynamic"):
                         dyn = block["dynamic"](h.mean(1)).view(-1, heads, 2, 64)
@@ -242,8 +253,15 @@ def parse_args():
     p.add_argument("--warmup", type=int, default=1000)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--bias-mode", default="both",
-                   choices=["both", "fixed", "dynamic", "none"],
-                   help="attention relation bias: static rel + dynamic, or ablations")
+                   choices=["both", "fixed", "fixed-slim", "dynamic", "none"],
+                   help="attention relation bias: static rel + dynamic, or\n"
+                        "ablations. fixed-slim = fixed with the unused dynamic\n"
+                        "module physically removed (~1.84M fewer parameters).")
+    p.add_argument("--relation-schema", default="v2", choices=["v2", "legacy-v1"],
+                   help="square-relation table for a FRESH run. legacy-v1 is the\n"
+                        "original eight-category table (two categories receive no\n"
+                        "gradient); v2 is the corrected seven-category table.\n"
+                        "Resume auto-detects the checkpoint's schema regardless.")
     p.add_argument("--w-dist", type=float, default=1.0)
     p.add_argument("--w-q", type=float, default=0.0,
                    help="Optional auxiliary scalar-Q regression. The canonical\n"
@@ -289,7 +307,9 @@ def main():
     # seven corrected live-geometry categories.  Resuming an old checkpoint
     # must recreate its original parameter shapes exactly.
     resume_config = None
-    active_relation_schema = "v2-live-knight-king-rank-file-diagonal-other"
+    active_relation_schema = ("legacy-v1-eight-relation-types"
+                              if args.relation_schema == "legacy-v1"
+                              else "v2-live-knight-king-rank-file-diagonal-other")
     if resume_dir is not None and (resume_dir / "config.json").exists():
         try:
             resume_config = json.loads(

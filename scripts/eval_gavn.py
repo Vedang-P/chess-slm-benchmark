@@ -69,7 +69,8 @@ def main():
                       src, dst, promo, candidate_relation_types()).to(device)
         architecture = "cc-gavn-v1"
     else:
-        legacy_relations = cfg.get("relation_schema") is None
+        legacy_relations = (cfg.get("relation_schema") is None
+                            or str(cfg.get("relation_schema")).startswith("legacy"))
         model = GAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
                      src, dst, promo, relation_types(legacy=legacy_relations),
                      bias_mode=cfg.get("bias_mode", "both")).to(device)
