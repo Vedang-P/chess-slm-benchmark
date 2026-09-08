@@ -27,12 +27,9 @@ from launch_trainers import env_for_account  # noqa: E402
 
 EVAL_CONFIGS = [
     # (owner, slug, hf RUN_ID prefix)
-    ("vedanggggg", "eval-gavn-3m-seed0", "account1-gavn-3m-seed0"),
-    ("vedanggggg", "eval-baseline-5m-seed0", "account1-baseline-5m-seed0"),
-    ("vedangpandeyyy", "eval-gavn-5m-seed0", "account2-gavn-5m-seed0"),
-    ("vedangpandeyyy", "eval-gavn-3m-seed1", "account2-gavn-3m-seed1"),
-    ("softmaxsimp", "eval-gavn-5m-geometry", "account3-gavn-5m-geometry"),
-    ("softmaxsimp", "eval-gavn-5m-loss", "account3-gavn-5m-loss"),
+    # Old-arm evals retired 2026-09-09 (their full frozen results are final in
+    # results/frozen-evals-2026-09-09/). Only the slim geometry arm remains.
+    ("softmaxsimp", "eval-gavn-5m-geometry-slim", "account3-gavn-5m-geometry-slim"),
 ]
 
 TEMPLATE = ROOT / "notebooks/03_kaggle_eval_frontier.ipynb"

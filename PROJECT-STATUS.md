@@ -177,10 +177,17 @@ geometry arm's `bias_mode="fixed"` forward never reads the dynamic projection
   relation categories) is trained. All GPU accounts are quota-blocked until
   2026-09-12T00:00Z.
 
-Still paused on HF (stranded by quota, resume ready):
-gavn-3m-seed0 @ 105k (best probe so far: 68% at 105k), gavn-3m-seed1 @ 110k,
-baseline @ 55k/120k. vedanggggg / vedangpandeyyy / softmaxsimp all 0.0h GPU
-until 2026-09-12T00:00Z.
+RETIRED (2026-09-09, user decision): the old arms and runs are no longer
+needed. The stranded checkpoints (gavn-3m-seed0 @ 105k, gavn-3m-seed1 @ 110k,
+baseline @ 55k/120k) will NOT be resumed; the completed arms' results are
+final. `launch_trainers.py` / `launch_evals.py` now register only the slim
+geometry arm. Old HF checkpoints are kept untouched for provenance (they
+underpin the reported results and the slim-equivalence verification); the
+stale local watchers (monitor_overnight, watch_runs, hf_poll) were stopped —
+its trainer auto-push was already permanently disarmed by
+`logs/trainer_push_state.json` (`pushed: true`). One monitor instance is
+supervised by the user's omp daemon and may respawn; it only polls and
+cannot relaunch anything.
 
 ## Wave-1 training status (2026-09-03)
 

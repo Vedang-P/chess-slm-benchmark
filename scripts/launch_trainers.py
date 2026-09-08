@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Push the 6 sharded training kernels to Kaggle (3 accounts, 2 each).
+"""Push training kernels to Kaggle.
 
-Replaces the monitor's one-shot auto-push: safe to re-run (each push creates
-a new kernel version). Per-kernel RUN_ID/DIM/SEED/BIAS_MODE/w-q replacements
-match scripts/monitor_overnight.py TRAINER_CONFIGS.
+2026-09-09 two-model decision: the old arms (baseline-5m, gavn-3m seed0/seed1,
+gavn-5m-seed0, gavn-5m-loss) are RETIRED and removed from this launcher —
+their results are final (see results/frozen-evals-2026-09-09/) and their
+stranded runs will not be resumed. The only registered trainer is the trimmed
+fixed-bias geometry arm; CC-GAVN launches via notebooks/07 manually when its
+turn comes.
 
 Usage:
   python3 scripts/launch_trainers.py --status   # just print kernel statuses
-  python3 scripts/launch_trainers.py            # push all 6
-  python3 scripts/launch_trainers.py --only gavn-5m-seed0
+  python3 scripts/launch_trainers.py            # push all registered
+  python3 scripts/launch_trainers.py --only gavn-5m-geometry-slim
 """
 from __future__ import annotations
 
@@ -26,22 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 TRAINER_CONFIGS = [
     # (owner, slug, template, description, {old: new} replacements)
-    ("vedanggggg", "baseline-5m-seed0", "01", "baseline 5M control (train_student)", {}),
-    ("vedanggggg", "gavn-3m-seed0", "02", "gavn 3M", {}),
-    ("vedangpandeyyy", "gavn-5m-seed0", "02", "gavn 5M", {
-        "RUN_ID = 'account1-gavn-3m-seed0'": "RUN_ID = 'account2-gavn-5m-seed0'",
-        "DIM = 192": "DIM = 224"}),
-    ("vedangpandeyyy", "gavn-3m-seed1", "02", "gavn 3M seed1", {
-        "RUN_ID = 'account1-gavn-3m-seed0'": "RUN_ID = 'account2-gavn-3m-seed1'",
-        "SEED = 0": "SEED = 1"}),
-    ("softmaxsimp", "gavn-5m-geometry", "02", "geometry ablation fixed", {
-        "RUN_ID = 'account1-gavn-3m-seed0'": "RUN_ID = 'account3-gavn-5m-geometry'",
-        "DIM = 192": "DIM = 224",
-        "BIAS_MODE = 'both'": "BIAS_MODE = 'fixed'"}),
-    ("softmaxsimp", "gavn-5m-loss", "02", "loss ablation no-q", {
-        "RUN_ID = 'account1-gavn-3m-seed0'": "RUN_ID = 'account3-gavn-5m-loss'",
-        "DIM = 192": "DIM = 224",
-        "'--w-q', '0.5'": "'--w-q', '0.0'"}),
+    # Old arms retired 2026-09-09; only the slim geometry arm remains.
     ("softmaxsimp", "gavn-5m-geometry-slim", "08", "trimmed fixed-bias geometry (3.46M)", {}),
 ]
 
