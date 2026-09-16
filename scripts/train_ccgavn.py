@@ -87,10 +87,14 @@ def development_mask(tokens: np.ndarray, modulus: int, fold: int) -> np.ndarray:
     """Stable position-level split, independent of candidate action and order."""
     if modulus < 2 or not 0 <= fold < modulus:
         raise ValueError("development split requires --dev-mod >= 2 and a valid --dev-fold")
-    # FNV-1a over all FEN tokens.  Using only position tokens prevents actions
-    # from the same position crossing the train/development boundary.
+    # FNV-1a over the position-defining tokens: side to move, 64 board
+    # squares, castling rights, and the en-passant field (columns 0..70).
+    # The two move clocks (columns 71..76) are excluded: the same position can
+    # appear with different clocks, and hashing them would let transpositions
+    # cross the train/development boundary.  Using only position tokens also
+    # prevents actions from the same position crossing that boundary.
     hashed = np.full(len(tokens), np.uint64(1469598103934665603), dtype=np.uint64)
-    for column in range(77):
+    for column in range(71):
         hashed ^= tokens[:, column].astype(np.uint64)
         hashed *= np.uint64(1099511628211)
     return (hashed % np.uint64(modulus)) == fold
@@ -280,7 +284,16 @@ def main():
     model = raw_model
     if device.type == "cuda" and torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(raw_model)
-    optimizer = torch.optim.AdamW(raw_model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=0.01)
+    # Matched optimization with the GAVN control: no weight decay on biases,
+    # LayerNorm parameters, embeddings, or relation biases.
+    no_decay, decay = [], []
+    for name, prm in raw_model.named_parameters():
+        (no_decay if prm.ndim <= 1 or "rel_" in name or "embed" in name
+         else decay).append(prm)
+    optimizer = torch.optim.AdamW(
+        [{"params": decay, "weight_decay": 0.01},
+         {"params": no_decay, "weight_decay": 0.0}],
+        lr=args.lr, betas=(0.9, 0.95))
     scaler = torch.amp.GradScaler("cuda", enabled=device.type == "cuda")
     start_step = 0
     if resume_dir is not None and (resume_dir / "state.pt").exists():
@@ -295,9 +308,24 @@ def main():
     print(f"[train] device={device} rows={manager.total:,} params={params:,}", flush=True)
 
     current_tag = None
-    tokens = actions = winprob = teacher = train_mask = dev_indices = None
+    tokens = actions = winprob = teacher = train_mask = None
     timer, started = UploadTimer(args.hf_upload_every), time.time()
     timer.mark()
+    # Fixed held-out development slice: the selected fold of the first shard.
+    # Every checkpoint is scored on the same positions, so dev loss is
+    # comparable across checkpoints instead of mixing per-shard folds.
+    dev_tag = manager.tags[0]
+    _dt, _da, _dwp, _dteach = manager.load(dev_tag, args.max_records)
+    _dev_rows = np.flatnonzero(development_mask(_dt, args.dev_mod, args.dev_fold))
+    if len(_dev_rows) == 0:
+        raise ValueError(f"development split selected no rows in shard {dev_tag}")
+    dev_tokens = np.asarray(_dt[_dev_rows])
+    dev_actions = np.asarray(_da[_dev_rows])
+    dev_teacher = np.asarray(_dteach[_dev_rows], dtype=np.float32)
+    dev_wp = np.asarray(_dwp[_dev_rows], dtype=np.float32)
+    dev_count = len(_dev_rows)
+    del _dt, _da, _dwp, _dteach, _dev_rows
+    print(f"[split] dev shard={dev_tag} rows={dev_count:,}", flush=True)
     for step in range(start_step, args.steps):
         tag = schedule[step]
         if tag != current_tag:
@@ -305,12 +333,17 @@ def main():
             current_tag = tag
             if teacher.shape != (len(tokens), 128):
                 raise ValueError(f"shard {tag}: invalid teacher shape {teacher.shape}")
-            dev_mask = development_mask(tokens, args.dev_mod, args.dev_fold)
-            train_mask = ~dev_mask
-            dev_indices = np.flatnonzero(dev_mask)
-            if not np.any(train_mask) or len(dev_indices) == 0:
-                raise ValueError(f"shard {tag}: development split left an empty partition")
-            print(f"[split] shard={tag} train={train_mask.mean():.3%} dev={dev_mask.mean():.3%}", flush=True)
+            # fp16 storage: normalize in fp32 or rounding noise false-trips the gate
+            log_norm = np.logaddexp.reduce(np.asarray(teacher[:1024], dtype=np.float32), axis=1)
+            if not np.allclose(log_norm, 0.0, atol=2e-3):
+                raise ValueError(f"shard {tag}: teacher matrix is not normalized log-probabilities")
+            if tag == dev_tag:
+                train_mask = ~development_mask(tokens, args.dev_mod, args.dev_fold)
+                if not np.any(train_mask):
+                    raise ValueError(f"shard {tag}: development split left no training rows")
+            else:
+                train_mask = np.ones(len(tokens), dtype=bool)
+            print(f"[split] shard={tag} train={train_mask.mean():.3%}", flush=True)
         idx = np_rng.integers(0, len(tokens), size=args.batch)
         # Rejection sampling preserves uniform sampling over the train split
         # without materializing a potentially multi-gigabyte index array.
@@ -360,15 +393,15 @@ def main():
             # This is a held-out, position-disjoint development diagnostic. It
             # is never used as a source of gradients and frozen MATE/puzzles
             # remain untouched until a configuration is selected.
-            dev_idx = np_rng.choice(dev_indices, size=args.dev_batch, replace=len(dev_indices) < args.dev_batch)
-            dev_tokens = torch.as_tensor(np.asarray(tokens[dev_idx], dtype=np.int64), dtype=torch.long, device=device)
-            dev_actions = torch.as_tensor(np.asarray(actions[dev_idx], dtype=np.int64), dtype=torch.long, device=device)
-            dev_teacher = torch.as_tensor(np.asarray(teacher[dev_idx], dtype=np.float32), dtype=torch.float32, device=device)
-            dev_wp = torch.as_tensor(np.asarray(winprob[dev_idx], dtype=np.float32), dtype=torch.float32, device=device)
+            dev_idx = np_rng.choice(dev_count, size=args.dev_batch, replace=dev_count < args.dev_batch)
+            dev_tokens_b = torch.as_tensor(dev_tokens[dev_idx], dtype=torch.long, device=device)
+            dev_actions_b = torch.as_tensor(dev_actions[dev_idx], dtype=torch.long, device=device)
+            dev_teacher_b = torch.as_tensor(dev_teacher[dev_idx], dtype=torch.float32, device=device)
+            dev_wp_b = torch.as_tensor(dev_wp[dev_idx], dtype=torch.float32, device=device)
             with torch.inference_mode(), torch.autocast(device_type=device.type, dtype=torch.float16, enabled=device.type == "cuda"):
-                dev_logp = torch.log_softmax(model(dev_tokens, dev_actions) / args.temperature, dim=-1)
-                dev_dist = -(torch.softmax(dev_teacher / args.temperature, dim=-1) * dev_logp).sum(-1).mean() * args.temperature**2
-                dev_bucket = torch.clamp(torch.ceil(dev_wp * 128).long() - 1, 0, 127)
+                dev_logp = torch.log_softmax(model(dev_tokens_b, dev_actions_b) / args.temperature, dim=-1)
+                dev_dist = -(torch.softmax(dev_teacher_b / args.temperature, dim=-1) * dev_logp).sum(-1).mean() * args.temperature**2
+                dev_bucket = torch.clamp(torch.ceil(dev_wp_b * 128).long() - 1, 0, 127)
                 dev_bins = torch.arange(128, device=device, dtype=torch.float32)[None]
                 dev_hard = torch.exp(-(dev_bins - dev_bucket[:, None]) ** 2 / (2 * 0.75 ** 2))
                 dev_hard = dev_hard / dev_hard.sum(-1, keepdim=True)
@@ -389,7 +422,7 @@ def main():
             (checkpoint / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
             metrics = {"step": step + 1, "train_loss": float(loss.detach()),
                        "dev_loss": float(dev_loss), "dev_dist": float(dev_dist), "dev_ce": float(dev_ce),
-                       "dev_tag": str(current_tag)}
+                       "dev_tag": str(dev_tag)}
             (checkpoint / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
             print(f"[dev] step={step+1} loss={dev_loss:.4f} dist={dev_dist:.4f} ce={dev_ce:.4f}", flush=True)
             upload_checkpoint(hf_client, args.hf_repo, outdir, args.hf_run, checkpoint.name)
