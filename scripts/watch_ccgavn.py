@@ -43,8 +43,12 @@ def ts() -> str:
 def log(msg: str) -> None:
     line = f"[{ts()}] {msg}"
     print(line, flush=True)
-    with open(LOG, "a") as f:
-        f.write(line + "\n")
+    try:
+        LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(LOG, "a") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass  # CI checkouts may not carry the log directory
 
 
 def final_checkpoint_on_hf() -> bool:
