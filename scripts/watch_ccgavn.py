@@ -9,10 +9,12 @@ checkpoint (step 160000) is present on HF, or when quota is exhausted (it
 then logs NEEDS_ACCOUNT_HOP and keeps waiting for the weekly refresh).
 
 Usage:
-  nohup python3 scripts/watch_ccgavn.py >/dev/null 2>&1 &
+  nohup python3 scripts/watch_ccgavn.py >/dev/null 2>&1 &   # local loop
+  python3 scripts/watch_ccgavn.py --once                    # one poll (CI)
 """
 from __future__ import annotations
 
+import argparse
 import subprocess
 import sys
 import time
@@ -66,32 +68,44 @@ def push() -> bool:
     return False
 
 
+def iterate(last_push: float) -> tuple[bool, float]:
+    try:
+        if final_checkpoint_on_hf():
+            log(f"DONE: {SLUG}/checkpoint-{FINAL_STEP} exists on HF")
+            return True, last_push
+        status = kernel_status(REF, OWNER)
+        quota = gpu_remaining(OWNER)
+        if any(k in status for k in ACTIVE):
+            log(f"status={status} quota={quota}h — running")
+        elif quota is None or quota <= 0:
+            log(f"status={status} quota={quota}h — NEEDS_ACCOUNT_HOP "
+                f"(no quota on {OWNER}; awaiting weekly refresh)")
+        elif time.time() - last_push < MIN_REPUSH_GAP_S:
+            log(f"status={status} quota={quota}h — session ended; "
+                f"re-push throttled ({int(time.time()-last_push)}s since last)")
+        else:
+            log(f"status={status} quota={quota}h — session ended; re-pushing")
+            if push():
+                last_push = time.time()
+            else:
+                last_push = time.time() - MIN_REPUSH_GAP_S + 120
+    except Exception as exc:  # transient API failures must not kill the watcher
+        log(f"poll error: {type(exc).__name__}: {exc}")
+    return False, last_push
+
+
 def main() -> None:
-    log(f"watching {REF} -> HF {SLUG}/checkpoint-{FINAL_STEP} (poll {POLL_S}s)")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--once", action="store_true",
+                    help="run one poll and exit (GitHub Actions mode)")
+    args = ap.parse_args()
+    log(f"watching {REF} -> HF {SLUG}/checkpoint-{FINAL_STEP} "
+        f"(mode={'once' if args.once else f'poll {POLL_S}s'})")
     last_push = 0.0
     while True:
-        try:
-            if final_checkpoint_on_hf():
-                log(f"DONE: {SLUG}/checkpoint-{FINAL_STEP} exists on HF; exiting")
-                return
-            status = kernel_status(REF, OWNER)
-            quota = gpu_remaining(OWNER)
-            if any(k in status for k in ACTIVE):
-                log(f"status={status} quota={quota}h — running")
-            elif quota is None or quota <= 0:
-                log(f"status={status} quota={quota}h — NEEDS_ACCOUNT_HOP "
-                    f"(no quota on {OWNER}; awaiting weekly refresh)")
-            elif time.time() - last_push < MIN_REPUSH_GAP_S:
-                log(f"status={status} quota={quota}h — session ended; "
-                    f"re-push throttled ({int(time.time()-last_push)}s since last)")
-            else:
-                log(f"status={status} quota={quota}h — session ended; re-pushing")
-                if push():
-                    last_push = time.time()
-                else:
-                    last_push = time.time() - MIN_REPUSH_GAP_S + 120
-        except Exception as exc:  # transient API failures must not kill the watcher
-            log(f"poll error: {type(exc).__name__}: {exc}")
+        done, last_push = iterate(last_push)
+        if done or args.once:
+            return
         time.sleep(POLL_S)
 
 

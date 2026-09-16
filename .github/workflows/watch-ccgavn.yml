@@ -1,0 +1,41 @@
+name: watch-ccgavn
+
+# Machine-independent watchdog for the single CC-GAVN training run.
+# Polls Kaggle every 20 minutes; re-pushes notebook 07 (resuming from the
+# latest HF checkpoint) whenever the session has ended before step 160000.
+# Stops being useful once ccgavn-5m-seed0/checkpoint-160000 exists on HF.
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: watch-ccgavn
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install --quiet "kaggle>=2,<3" huggingface_hub numpy
+      - name: Write Kaggle credential
+        env:
+          KAGGLE_ACCESS_TOKEN: ${{ secrets.KAGGLE_ACCESS_TOKEN }}
+        run: |
+          mkdir -p "$HOME/.kaggle"
+          printf '%s' "$KAGGLE_ACCESS_TOKEN" > "$HOME/.kaggle/access_token"
+          chmod 600 "$HOME/.kaggle/access_token"
+      - name: One watcher iteration
+        env:
+          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        run: python3 scripts/watch_ccgavn.py --once
