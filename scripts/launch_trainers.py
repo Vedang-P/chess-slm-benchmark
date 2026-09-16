@@ -4,9 +4,9 @@
 2026-09-09 two-model decision: the old arms (baseline-5m, gavn-3m seed0/seed1,
 gavn-5m-seed0, gavn-5m-loss) are RETIRED and removed from this launcher —
 their results are final (see results/frozen-evals-2026-09-09/) and their
-stranded runs will not be resumed. The only registered trainer is the trimmed
-fixed-bias geometry arm; CC-GAVN launches via notebooks/07 manually when its
-turn comes.
+stranded runs will not be resumed. Registered trainers are the two models of
+the endgame: the trimmed fixed-bias geometry arm (notebook 08) and CC-GAVN
+seed 0 (notebook 07).
 
 Usage:
   python3 scripts/launch_trainers.py --status   # just print kernel statuses
@@ -29,14 +29,16 @@ ROOT = Path(__file__).resolve().parent.parent
 
 TRAINER_CONFIGS = [
     # (owner, slug, template, description, {old: new} replacements)
-    # Old arms retired 2026-09-09; only the slim geometry arm remains.
+    # Old arms retired 2026-09-09; the two endgame models remain.
     ("softmaxsimp", "gavn-5m-geometry-slim", "08", "trimmed fixed-bias geometry (3.46M)", {}),
+    ("vedanggggg", "ccgavn-5m-seed0", "07", "candidate-conditioned geometry (4.76M)", {}),
 ]
 
 # Notebook template filenames that do not follow the {NN}_kaggle_train_gavn
 # convention.
 TEMPLATE_OVERRIDES = {
     "01": "01_kaggle_baseline_5m.ipynb",
+    "07": "07_kaggle_train_ccgavn.ipynb",
     "08": "08_kaggle_train_gavn_slim.ipynb",
 }
 
