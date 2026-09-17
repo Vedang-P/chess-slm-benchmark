@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Keep the single CC-GAVN run alive across Kaggle session deaths.
+"""Keep the CC-GAVN runs alive across Kaggle session deaths.
 
-User decision (2026-09-17): one model only, ccgavn-5m-seed0. Kaggle kernels
-die at ~12h or when the weekly GPU quota is exhausted. This watcher polls the
-kernel status and re-pushes notebook 07 through launch_trainers.py whenever
-the session has ended but the run has not finished. It exits when the final
-checkpoint (step 160000) is present on HF, or when quota is exhausted (it
-then logs NEEDS_ACCOUNT_HOP and keeps waiting for the weekly refresh).
+User decision (2026-09-17): one model only, CC-GAVN, currently two seeds:
+  vedangpandeyyy/ccgavn-5m-seed0   (resumed from checkpoint-90000)
+  shoumikmitra/ccgavn-5m-seed1     (fresh 160k run)
+Kaggle kernels die at ~12h or when the weekly GPU quota is exhausted. This
+watcher polls each kernel and re-pushes notebook 07 through launch_trainers.py
+whenever a session has ended but its run has not finished. It exits when all
+runs have written checkpoint-160000 to HF.
 
 Usage:
   nohup python3 scripts/watch_ccgavn.py >/dev/null 2>&1 &   # local loop
-  python3 scripts/watch_ccgavn.py --once                    # one poll (CI)
+  python3 scripts/watch_ccgavn.py --once                    # one pass (CI)
 """
 from __future__ import annotations
 
@@ -26,9 +27,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from launch_trainers import env_for_account  # noqa: E402
 from quota_relaunch import gpu_remaining, kernel_status  # noqa: E402
 
-OWNER = "vedangpandeyyy"  # moved 2026-09-17 to preempt a quota-conflicted account
-SLUG = "ccgavn-5m-seed0"
-REF = f"{OWNER}/{SLUG}"
+WATCHERS = [
+    ("vedangpandeyyy", "ccgavn-5m-seed0"),
+    ("shoumikmitra", "ccgavn-5m-seed1"),
+]
 FINAL_STEP = 160000
 LOG = ROOT / "logs" / "watch_ccgavn.log"
 POLL_S = 600
@@ -51,64 +53,70 @@ def log(msg: str) -> None:
         pass  # CI checkouts may not carry the log directory
 
 
-def final_checkpoint_on_hf() -> bool:
+def final_checkpoint_on_hf(slug: str) -> bool:
     from kaggle_checkpoint import hf_token
     from huggingface_hub import HfApi
     api = HfApi(token=hf_token(ROOT))
     files = api.list_repo_files(repo_id="vedangfake/chess-slm-benchmark",
                                 repo_type="dataset")
-    return f"{SLUG}/checkpoint-{FINAL_STEP}/config.json" in files
+    return f"{slug}/checkpoint-{FINAL_STEP}/config.json" in files
 
 
-def push() -> bool:
+def push(slug: str) -> bool:
     r = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "launch_trainers.py"), "--only", SLUG],
+        [sys.executable, str(ROOT / "scripts" / "launch_trainers.py"), "--only", slug],
         capture_output=True, text=True, timeout=600)
     out = (r.stdout + r.stderr).strip()
     if r.returncode == 0:
-        log(f"[push] OK {REF}: {out.splitlines()[-1] if out else ''}")
+        log(f"[push] OK {slug}: {out.splitlines()[-1] if out else ''}")
         return True
-    log(f"[push] FAIL {REF}: {out[-400:]}")
+    log(f"[push] FAIL {slug}: {out[-400:]}")
     return False
 
 
-def iterate(last_push: float) -> tuple[bool, float]:
-    try:
-        if final_checkpoint_on_hf():
-            log(f"DONE: {SLUG}/checkpoint-{FINAL_STEP} exists on HF")
-            return True, last_push
-        status = kernel_status(REF, OWNER)
-        quota = gpu_remaining(OWNER)
-        if any(k in status for k in ACTIVE):
-            log(f"status={status} quota={quota}h — running")
-        elif quota is None or quota <= 0:
-            log(f"status={status} quota={quota}h — NEEDS_ACCOUNT_HOP "
-                f"(no quota on {OWNER}; awaiting weekly refresh)")
-        elif time.time() - last_push < MIN_REPUSH_GAP_S:
-            log(f"status={status} quota={quota}h — session ended; "
-                f"re-push throttled ({int(time.time()-last_push)}s since last)")
-        else:
-            log(f"status={status} quota={quota}h — session ended; re-pushing")
-            if push():
-                last_push = time.time()
+def iterate(last_push: dict) -> tuple[bool, dict]:
+    all_done = True
+    for owner, slug in WATCHERS:
+        ref = f"{owner}/{slug}"
+        try:
+            if final_checkpoint_on_hf(slug):
+                log(f"DONE: {slug}/checkpoint-{FINAL_STEP} exists on HF")
+                continue
+            all_done = False
+            status = kernel_status(ref, owner)
+            quota = gpu_remaining(owner)
+            if any(k in status for k in ACTIVE):
+                log(f"{ref}: status={status} quota={quota}h — running")
+            elif quota is None or quota <= 0:
+                log(f"{ref}: status={status} quota={quota}h — NEEDS_ACCOUNT_HOP "
+                    f"(no quota on {owner}; awaiting weekly refresh)")
+            elif time.time() - last_push.get(slug, 0.0) < MIN_REPUSH_GAP_S:
+                log(f"{ref}: status={status} quota={quota}h — session ended; "
+                    f"re-push throttled ({int(time.time()-last_push.get(slug, 0.0))}s)")
             else:
-                last_push = time.time() - MIN_REPUSH_GAP_S + 120
-    except Exception as exc:  # transient API failures must not kill the watcher
-        log(f"poll error: {type(exc).__name__}: {exc}")
-    return False, last_push
+                log(f"{ref}: status={status} quota={quota}h — session ended; re-pushing")
+                if push(slug):
+                    last_push[slug] = time.time()
+                else:
+                    last_push[slug] = time.time() - MIN_REPUSH_GAP_S + 120
+        except Exception as exc:  # transient API failures must not kill the watcher
+            all_done = False
+            log(f"{ref}: poll error: {type(exc).__name__}: {exc}")
+    return all_done, last_push
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true",
-                    help="run one poll and exit (GitHub Actions mode)")
+                    help="run one pass and exit (GitHub Actions mode)")
     args = ap.parse_args()
-    log(f"watching {REF} -> HF {SLUG}/checkpoint-{FINAL_STEP} "
+    names = ", ".join(f"{o}/{s}" for o, s in WATCHERS)
+    log(f"watching [{names}] -> checkpoint-{FINAL_STEP} "
         f"(mode={'once' if args.once else f'poll {POLL_S}s'})")
-    last_push = 0.0
+    last_push: dict = {}
     while True:
-        done, last_push = iterate(last_push)
-        if done or args.once:
+        all_done, last_push = iterate(last_push)
+        if all_done or args.once:
             return
         time.sleep(POLL_S)
 
