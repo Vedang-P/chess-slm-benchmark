@@ -32,10 +32,6 @@ TRAINER_CONFIGS = [
     # Old arms retired 2026-09-09; the two endgame models remain.
     ("softmaxsimp", "gavn-5m-geometry-slim", "08", "trimmed fixed-bias geometry (3.46M)", {}),
     ("vedangpandeyyy", "ccgavn-5m-seed0", "07", "candidate-conditioned geometry (4.76M)", {}),
-    ("shoumikmitra", "ccgavn-5m-seed1", "07", "candidate-conditioned geometry, seed 1 (4.76M)",
-     {"RUN_ID = 'ccgavn-5m-seed0'": "RUN_ID = 'ccgavn-5m-seed1'",
-      "SEED, STEPS = 0, 160_000": "SEED, STEPS = 1, 160_000",
-      "'smoke-ccgavn-disposable'": "'smoke-ccgavn-seed1-disposable'"}),
 ]
 
 # Notebook template filenames that do not follow the {NN}_kaggle_train_gavn

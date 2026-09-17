@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Keep the CC-GAVN runs alive across Kaggle session deaths.
+"""Keep the CC-GAVN run alive across Kaggle session deaths.
 
-User decision (2026-09-17): one model only, CC-GAVN, currently two seeds:
-  vedangpandeyyy/ccgavn-5m-seed0   (resumed from checkpoint-90000)
-  shoumikmitra/ccgavn-5m-seed1     (fresh 160k run)
+User decision (2026-09-17): one model only, CC-GAVN (seed 0 on
+  vedangpandeyyy). seed 1 on shoumikmitra was stopped the same day: the
+  account was reassigned to space-ablation by user decision.
 Kaggle kernels die at ~12h or when the weekly GPU quota is exhausted. This
 watcher polls each kernel and re-pushes notebook 07 through launch_trainers.py
 whenever a session has ended but its run has not finished. It exits when all
@@ -29,7 +29,6 @@ from quota_relaunch import gpu_remaining, kernel_status  # noqa: E402
 
 WATCHERS = [
     ("vedangpandeyyy", "ccgavn-5m-seed0"),
-    ("shoumikmitra", "ccgavn-5m-seed1"),
 ]
 FINAL_STEP = 160000
 LOG = ROOT / "logs" / "watch_ccgavn.log"
