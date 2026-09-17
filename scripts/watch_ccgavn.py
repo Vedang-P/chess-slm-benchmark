@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from launch_trainers import env_for_account  # noqa: E402
 from quota_relaunch import gpu_remaining, kernel_status  # noqa: E402
 
-OWNER = "vedanggggg"
+OWNER = "vedangpandeyyy"  # moved 2026-09-17 to preempt a quota-conflicted account
 SLUG = "ccgavn-5m-seed0"
 REF = f"{OWNER}/{SLUG}"
 FINAL_STEP = 160000
