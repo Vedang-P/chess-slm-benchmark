@@ -60,8 +60,8 @@ def env_for_account(account: str) -> dict:
         (kdir / "access_token").unlink(missing_ok=True)
         env["HOME"] = str(fake_home)
         env["KAGGLE_CONFIG_DIR"] = str(kdir)
-    elif account == "softmaxsimp":
-        token = (Path.home() / ".kaggle/profiles/softmaxsimp/access_token").read_text().strip()
+    elif account in ("softmaxsimp", "samaltmannnn"):
+        token = (Path.home() / f".kaggle/profiles/{account}/access_token").read_text().strip()
         env["KAGGLE_API_TOKEN"] = token
     else:
         raise ValueError(account)
