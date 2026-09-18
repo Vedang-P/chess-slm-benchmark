@@ -86,7 +86,7 @@ def main() -> None:
         with torch.inference_mode():
             logits = model(torch.as_tensor(tokens, dtype=torch.long, device=device),
                            torch.as_tensor(action_ids, dtype=torch.long, device=device))
-            values = (torch.softmax(logits, -1) @ bucket_values).numpy()
+            values = (torch.softmax(logits, -1) @ bucket_values).detach().cpu().numpy()
         counters["evals"] += len(moves)
         out = []
         for move, value in zip(moves, values):
