@@ -38,6 +38,7 @@ from scripts.train_gavn import action_tables  # noqa: E402
 
 def main() -> None:
     import chess
+    import chess.pgn
     import pandas as pd
     import torch
 
@@ -62,14 +63,17 @@ def main() -> None:
     from scripts.train_ccgavn import CCGAVN, candidate_relation_types
     model = CCGAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
                    src, dst, promo, candidate_relation_types())
-    model.load_state_dict(torch.load(cp / "state.pt", map_location="cpu",
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.load_state_dict(torch.load(cp / "state.pt", map_location=device,
                                      weights_only=False)["model"])
+    model = model.to(device)
     model.eval()
+    print(f"[search] device={device}", flush=True)
     sys.path.insert(0, str(Path(args.sl_repo).parent))
     from searchless_chess.src import utils  # type: ignore
     from searchless_chess.src.engines import engine as engine_lib  # type: ignore
     bucket_values = torch.as_tensor(
-        np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32))
+        np.asarray(utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32), device=device)
 
     counters = {"evals": 0}
 
@@ -80,8 +84,8 @@ def main() -> None:
         action_ids = [utils.MOVE_TO_ACTION[m.uci()] for m in moves]
         tokens = np.repeat(tokenize_fen(board.fen())[None, :], len(moves), axis=0)
         with torch.inference_mode():
-            logits = model(torch.as_tensor(tokens, dtype=torch.long),
-                           torch.as_tensor(action_ids, dtype=torch.long))
+            logits = model(torch.as_tensor(tokens, dtype=torch.long, device=device),
+                           torch.as_tensor(action_ids, dtype=torch.long, device=device))
             values = (torch.softmax(logits, -1) @ bucket_values).numpy()
         counters["evals"] += len(moves)
         out = []
