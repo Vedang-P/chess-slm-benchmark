@@ -30,7 +30,7 @@ from quota_relaunch import gpu_remaining, kernel_status  # noqa: E402
 WATCHERS = [
     ("vedangpandeyyy", "ccgavn-5m-seed0"),
 ]
-FINAL_STEP = 160000
+FINAL_STEP = 320000
 LOG = ROOT / "logs" / "watch_ccgavn.log"
 POLL_S = 600
 MIN_REPUSH_GAP_S = 900

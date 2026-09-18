@@ -31,7 +31,9 @@ TRAINER_CONFIGS = [
     # (owner, slug, template, description, {old: new} replacements)
     # Old arms retired 2026-09-09; the two endgame models remain.
     ("softmaxsimp", "gavn-5m-geometry-slim", "08", "trimmed fixed-bias geometry (3.46M)", {}),
-    ("vedangpandeyyy", "ccgavn-5m-seed0", "07", "candidate-conditioned geometry (4.76M)", {}),
+    ("vedangpandeyyy", "ccgavn-5m-seed0", "07",
+     "candidate-conditioned geometry (4.76M), continued to 320k on the 10-shard mix",
+     {"SEED, STEPS = 0, 160_000": "SEED, STEPS = 0, 320_000"}),
 ]
 
 # Notebook template filenames that do not follow the {NN}_kaggle_train_gavn
