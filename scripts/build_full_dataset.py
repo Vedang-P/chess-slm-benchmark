@@ -25,6 +25,7 @@ Usage (Kaggle kernel, era stack installed by the notebook):
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import subprocess
@@ -164,6 +165,24 @@ def wait_for_disk(workdir: Path, need_gb: float, tag: str, tries: int = 30) -> N
         f"need {need_gb:.1f} GB)")
 
 
+class label_lock:
+    """Serialize the two slices' teacher-label phases: only one memmap write
+    at a time, so two ~6.7GB outputs can never hit the 20GB disk together."""
+
+    def __init__(self, workdir: Path):
+        self.path = workdir / ".label.lock"
+
+    def __enter__(self):
+        self.fh = open(self.path, "w")
+        print("[build] waiting for label lock", flush=True)
+        fcntl.flock(self.fh, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        fcntl.flock(self.fh, fcntl.LOCK_UN)
+        self.fh.close()
+
+
 def shard_done_on_hf(client, args, tag: str) -> bool:
     """Source of truth: both shard artifacts exist on HF (race-safe for
     parallel kernels; the manifest is advisory only)."""
@@ -206,6 +225,8 @@ def main() -> None:
         raw_bag = raw_dir / name
         npz_out = shard_dir / "train_set.npz"
         teacher_out = shard_dir / "teacher_logp.npy"
+        for stale in (npz_out, teacher_out):
+            stale.unlink(missing_ok=True)
         wait_for_disk(workdir, 3.0, tag)
 
         # 1. download raw shard (validated: truncated bags are rejected)
@@ -231,38 +252,38 @@ def main() -> None:
         print(f"[build] shard {tag}: parsed {n_parsed} rows", flush=True)
         raw_bag.unlink(missing_ok=True)
 
-        # 3. teacher label with the 9M
+        # 3-5. label + validate + upload under one lock: at most one slice's
+        # 7GB memmap exists at a time, so the shared 20GB disk can never fill.
         logp_gb = n_parsed * 128 * 2 / 1e9
-        wait_for_disk(workdir, logp_gb + 1.5, tag)
-        cmd = [sys.executable, "scripts/teacher_label.py",
-               "--npz", str(npz_out), "--checkpoint", args.teacher_checkpoint,
-               "--out", str(teacher_out), "--batch", str(args.teacher_batch),
-               "--dim", str(args.teacher_dim),
-               "--layers", str(args.teacher_layers),
-               "--heads", str(args.teacher_heads),
-               "--sl-repo", str(args.sl_repo)]
-        if args.max_shard_records:
-            cmd += ["--max-records", str(args.max_shard_records)]
-        print(f"[build] shard {tag}: teacher labeling (9M)", flush=True)
-        subprocess.run(cmd, check=True)
+        with label_lock(workdir):
+            wait_for_disk(workdir, logp_gb + 2.5, tag)
+            cmd = [sys.executable, "scripts/teacher_label.py",
+                   "--npz", str(npz_out), "--checkpoint", args.teacher_checkpoint,
+                   "--out", str(teacher_out), "--batch", str(args.teacher_batch),
+                   "--dim", str(args.teacher_dim),
+                   "--layers", str(args.teacher_layers),
+                   "--heads", str(args.teacher_heads),
+                   "--sl-repo", str(args.sl_repo)]
+            if args.max_shard_records:
+                cmd += ["--max-records", str(args.max_shard_records)]
+            print(f"[build] shard {tag}: teacher labeling (9M)", flush=True)
+            subprocess.run(cmd, check=True)
 
-        # 4. validate before upload
-        d = np.load(npz_out)
-        t = np.load(teacher_out, mmap_mode="r")
-        n = d["tokens"].shape[0]
-        assert t.shape == (n, 128), (t.shape, n)
-        norm = np.logaddexp.reduce(np.asarray(t[:1024]), axis=1)
-        assert np.allclose(norm, 0, atol=2e-3), "teacher not normalized"
-        rows = int(n)
-        print(f"[build] shard {tag}: validated {rows} rows", flush=True)
+            d = np.load(npz_out)
+            t = np.load(teacher_out, mmap_mode="r")
+            n = d["tokens"].shape[0]
+            assert t.shape == (n, 128), (t.shape, n)
+            norm = np.logaddexp.reduce(np.asarray(t[:1024]), axis=1)
+            assert np.allclose(norm, 0, atol=2e-3), "teacher not normalized"
+            rows = int(n)
+            print(f"[build] shard {tag}: validated {rows} rows", flush=True)
 
-        # 5. upload shard artifacts + manifest (persistence); free disk as we go
-        for fname in ("train_set.npz", "teacher_logp.npy"):
-            client.upload_file(
-                path_or_fileobj=str(shard_dir / fname),
-                path_in_repo=f"{args.hf_run.strip('/')}/shard-{tag}/{fname}",
-                repo_id=args.hf_repo, repo_type="dataset")
-            (shard_dir / fname).unlink(missing_ok=True)
+            for fname in ("train_set.npz", "teacher_logp.npy"):
+                client.upload_file(
+                    path_or_fileobj=str(shard_dir / fname),
+                    path_in_repo=f"{args.hf_run.strip('/')}/shard-{tag}/{fname}",
+                    repo_id=args.hf_repo, repo_type="dataset")
+                (shard_dir / fname).unlink(missing_ok=True)
         manifest.setdefault("shards", {})[tag] = {
             "rows": rows, "elapsed_s": round(time.time() - t0),
         }
