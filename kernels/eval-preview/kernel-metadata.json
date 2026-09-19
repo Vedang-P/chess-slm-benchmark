@@ -1,0 +1,16 @@
+{
+ "id": "vedangpandeyyy/eval-ccgavn-preview",
+ "title": "eval-ccgavn-preview",
+ "code_file": "eval_preview.py",
+ "language": "python",
+ "kernel_type": "script",
+ "is_private": true,
+ "enable_gpu": true,
+ "enable_tpu": false,
+ "enable_internet": true,
+ "dataset_sources": [
+  "vedangpandeyyy/chess-creds"
+ ],
+ "competition_sources": [],
+ "kernel_sources": []
+}
