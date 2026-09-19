@@ -65,6 +65,9 @@ def parse_args():
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
     p.add_argument("--hf-run", default="chessbench-full-build")
     p.add_argument("--resume-from-hf", action="store_true")
+    p.add_argument("--shard-list", default="",
+                   help="explicit comma-separated shard indices (overrides the range args); "
+                        "used for the largest-first 2B build")
     p.add_argument("--force-shard", type=int, default=-1,
                    help="process exactly this shard index even if done (repair)")
     return p.parse_args()
@@ -159,12 +162,16 @@ def main() -> None:
     shard_root = workdir / "shards"
     manifest = read_manifest(client, args)
     done = set(manifest.get("shards", {}))
-    print(f"[build] {len(done)}/{args.n_shards} shards in manifest, resume={args.resume_from_hf}",
-          flush=True)
-
-    end = args.shard_end if args.shard_end >= 0 else args.n_shards
-    targets = ([args.force_shard] if args.force_shard >= 0
-               else range(args.shard_start, min(end, args.n_shards)))
+    if args.shard_list:
+        targets = [int(x) for x in args.shard_list.split(",") if x.strip()]
+        total = len(targets)
+    else:
+        end = args.shard_end if args.shard_end >= 0 else args.n_shards
+        targets = ([args.force_shard] if args.force_shard >= 0
+                   else range(args.shard_start, min(end, args.n_shards)))
+        total = args.n_shards
+    print(f"[build] {len(done)} shards in manifest, {total} target shards, "
+          f"resume={args.resume_from_hf}", flush=True)
     for i in targets:
         name = shard_name(i)
         tag = f"{i:05d}"
@@ -242,8 +249,8 @@ def main() -> None:
         for fname in ("train_set.npz", "teacher_logp.npy"):
             (shard_dir / fname).unlink(missing_ok=True)
 
-    print(f"[build] all target shards complete: {len(done)}/{args.n_shards}",
-          flush=True)
+    print(f"[build] all target shards complete ({len(done)} in manifest, "
+          f"{total} targeted this run)", flush=True)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,35 @@
 # Project Status — Chess SLM Benchmark (2026-08-30)
 
+## 2026-09-19 — CC-GAVN 320k run + 2B scaling plan
+
+**Current run (automatic):** `ccgavn-5m-seed0` continued from checkpoint-160000
+to 320k steps on the 10-shard mix (8 ChessBench shards + 2 puzzle-curriculum
+shards, 14.9% of samples). Watcher (local + GitHub cron) resumes across Kaggle
+session limits; the auto-eval kernel (plus `ensure-eval-320k` CI safety net)
+runs the frozen protocol when checkpoint-320000 lands.
+
+**Frozen results so far (full sets, same protocol):**
+
+| model | MATE (4,000) | Puzzles (10K) |
+|---|---|---|
+| CC-GAVN @160k | 87.38% | 51.86% |
+| CC-GAVN @260k (preview) | 88.78% | 57.86% |
+| Ruoss 9M (target) | 98.72% | 86.13% |
+
+The +6.0pp puzzle jump at 260k is the tactic-curriculum effect; MATE +1.4pp.
+
+**Stockfish-anchored ladder (CC-GAVN @160k):** 1W 20D 19L vs UCI_Elo=1400
+(score 0.275, implied ~1230 anchored Elo); the ladder stopped early by the
+user's rule (do not climb when the low anchor is already lost). Artifacts:
+HF `elo-results/ccgavn-160k-stockfish-ladder/` (40 PGNs + results.json).
+
+**2B scaling plan (user-approved 2026-09-19):** see `SCALING-PLAN-2B.md`.
+Largest 108 remaining shards (~1.92B rows) are being teacher-labeled by four
+Kaggle accounts (2 slices each) with the same 9M-teacher recipe, then the same
+CC-GAVN recipe is retrained at 2.67 epochs. Rule: the fundamental recipe never
+changes to save compute; only engineering (streaming/parallelism) changes.
+
+
 Current working status. Keep updated as the direction changes.
 
 ## The objective
