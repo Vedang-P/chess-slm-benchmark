@@ -808,13 +808,17 @@ function renderCorpusDetail(){
   const tiles=all.map(t=>{const r=(c.rows_by_tag||{})[t];
     return '<span class="shardtile'+(done.has(t)?" done":"")+'" title="shard-'+esc(t)+" · "+(r?(r/1e6).toFixed(1):"?")+'M rows"></span>';}).join("");
   const fmtEta = eta!=null?(eta/60).toFixed(0)+" min":"—";
+  const remRows=(c.all_tags||[]).filter(x=>!done.has(x)).map(x=>({x:x,r:(c.rows_by_tag||{})[x]||0}))
+    .sort((a,b)=>b.r-a.r);
+  let acc=0,gateN=0;
+  for(const x of remRows){if(acc>=remaining)break;acc+=x.r;gateN++;}
   document.getElementById("corpus-detail").innerHTML=
     '<div class="card-head"><div class="card-title">corpus detail</div><div class="card-note mono">'+fmt(c.labeled_rows||0)+" / "+fmt(c.target_rows||0)+"</div></div>"+
     statRow([["rate",rate!=null?(rate/1000).toFixed(1)+"k rows/s":"—"],["eta to gate",fmtEta],
-      ["shards left",String(Math.max(0,(c.shards_planned||0)-(c.shards_done||0)))],
-      ["rows left",(remaining/1e6).toFixed(0)+"M"]])+
+      ["shards to gate","~"+String(gateN)+" of "+(c.shards_planned||0)+" planned"],
+      ["rows to gate",(remaining/1e6).toFixed(0)+"M"]])+
     '<div class="shardgrid">'+tiles+'</div>'+
-    '<div class="chart-note">largest-first order · green = labeled, dark = pending · hover for rows</div>';
+    '<div class="chart-note">largest-first order · green = labeled, dark = extra headroom beyond the 920M gate · hover for rows</div>';
 }
 function renderQuotaDetail(){
   const q=snap.quota||{};const keys=Object.keys(q);
