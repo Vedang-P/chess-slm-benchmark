@@ -196,6 +196,29 @@ async function refresh(env) {
     original_rows: 94_277_038,
   };
 
+  try {
+    const [slicesRes, assignRes] = await Promise.all([
+      fetch(`${RAW}/kernels/build-2b/shard_slices.json`),
+      fetch(`${RAW}/kernels/build-2b/slices.json`),
+    ]);
+    if (slicesRes.ok && assignRes.ok && planned.length) {
+      const sliceLists = await slicesRes.json();
+      const assign = await assignRes.json();
+      const ba = {};
+      for (const [acct, idxs] of Object.entries(assign)) {
+        let ps = 0, ds = 0, pr = 0, dr = 0;
+        for (const i of idxs) for (const shard of (sliceLists[i] || [])) {
+          ps += 1; pr += Number(rowsMap[shard] || 0);
+          if (paths.has(`chessbench-full-build/shard-${shard}/teacher_logp.npy`)) {
+            ds += 1; dr += Number(rowsMap[shard] || 0);
+          }
+        }
+        ba[acct] = { planned_shards: ps, done_shards: ds, planned_rows: pr, done_rows: dr };
+      }
+      snap.build_accounts = ba;
+    }
+  } catch { /* keep previous build_accounts */ }
+
   if (!snap.games.length) {
     for (const p of [...paths].filter((x) => /^elo-results\/.*\/games-\d+\.pgn$/.test(x)).slice(0, 2)) {
       const t = await hfFile(env, p);
@@ -329,6 +352,12 @@ h1,h2,p{margin:0}
 .status-name .state{font-size:13px;color:var(--ink-2)}
 .big{font-family:var(--mono);font-size:18px;font-weight:600}
 .status-sub{font-size:12px;color:var(--ink-3);margin-top:4px}
+.run-head{display:flex;align-items:baseline;gap:10px;min-width:0}
+.run-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.run-name .acct{color:var(--ink-3);font-weight:400}
+.run-state{color:var(--ink-3);font-size:12px;white-space:nowrap}
+.run-sum{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.run-bar{margin-top:7px}
 .phase-track{position:relative;height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden}
 .phase-fill{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:3px}
 .phase-fill.warm{background:var(--warn)}
@@ -531,34 +560,38 @@ function renderNotices(){
     ? ns.map(n=>'<div class="notice"><time>'+ago(n.t)+"</time><div>"+esc(n.text)+"</div></div>").join("")
     : '<div class="empty">no events recorded yet</div>';
 }
-function runBlock(key,status){
-  const cls=/RUNNING|QUEUED/i.test(status)?"var(--live)":(/DONE/i.test(status)?"var(--ok)":"var(--ink-3)");
+function runBlock(key,status,accounts){
+  const parts=key.split("/");
+  const acct=parts.length>1?parts[0]:"";const name=parts.length>1?parts.slice(1).join("/"):key;
+  const running=/RUNNING|QUEUED/i.test(status);
+  const state=running?"running":(/DONE/i.test(status)?"complete":(/error|Traceback|Error/i.test(status)?"failed":"idle"));
   const c=snap.curve||[];const last=c.length?c[c.length-1]:null;
-  let line="",sub="",stats="";
+  let sum="",bar="",stats="";
   if(key.indexOf("ccgavn-5m-seed0")>=0&&last){
     const pct=Math.min(100,last.step/1620000*100);
-    line='<div class="phase-track"><div class="phase-fill" style="width:'+pct.toFixed(1)+'%"></div></div>'+
-      '<div class="phase-text"><span>step '+fmt(last.step)+" / 1,620,000</span><span>"+pct.toFixed(1)+"%</span></div>";
-    sub="last checkpoint "+fmt(last.step)+" · dev "+(last.dev!=null?last.dev.toFixed(4):"—")+" · HF uploads every ~30 min";
+    sum="step "+fmt(last.step)+" / 1,620,000 · "+pct.toFixed(1)+"%";
+    bar='<div class="phase-track run-bar"><div class="phase-fill" style="width:'+pct.toFixed(1)+'%"></div></div>';
     stats=statRow([["train loss",last.train.toFixed(4)],["dev loss",last.dev!=null?last.dev.toFixed(4):"—"],
-      ["samples",(last.step*2048/1e9).toFixed(2)+"B"],["checkpoints",fmt(c.length)],
-      ["epochs · 94M corpus",(last.step*2048/94.3e6).toFixed(1)]]);
-  } else if(key.indexOf("build-2b")>=0){
-    const corpus=snap.corpus||{};const pct=Math.min(100,(corpus.labeled_rows||0)/(corpus.target_rows||1)*100);
-    line='<div class="phase-track"><div class="phase-fill warm" style="width:'+pct.toFixed(1)+'%"></div></div>'+
-      '<div class="phase-text"><span>'+((corpus.labeled_rows||0)/1e6).toFixed(0)+"M / "+((corpus.target_rows||0)/1e6).toFixed(0)+"M rows</span><span>"+pct.toFixed(1)+"%</span></div>";
-    sub="shards "+(corpus.shards_done||0)+" / "+(corpus.shards_planned||0);
+      ["samples",(last.step*2048/1e9).toFixed(2)+"B"],["epochs",(last.step*2048/94.3e6).toFixed(1)]]);
+  } else if(key.indexOf("build-2b")>=0&&accounts&&accounts[acct]){
+    const a=accounts[acct];const pct=a.planned_rows?Math.min(100,a.done_rows/a.planned_rows*100):0;
+    sum=a.done_shards+" / "+a.planned_shards+" shards · "+(a.done_rows/1e6).toFixed(0)+"M rows";
+    bar='<div class="phase-track run-bar"><div class="phase-fill warm" style="width:'+pct.toFixed(1)+'%"></div></div>';
   }
-  return '<div class="run"><div class="status-line">'+
-    '<span class="status-name"><span class="swatch" style="background:'+cls+'"></span><b>'+esc(key)+'</b><span class="state">'+esc(String(status).slice(0,42))+"</span></span>"+
-    (line?'<div class="big">'+(key.indexOf("ccgavn")>=0&&last?fmt(last.step):"")+"</div>":'<div class="big"></div>')+
-    "<div>"+line+"</div></div>"+(sub?'<div class="status-sub">'+sub+"</div>":"")+stats+"</div>";
+  return '<div class="run"><div class="run-head">'+
+    '<span class="swatch" style="background:'+(running?"var(--live)":"var(--ink-3)")+'"></span>'+
+    '<span class="run-name">'+(acct?'<span class="acct">'+esc(acct)+"/</span>":"")+esc(name)+"</span>"+
+    '<span class="run-state">'+state+"</span>"+
+    (sum?'<span class="run-sum">'+sum+"</span>":"")+"</div>"+bar+stats+"</div>";
 }
 function statRow(pairs){return '<div class="stat-row">'+pairs.map(p=>'<span class="stat"><span class="stat-label">'+p[0]+'</span><span class="stat-val">'+p[1]+"</span></span>").join("")+"</div>";}
 function renderRuns(){
-  const kernels=snap.kernels||[];const runs=snap.runs||{};const out=[];const seen={};
-  for(const k of kernels){const key=k.account+"/"+k.kernel;seen[key]=1;out.push(runBlock(key,k.status||"?"));}
-  for(const p in runs){if(seen[p])continue;out.push(runBlock(p,String(runs[p]).split("\\n")[0].slice(0,70)));}
+  const kernels=snap.kernels||[];const runs=snap.runs||{};const out=[];
+  const accounts=snap.build_accounts||{};
+  for(const k of kernels)out.push(runBlock(k.account+"/"+k.kernel,k.status||"?",accounts));
+  for(const p in runs){const txt=String(runs[p]);
+    if(txt.trim().indexOf("DONE")!==0)continue;   // old failure traces stay out of the run list
+    out.push(runBlock(p,txt.split("\\n")[0].slice(0,60),accounts));}
   document.getElementById("runs").innerHTML=out.length?out.join(""):'<div class="empty">no run data</div>';
 }
 function renderStages(){
