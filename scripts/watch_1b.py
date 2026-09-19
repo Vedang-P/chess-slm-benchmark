@@ -107,6 +107,20 @@ def main() -> None:
     if f"{RUN}/checkpoint-{FINAL_STEP}/config.json" in files:
         print("[1b] DONE: checkpoint-1,620,000 exists; nothing to do")
         return
+    # Readiness gate: never hold a GPU kernel while waiting. A Kaggle GPU
+    # kernel burns quota per wall-clock hour regardless of utilisation, so the
+    # continuation is only pushed once BOTH prerequisites exist.
+    if f"{RUN}/checkpoint-320000/config.json" not in files or \
+            f"{RUN}/checkpoint-320000/state.pt" not in files:
+        print("[1b] waiting: checkpoint-320000 not on HF yet; not pushing")
+        return
+    rows_map = json.loads((ROOT / "kernels" / "build-2b" / "shard_rows.json").read_text())
+    done_rows = sum(int(v) for k, v in rows_map.items()
+                    if f"chessbench-full-build/shard-{k}/teacher_logp.npy" in files)
+    if done_rows < 920_000_000:
+        print(f"[1b] waiting: corpus {done_rows/1e6:.0f}M / 920M new rows; not pushing")
+        return
+    print(f"[1b] prerequisites ready (corpus {done_rows/1e6:.0f}M new rows); arming training")
     for acct in ACCOUNTS:
         st = kernel_status(acct)
         if "RUNNING" in st or "QUEUED" in st or "PENDING" in st:
