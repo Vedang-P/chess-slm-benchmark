@@ -19,7 +19,7 @@ STEP = 320000
 CKPT = f"{RUN}/checkpoint-{STEP}"
 HF_REPO = "vedangfake/chess-slm-benchmark"
 PREFIX = f"eval-results/{RUN}-320k-frozen-2026-09-19"
-MAX_WAIT_S = 9.5 * 3600
+MAX_WAIT_S = 900
 
 WORK = Path("/kaggle/working")
 hits = sorted(glob.glob("/kaggle/input/**/hf_token.txt", recursive=True))

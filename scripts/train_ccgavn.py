@@ -18,6 +18,7 @@ import argparse
 import json
 import math
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -426,6 +427,13 @@ def main():
             (checkpoint / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
             print(f"[dev] step={step+1} loss={dev_loss:.4f} dist={dev_dist:.4f} ce={dev_ce:.4f}", flush=True)
             upload_checkpoint(hf_client, args.hf_repo, outdir, args.hf_run, checkpoint.name)
+            try:
+                local = sorted(outdir.glob("checkpoint-*"),
+                               key=lambda p: int(p.name.rsplit("-", 1)[-1]))
+                for old in local[:-2]:
+                    shutil.rmtree(old, ignore_errors=True)
+            except Exception as exc:
+                print(f"[ckpt] local prune skipped: {exc}", flush=True)
             timer.mark()
     print(f"[train] done in {(time.time()-started)/3600:.2f}h", flush=True)
 

@@ -29,6 +29,35 @@ def hf_files() -> set[str]:
     return set(api.list_repo_files(HF_REPO, repo_type="dataset"))
 
 
+def recent_crash_cooldown(seconds: int = 900) -> bool:
+    """True if the shared run-status file was written with a crash recently.
+    Prevents re-push storms while the fleet is crash-looping."""
+    import datetime
+    import requests
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from kaggle_checkpoint import hf_token
+    token = hf_token(ROOT)
+    r = requests.get(
+        f"https://huggingface.co/api/datasets/{HF_REPO}/commits/main",
+        params={"path": f"{PREFIX}/run-status.txt"},
+        headers={"Authorization": f"Bearer {token}"}, timeout=60)
+    if r.status_code != 200 or not r.json():
+        return False
+    c = r.json()[0]
+    age = (datetime.datetime.now(datetime.timezone.utc)
+           - datetime.datetime.fromisoformat(c["date"].replace("Z", "+00:00"))).total_seconds()
+    if age > seconds:
+        return False
+    txt = requests.get(
+        f"https://huggingface.co/datasets/{HF_REPO}/resolve/{c['id']}/{PREFIX}/run-status.txt",
+        headers={"Authorization": f"Bearer {token}"}, timeout=30)
+    crashed = txt.status_code == 200 and not txt.text.startswith(("DONE", "IN PROGRESS"))
+    if crashed:
+        print(f"[build-2b] run-status crash {age:.0f}s ago; cooling down "
+              f"({seconds}s) before any re-push")
+    return crashed
+
+
 def main() -> None:
     slices = [list(map(str, s)) for s in
               json.loads((ROOT / "kernels" / "build-2b" / "shard_slices.json").read_text())]
@@ -48,6 +77,8 @@ def main() -> None:
     if done_new_rows >= TARGET_NEW_ROWS:
         print(f"[build-2b] 1B target reached ({done_new_rows/1e6:.0f}M new rows labeled); "
               f"not pushing further")
+        return
+    if recent_crash_cooldown():
         return
     print(f"[build-2b] progress: {done_new_rows/1e6:.0f}M / {TARGET_NEW_ROWS/1e6:.0f}M new rows")
     for account, idxs in assign.items():

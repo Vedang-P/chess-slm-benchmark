@@ -1,9 +1,10 @@
-"""Wait for checkpoint-320000 + the 1B corpus, then continue CC-GAVN training.
+"""Wait briefly for checkpoint-320000 + the 1B corpus, then continue CC-GAVN.
 
 Continuation of `ccgavn-5m-seed0` from step 320,000 to 1,620,000 (+1.3M steps)
 on the expanded shard corpus (8 original ChessBench shards + 2 puzzle shards +
-the newly labeled 1B shards), identical recipe. The kernel waits (up to ~10h)
-until both prerequisites exist on HF, then runs the production trainer.
+the newly labeled 1B shards), identical recipe. The CI (scripts/watch_1b.py)
+gates the push on both prerequisites, so this kernel only waits ~15 min for a
+race, then exits (a GPU session must never idle on the quota clock).
 Persistence, resume, and re-push supervision are the usual ones.
 
 Pushed per account by scripts/watch_1b.py; kernel id is <account>/ccgavn-1b.
@@ -22,7 +23,7 @@ TOTAL_STEPS = 1_620_000
 TARGET_NEW_ROWS = 920_000_000
 HF_REPO = "vedangfake/chess-slm-benchmark"
 PREFIX = "chessbench-full-build"
-MAX_WAIT_S = 10 * 3600
+MAX_WAIT_S = 900
 
 WORK = Path("/kaggle/working")
 hits = sorted(glob.glob("/kaggle/input/**/hf_token.txt", recursive=True))

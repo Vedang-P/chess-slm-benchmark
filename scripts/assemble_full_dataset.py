@@ -42,9 +42,20 @@ def parse_args():
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
     p.add_argument("--hf-run", default="chessbench-full-build")
     p.add_argument("--out", default="/kaggle/working/chessbench-full")
+    p.add_argument("--min-free-gb", type=float, default=150.0,
+                   help="refuse to start below this free space (the merged "
+                        "memmaps reach hundreds of GB at 1B rows)")
     p.add_argument("--keep-shards", action="store_true",
                    help="do not delete downloaded shard pieces")
-    return p.parse_args()
+    args = p.parse_args()
+    import shutil as _shutil
+    free = _shutil.disk_usage(args.out if os.path.exists(args.out) else ".").free / 1e9
+    if free < args.min_free_gb:
+        raise SystemExit(
+            f"refusing to assemble: {free:.0f} GB free < --min-free-gb {args.min_free_gb:.0f}. "
+            "This step needs a large-disk machine (it writes tokens/teacher memmaps "
+            "for the whole corpus); the training pipeline streams shards instead.")
+    return args
 
 
 def write_array_stream(member, arr):
