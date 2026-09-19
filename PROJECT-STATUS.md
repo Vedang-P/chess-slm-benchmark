@@ -23,7 +23,10 @@ The +6.0pp puzzle jump at 260k is the tactic-curriculum effect; MATE +1.4pp.
 user's rule (do not climb when the low anchor is already lost). Artifacts:
 HF `elo-results/ccgavn-160k-stockfish-ladder/` (40 PGNs + results.json).
 
-**2B scaling plan (user-approved 2026-09-19):** see `SCALING-PLAN-2B.md`.
+**1B-first scaling plan (user decision 2026-09-19):** see `SCALING-PLAN-2B.md`.
+The labeling fleet runs on the largest 108 shards but stops once ~920M new
+rows (~1B total) are on HF; the CI watcher enforces the stop and never
+re-pushes after that. The 2B stage is deferred until 1B results justify it.
 Largest 108 remaining shards (~1.92B rows) are being teacher-labeled by four
 Kaggle accounts (2 slices each) with the same 9M-teacher recipe, then the same
 CC-GAVN recipe is retrained at 2.67 epochs. Rule: the fundamental recipe never
