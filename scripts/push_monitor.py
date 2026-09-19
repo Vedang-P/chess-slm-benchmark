@@ -30,11 +30,15 @@ KERNELS = [
 
 
 def load_env() -> dict:
-    env = {}
-    for line in (ROOT / ".env").read_text().splitlines():
-        if "=" in line and not line.strip().startswith("#"):
-            k, v = line.split("=", 1)
-            env[k.strip()] = v.strip()
+    """Real environment first (CI), then .env as a local convenience."""
+    import os
+    env = dict(os.environ)
+    envfile = ROOT / ".env"
+    if envfile.exists():
+        for line in envfile.read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                env.setdefault(k.strip(), v.strip())
     return env
 
 
