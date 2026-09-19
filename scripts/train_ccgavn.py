@@ -380,7 +380,7 @@ def main():
             loss = args.w_dist * dist + args.w_ce * ce
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(raw_model.parameters(), 1.0)
+        grad_norm = float(torch.nn.utils.clip_grad_norm_(raw_model.parameters(), 1.0))
         scaler.step(optimizer)
         scaler.update()
         if (step + 1) % 100 == 0:
@@ -423,7 +423,9 @@ def main():
             (checkpoint / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
             metrics = {"step": step + 1, "train_loss": float(loss.detach()),
                        "dev_loss": float(dev_loss), "dev_dist": float(dev_dist), "dev_ce": float(dev_ce),
-                       "dev_tag": str(dev_tag)}
+                       "dev_tag": str(dev_tag), "shard": str(current_tag),
+                       "lr": optimizer.param_groups[0]["lr"], "grad_norm": grad_norm,
+                       "samples_per_s": (step + 1 - start_step) * args.batch / max(1.0, time.time() - started)}
             (checkpoint / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
             print(f"[dev] step={step+1} loss={dev_loss:.4f} dist={dev_dist:.4f} ce={dev_ce:.4f}", flush=True)
             upload_checkpoint(hf_client, args.hf_repo, outdir, args.hf_run, checkpoint.name)
