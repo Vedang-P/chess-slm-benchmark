@@ -410,10 +410,10 @@ input[type=range]{width:130px;accent-color:var(--accent)}
 /* board + games */
 .boardwrap{display:grid;grid-template-columns:minmax(280px,440px) 1fr;gap:16px;align-items:start}
 @media(max-width:820px){.boardwrap{grid-template-columns:1fr}}
-.board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1/1;border:1px solid var(--border);border-radius:4px;overflow:hidden}
-.sq{display:flex;align-items:center;justify-content:center;padding:3.5%}
+.board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);aspect-ratio:1/1;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.sq{display:flex;align-items:center;justify-content:center;position:relative}
 .sq.l{background:var(--board-l)}.sq.d{background:var(--board-d)}
-.sq svg{width:100%;height:100%;display:block}
+.sq svg{width:86%;height:86%;display:block}
 .sq.from::after,.sq.to::after{content:"";position:absolute;inset:0;pointer-events:none}
 .sq{position:relative}
 .sq.from,.sq.to{box-shadow:inset 0 0 0 999px rgba(255,213,0,.32)}
@@ -718,7 +718,9 @@ function switchTab(name){
   ["overview","metrics","games"].forEach(t=>document.getElementById("tab-"+t).classList.toggle("hidden",t!==name));
   if(name!=="games")renderCharts();
 }
-document.querySelectorAll(".tabs a").forEach(a=>a.onclick=()=>switchTab(a.dataset.tab));
+document.querySelectorAll(".tabs a").forEach(a=>a.onclick=()=>{location.hash=a.dataset.tab;switchTab(a.dataset.tab);});
+const initTab=(location.hash||"").replace("#","");if(["overview","metrics","games"].includes(initTab))switchTab(initTab);
+window.addEventListener("hashchange",()=>{const t=(location.hash||"").replace("#","");if(["overview","metrics","games"].includes(t))switchTab(t);});
 document.getElementById("b-prev").onclick=()=>jump(ply-1);
 document.getElementById("b-next").onclick=()=>jump(ply+1);
 document.getElementById("b-first").onclick=()=>jump(0);
