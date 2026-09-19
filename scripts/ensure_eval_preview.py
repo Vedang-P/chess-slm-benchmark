@@ -18,7 +18,7 @@ HF_REPO = "vedangfake/chess-slm-benchmark"
 RUN = "ccgavn-5m-seed0"
 REF = "vedangpandeyyy/eval-ccgavn-preview"
 KERNEL_DIR = ROOT / "kernels" / "eval-preview"
-TARGETS = [400_000, 500_000, 600_000, 800_000, 1_000_000, 1_200_000, 1_400_000, 1_620_000]
+TARGETS = [400_000, 500_000, 600_000, 700_000, 800_000, 900_000, 1_000_000, 1_100_000, 1_200_000, 1_300_000, 1_400_000, 1_500_000, 1_600_000, 1_620_000]
 
 
 def out_prefix(step: int) -> str:

@@ -20,7 +20,7 @@ from pathlib import Path
 
 RUN = "ccgavn-5m-seed0"
 HF_REPO = "vedangfake/chess-slm-benchmark"
-TARGETS = [400_000, 500_000, 600_000, 800_000, 1_000_000, 1_200_000, 1_400_000, 1_620_000]
+TARGETS = [400_000, 500_000, 600_000, 700_000, 800_000, 900_000, 1_000_000, 1_100_000, 1_200_000, 1_300_000, 1_400_000, 1_500_000, 1_600_000, 1_620_000]
 BUDGET_S = 10.5 * 3600
 
 WORK = Path("/kaggle/working")
