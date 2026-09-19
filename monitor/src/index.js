@@ -580,10 +580,18 @@ function runBlock(key,status,accounts){
   const parts=key.split("/");
   const acct=parts.length>1?parts[0]:"";const name=parts.length>1?parts.slice(1).join("/"):key;
   const running=/RUNNING|QUEUED/i.test(status);
-  const state=running?"running":(/DONE/i.test(status)?"complete":(/error|Traceback|Error/i.test(status)?"failed":"idle"));
   const c=snap.curve||[];const last=c.length?c[c.length-1]:null;
+  const training=key.indexOf("ccgavn-5m-seed0")>=0;
+  const corpus=snap.corpus||{};
+  const gateOpen=(corpus.labeled_rows||0)>=(corpus.target_rows||920000000);
+  let state;
+  if(running)state="running";
+  else if(/DONE/i.test(status))state="complete";
+  else if(/error|Traceback|Error/i.test(status))state="failed";
+  else if(training&&last&&last.step<1620000)state=gateOpen?"resuming":"awaiting 1B corpus";
+  else state="idle";
   let sum="",bar="",stats="";
-  if(key.indexOf("ccgavn-5m-seed0")>=0&&last){
+  if(training&&last){
     const pct=Math.min(100,last.step/1620000*100);
     sum="step "+fmt(last.step)+" / 1,620,000 · "+pct.toFixed(1)+"%";
     bar='<div class="phase-track run-bar"><div class="phase-fill" style="width:'+pct.toFixed(1)+'%"></div></div>';
@@ -594,8 +602,9 @@ function runBlock(key,status,accounts){
     sum=a.done_shards+" / "+a.planned_shards+" shards · "+(a.done_rows/1e6).toFixed(0)+"M rows";
     bar='<div class="phase-track run-bar"><div class="phase-fill warm" style="width:'+pct.toFixed(1)+'%"></div></div>';
   }
+  const dot=running?"var(--live)":(state==="awaiting 1B corpus"?"var(--warn)":"var(--ink-3)");
   return '<div class="run"><div class="run-head">'+
-    '<span class="swatch" style="background:'+(running?"var(--live)":"var(--ink-3)")+'"></span>'+
+    '<span class="swatch" style="background:'+dot+'"></span>'+
     '<span class="run-name">'+(acct?'<span class="acct">'+esc(acct)+"/</span>":"")+esc(name)+"</span>"+
     '<span class="run-state">'+state+"</span>"+
     (sum?'<span class="run-sum">'+sum+"</span>":"")+"</div>"+bar+stats+"</div>";
