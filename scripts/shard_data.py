@@ -179,7 +179,7 @@ class ShardManager:
             return np.array([wanted[i % len(wanted)] for i in range(steps)])
         frac = rows / rows.sum()
         counts = np.maximum(1, np.round(frac * steps).astype(int))
-        counts[-1] += steps - counts.sum()
+        counts[int(np.argmax(counts))] += steps - counts.sum()
         order = rng.permutation(len(wanted))
         sched = np.concatenate([np.repeat(wanted[i], counts[i]) for i in order])
         return sched

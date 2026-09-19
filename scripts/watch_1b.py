@@ -74,7 +74,7 @@ def kernel_status(account: str) -> str:
         return f"status error: {exc}"
 
 
-def push(account: str) -> None:
+def push(account: str) -> tuple[int, str]:
     sys.path.insert(0, str(ROOT / "scripts"))
     from launch_trainers import env_for_account
     with tempfile.TemporaryDirectory(prefix=f"ccgavn1b_{account}_") as tmp:
@@ -97,8 +97,9 @@ def push(account: str) -> None:
         r = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "push",
                             "-p", str(tmpd)], env=env_for_account(account),
                            capture_output=True, text=True, timeout=300)
-        print(f"[1b] push {account}: rc={r.returncode} "
-              f"{(r.stdout + r.stderr).strip()[-200:]}", flush=True)
+        out = (r.stdout + r.stderr).strip()
+        print(f"[1b] push {account}: rc={r.returncode} {out[-200:]}", flush=True)
+        return r.returncode, out
 
 
 def main() -> None:
@@ -127,18 +128,25 @@ def main() -> None:
             print(f"[1b] {acct}/ccgavn-1b active: {st[-60:]}")
             return
     quotas = {a: gpu_quota(a) for a in ACCOUNTS}
-    best = max(quotas, key=lambda a: quotas[a])
-    print(f"[1b] no active kernel; quotas={quotas}; pushing on {best}")
-    if quotas[best] <= 0:
-        print("[1b] no account has GPU quota; waiting for the weekly refresh")
+    usable = {a: q for a, q in quotas.items() if q != 0}
+    if not usable:
+        print(f"[1b] quotas={quotas}; every account reports 0 GPU hours; "
+              "waiting for the weekly refresh")
         return
+    best = max(usable, key=usable.get)
+    print(f"[1b] no active kernel; quotas={quotas}; pushing on {best}")
     time.sleep(120)  # let a just-pushed kernel appear as RUNNING
     for acct in ACCOUNTS:
         st = kernel_status(acct)
         if "RUNNING" in st or "QUEUED" in st or "PENDING" in st:
             print(f"[1b] {acct}/ccgavn-1b became active; skipping push")
             return
-    push(best)
+    for acct in sorted(usable, key=usable.get, reverse=True):
+        rc, out = push(acct)
+        if "successfully pushed" in out.lower():
+            print(f"[1b] pushed on {acct}")
+            return
+        print(f"[1b] {acct} push failed; trying next account")
 
 
 if __name__ == "__main__":

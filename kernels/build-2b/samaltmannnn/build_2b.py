@@ -65,6 +65,15 @@ def run(slice_ids, gpu, workdir):
 
 p1 = run(SLICE_A, 0, "/kaggle/working/build-a")
 p2 = run(SLICE_B, 1, "/kaggle/working/build-b")
+while p1.poll() is None or p2.poll() is None:
+    if (p1.poll() not in (None, 0)) or (p2.poll() not in (None, 0)):
+        print("[2b] a slice exited non-zero; failing fast so CI re-pushes both", flush=True)
+        for p in (p1, p2):
+            if p.poll() is None:
+                p.terminate()
+        break
+    time.sleep(15)
 rc1 = p1.wait()
 rc2 = p2.wait()
 print(f"[2b] done rc={rc1},{rc2}", flush=True)
+sys.exit(1 if (rc1 or rc2) else 0)
