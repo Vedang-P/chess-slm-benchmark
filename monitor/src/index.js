@@ -404,6 +404,12 @@ input[type=range]{width:130px;accent-color:var(--accent)}
 .chart-card{padding:10px 12px 8px;display:flex;flex-direction:column;min-width:0}
 .chart-body{height:170px;margin-top:4px;position:relative}
 .chart-card.large .chart-body{height:300px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:980px){.grid2{grid-template-columns:1fr}}
+.chart-note{font-size:11px;color:var(--ink-3);margin-top:4px}
+.shardgrid{display:flex;flex-wrap:wrap;gap:3px;margin-top:10px}
+.shardtile{width:11px;height:11px;border-radius:2px;background:var(--surface-3);display:inline-block}
+.shardtile.done{background:var(--ok)}
 .chart-legend{display:flex;flex-wrap:wrap;gap:3px 14px;font-size:12px;color:var(--ink-2);padding-bottom:6px}
 .legend-item{display:inline-flex;align-items:center;gap:6px}
 .swatch{width:7px;height:7px;border-radius:2px}
@@ -504,7 +510,33 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
         </div>
       </div>
       <div class="chart-body"><canvas id="c-loss2"></canvas></div>
+      <div class="chart-note">shaded bands = steps trained on the puzzle shards (P000/P001) — dev dips there are transient distribution drift, not regressions</div>
     </div>
+  </div>
+  <div class="section grid2">
+    <div class="card chart-card">
+      <div class="card-head"><div class="card-title">accuracy vs step <span class="muted">frozen + preview evals</span></div></div>
+      <div class="chart-body"><canvas id="c-acc"></canvas></div>
+    </div>
+    <div class="card chart-card">
+      <div class="card-head"><div class="card-title">dev components <span class="muted">distribution / cross-entropy</span></div></div>
+      <div class="chart-body"><canvas id="c-comp"></canvas></div>
+    </div>
+  </div>
+  <div class="section grid2">
+    <div class="card chart-card">
+      <div class="card-head"><div class="card-title">throughput <span class="muted">samples/s</span></div></div>
+      <div class="chart-body"><canvas id="c-thr"></canvas></div>
+      <div class="chart-note" id="thr-note"></div>
+    </div>
+    <div class="card" id="corpus-detail"></div>
+  </div>
+  <div class="section grid2">
+    <div class="card">
+      <div class="card-head"><div class="card-title">eval history</div><div class="card-note">Δ vs previous · gap to 9M teacher</div></div>
+      <table class="tbl" id="evaltable"></table>
+    </div>
+    <div class="card" id="quota-detail"></div>
   </div>
   <div class="section">
     <div class="card"><div class="card-head"><div class="card-title">checkpoints</div><div class="card-note" id="ckpt-note"></div></div><table class="tbl" id="ckpttable"></table></div>
@@ -662,11 +694,27 @@ function drawBar(id,key,color){
         y:{suggestedMin:40,suggestedMax:100,ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#242423"}}}}});
 }
 function smoothArr(a,w){if(!w)return a;const al=1-w;let l=null;return a.map(v=>{l=l==null?v:al*v+(1-al)*l;return l;});}
+const puzzleShade={id:"puzzleShade",beforeDatasetsDraw(chart){
+  const c=snap.curve||[];const x=chart.scales.x;const a=chart.chartArea;
+  if(!x||!a)return;
+  const runs=[];let cur=null;
+  for(const p of c){const isP=String(p.shard||"").startsWith("P");
+    if(isP){if(!cur)cur={s:p.step,e:p.step};else cur.e=p.step;}
+    else if(cur){runs.push(cur);cur=null;}}
+  if(cur)runs.push(cur);
+  if(!runs.length)return;
+  const ctx=chart.ctx;ctx.save();ctx.fillStyle="rgba(201,162,39,.13)";
+  for(const r of runs){const xa=x.getPixelForValue(r.s),xb=x.getPixelForValue(r.e);
+    if(!isFinite(xa)||!isFinite(xb))continue;
+    const w=Math.max(2,xb-xa);
+    ctx.fillStyle="rgba(201,162,39,.13)";ctx.fillRect(xa,a.top,w,a.bottom-a.top);
+    ctx.fillStyle="rgba(201,162,39,.45)";ctx.fillRect(xa,a.top,w,1.5);}
+  ctx.restore();}};
 function drawLoss(id,log,sm){
   const el=document.getElementById(id);if(!el||!window.Chart)return;
   const c=snap.curve||[];
   const tr=smoothArr(c.map(p=>p.train),sm);
-  const dv=smoothArr(c.filter(p=>p.dev!=null).map(p=>p.dev),sm);
+  const dv=smoothArr(c.map(p=>p.dev==null?null:p.dev),sm);
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart(el,{type:"line",data:{labels:c.map(p=>p.step),datasets:[
     {label:"train",data:tr,borderColor:"#3987e5",backgroundColor:"rgba(57,135,229,.08)",pointRadius:0,borderWidth:1.5,fill:true},
@@ -674,7 +722,111 @@ function drawLoss(id,log,sm){
     options:{animation:false,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
       plugins:{legend:{labels:{color:"#a3a3a0",boxWidth:8,font:{size:11}}}},
       scales:{x:{ticks:{color:"#6f6f6c",maxTicksLimit:8,font:{size:10}},grid:{color:"#1a1a1a"}},
-        y:{type:log?"logarithmic":"linear",ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#242423"}}}}});
+        y:{type:log?"logarithmic":"linear",ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#242423"}}}},
+    plugins:[puzzleShade]});
+}
+/* metrics tab extras */
+function fmtStep(s){return s>=1e6?(s/1e6).toFixed(2)+"M":(s/1000).toFixed(0)+"k";}
+function evalSeries(){
+  const rows=[];
+  for(const p in (snap.evals||{})){const s=snap.evals[p];
+    const tail=String(s.checkpoint||"").split("checkpoint-")[1];
+    const step=tail?parseInt(tail,10):NaN;
+    if(!isFinite(step))continue;
+    const mate=s.mate&&s.mate[0]?s.mate[0].pct:null;const puz=s.puzzles&&s.puzzles[0]?s.puzzles[0].pct:null;
+    rows.push({step:step,mate:mate,puz:puz,dir:p});}
+  rows.sort((a,b)=>a.step-b.step);return rows;
+}
+function drawAccuracy(){
+  const el=document.getElementById("c-acc");if(!el||!window.Chart)return;
+  const rows=evalSeries();const refs=snap.reference||[];
+  const t=refs.filter(r=>r.ref)[0]||{};
+  if(charts["c-acc"])charts["c-acc"].destroy();
+  charts["c-acc"]=new Chart(el,{type:"line",data:{labels:rows.map(r=>fmtStep(r.step)),datasets:[
+    {label:"MATE",data:rows.map(r=>r.mate),borderColor:"#3987e5",backgroundColor:"#3987e5",pointRadius:3,borderWidth:2,tension:.3},
+    {label:"puzzles",data:rows.map(r=>r.puz),borderColor:"#3fa66a",backgroundColor:"#3fa66a",pointRadius:3,borderWidth:2,tension:.3},
+    {label:"9M teacher MATE",data:rows.map(()=>t.mate),borderColor:"#6f6f6c",borderDash:[4,4],pointRadius:0,borderWidth:1},
+    {label:"9M teacher puzzles",data:rows.map(()=>t.puzzles),borderColor:"#6f6f6c",borderDash:[4,4],pointRadius:0,borderWidth:1}]},
+    options:{animation:false,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:"#a3a3a0",boxWidth:8,font:{size:10}}}},
+      scales:{x:{ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#1a1a1a"}},
+        y:{suggestedMin:40,suggestedMax:100,ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#242423"}}}}});
+}
+function drawComponents(){
+  const el=document.getElementById("c-comp");if(!el||!window.Chart)return;
+  const c=snap.curve||[];
+  if(charts["c-comp"])charts["c-comp"].destroy();
+  charts["c-comp"]=new Chart(el,{type:"line",data:{labels:c.map(p=>p.step),datasets:[
+    {label:"dev dist",data:c.map(p=>p.dev_dist==null?null:p.dev_dist),borderColor:"#3987e5",pointRadius:0,borderWidth:1.5,spanGaps:true},
+    {label:"dev ce",data:c.map(p=>p.dev_ce==null?null:p.dev_ce),borderColor:"#c9a227",pointRadius:0,borderWidth:1.5,spanGaps:true}]},
+    options:{animation:false,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{labels:{color:"#a3a3a0",boxWidth:8,font:{size:10}}}},
+      scales:{x:{ticks:{color:"#6f6f6c",maxTicksLimit:8,font:{size:10}},grid:{color:"#1a1a1a"}},
+        y:{ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#242423"}}}}});
+}
+function drawThroughput(){
+  const el=document.getElementById("c-thr");if(!el||!window.Chart)return;
+  const c=(snap.curve||[]).filter(p=>p.samples_per_s!=null);
+  const note=document.getElementById("thr-note");
+  if(!c.length){if(charts["c-thr"]){charts["c-thr"].destroy();delete charts["c-thr"];}el.style.display="none";if(note)note.textContent="logged from the 1B continuation phase onward";return;}
+  el.style.display="";if(note)note.textContent="cumulative average for the session at each checkpoint";
+  if(charts["c-thr"])charts["c-thr"].destroy();
+  charts["c-thr"]=new Chart(el,{type:"line",data:{labels:c.map(p=>p.step),datasets:[
+    {label:"samples/s",data:c.map(p=>p.samples_per_s),borderColor:"#3fa66a",pointRadius:0,borderWidth:1.5,fill:true,backgroundColor:"rgba(63,166,106,.08)"}]},
+    options:{animation:false,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:"#6f6f6c",maxTicksLimit:8,font:{size:10}},grid:{color:"#1a1a1a"}},
+        y:{ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#242423"}}}}});
+}
+function renderEvalTable(){
+  const rows=evalSeries();const refs=snap.reference||[];const t=refs.filter(r=>r.ref)[0]||{};
+  const head='<thead><tr><th>step</th><th>MATE</th><th>Δ</th><th>puzzles</th><th>Δ</th><th>gap→teacher</th><th></th></tr></thead>';
+  let body="";
+  rows.forEach((r,i)=>{const prev=rows[i-1];
+    const dm=(prev&&prev.mate!=null&&r.mate!=null)?r.mate-prev.mate:null;
+    const dp=(prev&&prev.puz!=null&&r.puz!=null)?r.puz-prev.puz:null;
+    const gap=(t.puzzles!=null&&r.puz!=null)?r.puz-t.puzzles:null;
+    const dcls=d=>d==null?"":(d>0?"delta good":(d<0?"delta bad":""));
+    const df=(d)=>d==null?"—":(d>0?"+":"")+d.toFixed(2);
+    const href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/"+String(r.dir||"").replace("/eval-summary.json","");
+    body+="<tr><td>"+fmt(r.step)+"</td><td>"+(r.mate!=null?r.mate.toFixed(2)+"%":"—")+
+      '</td><td class="'+dcls(dm)+'">'+df(dm)+"</td><td>"+(r.puz!=null?r.puz.toFixed(2)+"%":"—")+
+      '</td><td class="'+dcls(dp)+'">'+df(dp)+"</td><td>"+(gap!=null?gap.toFixed(2):"—")+
+      '</td><td><a class="dim" href="'+href+'" target="_blank" rel="noopener">hf ↗</a></td></tr>';});
+  document.getElementById("evaltable").innerHTML=head+"<tbody>"+body+"</tbody>";
+}
+let _prevCorpus=null;
+function renderCorpusDetail(){
+  const c=snap.corpus||{};const now=Date.now();
+  let rate=null;
+  if(_prevCorpus&&c.labeled_rows!=null){const dt=(now-_prevCorpus.t)/1000;
+    if(dt>30)rate=(c.labeled_rows-_prevCorpus.rows)/dt;}
+  if(c.labeled_rows!=null)_prevCorpus={t:now,rows:c.labeled_rows};
+  const remaining=Math.max(0,(c.target_rows||920000000)-(c.labeled_rows||0));
+  const eta=(rate&&rate>0)?remaining/rate:null;
+  const done=new Set(c.done_tags||[]);const all=c.all_tags||[];
+  const tiles=all.map(t=>{const r=(c.rows_by_tag||{})[t];
+    return '<span class="shardtile'+(done.has(t)?" done":"")+'" title="shard-'+esc(t)+" · "+(r?(r/1e6).toFixed(1):"?")+'M rows"></span>';}).join("");
+  const fmtEta = eta!=null?(eta/60).toFixed(0)+" min":"—";
+  document.getElementById("corpus-detail").innerHTML=
+    '<div class="card-head"><div class="card-title">corpus detail</div><div class="card-note mono">'+fmt(c.labeled_rows||0)+" / "+fmt(c.target_rows||0)+"</div></div>"+
+    statRow([["rate",rate!=null?(rate/1000).toFixed(1)+"k rows/s":"—"],["eta to gate",fmtEta],
+      ["shards left",String(Math.max(0,(c.shards_planned||0)-(c.shards_done||0)))],
+      ["rows left",(remaining/1e6).toFixed(0)+"M"]])+
+    '<div class="shardgrid">'+tiles+'</div>'+
+    '<div class="chart-note">largest-first order · green = labeled, dark = pending · hover for rows</div>';
+}
+function renderQuotaDetail(){
+  const q=snap.quota||{};const keys=Object.keys(q);
+  const total=keys.reduce((a,k)=>a+(parseFloat(q[k])||0),0);
+  const reset=new Date("2026-09-26T00:00:00Z");
+  const hrsLeft=Math.max(0,(reset-Date.now())/36e5);
+  const days=Math.floor(hrsLeft/24),hh=Math.floor(hrsLeft%24);
+  document.getElementById("quota-detail").innerHTML=
+    '<div class="card-head"><div class="card-title">gpu budget</div><div class="card-note mono">reset in '+days+"d "+hh+'h</div></div>'+
+    statRow([["total left",total.toFixed(1)+"h"],["accounts",String(keys.length)],["avg",(total/Math.max(1,keys.length)).toFixed(1)+"h"]])+
+    '<table class="tbl"><thead><tr><th>account</th><th>gpu left</th></tr></thead><tbody>'+
+    keys.map(a=>"<tr><td>"+esc(a)+'</td><td class="mono">'+esc(q[a])+"h</td></tr>").join("")+"</tbody></table>";
 }
 function renderCharts(){
   const rows=evalRows();
@@ -686,6 +838,7 @@ function renderCharts(){
   document.getElementById("loss-top").textContent=last?(last.train.toFixed(3)+" / "+(last.dev!=null?last.dev.toFixed(3):"—")):"—";
   drawBar("c-mate","mate","#3987e5");drawBar("c-puz","puz","#3987e5");
   drawLoss("c-loss",false,0);drawLoss("c-loss2",logScale,smooth);
+  drawAccuracy();drawComponents();drawThroughput();renderEvalTable();renderCorpusDetail();renderQuotaDetail();
 }
 function renderCkpt(){
   const c=(snap.curve||[]).slice().reverse();

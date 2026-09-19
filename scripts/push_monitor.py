@@ -47,19 +47,45 @@ def hf_files(api) -> list[str]:
     return api.list_repo_files(HF_REPO, repo_type="dataset")
 
 
+def stage1_schedule():
+    """Reproduce the deterministic step->shard schedule of the 0..320k phase
+    (seed 0, the 10-shard mix) so the chart can shade puzzle-shard blocks for
+    checkpoints produced before the trainer logged its shard tag."""
+    import numpy as np
+    rows_cfg = json.loads((ROOT / "configs" / "chessbench_rows.json").read_text())
+    tags = list(rows_cfg)
+    rows = np.array([rows_cfg[t] for t in tags], dtype=np.float64)
+    steps = 320000
+    rng = np.random.default_rng(0)
+    frac = rows / rows.sum()
+    counts = np.maximum(1, np.round(frac * steps).astype(int))
+    counts[int(np.argmax(counts))] += steps - counts.sum()
+    order = rng.permutation(len(tags))
+    return np.concatenate([np.repeat(tags[i], counts[i]) for i in order])
+
+
 def build_curve(api, token: str) -> list[dict]:
     from huggingface_hub import hf_hub_download
     files = hf_files(api)
     steps = sorted({int(m.group(1)) for f in files
                     if (m := re.search(rf"{RUN}/checkpoint-(\d+)/metrics\.json$", f))})
+    sched = stage1_schedule()
     curve = []
     for s in steps:
         try:
             p = hf_hub_download(HF_REPO, f"{RUN}/checkpoint-{s}/metrics.json",
                                 repo_type="dataset", token=token)
             m = json.loads(Path(p).read_text())
-            curve.append({"step": m.get("step", s), "train": m.get("train_loss"),
-                          "dev": m.get("dev_loss")})
+            point = {"step": m.get("step", s), "train": m.get("train_loss"),
+                     "dev": m.get("dev_loss")}
+            for k in ("dev_dist", "dev_ce", "lr", "grad_norm", "samples_per_s", "shard"):
+                if m.get(k) is not None:
+                    point[k] = m[k]
+            if "shard" not in point:
+                idx = int(point["step"]) - 1
+                if 0 <= idx < len(sched):
+                    point["shard"] = str(sched[idx])
+            curve.append(point)
         except Exception:
             continue
     return curve
@@ -84,7 +110,10 @@ def build_corpus(api, files: list[str]) -> dict:
     labeled = sum(int(rows_map[s]) for s in done)
     return {"target_rows": 920_000_000, "labeled_rows": labeled,
             "shards_planned": len(rows_map), "shards_done": len(done),
-            "original_rows": 94_277_038}
+            "original_rows": 94_277_038,
+            "done_tags": sorted(done),
+            "all_tags": sorted(rows_map),
+            "rows_by_tag": {t: int(rows_map[t]) for t in sorted(rows_map)}}
 
 
 def build_games(token: str, limit: int = 6) -> list[dict]:
