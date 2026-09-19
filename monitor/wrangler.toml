@@ -1,0 +1,13 @@
+name = "chess-slm-monitor"
+main = "src/index.js"
+compatibility_date = "2026-09-19"
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[[kv_namespaces]]
+binding = "SNAPSHOT"
+id = "16a8423fd12c40c8a3990bda9c911798"
+
+[observability]
+enabled = true

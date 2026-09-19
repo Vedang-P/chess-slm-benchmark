@@ -18,6 +18,7 @@ CHECKS = [
     ("build-2b", ROOT / "scripts" / "ensure_build_2b.py"),
     ("1b", ROOT / "scripts" / "watch_1b.py"),
     ("eval-320k", ROOT / "scripts" / "ensure_eval_320k.py"),
+    ("monitor", ROOT / "scripts" / "push_monitor.py"),
 ]
 
 

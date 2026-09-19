@@ -82,7 +82,7 @@ data/models/
 /results_check*/
 docs/capability-analysis.md
 docs/anti-goal-analysis.md
-monitor/
+monitor/node_modules/
 
 # Generated figure/table outputs
 analysis/
@@ -106,3 +106,4 @@ notebooks/kaggle_mate_*_w*.ipynb
 /data/positions/noexplain-slice/*pretok*.jsonl
 .opencode/
 .omp/
+

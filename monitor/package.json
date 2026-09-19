@@ -1,0 +1,9 @@
+{
+  "name": "chess-slm-monitor",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "chess.js": "^1.0.0"
+  }
+}
