@@ -659,7 +659,14 @@ function renderStages(){
       return '<div style="margin:9px 0"><div class="phase-text" style="margin:0 0 4px"><span>'+label+'</span><span class="mono">'+p+'%</span></div>'+
         '<div class="phase-track"><div class="phase-fill" style="width:'+p+'%"></div></div></div>';}).join("");
 }
-function renderCorpus(){
+let _prevCorpus=null,_curRate=null;
+function updateCorpusRate(){
+  const c=snap.corpus||{};const now=Date.now();
+  if(_prevCorpus&&c.labeled_rows!=null){const dt=(now-_prevCorpus.t)/1000;
+    if(dt>30)_curRate=(c.labeled_rows-_prevCorpus.rows)/dt;}
+  if(c.labeled_rows!=null)_prevCorpus={t:now,rows:c.labeled_rows};
+}
+function corpusGateInfo(){
   const c=snap.corpus||{};
   const done=new Set(c.done_tags||[]);
   const remaining=Math.max(0,(c.target_rows||920000000)-(c.labeled_rows||0));
@@ -667,13 +674,24 @@ function renderCorpus(){
     .sort((a,b)=>b.r-a.r);
   let acc=0,gateN=0;
   for(const x of remRows){if(acc>=remaining)break;acc+=x.r;gateN++;}
-  const note=c.all_tags&&c.all_tags.length
-    ? "~"+gateN+" shards to gate · "+(c.shards_done||0)+" / "+(c.shards_planned||0)+" built"
+  return {c:c,done:done,remaining:remaining,gateN:gateN,
+    gateLabel:remRows.length?("~"+gateN+" of "+(c.shards_planned||0)+" planned"):"—",
+    eta:(_curRate&&_curRate>0)?remaining/_curRate:null};
+}
+function corpusTiles(c,done){
+  return (c.all_tags||[]).map(t=>{const r=(c.rows_by_tag||{})[t];
+    return '<span class="shardtile'+(done.has(t)?" done":"")+'" title="shard-'+esc(t)+" · "+(r?(r/1e6).toFixed(1):"?")+'M rows"></span>';}).join("");
+}
+function renderCorpus(){
+  const g=corpusGateInfo();const c=g.c;
+  const note=(c.all_tags&&c.all_tags.length)
+    ? g.gateLabel+" to gate · "+(c.shards_done||0)+" / "+(c.shards_planned||0)+" built"
     : (c.shards_done||0)+" / "+(c.shards_planned||0)+" shards";
   document.getElementById("corpus").innerHTML='<div class="card-head"><div class="card-title">1B corpus</div><div class="card-note mono">'+
     note+'</div></div>'+
-    statRow([["labeled",((c.labeled_rows||0)/1e6).toFixed(1)+"M"],["target",((c.target_rows||0)/1e6).toFixed(0)+"M"],
-      ["rows to gate",(remaining/1e6).toFixed(0)+"M"]]);
+    statRow([["labeled",((c.labeled_rows||0)/1e6).toFixed(1)+"M"],["rate",_curRate!=null?(_curRate/1000).toFixed(1)+"k rows/s":"—"],
+      ["eta to gate",g.eta!=null?(g.eta/60).toFixed(0)+" min":"—"],["rows to gate",(g.remaining/1e6).toFixed(0)+"M"]])+
+    '<div class="shardgrid">'+corpusTiles(c,g.done)+"</div>";
 }
 function renderInfra(){
   const k=snap.kernels||[];
@@ -814,30 +832,14 @@ function renderEvalTable(){
       '</td><td><a class="dim" href="'+href+'" target="_blank" rel="noopener">hf ↗</a></td></tr>';});
   document.getElementById("evaltable").innerHTML=head+"<tbody>"+body+"</tbody>";
 }
-let _prevCorpus=null;
 function renderCorpusDetail(){
-  const c=snap.corpus||{};const now=Date.now();
-  let rate=null;
-  if(_prevCorpus&&c.labeled_rows!=null){const dt=(now-_prevCorpus.t)/1000;
-    if(dt>30)rate=(c.labeled_rows-_prevCorpus.rows)/dt;}
-  if(c.labeled_rows!=null)_prevCorpus={t:now,rows:c.labeled_rows};
-  const remaining=Math.max(0,(c.target_rows||920000000)-(c.labeled_rows||0));
-  const eta=(rate&&rate>0)?remaining/rate:null;
-  const done=new Set(c.done_tags||[]);const all=c.all_tags||[];
-  const tiles=all.map(t=>{const r=(c.rows_by_tag||{})[t];
-    return '<span class="shardtile'+(done.has(t)?" done":"")+'" title="shard-'+esc(t)+" · "+(r?(r/1e6).toFixed(1):"?")+'M rows"></span>';}).join("");
-  const fmtEta = eta!=null?(eta/60).toFixed(0)+" min":"—";
-  const remRows=(c.all_tags||[]).filter(x=>!done.has(x)).map(x=>({x:x,r:(c.rows_by_tag||{})[x]||0}))
-    .sort((a,b)=>b.r-a.r);
-  let acc=0,gateN=0;
-  for(const x of remRows){if(acc>=remaining)break;acc+=x.r;gateN++;}
-  const gateLabel=remRows.length?("~"+String(gateN)+" of "+(c.shards_planned||0)+" planned"):"—";
+  const g=corpusGateInfo();const c=g.c;
+  const fmtEta=g.eta!=null?(g.eta/60).toFixed(0)+" min":"—";
   document.getElementById("corpus-detail").innerHTML=
-    '<div class="card-head"><div class="card-title">corpus detail</div><div class="card-note mono">'+fmt(c.labeled_rows||0)+" / "+fmt(c.target_rows||0)+"</div></div>"+
-    statRow([["rate",rate!=null?(rate/1000).toFixed(1)+"k rows/s":"—"],["eta to gate",fmtEta],
-      ["shards to gate",gateLabel],
-      ["rows to gate",(remaining/1e6).toFixed(0)+"M"]])+
-    '<div class="shardgrid">'+tiles+'</div>'+
+    '<div class="card-head"><div class="card-title">corpus detail</div><div class="card-note mono">'+fmt(c.labeled_rows||0)+" / "+fmt(c.target_rows||0)+'</div></div>'+
+    statRow([["rate",_curRate!=null?(_curRate/1000).toFixed(1)+"k rows/s":"—"],["eta to gate",fmtEta],
+      ["shards to gate",g.gateLabel],["rows to gate",(g.remaining/1e6).toFixed(0)+"M"]])+
+    '<div class="shardgrid">'+corpusTiles(c,g.done)+'</div>'+
     '<div class="chart-note">largest-first order · green = labeled, dark = extra headroom beyond the 920M gate · hover for rows</div>';
 }
 function renderQuotaDetail(){
@@ -921,8 +923,9 @@ document.getElementById("smooth").oninput=e=>{smooth=+e.target.value/100;documen
 document.getElementById("lin").onclick=()=>{logScale=false;document.getElementById("lin").classList.add("active");document.getElementById("log").classList.remove("active");drawLoss("c-loss2",logScale,smooth);};
 document.getElementById("log").onclick=()=>{logScale=true;document.getElementById("log").classList.add("active");document.getElementById("lin").classList.remove("active");drawLoss("c-loss2",logScale,smooth);};
 async function load(){
-  const r=await fetch("/api/snapshot",{cache:"no-store"});
+  const r=await fetch("/api/snapshot?t="+Date.now(),{cache:"no-store"});
   snap=await r.json();
+  updateCorpusRate();
   renderNav();renderNotices();renderRuns();renderStages();renderCorpus();renderInfra();renderCharts();renderCkpt();
   const sel=document.getElementById("gamesel");const cur=sel.value;
   sel.innerHTML=(snap.games||[]).map((g,i)=>'<option value="'+i+'">'+esc(g.white+" vs "+g.black+" ("+g.result+")")+"</option>").join("");
