@@ -61,7 +61,7 @@ def run(slice_ids, gpu, workdir):
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(gpu)
     print(f"[2b] launching slice {slice_ids[:3]}... on GPU {gpu}", flush=True)
-    return subprocess.Popen(cmd, env=env)
+    return subprocess.Popen(cmd, env=env, cwd=str(REPO))
 
 p1 = run(SLICE_A, 0, "/kaggle/working/build-a")
 p2 = run(SLICE_B, 1, "/kaggle/working/build-b")
