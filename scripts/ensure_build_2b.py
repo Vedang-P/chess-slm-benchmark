@@ -39,6 +39,17 @@ def main() -> None:
     files = hf_files()
     sys.path.insert(0, str(ROOT / "scripts"))
     from launch_trainers import env_for_account
+    # 1B-first stop rule (user decision 2026-09-19): once enough shards are
+    # labeled for ~1B new rows, stop supervising so the fleet is not re-pushed.
+    rows_map = json.loads((ROOT / "kernels" / "build-2b" / "shard_rows.json").read_text())
+    done_new_rows = sum(int(rows_map[s]) for s in rows_map
+                        if f"{PREFIX}/shard-{s}/teacher_logp.npy" in files)
+    TARGET_NEW_ROWS = 920_000_000
+    if done_new_rows >= TARGET_NEW_ROWS:
+        print(f"[build-2b] 1B target reached ({done_new_rows/1e6:.0f}M new rows labeled); "
+              f"not pushing further")
+        return
+    print(f"[build-2b] progress: {done_new_rows/1e6:.0f}M / {TARGET_NEW_ROWS/1e6:.0f}M new rows")
     for account, idxs in assign.items():
         want = []
         for idx in idxs:

@@ -1,9 +1,12 @@
 # 2B-Pair Scaling Plan (kickoff 2026-09-19)
 
-Goal: repeat the CC-GAVN recipe on ~2B **unique** ChessBench action-value pairs
-(Google's recipe proportion: ~2.67 epochs over the unique data), keeping the
-distillation recipe **exactly** as-is (9M teacher distributions + raw Stockfish
-bucket soft targets, 128 bins). No recipe changes to chase compute.
+Goal (revised 2026-09-19, user decision): run the CC-GAVN recipe on **~1B
+unique** ChessBench action-value pairs first (Google's recipe proportion:
+~2.67 epochs over the unique data), keeping the distillation recipe **exactly**
+as-is (9M teacher distributions + raw Stockfish bucket soft targets, 128 bins).
+The 2B stage is deferred until the 1B results justify it. The labeling fleet
+stops once ~920M new rows (~1B total with the existing 80.27M) are uploaded;
+the CI watcher enforces this stop rule.
 
 ## Rules (user decision, 2026-09-19)
 
@@ -20,8 +23,9 @@ bucket soft targets, 128 bins). No recipe changes to chase compute.
 - Sizes scanned for all 2,148 shards (2026-09-18); full ranking saved locally
   as `shard_sizes.json` (and reproducible with a HEAD scan; ~27 s).
 - Selected the **largest 108 unbuilt shards** (indices excluding 00000-00007,
-  which are already labeled): ~1.921B rows. With the existing 80.27M rows the
-  corpus reaches ~2.0B unique rows.
+  which are already labeled): ~1.921B rows available. For the 1B-first stage
+  the fleet stops when ~920M new rows are labeled (about half the slices);
+  the remainder stays available for the deferred 2B stage.
 - Split into 8 slices of 13-14 shards (~230-252M rows each); see
   `shard_slices_2b.json` (saved at kickoff).
 
@@ -49,9 +53,9 @@ bucket soft targets, 128 bins). No recipe changes to chase compute.
 
 ## Training (Phase C)
 
-- 2.67 epochs over ~2.0B rows = ~5.3B samples = ~2.6M steps at batch 2048
-  (~360 GPU-h at the measured ~2 steps/s on T4x2), staged:
-  1B unique (~1.3M steps) -> evaluate -> extend to 2B (~2.6M steps).
+- 2.67 epochs over ~1.0B rows = ~2.67B samples = ~1.3M steps at batch 2048
+  (~180 GPU-h at the measured ~2 steps/s on T4x2). Evaluate; only then decide
+  whether to extend to the 2B stage (~2.6M steps total).
 - Stop rule: development loss plateau plus the frozen protocol at the end.
   No probing against frozen sets.
 
