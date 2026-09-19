@@ -101,6 +101,22 @@ function computeStages(snap) {
   return stages;
 }
 
+async function dispatchTick(env) {
+  if (!env.GH_TOKEN) return;
+  const last = Number(await env.SNAPSHOT.get("last_tick") || 0);
+  if (Date.now() - last < 8 * 60 * 1000) return;  // throttle to ~10 min
+  try {
+    const r = await fetch("https://api.github.com/repos/Vedang-P/chess-slm-benchmark/dispatches", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.GH_TOKEN}`,
+                 Accept: "application/vnd.github+json",
+                 "User-Agent": "chess-slm-monitor" },
+      body: JSON.stringify({ event_type: "tick" }),
+    });
+    if (r.ok || r.status === 204) await env.SNAPSHOT.put("last_tick", String(Date.now()));
+  } catch { /* next cron retries */ }
+}
+
 async function refresh(env) {
   const prev = (await env.SNAPSHOT.get("snapshot", "json")) || {};
   const snap = {
@@ -199,6 +215,7 @@ async function refresh(env) {
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(refresh(env));
+    ctx.waitUntil(dispatchTick(env));
   },
 
   async fetch(req, env) {
@@ -225,6 +242,12 @@ export default {
       snap.updated_at = snap.ingested_at;
       await env.SNAPSHOT.put("snapshot", JSON.stringify(snap));
       return Response.json({ ok: true });
+    }
+
+    if (url.pathname === "/api/tick" && url.searchParams.get("key") === env.INGEST_KEY) {
+      await env.SNAPSHOT.delete("last_tick");
+      await dispatchTick(env);
+      return Response.json({ ok: true, dispatched: true });
     }
 
     if (url.pathname === "/api/refresh" && url.searchParams.get("key") === env.INGEST_KEY) {
@@ -407,7 +430,7 @@ function renderEvals(evals,reference){
       {label:'Puzzles %',data:rows.map(r=>r.puz),backgroundColor:'#5eead4'}]},
       options:{animation:false,plugins:{legend:{labels:{color:'#8b96ad'}}},scales:{
         x:{ticks:{color:'#8b96ad',maxRotation:50,minRotation:0,font:{size:10}},grid:{display:false}},
-        y:{ticks:{color:'#8b96ad'},grid:{color:'#1f2740'},suggestedMax:100}}}}});
+        y:{ticks:{color:'#8b96ad'},grid:{color:'#1f2740'},suggestedMax:100}}}});
   }
   document.getElementById('evaltable').innerHTML='<tr><th>eval</th><th>MATE</th><th>puzzles</th></tr>'+
     rows.map(r=>'<tr><td>'+r.label+'</td><td class="num">'+(r.mate==null?'—':r.mate.toFixed(2)+'%')+'</td><td class="num">'+(r.puz==null?'—':r.puz.toFixed(2)+'%')+'</td></tr>').join('');
@@ -480,10 +503,7 @@ document.getElementById('play').onclick=()=>{
   if(timer){clearInterval(timer);timer=null;return;}
   timer=setInterval(()=>{if(!game||ply>=game.moves.length){clearInterval(timer);timer=null;return;}jump(ply+1);},900);
 };
-const _c=new Chess?null:null;
 load();setInterval(load,60000);
 </script>
-<script>/* chess.js not needed client-side; FENs are precomputed. */
-window.Chess=window.Chess||function(){};</script>
 </body>
 </html>`;
