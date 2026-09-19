@@ -53,9 +53,16 @@ the CI watcher enforces this stop rule.
 
 ## Training (Phase C)
 
-- 2.67 epochs over ~1.0B rows = ~2.67B samples = ~1.3M steps at batch 2048
-  (~180 GPU-h at the measured ~2 steps/s on T4x2). Evaluate; only then decide
-  whether to extend to the 2B stage (~2.6M steps total).
+- **Continuation, not a fresh run (user decision 2026-09-19):** resume
+  `ccgavn-5m-seed0` from `checkpoint-320000` and train a further ~1.3M steps
+  (to ~1.62M total) with the ~60-shard corpus (8 original + 2 puzzle + ~54 new)
+  in the schedule. The post-320k samples (~1.3M x 2048 = 2.66B) work out to
+  ~2.6-2.7 epochs over the new ~920M rows, matching the Google proportion.
+  ~180 GPU-h at ~2 steps/s on T4x2.
+- Launch gate: the training kernel waits for BOTH `checkpoint-320000` on HF and
+  the 1B corpus to be complete, then resumes. It never starts on a partial
+  corpus (the shard list is snapshotted at process start).
+- Evaluate after the continuation; only then decide on the deferred 2B stage.
 - Stop rule: development loss plateau plus the frozen protocol at the end.
   No probing against frozen sets.
 
