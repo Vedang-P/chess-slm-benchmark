@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HF_REPO = "vedangfake/chess-slm-benchmark"
 RUN = "ccgavn-5m-seed0"
+LIVE_RUNS = ["ccgavn-5m-seed0", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum"]
 ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shoumikmitra"]
 KERNELS = [
     ("vedanggggg", "build-2b-slice"), ("softmaxsimp", "build-2b-slice"),
@@ -105,7 +106,9 @@ def build_games(token: str, limit: int = 6) -> list[dict]:
             for mv in g.mainline_moves():
                 san = board.san(mv)
                 board.push(mv)
-                moves.append({"san": san, "fen": board.fen()})
+                moves.append({"san": san, "fen": board.fen(),
+                              "from": chess.square_name(mv.from_square),
+                              "to": chess.square_name(mv.to_square)})
             games.append({"event": g.headers.get("Event", ""),
                           "white": g.headers.get("White", "?"),
                           "black": g.headers.get("Black", "?"),
@@ -117,7 +120,8 @@ def build_runs(api, token: str) -> dict:
     from huggingface_hub import hf_hub_download
     out = {}
     for f in hf_files(api):
-        if re.match(r"^[^/]+/run-status\.txt$", f) or f.startswith(f"{RUN}/run-status"):
+        if (re.match(r"^[^/]+/run-status\.txt$", f) or f.startswith(f"{RUN}/run-status")) \
+                and f.split("/")[0] in LIVE_RUNS:
             try:
                 p = hf_hub_download(HF_REPO, f, repo_type="dataset", token=token)
                 out[f] = Path(p).read_text()[:400]
