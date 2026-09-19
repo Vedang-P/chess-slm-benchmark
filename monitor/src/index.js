@@ -661,10 +661,19 @@ function renderStages(){
 }
 function renderCorpus(){
   const c=snap.corpus||{};
+  const done=new Set(c.done_tags||[]);
+  const remaining=Math.max(0,(c.target_rows||920000000)-(c.labeled_rows||0));
+  const remRows=(c.all_tags||[]).filter(x=>!done.has(x)).map(x=>({x:x,r:(c.rows_by_tag||{})[x]||0}))
+    .sort((a,b)=>b.r-a.r);
+  let acc=0,gateN=0;
+  for(const x of remRows){if(acc>=remaining)break;acc+=x.r;gateN++;}
+  const note=c.all_tags&&c.all_tags.length
+    ? "~"+gateN+" shards to gate · "+(c.shards_done||0)+" / "+(c.shards_planned||0)+" built"
+    : (c.shards_done||0)+" / "+(c.shards_planned||0)+" shards";
   document.getElementById("corpus").innerHTML='<div class="card-head"><div class="card-title">1B corpus</div><div class="card-note mono">'+
-    (c.shards_done||0)+" / "+(c.shards_planned||0)+' shards</div></div>'+
+    note+'</div></div>'+
     statRow([["labeled",((c.labeled_rows||0)/1e6).toFixed(1)+"M"],["target",((c.target_rows||0)/1e6).toFixed(0)+"M"],
-      ["existing",((c.original_rows||0)/1e6).toFixed(0)+"M"]]);
+      ["rows to gate",(remaining/1e6).toFixed(0)+"M"]]);
 }
 function renderInfra(){
   const k=snap.kernels||[];
