@@ -116,6 +116,13 @@ def build_games(token: str, limit: int = 6) -> list[dict]:
     return games
 
 
+def sanitize_status(txt: str) -> str:
+    t = " ".join(txt.split())
+    if any(w in t.lower() for w in ("traceback", "error", "exception", "killed")):
+        return "FAILED — log on HF"
+    return t[:120]
+
+
 def build_runs(api, token: str) -> dict:
     from huggingface_hub import hf_hub_download
     out = {}
@@ -124,7 +131,7 @@ def build_runs(api, token: str) -> dict:
                 and f.split("/")[0] in LIVE_RUNS:
             try:
                 p = hf_hub_download(HF_REPO, f, repo_type="dataset", token=token)
-                out[f] = Path(p).read_text()[:400]
+                out[f] = sanitize_status(Path(p).read_text()[:400])
             except Exception:
                 continue
     return out

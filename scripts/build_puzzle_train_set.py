@@ -74,8 +74,14 @@ def main() -> None:
     print(f"[build] exclusions: {len(test_ids)} ids, {len(test_pre)} pre, "
           f"{len(test_positions)} test positions, {len(mate_positions)} mate positions", flush=True)
 
-    train_tokens, train_actions = [], []
-    dev_tokens, dev_actions = [], []
+    train_tok_path = Path(f"{args.out}-train-tokens.bin")
+    train_act_path = Path(f"{args.out}-train-actions.bin")
+    dev_tok_path = Path(f"{args.out}-dev-tokens.bin")
+    dev_act_path = Path(f"{args.out}-dev-actions.bin")
+    train_tok_fh = open(train_tok_path, "wb")
+    train_act_fh = open(train_act_path, "wb")
+    dev_tok_fh = open(dev_tok_path, "wb")
+    dev_act_fh = open(dev_act_path, "wb")
     stats = dict(total=0, skipped_excluded=0, skipped_unsafe=0, skipped_bad=0,
                  puzzles_used=0, train_rows=0, dev_rows=0)
     t0 = time.time()
@@ -114,31 +120,40 @@ def main() -> None:
             dev = (stats["puzzles_used"] % args.dev_every == 0)
             for action, tokens in rows:
                 if dev:
-                    dev_tokens.append(tokens)
-                    dev_actions.append(action)
+                    dev_tok_fh.write(tokens.astype(np.uint8).tobytes())
+                    dev_act_fh.write(np.uint16(action).tobytes())
+                    stats["dev_rows"] += 1
                 else:
-                    train_tokens.append(tokens)
-                    train_actions.append(action)
-            if args.max_rows and len(train_tokens) >= args.max_rows:
+                    train_tok_fh.write(tokens.astype(np.uint8).tobytes())
+                    train_act_fh.write(np.uint16(action).tobytes())
+                    stats["train_rows"] += 1
+            if args.max_rows and stats["train_rows"] >= args.max_rows:
                 break
             if stats["total"] % 500000 == 0:
                 print(f"[build] {stats['total']/1e6:.1f}M scanned, "
-                      f"{len(train_tokens)/1e6:.1f}M train rows, {time.time()-t0:.0f}s", flush=True)
+                      f"{stats['train_rows']/1e6:.1f}M train rows, {time.time()-t0:.0f}s", flush=True)
 
-    def save(prefix: str, toks, acts):
-        if not toks:
-            return
-        np.savez_compressed(prefix + ".npz",
-                            tokens=np.asarray(toks, dtype=np.uint8),
-                            actions=np.asarray(acts, dtype=np.uint16))
+    for fh in (train_tok_fh, train_act_fh, dev_tok_fh, dev_act_fh):
+        fh.close()
 
-    n = len(train_tokens)
+    def load_bin(tok_path, act_path, n_rows):
+        if n_rows == 0:
+            return None, None
+        toks = np.fromfile(tok_path, dtype=np.uint8).reshape(n_rows, 77)
+        acts = np.fromfile(act_path, dtype=np.uint16)
+        assert len(acts) == n_rows, (len(acts), n_rows)
+        return toks, acts
+
+    n = stats["train_rows"]
+    toks, acts = load_bin(train_tok_path, train_act_path, n)
     half = n // 2
-    save(f"{args.out}-0", train_tokens[:half], train_actions[:half])
-    save(f"{args.out}-1", train_tokens[half:], train_actions[half:])
-    save(f"{args.out}-dev", dev_tokens, dev_actions)
-    stats["train_rows"] = n
-    stats["dev_rows"] = len(dev_tokens)
+    np.savez_compressed(f"{args.out}-0.npz", tokens=toks[:half], actions=acts[:half])
+    np.savez_compressed(f"{args.out}-1.npz", tokens=toks[half:], actions=acts[half:])
+    dev_toks, dev_acts = load_bin(dev_tok_path, dev_act_path, stats["dev_rows"])
+    if dev_toks is not None:
+        np.savez_compressed(f"{args.out}-dev.npz", tokens=dev_toks, actions=dev_acts)
+    for pth in (train_tok_path, train_act_path, dev_tok_path, dev_act_path):
+        pth.unlink(missing_ok=True)
     stats["seconds"] = round(time.time() - t0, 1)
     Path(f"{args.out}-audit.json").write_text(json.dumps(stats, indent=1))
     print(f"[build] done: {stats}", flush=True)
