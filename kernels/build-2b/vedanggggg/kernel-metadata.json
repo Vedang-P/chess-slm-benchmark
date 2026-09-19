@@ -1,0 +1,17 @@
+{
+ "id": "vedanggggg/build-2b-slice",
+ "title": "build-2b-slice",
+ "code_file": "build_2b.py",
+ "language": "python",
+ "kernel_type": "script",
+ "is_private": true,
+ "enable_gpu": true,
+ "enable_tpu": false,
+ "enable_internet": true,
+ "machine_shape": "NvidiaTeslaT4",
+ "dataset_sources": [
+  "vedanggggg/chess-creds"
+ ],
+ "competition_sources": [],
+ "kernel_sources": []
+}
