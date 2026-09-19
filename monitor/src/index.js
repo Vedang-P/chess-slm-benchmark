@@ -586,7 +586,7 @@ function runBlock(key,status,accounts){
   const gateOpen=(corpus.labeled_rows||0)>=(corpus.target_rows||920000000);
   let state;
   if(running)state="running";
-  else if(/DONE/i.test(status))state="complete";
+  else if(/DONE|COMPLETE/i.test(status))state="complete";
   else if(/error|Traceback|Error/i.test(status))state="failed";
   else if(training&&last&&last.step<1620000)state=gateOpen?"resuming":"awaiting 1B corpus";
   else state="idle";
