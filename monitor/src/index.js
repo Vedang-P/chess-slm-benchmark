@@ -775,13 +775,23 @@ function drawComponents(){
 }
 function drawThroughput(){
   const el=document.getElementById("c-thr");if(!el||!window.Chart)return;
-  const c=(snap.curve||[]).filter(p=>p.samples_per_s!=null);
+  const c=snap.curve||[];
+  const pts=[];
+  for(let i=0;i<c.length;i++){
+    const p=c[i];
+    if(p.samples_per_s!=null){pts.push({x:p.step,y:p.samples_per_s});continue;}
+    const q=c[i-1];
+    if(q&&q.t&&p.t){const dt=(new Date(p.t)-new Date(q.t))/1000;
+      if(dt>10&&p.step>q.step){pts.push({x:p.step,y:(p.step-q.step)*2048/dt});}}
+  }
   const note=document.getElementById("thr-note");
-  if(!c.length){if(charts["c-thr"]){charts["c-thr"].destroy();delete charts["c-thr"];}el.style.display="none";if(note)note.textContent="logged from the 1B continuation phase onward";return;}
-  el.style.display="";if(note)note.textContent="cumulative average for the session at each checkpoint";
+  if(!pts.length){if(charts["c-thr"]){charts["c-thr"].destroy();delete charts["c-thr"];}el.style.display="none";if(note)note.textContent="waiting for the next checkpoints";return;}
+  el.style.display="";
+  const avg=pts.reduce((a,b)=>a+b.y,0)/pts.length;
+  if(note)note.textContent="derived from checkpoint timestamps (batch 2048) · avg "+(avg/1000).toFixed(1)+"k samples/s";
   if(charts["c-thr"])charts["c-thr"].destroy();
-  charts["c-thr"]=new Chart(el,{type:"line",data:{labels:c.map(p=>p.step),datasets:[
-    {label:"samples/s",data:c.map(p=>p.samples_per_s),borderColor:"#3fa66a",pointRadius:0,borderWidth:1.5,fill:true,backgroundColor:"rgba(63,166,106,.08)"}]},
+  charts["c-thr"]=new Chart(el,{type:"line",data:{labels:pts.map(p=>p.x),datasets:[
+    {label:"samples/s",data:pts.map(p=>p.y),borderColor:"#3fa66a",pointRadius:0,borderWidth:1.5,fill:true,backgroundColor:"rgba(63,166,106,.08)"}]},
     options:{animation:false,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
       plugins:{legend:{display:false}},
       scales:{x:{ticks:{color:"#6f6f6c",maxTicksLimit:8,font:{size:10}},grid:{color:"#1a1a1a"}},
@@ -821,10 +831,11 @@ function renderCorpusDetail(){
     .sort((a,b)=>b.r-a.r);
   let acc=0,gateN=0;
   for(const x of remRows){if(acc>=remaining)break;acc+=x.r;gateN++;}
+  const gateLabel=remRows.length?("~"+String(gateN)+" of "+(c.shards_planned||0)+" planned"):"—";
   document.getElementById("corpus-detail").innerHTML=
     '<div class="card-head"><div class="card-title">corpus detail</div><div class="card-note mono">'+fmt(c.labeled_rows||0)+" / "+fmt(c.target_rows||0)+"</div></div>"+
     statRow([["rate",rate!=null?(rate/1000).toFixed(1)+"k rows/s":"—"],["eta to gate",fmtEta],
-      ["shards to gate","~"+String(gateN)+" of "+(c.shards_planned||0)+" planned"],
+      ["shards to gate",gateLabel],
       ["rows to gate",(remaining/1e6).toFixed(0)+"M"]])+
     '<div class="shardgrid">'+tiles+'</div>'+
     '<div class="chart-note">largest-first order · green = labeled, dark = extra headroom beyond the 920M gate · hover for rows</div>';

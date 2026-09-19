@@ -64,12 +64,38 @@ def stage1_schedule():
     return np.concatenate([np.repeat(tags[i], counts[i]) for i in order])
 
 
+def checkpoint_times(token: str, min_step: int) -> dict:
+    """step -> ISO upload time for metrics.json files, from commit history.
+    Gives throughput charts a real time axis even before the trainer logs it."""
+    import requests as rq
+    out = {}
+    for page in range(20):
+        r = rq.get(f"https://huggingface.co/api/datasets/{HF_REPO}/commits/main",
+                   params={"p": page}, headers={"Authorization": f"Bearer {token}"}, timeout=60)
+        if r.status_code != 200:
+            break
+        commits = r.json()
+        if not commits:
+            break
+        for x in commits:
+            t = x.get("title", "")
+            if t.startswith(f"Upload {RUN}/checkpoint-") and t.endswith("/metrics.json with huggingface_hub"):
+                step = t.split("checkpoint-")[1].split("/")[0]
+                d = x["date"]
+                if step not in out or d < out[step]:
+                    out[step] = d
+        if str(min_step) in out:
+            break
+    return out
+
+
 def build_curve(api, token: str) -> list[dict]:
     from huggingface_hub import hf_hub_download
     files = hf_files(api)
     steps = sorted({int(m.group(1)) for f in files
                     if (m := re.search(rf"{RUN}/checkpoint-(\d+)/metrics\.json$", f))})
     sched = stage1_schedule()
+    times = checkpoint_times(token, steps[0] if steps else 0)
     curve = []
     for s in steps:
         try:
@@ -85,6 +111,9 @@ def build_curve(api, token: str) -> list[dict]:
                 idx = int(point["step"]) - 1
                 if 0 <= idx < len(sched):
                     point["shard"] = str(sched[idx])
+            t = times.get(str(point["step"]))
+            if t:
+                point["t"] = t
             curve.append(point)
         except Exception:
             continue
