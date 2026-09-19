@@ -1,0 +1,16 @@
+{
+ "id": "vedangpandeyyy/eval-ccgavn-320k-auto",
+ "title": "eval-ccgavn-320k-auto",
+ "code_file": "eval_ccgavn.py",
+ "language": "python",
+ "kernel_type": "script",
+ "is_private": true,
+ "enable_gpu": false,
+ "enable_tpu": false,
+ "enable_internet": true,
+ "dataset_sources": [
+  "vedangpandeyyy/chess-creds"
+ ],
+ "competition_sources": [],
+ "kernel_sources": []
+}
