@@ -235,6 +235,13 @@ async function refresh(env) {
   return snap;
 }
 
+const MASK = { vedanggggg: "acct-1", vedangpandeyyy: "acct-2", softmaxsimp: "acct-3", samaltmannnn: "acct-4", shoumikmitra: "acct-5" };
+function masked(o) {
+  let s = JSON.stringify(o);
+  for (const k in MASK) s = s.split(k).join(MASK[k]);
+  return JSON.parse(s);
+}
+
 const SEC = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
@@ -254,7 +261,7 @@ export default {
     if (url.pathname === "/api/snapshot") {
       const snap = (await env.SNAPSHOT.get("snapshot", "json")) || {};
       snap.stages = computeStages(snap);
-      return Response.json(snap, { headers: { ...SEC, "cache-control": "no-store" } });
+      return Response.json(masked(snap), { headers: { ...SEC, "cache-control": "no-store" } });
     }
     if (url.pathname === "/api/ingest" && req.method === "POST") {
       if (req.headers.get("x-ingest-key") !== env.INGEST_KEY) return new Response("forbidden", { status: 403, headers: SEC });
@@ -263,7 +270,7 @@ export default {
       const prior = (await env.SNAPSHOT.get("snapshot", "json")) || {};
       const snap = { ...prior };
       for (const k of ["curve", "evals", "corpus", "games", "runs", "kernels", "quota", "live"]) {
-        if (k in body) snap[k] = body[k];
+        if (k in body) snap[k] = masked(body[k]);
       }
       snap.reference = REFERENCE;
       snap.ingested_at = new Date().toISOString();

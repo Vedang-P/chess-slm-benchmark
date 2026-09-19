@@ -123,6 +123,16 @@ def sanitize_status(txt: str) -> str:
     return t[:120]
 
 
+ALIASES = {a: f"acct-{i+1}" for i, a in enumerate(ACCOUNTS)}
+
+
+def mask_accounts(payload: dict) -> dict:
+    s = json.dumps(payload)
+    for real, alias in ALIASES.items():
+        s = s.replace(real, alias)
+    return json.loads(s)
+
+
 def build_runs(api, token: str) -> dict:
     from huggingface_hub import hf_hub_download
     out = {}
@@ -185,6 +195,7 @@ def main() -> None:
         "kernels": build_kernels_quota()[0],
         "quota": build_kernels_quota()[1],
     }
+    payload = mask_accounts(payload)
     req = urllib.request.Request(f"{url}/api/ingest", method="POST",
                                  data=json.dumps(payload).encode(),
                                  headers={"content-type": "application/json",
