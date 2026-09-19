@@ -143,6 +143,27 @@ def validate_bag(path: Path) -> int:
         return 0
 
 
+def free_gb(path: Path) -> float:
+    import shutil
+    return shutil.disk_usage(str(path)).free / 1e9
+
+
+def wait_for_disk(workdir: Path, need_gb: float, tag: str, tries: int = 30) -> None:
+    """Kaggle /kaggle/working is ~20GB shared by both GPU slices. A full disk
+    during the teacher memmap writeback raises SIGBUS, so wait for the sibling
+    slice to upload+clean before writing."""
+    for _ in range(tries):
+        f = free_gb(workdir)
+        if f >= need_gb:
+            print(f"[build] shard {tag}: disk ok ({f:.1f} GB free, need {need_gb:.1f})", flush=True)
+            return
+        print(f"[build] shard {tag}: low disk ({f:.1f} GB free < {need_gb:.1f} GB); waiting 60s", flush=True)
+        time.sleep(60)
+    raise RuntimeError(
+        f"shard {tag}: insufficient disk after wait ({free_gb(workdir):.1f} GB free, "
+        f"need {need_gb:.1f} GB)")
+
+
 def shard_done_on_hf(client, args, tag: str) -> bool:
     """Source of truth: both shard artifacts exist on HF (race-safe for
     parallel kernels; the manifest is advisory only)."""
@@ -185,6 +206,7 @@ def main() -> None:
         raw_bag = raw_dir / name
         npz_out = shard_dir / "train_set.npz"
         teacher_out = shard_dir / "teacher_logp.npy"
+        wait_for_disk(workdir, 3.0, tag)
 
         # 1. download raw shard (validated: truncated bags are rejected)
         download(f"{GCS_BASE}/{name}", raw_bag)
@@ -207,8 +229,11 @@ def main() -> None:
                 f"shard {tag}: parsed {n_parsed} rows but bag has "
                 f"{expected_rows} (truncated or corrupt); aborting shard")
         print(f"[build] shard {tag}: parsed {n_parsed} rows", flush=True)
+        raw_bag.unlink(missing_ok=True)
 
         # 3. teacher label with the 9M
+        logp_gb = n_parsed * 128 * 2 / 1e9
+        wait_for_disk(workdir, logp_gb + 1.5, tag)
         cmd = [sys.executable, "scripts/teacher_label.py",
                "--npz", str(npz_out), "--checkpoint", args.teacher_checkpoint,
                "--out", str(teacher_out), "--batch", str(args.teacher_batch),
@@ -231,12 +256,13 @@ def main() -> None:
         rows = int(n)
         print(f"[build] shard {tag}: validated {rows} rows", flush=True)
 
-        # 5. upload shard artifacts + manifest (persistence)
+        # 5. upload shard artifacts + manifest (persistence); free disk as we go
         for fname in ("train_set.npz", "teacher_logp.npy"):
             client.upload_file(
                 path_or_fileobj=str(shard_dir / fname),
                 path_in_repo=f"{args.hf_run.strip('/')}/shard-{tag}/{fname}",
                 repo_id=args.hf_repo, repo_type="dataset")
+            (shard_dir / fname).unlink(missing_ok=True)
         manifest.setdefault("shards", {})[tag] = {
             "rows": rows, "elapsed_s": round(time.time() - t0),
         }
@@ -244,10 +270,8 @@ def main() -> None:
         print(f"[build] shard {tag} DONE ({rows} rows, "
               f"{(time.time()-t0)/60:.1f}m) -> HF", flush=True)
 
-        # 6. disk hygiene: drop the raw bag and local copies
+        # 6. disk hygiene
         raw_bag.unlink(missing_ok=True)
-        for fname in ("train_set.npz", "teacher_logp.npy"):
-            (shard_dir / fname).unlink(missing_ok=True)
 
     print(f"[build] all target shards complete ({len(done)} in manifest, "
           f"{total} targeted this run)", flush=True)
