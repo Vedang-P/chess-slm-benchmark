@@ -31,11 +31,19 @@ Live dashboard for the whole project, phone-friendly:
     data is pushed from outside (below).
 - KV namespace `SNAPSHOT` (`16a8423fd12c40c8a3990bda9c911798`) holds one JSON
   snapshot.
-- `scripts/push_monitor.py` (run by `scripts/supervise_all.py` every 15 min)
-  assembles the heavy sections — full training curve, eval summaries, corpus
-  progress, PGN games, kernel statuses, quotas — and POSTs them to the Worker.
-- Secrets in the Worker: `HF_TOKEN` (read HF), `INGEST_KEY` (in `.env` as
-  `MONITOR_INGEST_KEY`, along with `MONITOR_URL`).
+- **Full cloud automation, no local machine involved:** the Worker's `*/10`
+  cron also sends a `repository_dispatch` tick to GitHub (throttled to ~10 min
+  via KV). The `pipeline-tick` GitHub Action then runs the keep-alive checks
+  (`ensure_build_2b.py`, `watch_1b.py`, `ensure_eval_320k.py`) and
+  `scripts/push_monitor.py`, which assembles the heavy sections — full
+  training curve, eval summaries, corpus progress, PGN games, kernel
+  statuses, quotas — and POSTs them to `/api/ingest`. A 30-minute cron in the
+  same workflow acts as a fallback; if both stall, the page shows the last
+  snapshot with its timestamp.
+- Secrets in the Worker: `HF_TOKEN` (read HF), `INGEST_KEY`, `GH_TOKEN`
+  (dispatch the Actions tick). GitHub repo secrets used by the workflow:
+  `HF_WRITE_TOKEN`, `MONITOR_INGEST_KEY`, and the five accounts' Kaggle
+  credentials. `MONITOR_URL` is set in the workflow env.
 
 ## Updating the Worker
 

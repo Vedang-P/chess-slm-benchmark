@@ -4,8 +4,7 @@
 
 **Current run (automatic):** `ccgavn-5m-seed0` continued from checkpoint-160000
 to 320k steps on the 10-shard mix (8 ChessBench shards + 2 puzzle-curriculum
-shards, 14.9% of samples). Watcher (local + GitHub cron) resumes across Kaggle
-session limits; the auto-eval kernel (plus `ensure-eval-320k` CI safety net)
+shards, 14.9% of samples). Watchers are fully cloud-side (Cloudflare cron -> GitHub Actions; no local machine). the auto-eval kernel (plus `ensure-eval-320k` CI safety net)
 runs the frozen protocol when checkpoint-320000 lands.
 
 **Frozen results so far (full sets, same protocol):**
