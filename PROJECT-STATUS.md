@@ -1,5 +1,29 @@
 # Project Status — Chess SLM Benchmark (2026-08-30)
 
+## 2026-09-20 — 1B continuation: push-only gate bug found & fixed; frozen corpus
+
+The 1B continuation had not started since `checkpoint-320000` landed
+(2026-09-19T18:51Z). Root cause: `kaggle kernels push` uploads only the
+`code_file`, so the sibling `shard_rows.json` written by `scripts/watch_1b.py`
+never reached the kernel; `train_1b.py` silently fell back to an empty map,
+counted **0M / 920M** rows, waited 900s and exited ("prerequisites not ready
+within the wait window") on every push (kernel log confirmed, v17-v20 loop,
+~0.25 GPU-h per ~20 min burned). The corpus side was fine: 92/108 planned
+shards (1.652B new rows) are on HF.
+
+Fix (engineering only): `train_1b.py` now takes the frozen shard-tag list as a
+push-time placeholder (hard-fails if not embedded), gates exactly on all
+frozen tags + `checkpoint-320000`; `watch_1b.py` injects the list, gained
+`--check-only`; `train_ccgavn.py` gained `--shard-tags-file`, stores
+`shard_tags` in checkpoint configs, and refuses a resume with a different
+frozen set; `ShardManager` accepts an explicit `tags` list.
+
+Frozen 1B-first corpus (user decision 2026-09-20): `configs/ccgavn-1b-shard-tags.json`
+= 10 original tags + 51 new planned shards in slice order (built-only) =
+**929.0M new rows**. The label fleet is stopped (sessions ended; the CI stop
+rule prevents re-pushes); the extra ~720M built rows remain on HF for the
+deferred 2B stage. Details and the epoch arithmetic: `SCALING-PLAN-2B.md`.
+
 ## 2026-09-19 — CC-GAVN 320k run + 2B scaling plan
 
 **Current run (automatic):** `ccgavn-5m-seed0` continued from checkpoint-160000

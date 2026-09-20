@@ -198,6 +198,10 @@ class CCGAVN:
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--hf-shards", required=True)
+    p.add_argument("--shard-tags-file", default="",
+                   help="JSON file freezing the exact shard set of this run "
+                        "(a list, or an object with a 'tags' list). Resumes "
+                        "refuse a different set.")
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
     p.add_argument("--hf-run", default="ccgavn-5m")
     p.add_argument("--outdir", required=True)
@@ -267,10 +271,27 @@ def main():
                 "Refusing to resume with a changed model, data split, or optimization configuration: "
                 + "; ".join(mismatches)
                 + ". Start a fresh --hf-run for a new experiment.")
+        remote_tags = resume_config.get("shard_tags")
+        if remote_tags is not None and shard_tags is not None and \
+                sorted(remote_tags) != sorted(shard_tags):
+            raise ValueError(
+                "Refusing to resume with a changed shard set: checkpoint has "
+                f"{len(remote_tags)} frozen tags, requested {len(shard_tags)}. "
+                "Start a fresh --hf-run for a new experiment.")
 
     token = hf_client.token
+    shard_tags = None
+    if args.shard_tags_file:
+        payload = json.loads(Path(args.shard_tags_file).read_text(encoding="utf-8"))
+        shard_tags = payload.get("tags") if isinstance(payload, dict) else payload
+        if not shard_tags:
+            raise ValueError(f"{args.shard_tags_file} contains no shard tags")
+        print(f"[shards] frozen corpus: {len(shard_tags)} tags "
+              f"from {args.shard_tags_file}", flush=True)
     manager = ShardManager(args.hf_repo, args.hf_shards,
-                           Path(os.environ.get("SHARD_CACHE", "/kaggle/tmp/shards")), token=token)
+                           Path(os.environ.get("SHARD_CACHE", "/kaggle/tmp/shards")),
+                           token=token, expect_tags=1 if args.max_records else 8,
+                           tags=shard_tags)
     manager.ensure_downloaded(max_records=args.max_records)
     manager.count_rows(max_records=args.max_records)
     schedule_rng = np.random.default_rng(args.seed)
@@ -419,6 +440,7 @@ def main():
                 "relation_schema": "v2-live-knight-king-rank-file-diagonal-other+candidate",
                 "canonical_decision_head": "distribution_expectation",
                 "parameter_count": params,
+                "shard_tags": shard_tags,
             }
             (checkpoint / "config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
             metrics = {"step": step + 1, "train_loss": float(loss.detach()),

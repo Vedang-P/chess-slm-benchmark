@@ -6,6 +6,9 @@ The 8 ChessBench shards live on HF as
 must sample from ALL shards, not just shard 0.
 
 Strategy (12h-resumable, Kaggle-safe, 2B-scale safe):
+  - the shard set can be frozen by passing an explicit ``tags`` list (the 1B
+    continuation does this); otherwise every built shard under the prefix is
+    used,
   - row counts come from exact overrides (configs/chessbench_rows.json) or a
     raw-bag size estimate via HTTP HEAD (~80 bytes/row, calibrated), so no
     full-corpus download is needed before training,
@@ -59,19 +62,29 @@ def npy_shape(path: Path) -> tuple:
 
 class ShardManager:
     def __init__(self, repo: str, prefix: str, cache_dir: Path,
-                 token: str | None = None, log=print, expect_tags: int = 8):
+                 token: str | None = None, log=print, expect_tags: int = 8,
+                 tags: list[str] | None = None):
         from huggingface_hub import HfApi
         self.repo, self.prefix, self.cache_dir = repo, prefix, Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.token = token
         self.log = log
         files = HfApi(token=token).list_repo_files(repo_id=repo, repo_type="dataset")
-        tags = set()
+        available = set()
         for f in files:
             if f.startswith(f"{prefix}/shard-") and f.endswith("train_set.npz"):
                 name = f.split("/")[1]
-                tags.add(name[len("shard-"):])
-        self.tags = sorted(tags)
+                available.add(name[len("shard-"):])
+        if tags is None:
+            self.tags = sorted(available)
+        else:
+            # Frozen corpus: the run trains on exactly these shards, so a
+            # resumed session cannot silently pick up shards built in between.
+            self.tags = sorted({str(t) for t in tags})
+            unknown = [t for t in self.tags if t not in available]
+            if unknown:
+                shown = ", ".join(unknown[:8]) + ("..." if len(unknown) > 8 else "")
+                raise RuntimeError(f"{repo}:{prefix} is missing requested shards: {shown}")
         if len(self.tags) < expect_tags:
             raise RuntimeError(
                 f"{repo}:{prefix} has {len(self.tags)} shards, expected {expect_tags}")

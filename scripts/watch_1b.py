@@ -1,11 +1,15 @@
 """Keep the 1B continuation alive across Kaggle session limits and accounts.
 
 - Done when ccgavn-5m-seed0/checkpoint-1,620,000 exists on HF.
+- Gate: the FROZEN 1B-first corpus (configs/ccgavn-1b-shard-tags.json) must be
+  fully on HF plus checkpoint-320000. The frozen list is also embedded into the
+  pushed kernel code (Kaggle uploads only the code file), so the kernel sees
+  exactly the same set.
 - If no <account>/ccgavn-1b kernel is RUNNING/QUEUED, push the continuation
-  kernel to the account with the most free GPU quota (metadata generated per
-  account; the kernel itself waits for checkpoint-320000 + the 1B corpus).
+  kernel to the account with the most free GPU quota.
 
-Called by .github/workflows/watch-1b.yml every 30 minutes; also safe locally.
+Called by .github/workflows/pipeline-tick.yml every ~10-30 minutes; also safe
+locally (`python3 scripts/watch_1b.py --check-only` never pushes).
 """
 from __future__ import annotations
 
@@ -20,8 +24,11 @@ ROOT = Path(__file__).resolve().parent.parent
 HF_REPO = "vedangfake/chess-slm-benchmark"
 RUN = "ccgavn-5m-seed0"
 FINAL_STEP = 1_620_000
+PREFIX = "chessbench-full-build"
 ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shoumikmitra"]
 KERNEL_DIR = ROOT / "kernels" / "ccgavn-1b"
+TAGS_FILE = ROOT / "configs" / "ccgavn-1b-shard-tags.json"
+TAGS_MARKER = "__CCGAVN1B_TRAIN_TAGS__"
 
 
 def ensure_creds_files() -> None:
@@ -37,6 +44,29 @@ def ensure_creds_files() -> None:
             default = Path.home() / ".kaggle" / "access_token"
             if acct == "vedanggggg" and default.exists():
                 tok.write_text(default.read_text())
+
+
+def frozen_tags() -> list[str]:
+    payload = json.loads(TAGS_FILE.read_text(encoding="utf-8"))
+    tags = payload.get("tags") if isinstance(payload, dict) else payload
+    if not tags:
+        raise RuntimeError(f"{TAGS_FILE} contains no shard tags")
+    return sorted({str(t) for t in tags})
+
+
+def missing_shards(tags: list[str], files: set[str]) -> list[str]:
+    return [t for t in tags
+            if f"{PREFIX}/shard-{t}/train_set.npz" not in files
+            or f"{PREFIX}/shard-{t}/teacher_logp.npy" not in files]
+
+
+def render_kernel(tags: list[str]) -> str:
+    src = (KERNEL_DIR / "train_1b.py").read_text(encoding="utf-8")
+    placeholder = f'"""{TAGS_MARKER}"""'
+    if placeholder not in src:
+        raise RuntimeError(
+            f"{KERNEL_DIR / 'train_1b.py'} lost its {placeholder} placeholder")
+    return src.replace(placeholder, '"""' + json.dumps(tags) + '"""')
 
 
 def hf_files() -> set[str]:
@@ -74,14 +104,12 @@ def kernel_status(account: str) -> str:
         return f"status error: {exc}"
 
 
-def push(account: str) -> tuple[int, str]:
+def push(account: str, tags: list[str]) -> tuple[int, str]:
     sys.path.insert(0, str(ROOT / "scripts"))
     from launch_trainers import env_for_account
     with tempfile.TemporaryDirectory(prefix=f"ccgavn1b_{account}_") as tmp:
         tmpd = Path(tmp)
-        (tmpd / "train_1b.py").write_text((KERNEL_DIR / "train_1b.py").read_text())
-        (tmpd / "shard_rows.json").write_text(
-            (ROOT / "kernels" / "build-2b" / "shard_rows.json").read_text())
+        (tmpd / "train_1b.py").write_text(render_kernel(tags), encoding="utf-8")
         cred_ds = {"vedanggggg": "vedanggggg/chess-creds",
                    "vedangpandeyyy": "vedangpandeyyy/chess-creds",
                    "softmaxsimp": "softmaxsimp/chess-creds",
@@ -102,8 +130,9 @@ def push(account: str) -> tuple[int, str]:
         return r.returncode, out
 
 
-def main() -> None:
+def main(check_only: bool = False) -> None:
     ensure_creds_files()
+    tags = frozen_tags()
     files = hf_files()
     if f"{RUN}/checkpoint-{FINAL_STEP}/config.json" in files:
         print("[1b] DONE: checkpoint-1,620,000 exists; nothing to do")
@@ -111,17 +140,20 @@ def main() -> None:
     # Readiness gate: never hold a GPU kernel while waiting. A Kaggle GPU
     # kernel burns quota per wall-clock hour regardless of utilisation, so the
     # continuation is only pushed once BOTH prerequisites exist.
+    missing = missing_shards(tags, files)
+    if missing:
+        shown = ", ".join(missing[:5]) + ("..." if len(missing) > 5 else "")
+        print(f"[1b] waiting: corpus {len(tags) - len(missing)}/{len(tags)} frozen "
+              f"shards on HF; missing {shown}; not pushing")
+        return
     if f"{RUN}/checkpoint-320000/config.json" not in files or \
             f"{RUN}/checkpoint-320000/state.pt" not in files:
         print("[1b] waiting: checkpoint-320000 not on HF yet; not pushing")
         return
-    rows_map = json.loads((ROOT / "kernels" / "build-2b" / "shard_rows.json").read_text())
-    done_rows = sum(int(v) for k, v in rows_map.items()
-                    if f"chessbench-full-build/shard-{k}/teacher_logp.npy" in files)
-    if done_rows < 920_000_000:
-        print(f"[1b] waiting: corpus {done_rows/1e6:.0f}M / 920M new rows; not pushing")
+    print(f"[1b] prerequisites ready ({len(tags)} frozen corpus shards); arming training")
+    if check_only:
+        print("[1b] check-only: gate passed; a real run would push the kernel now")
         return
-    print(f"[1b] prerequisites ready (corpus {done_rows/1e6:.0f}M new rows); arming training")
     for acct in ACCOUNTS:
         st = kernel_status(acct)
         if "RUNNING" in st or "QUEUED" in st or "PENDING" in st:
@@ -142,7 +174,7 @@ def main() -> None:
             print(f"[1b] {acct}/ccgavn-1b became active; skipping push")
             return
     for acct in sorted(usable, key=usable.get, reverse=True):
-        rc, out = push(acct)
+        rc, out = push(acct, tags)
         if "successfully pushed" in out.lower():
             print(f"[1b] pushed on {acct}")
             return
@@ -150,4 +182,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(check_only="--check-only" in sys.argv[1:])
