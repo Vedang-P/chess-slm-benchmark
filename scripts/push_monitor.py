@@ -26,8 +26,7 @@ ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shou
 KERNELS = [
     ("vedanggggg", "build-2b-slice"), ("softmaxsimp", "build-2b-slice"),
     ("samaltmannnn", "build-2b-slice"), ("shoumikmitra", "build-2b-slice"),
-    ("vedangpandeyyy", "ccgavn-5m-seed0"), ("vedangpandeyyy", "eval-ccgavn-320k-auto"),
-]
+] + [(acct, "ccgavn-1b") for acct in ACCOUNTS]
 
 
 def load_env() -> dict:
