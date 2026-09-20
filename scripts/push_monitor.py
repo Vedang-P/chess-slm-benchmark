@@ -204,10 +204,11 @@ def build_runs(api, token: str) -> dict:
     return out
 
 
-def build_kernels_quota() -> tuple[list, dict]:
+def build_kernels_quota() -> tuple[list, dict, str]:
     sys.path.insert(0, str(ROOT / "scripts"))
     from launch_trainers import env_for_account
     kernels, quota = [], {}
+    reset = ""
     for acct, slug in KERNELS:
         try:
             r = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "status",
@@ -227,9 +228,15 @@ def build_kernels_quota() -> tuple[list, dict]:
                 parts = line.split()
                 if len(parts) >= 4 and parts[0] == "GPU":
                     quota[acct] = parts[2].rstrip("h")
+                    if len(parts) >= 5 and not reset:
+                        # kaggle prints e.g. 2026-09-26T00:00:00 (UTC)
+                        stamp = parts[4]
+                        if not stamp.endswith(("Z", "z")) and "+" not in stamp:
+                            stamp += "Z"
+                        reset = stamp
         except Exception:
             continue
-    return kernels, quota
+    return kernels, quota, reset
 
 
 def main() -> None:
@@ -243,14 +250,16 @@ def main() -> None:
         return
     api = HfApi(token=token)
     files = hf_files(api)
+    kernels, quota, quota_reset = build_kernels_quota()
     payload = {
         "curve": build_curve(api, token),
         "evals": build_evals(api, token),
         "corpus": build_corpus(api, files),
         "games": build_games(token),
         "runs": build_runs(api, token),
-        "kernels": build_kernels_quota()[0],
-        "quota": build_kernels_quota()[1],
+        "kernels": kernels,
+        "quota": quota,
+        "quota_reset": quota_reset,
     }
     payload = mask_accounts(payload)
     req = urllib.request.Request(f"{url}/api/ingest", method="POST",
