@@ -40,6 +40,9 @@ WORK = Path("/kaggle/working")
 hits = sorted(glob.glob("/kaggle/input/**/hf_token.txt", recursive=True))
 TOKEN = Path(hits[0]).read_text().strip() if hits else os.environ.get("HF_WRITE_TOKEN", "")
 assert TOKEN, "no HF token"
+# The trainer (and its failure-status upload) read the token from the
+# environment; without this export every run dies at make_hf_api.
+os.environ["HF_WRITE_TOKEN"] = TOKEN
 
 from huggingface_hub import HfApi  # noqa: E402
 api = HfApi(token=TOKEN)
