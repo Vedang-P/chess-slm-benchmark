@@ -215,9 +215,18 @@ def build_kernels_quota() -> tuple[list, dict, str]:
                                 f"{acct}/{slug}"], env=env_for_account(acct),
                                capture_output=True, text=True, timeout=60)
             out = (r.stdout or r.stderr).strip()
-            st = out.split('"')[-2].split(".")[-1] if '"' in out else out[:40]
+            if "Cannot access kernel" in out:
+                st = "not created"
+            elif '"' in out:
+                st = out.split('"')[-2].split(".")[-1]
+            else:
+                st = out[:40]
         except Exception as exc:
             st = f"err {str(exc)[:30]}"
+        # The labeling fleet is finished; keep its rows only while actually
+        # running (the corpus card reports the labeled-shard state instead).
+        if slug == "build-2b-slice" and st not in ("RUNNING", "QUEUED", "PENDING"):
+            continue
         kernels.append({"account": acct, "kernel": slug, "status": st})
     for acct in ACCOUNTS:
         try:
