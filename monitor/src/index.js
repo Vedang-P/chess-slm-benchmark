@@ -269,7 +269,7 @@ export default {
       if (!body) return new Response("bad json", { status: 400, headers: SEC });
       const prior = (await env.SNAPSHOT.get("snapshot", "json")) || {};
       const snap = { ...prior };
-      for (const k of ["curve", "evals", "corpus", "games", "runs", "kernels", "quota", "live"]) {
+      for (const k of ["curve", "evals", "corpus", "games", "runs", "kernels", "quota", "quota_reset", "live"]) {
         if (k in body) snap[k] = masked(body[k]);
       }
       snap.reference = REFERENCE;
@@ -493,7 +493,7 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
     <div class="section-title" style="margin-top:0">infrastructure</div>
     <div class="grid g2">
       <div class="card"><div class="card-head"><div class="card-title">kernels</div></div><table class="tbl" id="kernels"></table></div>
-      <div class="card"><div class="card-head"><div class="card-title">gpu quota</div><div class="card-note">weekly reset</div></div><table class="tbl" id="quota"></table></div>
+      <div class="card"><div class="card-head"><div class="card-title">gpu quota</div><div class="card-note" id="quota-note">weekly reset</div></div><table class="tbl" id="quota"></table></div>
     </div>
   </div>
 </section>
@@ -696,11 +696,13 @@ function renderCorpus(){
 function renderInfra(){
   const k=snap.kernels||[];
   document.getElementById("kernels").innerHTML='<thead><tr><th>kernel</th><th>status</th></tr></thead><tbody>'+
-    k.map(x=>{const cls=/RUNNING|QUEUED/i.test(x.status)?"var(--live)":"var(--ink-3)";
+    k.map(x=>{const cls=/RUNNING|QUEUED/i.test(x.status)?"var(--live)":(/ERROR|FAILED/i.test(x.status)?"var(--warn)":"var(--ink-3)");
       return '<tr><td><span class="swatch" style="background:'+cls+';display:inline-block;margin-right:7px"></span>'+esc(x.account+"/"+x.kernel)+"</td><td>"+esc(x.status)+"</td></tr>";}).join("")+"</tbody>";
   const q=snap.quota||{};
   document.getElementById("quota").innerHTML='<thead><tr><th>account</th><th>gpu left</th></tr></thead><tbody>'+
     Object.keys(q).map(a=>"<tr><td>"+esc(a)+'</td><td>'+esc(q[a])+"h</td></tr>").join("")+"</tbody>";
+  const qn=document.getElementById("quota-note");
+  if(qn){const r=fmtQuotaReset();qn.textContent="resets "+r.date+" "+r.time+" IST · in "+r.countdown;}
 }
 function evalRows(){
   const rows=[];
@@ -842,15 +844,32 @@ function renderCorpusDetail(){
     '<div class="shardgrid">'+corpusTiles(c,g.done)+'</div>'+
     '<div class="chart-note">largest-first order · green = labeled, dark = extra headroom beyond the 920M gate · hover for rows</div>';
 }
+function quotaResetAt(){
+  const iso = snap && snap.quota_reset;
+  if (iso) { const d = new Date(iso); if (!isNaN(d.getTime())) return d; }
+  // Kaggle resets the weekly GPU quota Saturday 00:00 UTC; derive the next one.
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  d.setUTCDate(d.getUTCDate() + ((6 - d.getUTCDay() + 7) % 7));
+  if (d.getTime() <= now.getTime()) d.setUTCDate(d.getUTCDate() + 7);
+  return d;
+}
+function fmtQuotaReset(){
+  const d = quotaResetAt();
+  const hrs = Math.max(0, (d.getTime() - Date.now()) / 36e5);
+  const dd = Math.floor(hrs / 24), hh = Math.floor(hrs % 24), mm = Math.floor((hrs % 1) * 60);
+  const countdown = dd > 0 ? dd + "d " + hh + "h" : (hh > 0 ? hh + "h " + mm + "m" : mm + "m");
+  const date = d.toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
+  return { date, time, countdown, utc: d.toISOString().slice(0, 16).replace("T", " ") + " UTC" };
+}
 function renderQuotaDetail(){
   const q=snap.quota||{};const keys=Object.keys(q);
   const total=keys.reduce((a,k)=>a+(parseFloat(q[k])||0),0);
-  const reset=new Date("2026-09-26T00:00:00Z");
-  const hrsLeft=Math.max(0,(reset-Date.now())/36e5);
-  const days=Math.floor(hrsLeft/24),hh=Math.floor(hrsLeft%24);
+  const r=fmtQuotaReset();
   document.getElementById("quota-detail").innerHTML=
-    '<div class="card-head"><div class="card-title">gpu budget</div><div class="card-note mono">reset in '+days+"d "+hh+'h</div></div>'+
-    statRow([["total left",total.toFixed(1)+"h"],["accounts",String(keys.length)],["avg",(total/Math.max(1,keys.length)).toFixed(1)+"h"]])+
+    '<div class="card-head"><div class="card-title">gpu budget</div><div class="card-note mono">resets '+esc(r.date)+' '+esc(r.time)+' IST · in '+esc(r.countdown)+'</div></div>'+
+    statRow([["total left",total.toFixed(1)+"h"],["accounts",String(keys.length)],["avg",(total/Math.max(1,keys.length)).toFixed(1)+"h"],["reset",r.utc]])+
     '<table class="tbl"><thead><tr><th>account</th><th>gpu left</th></tr></thead><tbody>'+
     keys.map(a=>"<tr><td>"+esc(a)+'</td><td class="mono">'+esc(q[a])+"h</td></tr>").join("")+"</tbody></table>";
 }

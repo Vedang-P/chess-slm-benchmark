@@ -249,6 +249,15 @@ def main():
     # checkpoint (including a failure status) can satisfy the HF persistence
     # contract instead of discovering missing credentials after GPU time spent.
     hf_client = make_hf_api(ROOT)
+    token = hf_client.token
+    shard_tags = None
+    if args.shard_tags_file:
+        payload = json.loads(Path(args.shard_tags_file).read_text(encoding="utf-8"))
+        shard_tags = payload.get("tags") if isinstance(payload, dict) else payload
+        if not shard_tags:
+            raise ValueError(f"{args.shard_tags_file} contains no shard tags")
+        print(f"[shards] frozen corpus: {len(shard_tags)} tags "
+              f"from {args.shard_tags_file}", flush=True)
     resume_dir = (download_latest(hf_client, args.hf_repo, args.hf_run, outdir / "hf-resume")
                   if args.resume_from_hf else None)
     if resume_dir is not None:
@@ -279,15 +288,6 @@ def main():
                 f"{len(remote_tags)} frozen tags, requested {len(shard_tags)}. "
                 "Start a fresh --hf-run for a new experiment.")
 
-    token = hf_client.token
-    shard_tags = None
-    if args.shard_tags_file:
-        payload = json.loads(Path(args.shard_tags_file).read_text(encoding="utf-8"))
-        shard_tags = payload.get("tags") if isinstance(payload, dict) else payload
-        if not shard_tags:
-            raise ValueError(f"{args.shard_tags_file} contains no shard tags")
-        print(f"[shards] frozen corpus: {len(shard_tags)} tags "
-              f"from {args.shard_tags_file}", flush=True)
     manager = ShardManager(args.hf_repo, args.hf_shards,
                            Path(os.environ.get("SHARD_CACHE", "/kaggle/tmp/shards")),
                            token=token, expect_tags=1 if args.max_records else 8,
