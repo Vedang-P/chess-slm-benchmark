@@ -14,6 +14,7 @@ locally (`python3 scripts/watch_1b.py --check-only` never pushes).
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,8 @@ ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shou
 KERNEL_DIR = ROOT / "kernels" / "ccgavn-1b"
 TAGS_FILE = ROOT / "configs" / "ccgavn-1b-shard-tags.json"
 TAGS_MARKER = "__CCGAVN1B_TRAIN_TAGS__"
+CRASH_LOOP_LIMIT = 3          # failed resumes since the last checkpoint
+CRASH_BACKOFF_S = 3600        # ... then retry at most once per hour
 
 
 def ensure_creds_files() -> None:
@@ -67,6 +70,33 @@ def render_kernel(tags: list[str]) -> str:
         raise RuntimeError(
             f"{KERNEL_DIR / 'train_1b.py'} lost its {placeholder} placeholder")
     return src.replace(placeholder, '"""' + json.dumps(tags) + '"""')
+
+
+def recent_crash_cycles() -> tuple[int, float]:
+    """Failure-status uploads newer than the newest checkpoint, plus the age
+    (seconds) of the newest one, from the HF commit log. A deterministic bug
+    makes every re-push crash before any new checkpoint appears; after a few
+    of those the watcher backs off instead of burning GPU quota silently."""
+    import datetime
+    from huggingface_hub import HfApi
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from kaggle_checkpoint import hf_token
+    commits = HfApi(token=hf_token(ROOT)).list_repo_commits(HF_REPO, repo_type="dataset")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cycles = 0
+    newest_age = float("inf")
+    for c in commits:
+        created = c.created_at if c.created_at.tzinfo else c.created_at.replace(
+            tzinfo=datetime.timezone.utc)
+        age = (now - created).total_seconds()
+        if age > 6 * 3600:
+            break
+        if re.search(rf"{RUN}/checkpoint-\d+/metrics\.json", c.title):
+            break
+        if c.title.startswith(f"Upload {RUN}/run-status.txt"):
+            cycles += 1
+            newest_age = min(newest_age, age)
+    return cycles, newest_age
 
 
 def hf_files() -> set[str]:
@@ -151,8 +181,18 @@ def main(check_only: bool = False) -> None:
         print("[1b] waiting: checkpoint-320000 not on HF yet; not pushing")
         return
     print(f"[1b] prerequisites ready ({len(tags)} frozen corpus shards); arming training")
+    cycles, crash_age = recent_crash_cycles()
+    looping = cycles >= CRASH_LOOP_LIMIT and crash_age < CRASH_BACKOFF_S
+    if looping:
+        print(f"[1b] CRASH LOOP: {cycles} failed resume(s) since the last checkpoint, "
+              f"newest {crash_age/60:.0f} min ago; backing off for "
+              f"~{(CRASH_BACKOFF_S - crash_age)/60:.0f} min. "
+              "Inspect ccgavn-5m-seed0/run-status.txt on HF, fix, then it resumes.")
     if check_only:
-        print("[1b] check-only: gate passed; a real run would push the kernel now")
+        print(f"[1b] check-only: {'crash loop detected' if looping else 'gate passed'}; "
+              "a real run would push the kernel when not looping")
+        return
+    if looping:
         return
     for acct in ACCOUNTS:
         st = kernel_status(acct)

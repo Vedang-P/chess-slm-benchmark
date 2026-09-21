@@ -39,6 +39,10 @@ def upload_checkpoint(api_client, repo_id: str, local_dir: Path,
     if not checkpoint.is_dir():
         raise FileNotFoundError(checkpoint)
     files = [p for p in checkpoint.rglob("*") if p.is_file()]
+    # config.json is the commit marker: it goes up last so an interrupted
+    # upload never leaves a checkpoint dir that looks resumable but is not
+    # (latest_remote_checkpoint requires both config.json and state.pt).
+    files.sort(key=lambda p: p.name == "config.json")
     last_exc: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
@@ -83,7 +87,13 @@ def latest_remote_checkpoint(api_client, repo_id: str, remote_prefix: str) -> st
             return int(name.split("-")[-1])
         except ValueError:
             return -1
-    return max(names, key=key) if names else None
+    # Only complete checkpoints (training state + config) are resumable; a
+    # session killed mid-upload must not become the permanent "latest" that
+    # crashes every future resume.
+    root = remote_prefix.strip("/")
+    complete = {n for n in names
+                if f"{root}/{n}/state.pt" in files and f"{root}/{n}/config.json" in files}
+    return max(complete, key=key) if complete else None
 
 
 def download_latest(api_client, repo_id: str, remote_prefix: str,
@@ -115,6 +125,14 @@ def download_latest(api_client, repo_id: str, remote_prefix: str,
 
 
 def write_status(api_client, repo_id: str, remote_prefix: str, status: str) -> None:
+    # Timestamp failure statuses: identical text would otherwise be skipped as a
+    # no-op upload by HF, hiding repeated crash cycles from the watchers that
+    # key off the commit history. DONE / IN PROGRESS markers stay untouched so
+    # their startswith checks keep working.
+    if not status.startswith(("DONE", "IN PROGRESS")):
+        import datetime
+        stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        status = f"# {stamp}\n{status}"
     api_client.upload_file(
         path_or_fileobj=status.encode("utf-8"),
         path_in_repo=f"{remote_prefix.strip('/')}/run-status.txt",
