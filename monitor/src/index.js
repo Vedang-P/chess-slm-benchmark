@@ -1040,6 +1040,21 @@ function renderTimeline(){
     (detail?'<div class="d">'+detail+"</div>":"")+
     (chips&&chips.length?'<div class="chips">'+chips.map(x=>'<span class="chip '+x[0]+'">'+x[1]+"</span>").join("")+"</div>":"")+"</div></div>";
   let html=TL_HISTORY.map(h=>item("done",tlFmt(new Date(h[0])),h[1],h[2],h[3])).join("");
+  // Evals completed after the hand-written history: append them automatically
+  // with their real numbers, so the timeline keeps growing on its own.
+  TL_TARGETS.filter(s=>s>500000).forEach(s=>{
+    const e=(snap.evals||{})[tlEvalKey(s)];
+    if(!e)return;
+    const mate=e.mate&&e.mate[0]?e.mate[0].pct:null, puz=e.puzzles&&e.puzzles[0]?e.puzzles[0].pct:null;
+    const fin=s===1620000;
+    const chips=[];
+    if(mate!=null)chips.push(["ok",mate+"% MATE"]);
+    if(puz!=null)chips.push(["ok",puz+"% puzzles"]);
+    if(fin)chips.push(["","full frozen protocol"]);
+    html+=item("done",e.fetched_at?tlFmt(new Date(e.fetched_at)):"done",
+      "@"+tlK(s)+" "+(fin?"final frozen eval":"preview eval"),
+      fin?"4k MATE + official 10k puzzles, archived on HF":"",chips);
+  });
   html+=item("now","now","training — step "+last.step.toLocaleString()+" ("+pct.toFixed(1)+"%)",
     (k?"on "+esc(k.account):"no kernel")+(complete?" · complete":" · next eval @"+tlK(next)+" in "+tlIn(etaT(next)-nowT)+" · finish in "+tlIn(etaT(1620000)-nowT)),
     [["live",rate.toFixed(2)+" steps/s"],["",Math.round(rate*2048).toLocaleString()+" samples/s"]]);
