@@ -440,6 +440,43 @@ input[type=range]{width:130px;accent-color:var(--accent)}
 select{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:5px 8px;max-width:320px;font-size:13px}
 .foot{color:var(--ink-3);font-size:12px;margin:28px 0 50px;font-family:var(--mono)}
 .empty{color:var(--ink-3);padding:10px 0}
+/* timeline */
+.tl-hero{display:grid;gap:8px}
+.tl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:760px){.tl-stats{grid-template-columns:repeat(2,1fr)}}
+.tl-stat .k{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.tl-stat .v{font-family:var(--mono);font-size:15px;margin-top:2px}
+.tl-stat .s{color:var(--ink-3);font-size:11.5px;font-family:var(--mono)}
+.tl-track{position:relative;height:46px;margin:20px 2px 22px}
+.tl-track .rail{position:absolute;left:0;right:0;top:17px;height:4px;border-radius:2px;background:var(--surface-3)}
+.tl-track .fill{position:absolute;left:0;top:17px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--live))}
+.tl-track .marker{position:absolute;top:10px;width:18px;height:18px;border-radius:50%;background:var(--live);box-shadow:0 0 0 4px rgba(217,70,63,.16);transform:translateX(-50%)}
+.tl-track .marker::after{content:"";position:absolute;inset:5px;border-radius:50%;background:var(--bg)}
+.tl-track .tick{position:absolute;top:25px;transform:translateX(-50%);font-family:var(--mono);font-size:10px;color:var(--ink-3);text-align:center;white-space:nowrap}
+.tl-track .tick i{position:absolute;left:50%;top:-11px;width:1px;height:8px;background:var(--grid)}
+.tl-track .tick.done{color:var(--ink-2)}
+.tl-track .tick.done i{background:var(--ok)}
+.tl-track .tick.now{color:var(--live)}
+.tl-track .tick.now i{background:var(--live)}
+.tl{position:relative}
+.tl-item{display:grid;grid-template-columns:118px 22px 1fr;gap:12px;padding:8px 0}
+.tl-item .when{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);padding-top:2px;text-align:right;white-space:nowrap}
+.tl-item .node{position:relative}
+.tl-item .node::before{content:"";position:absolute;left:50%;top:5px;width:9px;height:9px;border-radius:50%;background:var(--ink-3);transform:translateX(-50%)}
+.tl-item .node::after{content:"";position:absolute;left:50%;top:19px;bottom:-12px;width:1px;background:var(--grid);transform:translateX(-50%)}
+.tl-item:last-child .node::after{display:none}
+.tl-item.done .node::before{background:var(--ok)}
+.tl-item.now .node::before{background:var(--live);box-shadow:0 0 0 4px rgba(217,70,63,.16)}
+.tl-item.future .node::before{background:transparent;border:1px dashed var(--ink-3);box-sizing:border-box}
+.tl-item.future{opacity:.75}
+.tl-item .t{font-weight:600;font-size:13px}
+.tl-item .d{color:var(--ink-2);font-size:12.5px;margin-top:1px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.chip{font-family:var(--mono);font-size:11px;padding:1px 7px;border:1px solid var(--border);border-radius:999px;color:var(--ink-2);background:var(--surface-2)}
+.chip.ok{border-color:rgba(63,166,106,.45);color:#7ed3a4}
+.chip.live{border-color:rgba(217,70,63,.5);color:#ef8a85}
+.chip.warn{border-color:rgba(201,162,39,.5);color:#e3c565}
+@media(max-width:700px){.tl-item{grid-template-columns:86px 18px 1fr;gap:8px}}
 </style>
 </head>
 <body>
@@ -448,6 +485,7 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
   <div class="tabs">
     <a data-tab="overview" class="active">overview</a>
     <a data-tab="metrics">metrics</a>
+    <a data-tab="timeline">timeline</a>
     <a data-tab="games">games</a>
   </div>
   <div class="nav-right" id="navright"></div>
@@ -543,6 +581,18 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
   </div>
   <div class="section">
     <div class="card"><div class="card-head"><div class="card-title">checkpoints</div><div class="card-note" id="ckpt-note"></div></div><table class="tbl" id="ckpttable"></table></div>
+  </div>
+</section>
+
+<!-- timeline -->
+<section id="tab-timeline" class="hidden">
+  <div class="section">
+    <div class="section-title">1b continuation · 320k → 1.62m steps · where we are</div>
+    <div class="card tl-hero" id="tl-hero"></div>
+  </div>
+  <div class="section">
+    <div class="section-title">project timeline</div>
+    <div class="card"><div class="tl" id="tl-list"></div></div>
   </div>
 </section>
 
@@ -922,15 +972,97 @@ function sanSpan(i){if(i>=game.moves.length)return '<span class="dim">—</span>
   return '<span class="san '+(i===ply-1?"on":"")+'" onclick="jump('+(i+1)+')">'+game.moves[i].san+"</span>";}
 function jump(p){if(!game)return;ply=Math.max(0,Math.min(game.moves.length,p));draw();}
 window.jump=jump;
+/* timeline tab */
+function tlRate(){
+  const c=(snap.curve||[]).filter(p=>p.t&&p.step);
+  const gaps=[];
+  for(let i=c.length-1;i>0&&gaps.length<6;i--){
+    const dt=(new Date(c[i].t)-new Date(c[i-1].t))/1000, ds=c[i].step-c[i-1].step;
+    if(dt>60&&ds>0){const r=ds/dt;if(r>0.5&&r<6)gaps.push(r);}
+  }
+  if(gaps.length){gaps.sort((a,b)=>a-b);return gaps[Math.floor(gaps.length/2)];}
+  const last=(snap.curve||[]).slice(-1)[0];
+  if(last&&last.samples_per_s)return last.samples_per_s/2048;
+  return 2.0;
+}
+function tlFmt(d){return d.toLocaleString("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});}
+function tlIn(ms){const h=ms/36e5;if(h<1)return Math.max(1,Math.round(h*60))+"m";if(h<48)return Math.floor(h)+"h "+Math.round((h%1)*60)+"m";return Math.floor(h/24)+"d "+Math.floor(h%24)+"h";}
+function tlK(s){return s>=1000000?((s/1e6).toFixed(2).replace(/\.?0+$/,""))+"m":(s/1000)+"k";}
+const TL_TARGETS=(function(){const a=[];for(let s=400000;s<=1600000;s+=100000)a.push(s);a.push(1620000);return a;})();
+function tlEvalKey(s){return s===1620000?"eval-results/ccgavn-5m-seed0-1620k-frozen/eval-summary.json":"eval-results/ccgavn-5m-seed0-"+(s/1000)+"k-preview/eval-summary.json";}
+const TL_HISTORY=[
+ ["2026-09-07T12:00:00Z","GAVN wave-2 arms reach 160k steps","5M GAVN (dim 224, 8L) on 80.27M ChessBench rows; train losses plateau ~3.89.",[]],
+ ["2026-09-09T12:00:00Z","Full frozen protocol — legacy 5M arms","13pp MATE gap to the 9M teacher; legacy GAVN rejected, CC-GAVN becomes the direction.",[["ok","85.35% MATE"],["ok","43.83% puzzles"]]],
+ ["2026-09-16T20:38:00Z","CC-GAVN run starts","4.76M params, candidate-conditioned geometry; 9M-teacher distillation + raw Stockfish bucket targets.",[]],
+ ["2026-09-17T12:00:00Z","@160k frozen eval","First CC-GAVN frozen-protocol measurement (8 ChessBench shards).",[["ok","87.38% MATE"],["ok","51.86% puzzles"]]],
+ ["2026-09-19T12:21:00Z","@260k preview","Puzzle curriculum (14.9% of samples) added at 160k; tactic effect shows up.",[["ok","88.78% MATE"],["ok","57.86% puzzles"]]],
+ ["2026-09-19T19:28:00Z","@320k frozen eval","End of the 10-shard phase: 655M samples over only ~80M unique rows (~8 passes).",[["ok","89.05% MATE"],["ok","59.95% puzzles"]]],
+ ["2026-09-19T20:00:00Z","1B-first scaling plan kickoff","Largest 108 unbuilt ChessBench shards; 4 accounts x 2 labeling slices; recipe frozen, only engineering changes.",[]],
+ ["2026-09-20T10:50:00Z","Corpus frozen, 1B continuation launches","92/108 shards built (1.652B rows); training set = 61 tags / 929M new rows (~11.6x unique data); push-only gate bug fixed.",[]],
+ ["2026-09-21T04:02:00Z","@400k preview","LR warm-restart transient: the resumed cosine schedule jumped 0 -> 4.5e-4.",[["warn","88.62% MATE"],["warn","59.77% puzzles"]]],
+ ["2026-09-21T16:10:00Z","@500k preview","Biggest interval jump yet; puzzles rose with the tactic curriculum diluted 10x — generalization from ChessBench.",[["ok","90.60% MATE"],["ok","66.33% puzzles"],["ok","+2.0 / +6.6"]]],
+];
+function renderTimeline(){
+  const c=(snap.curve||[]).filter(p=>p.step);
+  const last=c.length?c[c.length-1]:{step:320000};
+  const complete=last.step>=1620000;
+  const rate=tlRate(), nowT=Date.now();
+  const baseT=last.t?new Date(last.t).getTime():nowT;
+  const etaT=s=>baseT+(s-last.step)/rate*1000;
+  const pct=Math.max(0,Math.min(100,(last.step-320000)/(1620000-320000)*100));
+  const next=TL_TARGETS.find(s=>s>last.step)||1620000;
+  const k=(snap.kernels||[]).find(x=>x.kernel==="ccgavn-1b"&&/RUNNING/i.test(x.status));
+  const q=k?(snap.quota||{})[k.account]:null;
+  const handoffT=(q!==null&&q!==undefined&&isFinite(parseFloat(q)))?nowT+parseFloat(q)*36e5:null;
+  const stat=(kk,v,s)=>'<div class="tl-stat"><div class="k">'+kk+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>';
+  const stats='<div class="tl-stats">'+
+    stat("step",last.step.toLocaleString(),"of 1,620,000 · "+pct.toFixed(1)+"%")+
+    stat("rate",rate.toFixed(2)+" steps/s",Math.round(rate*2048).toLocaleString()+" samples/s")+
+    (complete?stat("next eval","—","all milestones evaluated")+stat("finish","done",tlFmt(new Date(baseT)))
+             :stat("next eval",tlIn(etaT(next)-nowT),"@"+tlK(next)+" · "+tlFmt(new Date(etaT(next))))+
+              stat("finish",tlIn(etaT(1620000)-nowT),tlFmt(new Date(etaT(1620000)))))+
+    "</div>";
+  const ticks=TL_TARGETS.filter(s=>s%200000===0).map(s=>{
+    const p=(s-320000)/1300000*100;
+    const done=!!(snap.evals||{})[tlEvalKey(s)];
+    const now=Math.abs(s-last.step)<50000&&!done;
+    return '<div class="tick '+(done?"done":(now?"now":""))+'" style="left:'+p.toFixed(2)+'%"><i></i>'+tlK(s)+"</div>";
+  }).join("");
+  const track='<div class="tl-track"><div class="rail"></div><div class="fill" style="width:'+pct.toFixed(2)+'%"></div>'+ticks+
+    '<div class="marker" style="left:'+pct.toFixed(2)+'%"></div></div>';
+  const footer=k?("training on "+esc(k.account)+" · "+esc(q==null?"?":String(q))+"h quota left"+(handoffT?" · handoff ~"+tlFmt(new Date(handoffT)):"")+" · "+rate.toFixed(2)+" steps/s")
+                 :("no training kernel running · last checkpoint "+last.step.toLocaleString());
+  const totalQ=Object.keys(snap.quota||{}).reduce((a,x)=>a+(parseFloat(snap.quota[x])||0),0);
+  const needH=(1620000-last.step)/rate/3600;
+  document.getElementById("tl-hero").innerHTML=stats+track+'<div class="card-note mono">'+footer+"</div>"+
+    '<div class="card-note mono">ETAs assume continuous training · '+totalQ.toFixed(1)+"h GPU quota left across accounts, ~"+needH.toFixed(0)+"h needed to 1.62m · quota handoffs/resets add time</div>";
+  const item=(cls,when,title,detail,chips)=>'<div class="tl-item '+cls+'"><div class="when">'+when+'</div><div class="node"></div><div><div class="t">'+title+"</div>"+
+    (detail?'<div class="d">'+detail+"</div>":"")+
+    (chips&&chips.length?'<div class="chips">'+chips.map(x=>'<span class="chip '+x[0]+'">'+x[1]+"</span>").join("")+"</div>":"")+"</div></div>";
+  let html=TL_HISTORY.map(h=>item("done",tlFmt(new Date(h[0])),h[1],h[2],h[3])).join("");
+  html+=item("now","now","training — step "+last.step.toLocaleString()+" ("+pct.toFixed(1)+"%)",
+    (k?"on "+esc(k.account):"no kernel")+(complete?" · complete":" · next eval @"+tlK(next)+" in "+tlIn(etaT(next)-nowT)+" · finish in "+tlIn(etaT(1620000)-nowT)),
+    [["live",rate.toFixed(2)+" steps/s"],["",Math.round(rate*2048).toLocaleString()+" samples/s"]]);
+  TL_TARGETS.filter(s=>s>last.step).forEach(s=>{
+    const fin=s===1620000;
+    html+=item("future",tlFmt(new Date(etaT(s))),
+      "@"+tlK(s)+" "+(fin?"final frozen eval":"preview eval"),
+      "projected · in "+tlIn(etaT(s)-nowT)+(fin?" · full protocol: 4k MATE + official 10k puzzles":""),
+      fin?[["","4k MATE"],["","10k puzzles"]]:[]);
+  });
+  html+=item("future","tbd","2B stage decision","Deferred until the 1B results justify it (user decision 2026-09-19). Extra labeled shards are frozen on HF.",[]);
+  html+=item("future","tbd","write-up","Target: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026.",[]);
+  document.getElementById("tl-list").innerHTML=html;
+}
 /* tabs + wiring */
 function switchTab(name){
   document.querySelectorAll(".tabs a").forEach(a=>a.classList.toggle("active",a.dataset.tab===name));
-  ["overview","metrics","games"].forEach(t=>document.getElementById("tab-"+t).classList.toggle("hidden",t!==name));
+  ["overview","metrics","timeline","games"].forEach(t=>document.getElementById("tab-"+t).classList.toggle("hidden",t!==name));
   if(name!=="games")renderCharts();
 }
 document.querySelectorAll(".tabs a").forEach(a=>a.onclick=()=>{location.hash=a.dataset.tab;switchTab(a.dataset.tab);});
-const initTab=(location.hash||"").replace("#","");if(["overview","metrics","games"].includes(initTab))switchTab(initTab);
-window.addEventListener("hashchange",()=>{const t=(location.hash||"").replace("#","");if(["overview","metrics","games"].includes(t))switchTab(t);});
+const initTab=(location.hash||"").replace("#","");if(["overview","metrics","timeline","games"].includes(initTab))switchTab(initTab);
+window.addEventListener("hashchange",()=>{const t=(location.hash||"").replace("#","");if(["overview","metrics","timeline","games"].includes(t))switchTab(t);});
 document.getElementById("b-prev").onclick=()=>jump(ply-1);
 document.getElementById("b-next").onclick=()=>jump(ply+1);
 document.getElementById("b-first").onclick=()=>jump(0);
@@ -948,7 +1080,7 @@ async function load(){
   const r=await fetch("/api/snapshot?t="+Date.now(),{cache:"no-store"});
   snap=await r.json();
   updateCorpusRate();
-  renderNav();renderNotices();renderRuns();renderStages();renderCorpus();renderInfra();renderCharts();renderCkpt();
+  renderNav();renderNotices();renderRuns();renderStages();renderCorpus();renderInfra();renderCharts();renderCkpt();renderTimeline();
   const sel=document.getElementById("gamesel");const cur=sel.value;
   sel.innerHTML=(snap.games||[]).map((g,i)=>'<option value="'+i+'">'+esc(g.white+" vs "+g.black+" ("+g.result+")")+"</option>").join("");
   if(snap.games&&snap.games.length){sel.value=(cur&&+cur<snap.games.length)?cur:0;selectGame(+sel.value);}else selectGame(-1);
