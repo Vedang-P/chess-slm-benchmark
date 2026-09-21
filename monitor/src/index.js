@@ -142,13 +142,16 @@ async function dispatchTick(env) {
 async function refresh(env) {
   const prev = (await env.SNAPSHOT.get("snapshot", "json")) || {};
   const snap = { ...prev, errors: [] };
-  snap.curve = prev.curve || [];
-  snap.evals = prev.evals || {};
+  // Clone the fields this refresh mutates: aliasing prev.* would make
+  // appendNotices(prev, snap) compare an object with itself and silently
+  // drop every "new eval" notice.
+  snap.curve = [...(prev.curve || [])];
+  snap.evals = { ...(prev.evals || {}) };
   snap.runs = {};
-  snap.games = prev.games || [];
+  snap.games = [...(prev.games || [])];
   snap.kernels = prev.kernels || [];
   snap.quota = prev.quota || {};
-  snap.notices = prev.notices || [];
+  snap.notices = [...(prev.notices || [])];
 
   let files = [];
   try { files = await hfTree(env); } catch (e) { snap.errors.push(`hf: ${e}`); }
