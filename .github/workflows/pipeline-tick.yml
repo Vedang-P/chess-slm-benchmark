@@ -58,6 +58,7 @@ jobs:
         run: |
           python3 scripts/ensure_build_2b.py || true
           python3 scripts/watch_1b.py || true
+          python3 scripts/watch_2b.py || true
           python3 scripts/ensure_eval_320k.py || true
           python3 scripts/ensure_eval_preview.py || true
           python3 scripts/push_monitor.py

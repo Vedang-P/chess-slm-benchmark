@@ -227,6 +227,11 @@ def parse_args():
     p.add_argument("--ckpt-every", type=int, default=5000)
     p.add_argument("--hf-upload-every", type=float, default=1800)
     p.add_argument("--resume-from-hf", action="store_true")
+    p.add_argument("--allow-shard-superset", action="store_true",
+                   help="Deliberate stage transition: permit resuming when every "
+                        "checkpoint shard tag is contained in the requested "
+                        "(larger) set. The new schedule covers the union; only "
+                        "use with an explicit new stage config.")
     return p.parse_args()
 
 
@@ -281,12 +286,25 @@ def main():
                 + "; ".join(mismatches)
                 + ". Start a fresh --hf-run for a new experiment.")
         remote_tags = resume_config.get("shard_tags")
-        if remote_tags is not None and shard_tags is not None and \
-                sorted(remote_tags) != sorted(shard_tags):
-            raise ValueError(
-                "Refusing to resume with a changed shard set: checkpoint has "
-                f"{len(remote_tags)} frozen tags, requested {len(shard_tags)}. "
-                "Start a fresh --hf-run for a new experiment.")
+        if remote_tags is not None and shard_tags is not None:
+            if args.allow_shard_superset:
+                missing_from_request = set(remote_tags) - set(shard_tags)
+                if missing_from_request:
+                    raise ValueError(
+                        "Refusing superset resume: checkpoint tags are not a "
+                        f"subset of the requested set (checkpoint has "
+                        f"{len(remote_tags)}, requested {len(shard_tags)}; "
+                        f"missing {sorted(missing_from_request)[:5]}).")
+                added = sorted(set(shard_tags) - set(remote_tags))
+                print(f"[shards] stage transition: {len(remote_tags)} -> "
+                      f"{len(shard_tags)} tags ({len(added)} added; first: "
+                      f"{', '.join(added[:5])}"
+                      f"{'...' if len(added) > 5 else ''})", flush=True)
+            elif sorted(remote_tags) != sorted(shard_tags):
+                raise ValueError(
+                    "Refusing to resume with a changed shard set: checkpoint has "
+                    f"{len(remote_tags)} frozen tags, requested {len(shard_tags)}. "
+                    "Start a fresh --hf-run for a new experiment.")
 
     manager = ShardManager(args.hf_repo, args.hf_shards,
                            Path(os.environ.get("SHARD_CACHE", "/kaggle/tmp/shards")),

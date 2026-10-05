@@ -4,9 +4,10 @@ const HF = "https://huggingface.co";
 const REPO = "vedangfake/chess-slm-benchmark";
 const RAW = "https://raw.githubusercontent.com/Vedang-P/chess-slm-benchmark/main";
 const RUN = "ccgavn-5m-seed0";
-const FINAL_STEP = 1_620_000;
+const FINAL_STEP = 3_896_658;   // stage 2B-A target (2026-10-05)
 const STAGE1 = 320_000;
-const CORPUS_TARGET = 920_000_000;
+const STAGE1B = 1_620_000;      // end of stage 1B
+const CORPUS_TARGET = 1_920_690_429;
 const LIVE_RUNS = ["ccgavn-5m-seed0", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum"];
 const REFERENCE = [
   { name: "Ruoss 9M (teacher)", mate: 98.72, puzzles: 86.13, ref: true },
@@ -78,9 +79,12 @@ function computeStages(snap) {
   s.train320 = lastStep >= STAGE1 ? 100 : Math.min(100, (lastStep / STAGE1) * 100);
   s.eval320 = snap.eval320_done ? 100 : (lastStep >= STAGE1 ? 50 : 0);
   s.corpus1b = Math.min(100, ((corpus.labeled_rows || 0) / CORPUS_TARGET) * 100);
-  s.train1b = lastStep >= FINAL_STEP ? 100
-    : lastStep >= STAGE1 ? Math.max(0, Math.min(100, ((lastStep - STAGE1) / (FINAL_STEP - STAGE1)) * 100)) : 0;
+  s.train1b = lastStep >= STAGE1B ? 100
+    : lastStep >= STAGE1 ? Math.max(0, Math.min(100, ((lastStep - STAGE1) / (STAGE1B - STAGE1)) * 100)) : 0;
   s.eval1b = snap.eval1b_done ? 100 : 0;
+  s.train2b = lastStep >= FINAL_STEP ? 100
+    : lastStep >= STAGE1B ? Math.max(0, Math.min(100, ((lastStep - STAGE1B) / (FINAL_STEP - STAGE1B)) * 100)) : 0;
+  s.eval2b = snap.eval2b_done ? 100 : 0;
   return s;
 }
 
@@ -175,7 +179,8 @@ async function refresh(env) {
     if (s) snap.evals[p] = { ...s, fetched_at: new Date().toISOString() };
   }
   snap.eval320_done = evalPaths.some((p) => p.includes("320k"));
-  snap.eval1b_done = evalPaths.some((p) => /1b/i.test(p));
+  snap.eval1b_done = evalPaths.some((p) => /1b|1620k/i.test(p));
+  snap.eval2b_done = evalPaths.some((p) => /3896k/.test(p));
 
   for (const p of [...paths].filter((x) => /^[^/]+\/run-status\.txt$/.test(x))) {
     const top = p.split("/")[0];
@@ -668,17 +673,17 @@ function runBlock(key,status,accounts){
   const c=snap.curve||[];const last=c.length?c[c.length-1]:null;
   const training=key.indexOf("ccgavn-5m-seed0")>=0;
   const corpus=snap.corpus||{};
-  const gateOpen=(corpus.labeled_rows||0)>=(corpus.target_rows||920000000);
+  const gateOpen=(corpus.labeled_rows||0)>=(corpus.target_rows||1920690429);
   let state;
   if(running)state="running";
   else if(/DONE|COMPLETE/i.test(status))state="complete";
   else if(/error|Traceback|Error/i.test(status))state="failed";
-  else if(training&&last&&last.step<1620000)state=gateOpen?"resuming":"awaiting 1B corpus";
+  else if(training&&last&&last.step<FINAL_STEP)state=last.step>=STAGE1B?"stage 2B":(gateOpen?"resuming":"awaiting 1B corpus");
   else state="idle";
   let sum="",bar="",stats="";
   if(training&&last){
-    const pct=Math.min(100,last.step/1620000*100);
-    sum="step "+fmt(last.step)+" / 1,620,000 · "+pct.toFixed(1)+"%";
+    const pct=Math.min(100,last.step/FINAL_STEP*100);
+    sum="step "+fmt(last.step)+" / "+fmt(FINAL_STEP)+" · "+pct.toFixed(1)+"%";
     bar='<div class="phase-track run-bar"><div class="phase-fill" style="width:'+pct.toFixed(1)+'%"></div></div>';
     stats=statRow([["train loss",last.train.toFixed(4)],["dev loss",last.dev!=null?last.dev.toFixed(4):"—"],
       ["samples",(last.step*2048/1e9).toFixed(2)+"B"],["epochs",(last.step*2048/94.3e6).toFixed(1)]]);
@@ -706,7 +711,7 @@ function renderRuns(){
 }
 function renderStages(){
   const s=snap.stages||{};
-  const rows=[["train320","CC-GAVN 320k training"],["eval320","320k frozen eval"],["corpus1b","1B corpus labeling"],["train1b","1B continuation → 1.62M steps"],["eval1b","1B frozen eval"]];
+  const rows=[["train320","CC-GAVN 320k training"],["eval320","320k frozen eval"],["corpus1b","2B corpus labeling (108 shards)"],["train1b","1B continuation → 1.62M steps"],["eval1b","1B frozen eval"],["train2b","2B-A continuation → 3.90M steps"],["eval2b","2B-A frozen eval"]];
   document.getElementById("stages").innerHTML='<div class="card-head"><div class="card-title">stages</div></div>'+
     rows.map(([k,label])=>{const p=Math.round(s[k]||0);
       return '<div style="margin:9px 0"><div class="phase-text" style="margin:0 0 4px"><span>'+label+'</span><span class="mono">'+p+'%</span></div>'+
@@ -722,7 +727,7 @@ function updateCorpusRate(){
 function corpusGateInfo(){
   const c=snap.corpus||{};
   const done=new Set(c.done_tags||[]);
-  const remaining=Math.max(0,(c.target_rows||920000000)-(c.labeled_rows||0));
+  const remaining=Math.max(0,(c.target_rows||1920690429)-(c.labeled_rows||0));
   const remRows=(c.all_tags||[]).filter(x=>!done.has(x)).map(x=>({x:x,r:(c.rows_by_tag||{})[x]||0}))
     .sort((a,b)=>b.r-a.r);
   let acc=0,gateN=0;
@@ -988,8 +993,8 @@ function tlRate(){
 function tlFmt(d){return d.toLocaleString("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});}
 function tlIn(ms){const h=ms/36e5;if(h<1)return Math.max(1,Math.round(h*60))+"m";if(h<48)return Math.floor(h)+"h "+Math.round((h%1)*60)+"m";return Math.floor(h/24)+"d "+Math.floor(h%24)+"h";}
 function tlK(s){return s>=1000000?((s/1e6).toFixed(2).replace(/\.?0+$/,""))+"m":(s/1000)+"k";}
-const TL_TARGETS=(function(){const a=[];for(let s=400000;s<=1600000;s+=100000)a.push(s);a.push(1620000);return a;})();
-function tlEvalKey(s){return s===1620000?"eval-results/ccgavn-5m-seed0-1620k-frozen/eval-summary.json":"eval-results/ccgavn-5m-seed0-"+(s/1000)+"k-preview/eval-summary.json";}
+const TL_TARGETS=(function(){const a=[];for(let s=400000;s<=3800000;s+=100000)a.push(s);a.push(1620000);a.push(3896658);a.sort((x,y)=>x-y);return a;})();
+function tlEvalKey(s){return (s===1620000||s===3896658)?"eval-results/ccgavn-5m-seed0-"+Math.floor(s/1000)+"k-frozen/eval-summary.json":"eval-results/ccgavn-5m-seed0-"+(s/1000)+"k-preview/eval-summary.json";}
 const TL_HISTORY=[
  ["2026-09-07T12:00:00Z","GAVN wave-2 arms reach 160k steps","5M GAVN (dim 224, 8L) on 80.27M ChessBench rows; train losses plateau ~3.89.",[]],
  ["2026-09-09T12:00:00Z","Full frozen protocol — legacy 5M arms","13pp MATE gap to the 9M teacher; legacy GAVN rejected, CC-GAVN becomes the direction.",[["ok","85.35% MATE"],["ok","43.83% puzzles"]]],
@@ -1001,29 +1006,31 @@ const TL_HISTORY=[
  ["2026-09-20T10:50:00Z","Corpus frozen, 1B continuation launches","92/108 shards built (1.652B rows); training set = 61 tags / 929M new rows (~11.6x unique data); push-only gate bug fixed.",[]],
  ["2026-09-21T04:02:00Z","@400k preview","LR warm-restart transient: the resumed cosine schedule jumped 0 -> 4.5e-4.",[["warn","88.62% MATE"],["warn","59.77% puzzles"]]],
  ["2026-09-21T16:10:00Z","@500k preview","Biggest interval jump yet; puzzles rose with the tactic curriculum diluted 10x — generalization from ChessBench.",[["ok","90.60% MATE"],["ok","66.33% puzzles"],["ok","+2.0 / +6.6"]]],
+ ["2026-09-30T21:51:00Z","1B continuation complete","1,620,000 steps on the 61-tag / 1.023B-row corpus; frozen eval MATE 91.70% / puzzles 74.31% (+2.7pp / +14.4pp over 320k).",[["ok","91.70% MATE"],["ok","74.31% puzzles"]]],
+ ["2026-10-05T17:00:00Z","Stage 2B-A launched","102 tags (1.746B rows) warm-started from checkpoint-1,620,000; target 3,896,658 steps; last 16 planned shards labeling in parallel.",[]],
 ];
 function renderTimeline(){
   const c=(snap.curve||[]).filter(p=>p.step);
   const last=c.length?c[c.length-1]:{step:320000};
-  const complete=last.step>=1620000;
+  const complete=last.step>=FINAL_STEP;
   const rate=tlRate(), nowT=Date.now();
   const baseT=last.t?new Date(last.t).getTime():nowT;
   const etaT=s=>baseT+(s-last.step)/rate*1000;
-  const pct=Math.max(0,Math.min(100,(last.step-320000)/(1620000-320000)*100));
-  const next=TL_TARGETS.find(s=>s>last.step)||1620000;
-  const k=(snap.kernels||[]).find(x=>x.kernel==="ccgavn-1b"&&/RUNNING/i.test(x.status));
+  const pct=Math.max(0,Math.min(100,(last.step-STAGE1)/(FINAL_STEP-STAGE1)*100));
+  const next=TL_TARGETS.find(s=>s>last.step)||FINAL_STEP;
+  const k=(snap.kernels||[]).find(x=>/^ccgavn-/.test(x.kernel)&&/RUNNING/i.test(x.status));
   const q=k?(snap.quota||{})[k.account]:null;
   const handoffT=(q!==null&&q!==undefined&&isFinite(parseFloat(q)))?nowT+parseFloat(q)*36e5:null;
   const stat=(kk,v,s)=>'<div class="tl-stat"><div class="k">'+kk+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>';
   const stats='<div class="tl-stats">'+
-    stat("step",last.step.toLocaleString(),"of 1,620,000 · "+pct.toFixed(1)+"%")+
+    stat("step",last.step.toLocaleString(),"of "+FINAL_STEP.toLocaleString()+" · "+pct.toFixed(1)+"%")+
     stat("rate",rate.toFixed(2)+" steps/s",Math.round(rate*2048).toLocaleString()+" samples/s")+
     (complete?stat("next eval","—","all milestones evaluated")+stat("finish","done",tlFmt(new Date(baseT)))
              :stat("next eval",tlIn(etaT(next)-nowT),"@"+tlK(next)+" · "+tlFmt(new Date(etaT(next))))+
-              stat("finish",tlIn(etaT(1620000)-nowT),tlFmt(new Date(etaT(1620000)))))+
+              stat("finish",tlIn(etaT(FINAL_STEP)-nowT),tlFmt(new Date(etaT(FINAL_STEP)))))+
     "</div>";
   const ticks=TL_TARGETS.filter(s=>s%200000===0).map(s=>{
-    const p=(s-320000)/1300000*100;
+    const p=(s-STAGE1)/(FINAL_STEP-STAGE1)*100;
     const done=!!(snap.evals||{})[tlEvalKey(s)];
     const now=Math.abs(s-last.step)<50000&&!done;
     return '<div class="tick '+(done?"done":(now?"now":""))+'" style="left:'+p.toFixed(2)+'%"><i></i>'+tlK(s)+"</div>";
@@ -1033,9 +1040,9 @@ function renderTimeline(){
   const footer=k?("training on "+esc(k.account)+" · "+esc(q==null?"?":String(q))+"h quota left"+(handoffT?" · handoff ~"+tlFmt(new Date(handoffT)):"")+" · "+rate.toFixed(2)+" steps/s")
                  :("no training kernel running · last checkpoint "+last.step.toLocaleString());
   const totalQ=Object.keys(snap.quota||{}).reduce((a,x)=>a+(parseFloat(snap.quota[x])||0),0);
-  const needH=(1620000-last.step)/rate/3600;
+  const needH=(FINAL_STEP-last.step)/rate/3600;
   document.getElementById("tl-hero").innerHTML=stats+track+'<div class="card-note mono">'+footer+"</div>"+
-    '<div class="card-note mono">ETAs assume continuous training · '+totalQ.toFixed(1)+"h GPU quota left across accounts, ~"+needH.toFixed(0)+"h needed to 1.62m · quota handoffs/resets add time</div>";
+    '<div class="card-note mono">ETAs assume continuous training · '+totalQ.toFixed(1)+"h GPU quota left across accounts, ~"+needH.toFixed(0)+"h needed to "+tlK(FINAL_STEP)+" · quota handoffs/resets add time</div>";
   const item=(cls,when,title,detail,chips)=>'<div class="tl-item '+cls+'"><div class="when">'+when+'</div><div class="node"></div><div><div class="t">'+title+"</div>"+
     (detail?'<div class="d">'+detail+"</div>":"")+
     (chips&&chips.length?'<div class="chips">'+chips.map(x=>'<span class="chip '+x[0]+'">'+x[1]+"</span>").join("")+"</div>":"")+"</div></div>";
@@ -1046,7 +1053,7 @@ function renderTimeline(){
     const e=(snap.evals||{})[tlEvalKey(s)];
     if(!e)return;
     const mate=e.mate&&e.mate[0]?e.mate[0].pct:null, puz=e.puzzles&&e.puzzles[0]?e.puzzles[0].pct:null;
-    const fin=s===1620000;
+    const fin=(s===1620000||s===3896658);
     const chips=[];
     if(mate!=null)chips.push(["ok",mate+"% MATE"]);
     if(puz!=null)chips.push(["ok",puz+"% puzzles"]);
@@ -1056,16 +1063,16 @@ function renderTimeline(){
       fin?"4k MATE + official 10k puzzles, archived on HF":"",chips);
   });
   html+=item("now","now","training — step "+last.step.toLocaleString()+" ("+pct.toFixed(1)+"%)",
-    (k?"on "+esc(k.account):"no kernel")+(complete?" · complete":" · next eval @"+tlK(next)+" in "+tlIn(etaT(next)-nowT)+" · finish in "+tlIn(etaT(1620000)-nowT)),
+    (k?"on "+esc(k.account):"no kernel")+(complete?" · complete":" · next eval @"+tlK(next)+" in "+tlIn(etaT(next)-nowT)+" · finish in "+tlIn(etaT(FINAL_STEP)-nowT)),
     [["live",rate.toFixed(2)+" steps/s"],["",Math.round(rate*2048).toLocaleString()+" samples/s"]]);
   TL_TARGETS.filter(s=>s>last.step).forEach(s=>{
-    const fin=s===1620000;
+    const fin=(s===1620000||s===3896658);
     html+=item("future",tlFmt(new Date(etaT(s))),
       "@"+tlK(s)+" "+(fin?"final frozen eval":"preview eval"),
       "projected · in "+tlIn(etaT(s)-nowT)+(fin?" · full protocol: 4k MATE + official 10k puzzles":""),
       fin?[["","4k MATE"],["","10k puzzles"]]:[]);
   });
-  html+=item("future","tbd","2B stage decision","Deferred until the 1B results justify it (user decision 2026-09-19). Extra labeled shards are frozen on HF.",[]);
+  html+=item("future","tbd","Stage 2B-B / next decision","Final 16 shards (~269M rows) append after stage 2B-A; then decide on further scaling from the shard-content insights.",[]);
   html+=item("future","tbd","write-up","Target: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026.",[]);
   document.getElementById("tl-list").innerHTML=html;
 }

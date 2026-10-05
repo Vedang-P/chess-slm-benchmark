@@ -32,14 +32,19 @@ CRED_DS = {"vedanggggg": "vedanggggg/chess-creds",
            "samaltmannnn": "samaltmannnn/hf-creds",
            "shoumikmitra": "shoumikmitra/hf-creds"}
 ACTIVE = ("RUNNING", "QUEUED", "PENDING")
+FINAL_STEP = 3_896_658  # stage 2B-A target (2026-10-05)
 TARGETS = [400_000, 500_000, 600_000, 700_000, 800_000, 900_000, 1_000_000,
            1_100_000, 1_200_000, 1_300_000, 1_400_000, 1_500_000, 1_600_000,
-           1_620_000]
+           1_620_000,
+           1_700_000, 1_800_000, 1_900_000, 2_000_000, 2_100_000, 2_200_000,
+           2_300_000, 2_400_000, 2_500_000, 2_600_000, 2_700_000, 2_800_000,
+           2_900_000, 3_000_000, 3_100_000, 3_200_000, 3_300_000, 3_400_000,
+           3_500_000, 3_600_000, 3_700_000, 3_800_000, FINAL_STEP]
 
 
 def out_prefix(step: int) -> str:
     k = step // 1000
-    return (f"eval-results/{RUN}-{k}k-frozen" if step == 1_620_000
+    return (f"eval-results/{RUN}-{k}k-frozen" if step in (1_620_000, FINAL_STEP)
             else f"eval-results/{RUN}-{k}k-preview")
 
 

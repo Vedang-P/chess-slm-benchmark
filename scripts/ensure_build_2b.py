@@ -68,14 +68,16 @@ def main() -> None:
     files = hf_files()
     sys.path.insert(0, str(ROOT / "scripts"))
     from launch_trainers import env_for_account
-    # 1B-first stop rule (user decision 2026-09-19): once enough shards are
-    # labeled for ~1B new rows, stop supervising so the fleet is not re-pushed.
+    # 2026-10-05 user decision: finish the full planned 108-shard corpus.
+    # Stage 2B-A trains on the 102 already-built tags (1.746B rows) while the
+    # last 16 (~269M rows) are labeled; the fleet now runs to the full plan
+    # instead of stopping at the old 920M 1B-first target.
     rows_map = json.loads((ROOT / "kernels" / "build-2b" / "shard_rows.json").read_text())
     done_new_rows = sum(int(rows_map[s]) for s in rows_map
                         if f"{PREFIX}/shard-{s}/teacher_logp.npy" in files)
-    TARGET_NEW_ROWS = 920_000_000
+    TARGET_NEW_ROWS = sum(int(v) for v in rows_map.values())
     if done_new_rows >= TARGET_NEW_ROWS:
-        print(f"[build-2b] 1B target reached ({done_new_rows/1e6:.0f}M new rows labeled); "
+        print(f"[build-2b] full plan reached ({done_new_rows/1e6:.0f}M new rows labeled); "
               f"not pushing further")
         return
     if recent_crash_cooldown():

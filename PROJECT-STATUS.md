@@ -1,5 +1,33 @@
 # Project Status — Chess SLM Benchmark (2026-08-30)
 
+## 2026-10-05 — 1B continuation COMPLETE; final frozen eval
+
+The 1B continuation reached **1,620,000 steps** on 2026-09-30T21:51Z
+(final train_loss 3.685, cosine lr → 4.7e-16, clean finish) on the frozen
+blend (`configs/ccgavn-1b-shard-tags.json`: 61 tags = 10 original + 51 new,
+929.0M new rows). All five `ccgavn-1b` kernels are stopped (one COMPLETE,
+four CANCEL_ACKNOWLEDGED after the winner finished). The complete frozen
+protocol was archived with returncode 0:
+
+| checkpoint | MATE (4,000) | Puzzles (10,000) |
+|---|---|---|
+| CC-GAVN @320k | 89.05% (3,562) | 59.95% (5,995) |
+| CC-GAVN @1620k (1B) | **91.70%** (3,668) | **74.31%** (7,431) |
+| Ruoss 9M (target) | 98.72% | 86.13% |
+
+1B adds **+2.65pp MATE / +14.36pp puzzles** over 320k at the same 4.76M
+params. The 100k-step preview evals show the curve flattening: MATE was
+91.42% at 1300k and 91.7% at 1620k; puzzles 74.08% → 74.31% (the 1600k
+preview read 91.9% / 74.25%, so the final stretch moves within ±0.3pp).
+Remaining gap to the 9M teacher: **−7.0pp MATE, −11.8pp puzzles**.
+
+Artifacts: HF `ccgavn-5m-seed0/checkpoint-1620000/` (config, metrics,
+state.pt) and `eval-results/ccgavn-5m-seed0-1620k-frozen/` (eval-full.log,
+eval-summary.json, run-status.txt). Reporting cleanup same day: the stale
+pre-fix crash traceback in the top-level `run-status.txt` was replaced
+with a DONE status, and the monitor's `eval1b` stage now matches the
+`1620k-frozen` archive (all five dashboard stages at 100%).
+
 ## 2026-09-20 — 1B continuation: push-only gate bug found & fixed; frozen corpus
 
 The 1B continuation had not started since `checkpoint-320000` landed
