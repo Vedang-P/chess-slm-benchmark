@@ -136,7 +136,7 @@ def build_corpus(api, files: list[str]) -> dict:
     rows_map = json.loads((ROOT / "kernels" / "build-2b" / "shard_rows.json").read_text())
     done = [s for s in rows_map if f"chessbench-full-build/shard-{s}/teacher_logp.npy" in files]
     labeled = sum(int(rows_map[s]) for s in done)
-    return {"target_rows": 920_000_000, "labeled_rows": labeled,
+    return {"target_rows": sum(int(v) for v in rows_map.values()), "labeled_rows": labeled,
             "shards_planned": len(rows_map), "shards_done": len(done),
             "original_rows": 94_277_038,
             "done_tags": sorted(done),
