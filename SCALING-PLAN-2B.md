@@ -1,5 +1,51 @@
 # 2B-Pair Scaling Plan (kickoff 2026-09-19)
 
+## 2026-10-05 — Stage 2B-A: user decisions, exact arithmetic, launch
+
+This plan was written for a single ~2B / 2.67-epoch stage. On 2026-10-05 the
+user chose a two-segment execution that starts training immediately:
+
+- **Segment 2B-A (running):** resume `ccgavn-5m-seed0` from
+  checkpoint-1,620,000 on the **102 built tags** (frozen 61-tag 1B corpus +
+  41 remaining built shards). Union = 94,277,038 original + 1,652,013,445 new
+  = **1,746,290,483 rows**. New cosine schedule to step **3,896,658**
+  (= 1,620,000 + round(2.67 × 1,746,290,483 / 2048) = +2,276,658 steps), i.e.
+  ~2.67 passes over the added 722,968,579 rows because the schedule is
+  proportional over the union. Warm start (weights + optimizer state); the
+  LR continues on the new cosine (~3.1e-4 at resume, no re-warmup).
+- **Segment 2B-B (pending):** the last 16 planned shards (~268.7M rows) are
+  being labeled now; append them with a further warm-start continuation once
+  they land.
+- Recipe unchanged: distillation signal, buckets, loss, model (4.76M params),
+  batch 2048, and the contiguous P000/P001 blocks all stay as-is. The
+  proposal to "fix" the puzzle-block dev spikes by rescheduling was rejected
+  by the user on 2026-10-05 (transient interference, fully recovered;
+  rescheduling would change the recipe that produced the puzzle gains).
+- Engineering: `train_ccgavn.py --allow-shard-superset` (stage transition,
+  checkpoint tags must be a subset), `kernels/ccgavn-2b/train_2b.py`,
+  `scripts/watch_2b.py`, CI tick updated, monitor extended to 3,896,658.
+
+**First shard-content insights (2026-10-05; sampled teacher_logp.npy via HTTP
+Range, no full downloads):**
+
+- The 92 built ChessBench shards are homogeneous: teacher entropy 2.59–2.62
+  nats (top-prob ~0.30), no shard with a distinct content signature; per-block
+  dev-loss effects are within ±0.02 and uncorrelated with entropy/rows
+  (Spearman 0.17 / −0.12). Adding the remaining ChessBench shards is therefore
+  a *data-quantity* intervention, not a *data-diversity* one — expect smooth
+  diminishing returns; there is no "golden shard" to chase.
+- The only content class that moves the model is the puzzle curriculum
+  (P000/P001, 7.0M rows each): softer teacher (2.88 nats) and the only blocks
+  that move dev (+0.17/+0.22 excursion, fully recovered). Every large
+  MATE/puzzle jump in the log is downstream of puzzle blocks. After 2B, the
+  higher-leverage axes are curriculum (more/harder tactics) or capacity — not
+  more of the same ChessBench distribution.
+- Crude scaling extrapolation: unique ChessBench data 80M (at 320k) → 1.023B
+  (at 1.62M) bought +2.65pp MATE / +14.36pp puzzles; a log-linear fit over
+  that interval predicts roughly **+0.7pp MATE / +3.8pp puzzles** for the next
+  2x of unique data. The flat 1B tail makes this an upper bound, so 2B-A is a
+  direct test of whether the data axis still pays.
+
 ## 2026-09-20 audit: 1B continuation gate bug, frozen corpus, fleet stop
 
 **Why training never started (fixed):** `kaggle kernels push` uploads *only*

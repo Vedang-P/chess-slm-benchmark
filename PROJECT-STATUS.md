@@ -28,6 +28,36 @@ pre-fix crash traceback in the top-level `run-status.txt` was replaced
 with a DONE status, and the monitor's `eval1b` stage now matches the
 `1620k-frozen` archive (all five dashboard stages at 100%).
 
+## 2026-10-05 — Stage 2B-A launched (102 tags); full-108 labeling restarted
+
+User decisions (2026-10-05): (1) start stage 2B-A now on the **102 built
+tags** (frozen 61 + 41 remaining built shards = 1.746B rows) and append the
+last 16 (~268.7M rows) after they are labeled; (2) step budget = the
+pre-registered 2.67-epoch proportion over the 723.0M added rows → new cosine
+schedule to **step 3,896,658**; (3) **warm start** from checkpoint-1,620,000
+(weights + optimizer state), not a fresh run; (4) keep the contiguous
+P000/P001 schedule blocks — the dev spikes are transient interference with
+full recovery, and changing the schedule would change the recipe that
+produced +14.4pp puzzles.
+
+- `configs/ccgavn-2b-shard-tags.json`: 102 tags, union 1,746,290,483 rows.
+- `scripts/train_ccgavn.py --allow-shard-superset`: deliberate stage
+  transitions (checkpoint tag set must be a subset of the new set).
+- `kernels/ccgavn-2b/train_2b.py` + `scripts/watch_2b.py` (cloud keep-alive,
+  crash backoff): launched on `vedangpandeyyy/ccgavn-2b` 2026-10-05.
+- Labeling fleet re-pushed to finish the full 108-shard plan (16 shards left,
+  across 4 accounts); `ensure_build_2b.py` target is now the full 1.921B rows.
+- Preview-eval milestones extended to 3.8M + a `3896k-frozen` final.
+
+First shard-content insights (curve + teacher sampling, 2026-10-05):
+ChessBench shards are statistically homogeneous (teacher entropy 2.59–2.62
+nats, top-prob ~0.30; per-block dev effects within ±0.02, Spearman vs
+entropy/rows 0.17 / −0.12) — more ChessBench shards are more of the same
+distribution, with no "golden shard". The puzzle curriculum is the only
+qualitatively different type: softer teacher (2.88 nats) and the only blocks
+that move dev (+0.17 to +0.22 during the block, fully recovered after);
+every large MATE/puzzle jump so far is downstream of those blocks.
+
 ## 2026-09-20 — 1B continuation: push-only gate bug found & fixed; frozen corpus
 
 The 1B continuation had not started since `checkpoint-320000` landed
