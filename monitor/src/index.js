@@ -774,6 +774,16 @@ function renderInfra(){
   const qn=document.getElementById("quota-note");
   if(qn){const r=fmtQuotaReset();qn.textContent="resets "+r.date+" "+r.time+" IST · in "+r.countdown;}
 }
+function evalNumbers(s){
+  const one=(m,key)=>{
+    if(!m)return null;
+    if(Array.isArray(m))return m[0]?m[0].pct:null;
+    if(m.pct!=null)return m.pct;
+    const n=m[key];
+    return n!=null&&m.total?Math.round(1000*n/m.total)/10:null;
+  };
+  return {mate:one(s.mate,"correct"),puz:one(s.puzzles,"solved")};
+}
 function evalRows(){
   const rows=[];
   for(const p in (snap.evals||{})){const s=snap.evals[p];
