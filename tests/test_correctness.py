@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -301,6 +302,16 @@ class CorrectnessTests(unittest.TestCase):
                              ["identity.json", "mate.jsonl", "puzzles.jsonl"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_monitor_inline_script_renders(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not available")
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run([node, str(root / "monitor" / "check_render.mjs")],
+                                capture_output=True, text=True, timeout=180)
+        self.assertEqual(result.returncode, 0,
+                         f"stdout={result.stdout}\nstderr={result.stderr}")
 
     def test_2b_launcher_renders_corrected_config(self):
         import ast
