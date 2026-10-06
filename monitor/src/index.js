@@ -89,44 +89,55 @@ function computeStages(snap) {
   return s;
 }
 
+function evalNumbers(s) {
+  // Summaries exist in two shapes: legacy list-of-aggregates and the 2026-10
+  // dict format (correct/total, solved/total). Return percentages either way.
+  const one = (m, key) => {
+    if (!m) return null;
+    if (Array.isArray(m)) return m[0] ? m[0].pct : null;
+    if (m.pct != null) return m.pct;
+    const n = m[key];
+    return n != null && m.total ? Math.round(1000 * n / m.total) / 10 : null;
+  };
+  return { mate: one(s.mate, "correct"), puz: one(s.puzzles, "solved") };
+}
+
+const NOTICE_KEEP = /corrected-v2|seed0-v2|training armed|stage reached|final evaluation|corpus complete|INCOMPLETE/;
 function appendNotices(prev, next) {
-  const notices = prev.notices || [];
+  // Important announcements only (2026-10-06 cleanup): drop historical /
+  // per-checkpoint noise, keep corrected-v2 progress and failures.
   const ts = Date.now();
-  const push = (text) => notices.unshift({ t: ts, text });
-  if (!notices.length) {
-    // seed the feed once so a fresh dashboard is never empty
-    const c = next.curve || [];
-    const last = c.length ? c[c.length - 1] : null;
-    if (last) push(`training at step ${last.step.toLocaleString()} · train ${last.train.toFixed(4)} · dev ${(last.dev ?? 0).toFixed(4)}`);
-    for (const [k, v] of Object.entries(next.evals || {})) {
-      if (v.mate && v.mate[0] && v.puzzles && v.puzzles[0]) {
-        push(`eval complete — ${k.replace(/^eval-results\//, "").replace(/\/eval-summary\.json$/, "")}: MATE ${v.mate[0].pct}% · puzzles ${v.puzzles[0].pct}%`);
-      }
-    }
-    const cp = next.corpus || {};
-    if (cp.shards_planned) push(`1B corpus build armed: ${cp.shards_done || 0}/${cp.shards_planned} shards labeled`);
-  }
-  const ps = prev.stages || {}, ns = next.stages || {};
-  const pc = prev.corpus || {}, nc = next.corpus || {};
+  const notices = (prev.notices || []).filter((n) => NOTICE_KEEP.test(n.text || ""));
+  const seen = new Set(notices.map((n) => n.text));
+  const push = (text) => {
+    if (!seen.has(text)) { notices.unshift({ t: ts, text }); seen.add(text); }
+  };
+  push("corrected-v2 training armed — steps 1.715M → 3.896M, all 102 shards, MATE/puzzle exclusions active");
   const pe = prev.evals || {}, ne = next.evals || {};
   for (const [k, v] of Object.entries(ne)) {
-    if (!(k in pe) && v.mate && v.mate[0] && v.puzzles && v.puzzles[0]) {
+    if (!k.includes("seed0-v2")) continue;
+    const { mate, puz } = evalNumbers(v);
+    if (!(k in pe) && mate != null && puz != null) {
       const name = k.replace(/^eval-results\//, "").replace(/\/eval-summary\.json$/, "");
-      push(`eval complete — ${name}: MATE ${v.mate[0].pct}% · puzzles ${v.puzzles[0].pct}%`);
+      push(`eval complete — ${name}: MATE ${mate}% · puzzles ${puz}%`);
     }
   }
-  if ((ps.train320 || 0) < 100 && (ns.train320 || 0) >= 100) push("CC-GAVN reached 320k steps");
-  if ((ps.eval320 || 0) < 100 && (ns.eval320 || 0) >= 100) push("320k frozen evaluation archived");
-  for (const mark of [100e6, 250e6, 500e6, 750e6, 920e6]) {
-    if ((pc.labeled_rows || 0) < mark && (nc.labeled_rows || 0) >= mark)
-      push(`corpus milestone: ${(mark / 1e6).toFixed(0)}M new rows labeled`);
-  }
+  const ps = prev.stages || {}, ns = next.stages || {};
   for (const pct of [25, 50, 75, 100]) {
-    const a = ps.train1b || 0, b = ns.train1b || 0;
-    if (a < pct && b >= pct && pct < 100) push(`1B continuation reached ${pct}%`);
-    if (pct === 100 && a < 100 && b >= 100) push("1B continuation reached 1.62M steps");
+    if ((ps.train2b || 0) < pct && (ns.train2b || 0) >= pct)
+      push(`corrected-v2 stage reached ${pct}%`);
   }
-  next.notices = notices.slice(0, 40);
+  if (!prev.eval2b_done && next.eval2b_done) push("corrected-v2 final evaluation archived");
+  const pc = prev.corpus || {}, nc = next.corpus || {};
+  if ((nc.shards_planned || 0) > 0 && (nc.shards_done || 0) >= (nc.shards_planned || 0)
+      && (pc.shards_done || 0) < (nc.shards_planned || 0))
+    push(`corpus complete: ${nc.shards_done}/${nc.shards_planned} shards labeled`);
+  const pr = prev.runs || {}, nr = next.runs || {};
+  for (const [k, v] of Object.entries(nr)) {
+    if (k.includes("seed0-v2") && typeof v === "string" && v.startsWith("INCOMPLETE") && pr[k] !== v)
+      push(`eval INCOMPLETE — ${k.split("/")[0]}`);
+  }
+  next.notices = notices.slice(0, 12);
 }
 
 async function dispatchTick(env) {
@@ -766,7 +777,7 @@ function renderInfra(){
 function evalRows(){
   const rows=[];
   for(const p in (snap.evals||{})){const s=snap.evals[p];
-    const mate=s.mate&&s.mate[0]?s.mate[0].pct:null;const puz=s.puzzles&&s.puzzles[0]?s.puzzles[0].pct:null;
+    const {mate,puz}=evalNumbers(s);
     rows.push({label:p.replace(/^eval-results\\//,"").replace(/\\/eval-summary\\.json$/,""),mate:mate,puz:puz,ref:false});}
   rows.sort((a,b)=>(b.mate||0)-(a.mate||0));
   return rows.concat(snap.reference||[]);
@@ -821,7 +832,7 @@ function evalSeries(){
     const tail=String(s.checkpoint||"").split("checkpoint-")[1];
     const step=tail?parseInt(tail,10):NaN;
     if(!isFinite(step))continue;
-    const mate=s.mate&&s.mate[0]?s.mate[0].pct:null;const puz=s.puzzles&&s.puzzles[0]?s.puzzles[0].pct:null;
+    const {mate,puz}=evalNumbers(s);
     rows.push({step:step,mate:mate,puz:puz,dir:p});}
   rows.sort((a,b)=>a.step-b.step);return rows;
 }
@@ -1060,7 +1071,7 @@ function renderTimeline(){
   TL_TARGETS.filter(s=>s>500000).forEach(s=>{
     const e=(snap.evals||{})[tlEvalKey(s)];
     if(!e)return;
-    const mate=e.mate&&e.mate[0]?e.mate[0].pct:null, puz=e.puzzles&&e.puzzles[0]?e.puzzles[0].pct:null;
+    const {mate,puz}=evalNumbers(e);
     const fin=(s===1620000||s===3896658);
     const chips=[];
     if(mate!=null)chips.push(["ok",mate+"% MATE"]);

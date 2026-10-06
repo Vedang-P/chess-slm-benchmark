@@ -202,8 +202,7 @@ def build_runs(api, token: str) -> dict:
     from huggingface_hub import hf_hub_download
     out = {}
     for f in hf_files(api):
-        if (re.match(r"^[^/]+/run-status\.txt$", f) or f.startswith(f"{RUN}/run-status")) \
-                and f.split("/")[0] in LIVE_RUNS:
+        if re.match(r"^[^/]+/run-status\.txt$", f) and f.split("/")[0] in LIVE_RUNS:
             try:
                 p = hf_hub_download(HF_REPO, f, repo_type="dataset", token=token)
                 out[f] = sanitize_status(Path(p).read_text()[:400])
