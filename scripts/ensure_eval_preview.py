@@ -179,10 +179,10 @@ def main(check_only: bool = False) -> None:
               f"commit {commit[:12]} with {len(pending)} pending")
         return
     quotas = {a: gpu_quota(a) for a in ACCOUNTS}
-    usable = {a: q for a, q in quotas.items() if q != 0}
+    usable = {a: q for a, q in quotas.items() if q > 0}
     if not usable:
-        print(f"[preview] quotas={quotas}; every account reports 0 GPU hours; "
-              "waiting for the weekly refresh")
+        print(f"[preview] quotas={quotas}; no account with verified positive "
+              "quota (0 = exhausted, negative = query failed); waiting")
         return
     best = max(usable, key=usable.get)
     print(f"[preview] no active kernel; quotas={quotas}; pushing on {best}")

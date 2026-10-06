@@ -1,0 +1,9 @@
+{
+  "armed": true,
+  "run": "ccgavn-5m-seed0-v2",
+  "init_run": "ccgavn-5m-seed0",
+  "recipe": "corrected-v2",
+  "armed_at": "2026-10-06T00:00:00Z",
+  "armed_by": "explicit user instruction (start the training)",
+  "note": "Delete this file and push to disarm. watch_2b.py refuses to push a training kernel without it (or CCGAVN2B_ARMED=1)."
+}

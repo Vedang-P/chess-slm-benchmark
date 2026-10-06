@@ -259,10 +259,10 @@ def main(check_only: bool = False) -> None:
             print(f"[2b] {acct}/ccgavn-2b active: {st[-60:]}")
             return
     quotas = {a: gpu_quota(a) for a in ACCOUNTS}
-    usable = {a: q for a, q in quotas.items() if q != 0}
+    usable = {a: q for a, q in quotas.items() if q > 0}
     if not usable:
-        print(f"[2b] quotas={quotas}; every account reports 0 GPU hours; "
-              "waiting for the weekly refresh")
+        print(f"[2b] quotas={quotas}; no account with verified positive quota "
+              "(0 = exhausted, negative = query failed); waiting")
         return
     best = max(usable, key=usable.get)
     print(f"[2b] no active kernel; quotas={quotas}; pushing on {best}")
