@@ -190,6 +190,51 @@ class CorrectnessTests(unittest.TestCase):
         self.assertNotIn('examples = WORK / "examples"', source)
         self.assertIn('"identity.json"', source)
 
+    def test_eval_interrupted_upload_recovers(self):
+        from scripts.eval_gavn import (UNUSABLE_PREFIX, checkpoint_identity,
+                                       validate_examples_identity)
+        root = Path(__file__).resolve().parents[1]
+        source = (root / "kernels/eval-preview/eval_preview.py").read_text(encoding="utf-8")
+        # The kernel's recovery detector must match the evaluator's token, for
+        # BOTH refusals (wrong identity and interrupted upload).
+        self.assertIn('UNUSABLE_TOKEN = "eval examples unusable"', source)
+        self.assertIn(f'UNUSABLE_PREFIX = "{UNUSABLE_PREFIX}"',
+                      (root / "scripts/eval_gavn.py").read_text(encoding="utf-8"))
+        # identity.json uploads before the row files...
+        self.assertIn('for name in ("identity.json", "mate.jsonl", "puzzles.jsonl")', source)
+        # ...and the recovery handler deletes the remote artifacts.
+        self.assertIn("delete_remote_examples(prefix)", source)
+        self.assertIn("api.delete_file", source)
+
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            cp = tmp / "checkpoint-1800000"
+            cp.mkdir()
+            (cp / "state.pt").write_bytes(b"weights")
+            identity = {"checkpoint": checkpoint_identity(
+                cp, {"dim": 8, "layers": 1, "heads": 2}, "cc-gavn-v1", "v1", "dist"),
+                "dataset": {"mate_sha256": "0" * 64, "puzzles": None}}
+            examples = tmp / "examples-1800000"
+            examples.mkdir()
+            (examples / "mate.jsonl").write_text(
+                json.dumps({"file": "mate.json", "row": 0}) + "\n")
+            with self.assertRaises(ValueError) as ctx:
+                validate_examples_identity(examples, identity)
+            self.assertIn(UNUSABLE_PREFIX, str(ctx.exception))
+            self.assertIn("without identity.json", str(ctx.exception))
+            # Wrong identity also carries the shared token.
+            (examples / "identity.json").write_text(json.dumps(
+                {"checkpoint": {"checkpoint": "other"}, "dataset": {}}))
+            with self.assertRaises(ValueError) as ctx:
+                validate_examples_identity(examples, identity)
+            self.assertIn(UNUSABLE_PREFIX, str(ctx.exception))
+            # A clean directory (the post-recovery state) is accepted.
+            clean = tmp / "examples-1900000"
+            validate_examples_identity(clean, identity)
+            self.assertTrue((clean / "identity.json").exists())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_2b_launcher_renders_corrected_config(self):
         import ast
         from scripts.watch_2b import (FINAL_STEP, INIT_RUN, RUN, frozen_tags,

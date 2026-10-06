@@ -11,8 +11,9 @@ Guarantees (2026-10-06 review fixes):
   - each checkpoint gets its OWN examples directory (examples-<step>) and the
     saved rows carry a checkpoint/dataset/score identity that is validated, so
     checkpoint N's rows can never be skipped and republished under checkpoint
-    N+1; per-example JSONL is downloaded before scoring and uploaded
-    periodically, so a killed session resumes instead of rescoring,
+    N+1; identity.json is uploaded before the JSONL, and an interrupted upload
+    (rows without marker) or a wrong identity triggers deletion of the remote
+    artifacts and a clean rescore,
   - a target is only marked DONE when eval_gavn.py exits 0 with exact expected
     totals (4,000 MATE rows / 10,000 puzzles); otherwise INCOMPLETE is written
     and CI re-pushes.
@@ -67,8 +68,15 @@ def upload(local: Path, remote: str) -> None:
         print(f"[preview] upload failed {remote}: {exc}", flush=True)
 
 
+# Must match eval_gavn.UNUSABLE_PREFIX: covers both wrong identity and rows
+# uploaded without their marker (killed mid-upload).
+UNUSABLE_TOKEN = "eval examples unusable"
+
+
 def upload_examples(examples: Path, prefix: str) -> None:
-    for name in ("mate.jsonl", "puzzles.jsonl", "identity.json"):
+    # identity.json FIRST: if the session dies mid-upload, saved rows are never
+    # left without their identity (the state that previously wedged recovery).
+    for name in ("identity.json", "mate.jsonl", "puzzles.jsonl"):
         path = examples / name
         if path.exists():
             upload(path, f"{prefix}/examples/{name}")
@@ -76,7 +84,7 @@ def upload_examples(examples: Path, prefix: str) -> None:
 
 def download_examples(prefix: str, examples: Path) -> None:
     examples.mkdir(parents=True, exist_ok=True)
-    for name in ("mate.jsonl", "puzzles.jsonl", "identity.json"):
+    for name in ("identity.json", "mate.jsonl", "puzzles.jsonl"):
         remote = f"{prefix}/examples/{name}"
         try:
             cached = hf_hub_download(HF_REPO, remote, repo_type="dataset", token=TOKEN)
@@ -86,25 +94,34 @@ def download_examples(prefix: str, examples: Path) -> None:
             pass
 
 
+def delete_remote_examples(prefix: str) -> None:
+    for name in ("identity.json", "mate.jsonl", "puzzles.jsonl"):
+        try:
+            api.delete_file(f"{prefix}/examples/{name}", repo_id=HF_REPO,
+                            repo_type="dataset")
+        except Exception:
+            pass
+
+
 def run_eval_streamed(cmd: list[str], out: Path, prefix: str,
                       examples: Path) -> tuple[int, bool]:
     """Run eval_gavn.py, uploading partial artifacts every 5 minutes.
-    Returns (returncode, identity_mismatch)."""
-    mismatch = False
+    Returns (returncode, unusable_examples)."""
+    unusable = False
     last = time.time()
     with open(out, "w") as fh:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout:
             fh.write(line); fh.flush(); print(line.rstrip(), flush=True)
-            if "identity mismatch" in line:
-                mismatch = True
+            if UNUSABLE_TOKEN in line:
+                unusable = True
             if time.time() - last > 300:
                 upload(out, f"{prefix}/eval-full.partial.log")
                 upload_examples(examples, prefix)
                 last = time.time()
         proc.wait()
-    return proc.returncode, mismatch
+    return proc.returncode, unusable
 
 
 def summary_complete(summary: dict) -> bool:
@@ -194,13 +211,15 @@ for step in TARGETS:
            "--examples-out", str(examples), "--summary-out", str(summary_path)]
     print("[preview] " + " ".join(cmd), flush=True)
     summary_path.unlink(missing_ok=True)
-    returncode, mismatch = run_eval_streamed(cmd, out, prefix, examples)
-    if mismatch and returncode != 0:
-        # Saved rows belong to a different checkpoint/dataset/score: discard
-        # them locally and rescore this target from scratch (the fresh upload
-        # overwrites the stale artifacts on HF).
-        print("[preview] identity mismatch in saved examples; rescoring from scratch",
-              flush=True)
+    returncode, unusable = run_eval_streamed(cmd, out, prefix, examples)
+    if unusable and returncode != 0:
+        # Saved rows belong to a different checkpoint/dataset/score, or an
+        # earlier session died between the JSONL and identity uploads. Delete
+        # the remote artifacts so a later interrupted run cannot re-download
+        # the same unusable state, then rescore from scratch.
+        print("[preview] saved examples unusable (wrong identity or interrupted "
+              "upload); deleting them and rescoring from scratch", flush=True)
+        delete_remote_examples(prefix)
         shutil.rmtree(examples, ignore_errors=True)
         summary_path.unlink(missing_ok=True)
         returncode, _ = run_eval_streamed(cmd, out, prefix, examples)

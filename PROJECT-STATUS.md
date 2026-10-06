@@ -73,9 +73,15 @@ the historical record.
     JSONL and could republish its scores. Each target now gets
     `examples-<step>`, and `eval_gavn.py` validates a checkpoint/dataset/score
     identity (including the state-file hash) before accepting saved rows;
-    mismatch aborts and the kernel rescoring from scratch. Regression tests:
+    mismatch aborts and the kernel rescoring from scratch. Second follow-up:
+    identity.json now uploads before the JSONL, both refusals (wrong identity
+    and interrupted upload with rows but no marker) share the
+    `eval examples unusable` token the kernel detects, and recovery deletes
+    the remote artifacts before rescoring so a repeated crash cannot re-download
+    the same incomplete state. Regression tests:
     `test_eval_resume_is_checkpoint_scoped`,
-    `test_eval_kernel_scopes_examples_per_checkpoint`.
+    `test_eval_kernel_scopes_examples_per_checkpoint`,
+    `test_eval_interrupted_upload_recovers`.
 12. Watcher/kernel milestone lists disagreed (watcher to 3,896,658, kernel to
     1,620,000). Fixed: one list in `ensure_eval_preview.py`, rendered into the
     pushed kernel, so they cannot drift.

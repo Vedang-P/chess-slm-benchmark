@@ -94,6 +94,13 @@ def dataset_identity(mate_files: list[Path], puzzles: Path | None) -> dict:
     return identity
 
 
+# Stable token the eval kernels match on to trigger a clean rescore. Both the
+# wrong-identity and the interrupted-upload (rows without marker) refusals use
+# it; a text-specific detector previously missed the second case and kept
+# re-downloading the same incomplete artifacts.
+UNUSABLE_PREFIX = "eval examples unusable"
+
+
 def validate_examples_identity(examples_dir: Path, identity: dict) -> None:
     """Refuse to append to per-example files that belong to a different
     checkpoint, dataset, or scoring mode. The 2026-10-06 review found the eval
@@ -108,11 +115,12 @@ def validate_examples_identity(examples_dir: Path, identity: dict) -> None:
         stored = json.loads(marker.read_text(encoding="utf-8"))
         if stored != identity:
             raise ValueError(
-                "identity mismatch for saved eval examples: refusing to reuse "
-                "rows scored for a different checkpoint, dataset, or score mode")
+                f"{UNUSABLE_PREFIX}: saved rows were scored for a different "
+                "checkpoint, dataset, or score mode")
     elif existing_rows:
         raise ValueError(
-            "saved eval examples exist without identity.json; refusing to reuse")
+            f"{UNUSABLE_PREFIX}: saved rows exist without identity.json "
+            "(interrupted upload)")
     marker.write_text(json.dumps(identity, indent=2), encoding="utf-8")
 
 
