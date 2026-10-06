@@ -32,6 +32,8 @@ from scripts.kaggle_checkpoint import (  # noqa: E402
     write_status,
 )
 from scripts.shard_data import ShardManager  # noqa: E402
+from scripts.data_hygiene import (eligible_mask, load_exclusions, position_hashes,
+                                 set_learning_rate)
 from scripts.train_gavn import action_tables, relation_types  # noqa: E402
 
 
@@ -60,6 +62,8 @@ def horizontal_action_map(utils) -> np.ndarray:
 def reflect_horizontal(tokens: np.ndarray, actions: np.ndarray,
                        action_map: np.ndarray, selected: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Apply the horizontal chess symmetry to selected token/action rows."""
+    # Standard-chess castling is not invariant under file reflection.
+    selected = selected & np.all(tokens[:, 65:69] == 30, axis=1)
     if not np.any(selected):
         return tokens, actions
     out = tokens.copy()
@@ -94,16 +98,13 @@ def development_mask(tokens: np.ndarray, modulus: int, fold: int) -> np.ndarray:
     # appear with different clocks, and hashing them would let transpositions
     # cross the train/development boundary.  Using only position tokens also
     # prevents actions from the same position crossing that boundary.
-    hashed = np.full(len(tokens), np.uint64(1469598103934665603), dtype=np.uint64)
-    for column in range(71):
-        hashed ^= tokens[:, column].astype(np.uint64)
-        hashed *= np.uint64(1099511628211)
+    hashed = position_hashes(tokens)
     return (hashed % np.uint64(modulus)) == fold
 
 
 class CandidateConditionedBlock:
     def __init__(self, torch, dim: int, heads: int, relation_count: int,
-                 sequence_length: int, dropout: float):
+                 sequence_length: int, dropout: float, model_version: str = "v1"):
         nn = torch.nn
         self.norm1 = nn.LayerNorm(dim)
         self.qkv = nn.Linear(dim, dim * 3)
@@ -113,7 +114,12 @@ class CandidateConditionedBlock:
         self.ff2 = nn.Linear(dim * 2, dim)
         self.rel = nn.Parameter(torch.zeros(heads, relation_count))
         # Position-specific dynamic bias, conditioned on the board plus move.
-        self.dynamic = nn.Linear(dim, heads * 2 * sequence_length)
+        # v1 allocated a query-side half that is provably constant along each
+        # softmax row (no gradient, no effect); v2 keeps only the key-side term.
+        out_features = heads * sequence_length
+        if model_version == "v1":
+            out_features *= 2
+        self.dynamic = nn.Linear(dim, out_features)
         self.dropout = nn.Dropout(dropout)
 
 
@@ -122,15 +128,24 @@ class CCGAVN:
     def __new__(cls, torch, dim: int, layers: int, heads: int,
                 action_src: np.ndarray, action_dst: np.ndarray,
                 action_promo: np.ndarray, relation_index: np.ndarray,
-                dropout: float = 0.0):
+                dropout: float = 0.0, model_version: str = "v1"):
+        if model_version not in ("v1", "v2"):
+            raise ValueError(f"unknown model_version {model_version!r}")
         class _Model(torch.nn.Module):
             def __init__(self):
                 super().__init__()
                 self.dim, self.heads = dim, heads
+                self.model_version = model_version
                 self.board_embed = torch.nn.Embedding(32, dim)
                 self.square_embed = torch.nn.Parameter(torch.zeros(64, dim))
                 self.global_embed = torch.nn.Embedding(32, dim)
                 self.global_pos = torch.nn.Parameter(torch.zeros(13, dim))
+                # v2: per-field gates make the pooled metadata representation
+                # sensitive to which value sits in which field (v1's plain mean
+                # was permutation-invariant; positional embeddings averaged to a
+                # constant). Initialised at one so v2 starts equivalent to v1.
+                self.global_field = (torch.nn.Parameter(torch.ones(13, dim))
+                                     if model_version == "v2" else None)
                 self.promo_embed = torch.nn.Embedding(5, 24)
                 self.candidate = torch.nn.Sequential(
                     torch.nn.Linear(dim * 3 + 24, dim), torch.nn.GELU(),
@@ -140,7 +155,8 @@ class CCGAVN:
                 relation_count = int(np.max(relation_index)) + 1
                 for i in range(layers):
                     block = CandidateConditionedBlock(
-                        torch, dim, heads, relation_count, 65, dropout)
+                        torch, dim, heads, relation_count, 65, dropout,
+                        model_version=model_version)
                     self.blocks.append(torch.nn.ModuleDict({
                         "norm1": block.norm1, "qkv": block.qkv,
                         "proj": block.proj, "norm2": block.norm2,
@@ -160,6 +176,8 @@ class CCGAVN:
                 x = self.board_embed(tokens[:, 1:65].clamp(0, 31)) + self.square_embed[None]
                 context_ids = torch.cat((tokens[:, :1], tokens[:, 65:77]), dim=1).clamp(0, 31)
                 context = self.global_embed(context_ids) + self.global_pos[None]
+                if self.global_field is not None:
+                    context = context * self.global_field[None]
                 context = context.mean(dim=1)
                 x = x + context[:, None]
                 src, dst = self.action_src[actions], self.action_dst[actions]
@@ -181,8 +199,14 @@ class CCGAVN:
                     v = v.view(bsz, 65, heads, head_dim).transpose(1, 2)
                     scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(head_dim)
                     scores = scores + getattr(self, f"rel_{i}")[:, self.relation_index].unsqueeze(0)
-                    dynamic = block["dynamic"](h.mean(1)).view(bsz, heads, 2, 65)
-                    scores = scores + (dynamic[:, :, 0, :, None] + dynamic[:, :, 1, None, :]) / math.sqrt(dim)
+                    dynamic = block["dynamic"](h.mean(1))
+                    if self.model_version == "v2":
+                        # Key-side only: the query-side half of v1's bias is
+                        # constant along each softmax row and provably cancels.
+                        scores = scores + dynamic.view(bsz, heads, 1, 65) / math.sqrt(dim)
+                    else:
+                        dynamic = dynamic.view(bsz, heads, 2, 65)
+                        scores = scores + (dynamic[:, :, 0, :, None] + dynamic[:, :, 1, None, :]) / math.sqrt(dim)
                     attn = torch.softmax(scores, dim=-1)
                     y = torch.matmul(block["dropout"](attn), v)
                     x = x + block["dropout"](block["proj"](
@@ -222,11 +246,25 @@ def parse_args():
     p.add_argument("--dev-fold", type=int, default=0,
                    help="Held-out position-hash fold; never sampled for updates.")
     p.add_argument("--dev-batch", type=int, default=8192)
+    p.add_argument("--model-version", choices=["v1", "v2"], default="v1",
+                   help="v1 = warm-start-compatible original; v2 fixes the "
+                        "permutation-blind metadata pooling and drops the dead "
+                        "query-side dynamic bias (requires a fresh run).")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--max-records", type=int, default=0)
     p.add_argument("--ckpt-every", type=int, default=5000)
     p.add_argument("--hf-upload-every", type=float, default=1800)
     p.add_argument("--resume-from-hf", action="store_true")
+    p.add_argument("--init-from-hf-run", default="",
+                   help="Explicit legacy warm start into a NEW corrected run prefix.")
+    p.add_argument("--init-checkpoint", default="")
+    p.add_argument("--stage-start-step", type=int, default=0)
+    p.add_argument("--allow-code-drift", action="store_true",
+                   help="Explicitly resume although the checked-out code differs "
+                        "from the checkpoint's recorded source_commit. Marked in "
+                        "every subsequent checkpoint as code_drift=true.")
+    p.add_argument("--exclusion-puzzles", required=True)
+    p.add_argument("--mate-dir", default=str(ROOT / "data/positions"))
     p.add_argument("--allow-shard-superset", action="store_true",
                    help="Deliberate stage transition: permit resuming when every "
                         "checkpoint shard tag is contained in the requested "
@@ -235,10 +273,20 @@ def parse_args():
     return p.parse_args()
 
 
+def git_head() -> str:
+    try:
+        import subprocess
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT,
+                                       text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return "unknown"
+
+
 def main():
     import torch
 
     args = parse_args()
+    source_commit = git_head()
     if not (0.0 <= args.reflect_prob <= 1.0):
         raise ValueError("--reflect-prob must be in [0, 1]")
     if args.dim % args.heads:
@@ -255,6 +303,12 @@ def main():
     # contract instead of discovering missing credentials after GPU time spent.
     hf_client = make_hf_api(ROOT)
     token = hf_client.token
+    excluded_hashes, exclusion_digest = load_exclusions(
+        Path(args.mate_dir), Path(args.exclusion_puzzles))
+    if not 0 <= args.stage_start_step < args.steps:
+        raise ValueError("stage-start-step must be within the training budget")
+    if args.init_from_hf_run and args.init_from_hf_run == args.hf_run:
+        raise ValueError("a corrected continuation must use a new HF run prefix")
     shard_tags = None
     if args.shard_tags_file:
         payload = json.loads(Path(args.shard_tags_file).read_text(encoding="utf-8"))
@@ -265,16 +319,43 @@ def main():
               f"from {args.shard_tags_file}", flush=True)
     resume_dir = (download_latest(hf_client, args.hf_repo, args.hf_run, outdir / "hf-resume")
                   if args.resume_from_hf else None)
+    legacy_init = False
+    if resume_dir is None and args.init_from_hf_run:
+        from huggingface_hub import snapshot_download
+        if args.init_checkpoint != f"checkpoint-{args.stage_start_step}":
+            raise ValueError("warm-start checkpoint must match stage-start-step")
+        dest = outdir / "legacy-init"
+        snapshot_download(args.hf_repo, repo_type="dataset", token=token,
+                          local_dir=str(dest), allow_patterns=[
+                              f"{args.init_from_hf_run}/{args.init_checkpoint}/*"])
+        resume_dir = dest / args.init_from_hf_run / args.init_checkpoint
+        legacy_init = True
     if resume_dir is not None:
         config_path = resume_dir / "config.json"
         if not config_path.exists():
             raise ValueError(f"remote checkpoint is missing {config_path.name}: {resume_dir}")
         resume_config = json.loads(config_path.read_text(encoding="utf-8"))
+        if not legacy_init:
+            if resume_config.get("recipe_version") != "corrected-v2":
+                raise ValueError("legacy checkpoints require an explicit new-run warm start")
+            for key, expected in (("stage_start_step", args.stage_start_step),
+                                  ("steps", args.steps),
+                                  ("exclusion_digest", exclusion_digest),
+                                  ("model_version", args.model_version)):
+                if resume_config.get(key) != expected:
+                    raise ValueError(f"resume changed {key}; define a new stage explicitly")
+            recorded = resume_config.get("source_commit")
+            if recorded and recorded != source_commit and not args.allow_code_drift:
+                raise ValueError(
+                    "checked-out code differs from the checkpoint's recorded "
+                    f"source_commit ({recorded[:12]} recorded, {source_commit[:12]} "
+                    "checked out). Check out the recorded commit, start a new "
+                    "--hf-run, or pass --allow-code-drift deliberately.")
         if resume_config.get("architecture") != "cc-gavn-v1":
             raise ValueError("remote checkpoint is not a CC-GAVN v1 run")
         scientific_fields = ("dim", "layers", "heads", "batch", "lr", "warmup",
                              "temperature", "w_dist", "w_ce", "reflect_prob",
-                             "dev_mod", "dev_fold", "seed")
+                             "dev_mod", "dev_fold", "seed", "model_version")
         mismatches = [
             f"{key}: checkpoint={resume_config.get(key)!r}, requested={getattr(args, key)!r}"
             for key in scientific_fields
@@ -313,11 +394,19 @@ def main():
     manager.ensure_downloaded(max_records=args.max_records)
     manager.count_rows(max_records=args.max_records)
     schedule_rng = np.random.default_rng(args.seed)
-    schedule = manager.schedule(args.steps, schedule_rng, args.max_records)
+    schedule = manager.schedule(args.steps - args.stage_start_step,
+                                schedule_rng, args.max_records)
+    schedule_digest = __import__('hashlib').sha256(schedule.tobytes()).hexdigest()
+    if resume_dir is not None and not legacy_init:
+        if resume_config.get("schedule_digest") != schedule_digest:
+            raise ValueError("resume schedule changed")
+    print(f"[schedule] stage={args.stage_start_step}..{args.steps} "
+          f"tags={len(set(schedule))} digest={schedule_digest}", flush=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     raw_model = CCGAVN(torch, args.dim, args.layers, args.heads, src, dst, promo,
-                        candidate_relation_types()).to(device)
+                        candidate_relation_types(),
+                        model_version=args.model_version).to(device)
     params = sum(p.numel() for p in raw_model.parameters())
     if params > 5_000_000:
         raise ValueError(f"CC-GAVN has {params:,} parameters; exceeds the strict 5M budget")
@@ -344,7 +433,12 @@ def main():
         start_step = int(state["step"])
         np_rng.bit_generator.state = state["numpy_rng"]
         torch.set_rng_state(torch.ByteTensor(torch.frombuffer(state["torch_rng"], dtype=torch.uint8)))
+        if not legacy_init and state.get("cuda_rng") is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all([x.cpu() for x in state["cuda_rng"]])
         print(f"[resume] step={start_step}", flush=True)
+    if start_step < args.stage_start_step:
+        raise ValueError("checkpoint predates the declared stage")
+    dev_rng = np.random.default_rng(args.seed + 9187)
     print(f"[train] device={device} rows={manager.total:,} params={params:,}", flush=True)
 
     current_tag = None
@@ -356,7 +450,8 @@ def main():
     # comparable across checkpoints instead of mixing per-shard folds.
     dev_tag = manager.tags[0]
     _dt, _da, _dwp, _dteach = manager.load(dev_tag, args.max_records)
-    _dev_rows = np.flatnonzero(development_mask(_dt, args.dev_mod, args.dev_fold))
+    _dev_rows = np.flatnonzero(development_mask(_dt, args.dev_mod, args.dev_fold)
+                              & ~np.isin(position_hashes(_dt), excluded_hashes))
     if len(_dev_rows) == 0:
         raise ValueError(f"development split selected no rows in shard {dev_tag}")
     dev_tokens = np.asarray(_dt[_dev_rows])
@@ -367,7 +462,7 @@ def main():
     del _dt, _da, _dwp, _dteach, _dev_rows
     print(f"[split] dev shard={dev_tag} rows={dev_count:,}", flush=True)
     for step in range(start_step, args.steps):
-        tag = schedule[step]
+        tag = schedule[step - args.stage_start_step]
         if tag != current_tag:
             tokens, actions, winprob, teacher = manager.load(tag, args.max_records)
             current_tag = tag
@@ -377,12 +472,9 @@ def main():
             log_norm = np.logaddexp.reduce(np.asarray(teacher[:1024], dtype=np.float32), axis=1)
             if not np.allclose(log_norm, 0.0, atol=2e-3):
                 raise ValueError(f"shard {tag}: teacher matrix is not normalized log-probabilities")
-            if tag == dev_tag:
-                train_mask = ~development_mask(tokens, args.dev_mod, args.dev_fold)
-                if not np.any(train_mask):
-                    raise ValueError(f"shard {tag}: development split left no training rows")
-            else:
-                train_mask = np.ones(len(tokens), dtype=bool)
+            train_mask = eligible_mask(tokens, excluded_hashes, args.dev_mod, args.dev_fold)
+            if not np.any(train_mask):
+                raise ValueError(f"shard {tag}: exclusions left no training rows")
             print(f"[split] shard={tag} train={train_mask.mean():.3%}", flush=True)
         idx = np_rng.integers(0, len(tokens), size=args.batch)
         # Rejection sampling preserves uniform sampling over the train split
@@ -404,7 +496,7 @@ def main():
         lr = args.lr * min(1.0, (step + 1) / max(1, args.warmup))
         if step >= args.warmup:
             lr = args.lr * 0.5 * (1.0 + math.cos(math.pi * frac))
-        optimizer.param_groups[0]["lr"] = lr
+        set_learning_rate(optimizer, lr)
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=device.type == "cuda"):
             logits = model(bt, ba)
@@ -433,7 +525,9 @@ def main():
             # This is a held-out, position-disjoint development diagnostic. It
             # is never used as a source of gradients and frozen MATE/puzzles
             # remain untouched until a configuration is selected.
-            dev_idx = np_rng.choice(dev_count, size=args.dev_batch, replace=dev_count < args.dev_batch)
+            # Fixed sample, separate RNG: checkpoint timing cannot alter training samples.
+            dev_rng = np.random.default_rng(args.seed + 9187)
+            dev_idx = dev_rng.choice(dev_count, size=args.dev_batch, replace=dev_count < args.dev_batch)
             dev_tokens_b = torch.as_tensor(dev_tokens[dev_idx], dtype=torch.long, device=device)
             dev_actions_b = torch.as_tensor(dev_actions[dev_idx], dtype=torch.long, device=device)
             dev_teacher_b = torch.as_tensor(dev_teacher[dev_idx], dtype=torch.float32, device=device)
@@ -452,9 +546,16 @@ def main():
             torch.save({"model": raw_model.state_dict(), "optimizer": optimizer.state_dict(),
                         "scaler": scaler.state_dict(), "step": step + 1,
                         "numpy_rng": np_rng.bit_generator.state,
-                        "torch_rng": torch.get_rng_state().cpu().numpy().tobytes()}, checkpoint / "state.pt")
+                        "torch_rng": torch.get_rng_state().cpu().numpy().tobytes(),
+                        "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None}, checkpoint / "state.pt")
             config = vars(args) | {
                 "architecture": "cc-gavn-v1",
+                "recipe_version": "corrected-v2",
+                "exclusion_digest": exclusion_digest,
+                "schedule_digest": schedule_digest,
+                "historical_training_caveat": bool(args.init_from_hf_run),
+                "source_commit": source_commit,
+                "code_drift": bool(args.allow_code_drift),
                 "relation_schema": "v2-live-knight-king-rank-file-diagonal-other+candidate",
                 "canonical_decision_head": "distribution_expectation",
                 "parameter_count": params,
@@ -464,7 +565,9 @@ def main():
             metrics = {"step": step + 1, "train_loss": float(loss.detach()),
                        "dev_loss": float(dev_loss), "dev_dist": float(dev_dist), "dev_ce": float(dev_ce),
                        "dev_tag": str(dev_tag), "shard": str(current_tag),
-                       "lr": optimizer.param_groups[0]["lr"], "grad_norm": grad_norm,
+                       "lr": optimizer.param_groups[0]["lr"],
+                       "learning_rates": [g['lr'] for g in optimizer.param_groups],
+                       "recipe_version": "corrected-v2", "grad_norm": grad_norm,
                        "samples_per_s": (step + 1 - start_step) * args.batch / max(1.0, time.time() - started)}
             (checkpoint / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
             print(f"[dev] step={step+1} loss={dev_loss:.4f} dist={dev_dist:.4f} ce={dev_ce:.4f}", flush=True)

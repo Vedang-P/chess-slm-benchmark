@@ -142,11 +142,12 @@ class ShardManager:
     # ---- row counts (no download required) ----
     @staticmethod
     def _override_rows() -> dict:
-        try:
-            return {str(k): int(v)
-                    for k, v in json.loads(ROWS_OVERRIDE.read_text()).items()}
-        except Exception:
-            return {}
+        counts = {}
+        for path in (ROWS_OVERRIDE.parent.parent / 'kernels/build-2b/shard_rows.json',
+                     ROWS_OVERRIDE):
+            if path.exists():
+                counts.update({str(k): int(v) for k, v in json.loads(path.read_text()).items()})
+        return counts
 
     def _gcs_rows(self, tag: str) -> int:
         url = f"{GCS_BASE}/action_value-{tag}-of-02148_data.bag"
@@ -187,9 +188,11 @@ class ShardManager:
         order is shuffled by the seeded rng, so the schedule is identical on
         resume."""
         wanted = list(self.tags if not max_records else self.tags[:1])
-        rows = np.array([self.rows[t] for t in wanted], dtype=np.float64)
         if steps < len(wanted):
-            return np.array([wanted[i % len(wanted)] for i in range(steps)])
+            raise ValueError("stage budget cannot cover every declared shard")
+        rows = np.array([self.rows[t] for t in wanted], dtype=np.float64)
+        if np.any(rows <= 0):
+            raise ValueError("shard row counts must be positive")
         frac = rows / rows.sum()
         counts = np.maximum(1, np.round(frac * steps).astype(int))
         counts[int(np.argmax(counts))] += steps - counts.sum()

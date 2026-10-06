@@ -3,12 +3,13 @@ import { Chess } from "chess.js";
 const HF = "https://huggingface.co";
 const REPO = "vedangfake/chess-slm-benchmark";
 const RAW = "https://raw.githubusercontent.com/Vedang-P/chess-slm-benchmark/main";
-const RUN = "ccgavn-5m-seed0";
+const RUN = "ccgavn-5m-seed0";       // legacy prefix (frozen historical record)
+const RUN2 = "ccgavn-5m-seed0-v2";   // corrected-v2 continuation (2026-10-06)
 const FINAL_STEP = 3_896_658;   // stage 2B-A target (2026-10-05)
 const STAGE1 = 320_000;
 const STAGE1B = 1_620_000;      // end of stage 1B
 const CORPUS_TARGET = 1_920_690_429;
-const LIVE_RUNS = ["ccgavn-5m-seed0", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum"];
+const LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum"];
 const REFERENCE = [
   { name: "Ruoss 9M (teacher)", mate: 98.72, puzzles: 86.13, ref: true },
   { name: "legacy GAVN 5.3M", mate: 85.35, puzzles: 43.83, ref: true },
@@ -161,14 +162,14 @@ async function refresh(env) {
   try { files = await hfTree(env); } catch (e) { snap.errors.push(`hf: ${e}`); }
   const paths = new Set(files.map((f) => f.path));
 
-  const known = new Set(snap.curve.map((p) => p.step));
+  const known = new Set(snap.curve.map((p) => p.run + ":" + p.step));
   const metrics = files.map((f) => f.path)
-    .filter((p) => /^ccgavn-5m-seed0\/checkpoint-\d+\/metrics\.json$/.test(p))
-    .map((p) => ({ p, step: parseInt(p.match(/checkpoint-(\d+)/)[1], 10) }))
-    .filter((x) => !known.has(x.step)).sort((a, b) => a.step - b.step);
-  for (const { p, step } of metrics.slice(0, 10)) {
+    .filter((p) => /^(ccgavn-5m-seed0|ccgavn-5m-seed0-v2)\/checkpoint-\d+\/metrics\.json$/.test(p))
+    .map((p) => ({ p, run: p.split("/")[0], step: parseInt(p.match(/checkpoint-(\d+)/)[1], 10) }))
+    .filter((x) => !known.has(x.run + ":" + x.step)).sort((a, b) => a.step - b.step);
+  for (const { p, run, step } of metrics.slice(0, 10)) {
     const m = await hfJson(env, p);
-    if (m && typeof m.train_loss === "number") snap.curve.push({ step, train: m.train_loss, dev: m.dev_loss ?? null });
+    if (m && typeof m.train_loss === "number") snap.curve.push({ step, run, train: m.train_loss, dev: m.dev_loss ?? null });
   }
   snap.curve.sort((a, b) => a.step - b.step);
 
@@ -561,7 +562,7 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
   </div>
   <div class="section grid2">
     <div class="card chart-card">
-      <div class="card-head"><div class="card-title">accuracy vs step <span class="muted">frozen + preview evals</span></div></div>
+      <div class="card-head"><div class="card-title">accuracy vs step <span class="muted">monitoring evals + final (sets seen in training)</span></div></div>
       <div class="chart-body"><canvas id="c-acc"></canvas></div>
     </div>
     <div class="card chart-card">
@@ -592,7 +593,7 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
 <!-- timeline -->
 <section id="tab-timeline" class="hidden">
   <div class="section">
-    <div class="section-title">1b continuation · 320k → 1.62m steps · where we are</div>
+    <div class="section-title">2B continuation · legacy 320k → 1.62m → corrected-v2 → 3.90m steps</div>
     <div class="card tl-hero" id="tl-hero"></div>
   </div>
   <div class="section">
@@ -993,8 +994,13 @@ function tlRate(){
 function tlFmt(d){return d.toLocaleString("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});}
 function tlIn(ms){const h=ms/36e5;if(h<1)return Math.max(1,Math.round(h*60))+"m";if(h<48)return Math.floor(h)+"h "+Math.round((h%1)*60)+"m";return Math.floor(h/24)+"d "+Math.floor(h%24)+"h";}
 function tlK(s){return s>=1000000?((s/1e6).toFixed(2).replace(/\.?0+$/,""))+"m":(s/1000)+"k";}
-const TL_TARGETS=(function(){const a=[];for(let s=400000;s<=3800000;s+=100000)a.push(s);a.push(1620000);a.push(3896658);a.sort((x,y)=>x-y);return a;})();
-function tlEvalKey(s){return (s===1620000||s===3896658)?"eval-results/ccgavn-5m-seed0-"+Math.floor(s/1000)+"k-frozen/eval-summary.json":"eval-results/ccgavn-5m-seed0-"+(s/1000)+"k-preview/eval-summary.json";}
+const TL_TARGETS=(function(){const a=[];for(let s=400000;s<=3800000;s+=100000)a.push(s);a.push(1620000);a.push(1715000);a.push(3896658);a.sort((x,y)=>x-y);return a;})();
+function tlEvalKey(s){
+  if(s===1620000)return "eval-results/ccgavn-5m-seed0-1620k-frozen/eval-summary.json";
+  if(s===3896658)return "eval-results/ccgavn-5m-seed0-v2-3896k-final/eval-summary.json";
+  if(s>=1715000)return "eval-results/ccgavn-5m-seed0-v2-"+(s/1000)+"k-preview/eval-summary.json";
+  return "eval-results/ccgavn-5m-seed0-"+(s/1000)+"k-preview/eval-summary.json";
+}
 const TL_HISTORY=[
  ["2026-09-07T12:00:00Z","GAVN wave-2 arms reach 160k steps","5M GAVN (dim 224, 8L) on 80.27M ChessBench rows; train losses plateau ~3.89.",[]],
  ["2026-09-09T12:00:00Z","Full frozen protocol — legacy 5M arms","13pp MATE gap to the 9M teacher; legacy GAVN rejected, CC-GAVN becomes the direction.",[["ok","85.35% MATE"],["ok","43.83% puzzles"]]],
@@ -1007,7 +1013,9 @@ const TL_HISTORY=[
  ["2026-09-21T04:02:00Z","@400k preview","LR warm-restart transient: the resumed cosine schedule jumped 0 -> 4.5e-4.",[["warn","88.62% MATE"],["warn","59.77% puzzles"]]],
  ["2026-09-21T16:10:00Z","@500k preview","Biggest interval jump yet; puzzles rose with the tactic curriculum diluted 10x — generalization from ChessBench.",[["ok","90.60% MATE"],["ok","66.33% puzzles"],["ok","+2.0 / +6.6"]]],
  ["2026-09-30T21:51:00Z","1B continuation complete","1,620,000 steps on the 61-tag / 1.023B-row corpus; frozen eval MATE 91.70% / puzzles 74.31% (+2.7pp / +14.4pp over 320k).",[["ok","91.70% MATE"],["ok","74.31% puzzles"]]],
- ["2026-10-05T17:00:00Z","Stage 2B-A launched","102 tags (1.746B rows) warm-started from checkpoint-1,620,000; target 3,896,658 steps; last 16 planned shards labeling in parallel.",[]],
+ ["2026-10-05T17:00:00Z","Stage 2B-A launched (legacy recipe)","102 tags (1.746B rows) warm-started from checkpoint-1,620,000; target 3,896,658 steps; last 16 planned shards labeling in parallel.",[]],
+ ["2026-10-06T12:00:00Z","Review: legacy 2B schedule skipped 41/102 shards","The committed trainer rebuilt the full-budget schedule and indexed it by global step, so whole shard blocks in the skipped prefix never trained; also no MATE/puzzle exclusions, LR on group 0 only, castling reflections and dev-sampling RNG issues.",[["warn","41/102 tags never sampled"]]],
+ ["2026-10-06T13:00:00Z","Corrected-v2 continuation designed; training disarmed","New prefix warm-starts from the latest legacy checkpoint with a stage-relative schedule over all 102 tags, MATE+puzzle exclusions, all-group LR, checkpoint-independent dev RNG, source-commit pinning, per-example eval resume; audits: 0.0003% benchmark overlap, ~0.24% duplicate positions.",[["warn","awaiting explicit arm"]]],
 ];
 function renderTimeline(){
   const c=(snap.curve||[]).filter(p=>p.step);
@@ -1057,10 +1065,10 @@ function renderTimeline(){
     const chips=[];
     if(mate!=null)chips.push(["ok",mate+"% MATE"]);
     if(puz!=null)chips.push(["ok",puz+"% puzzles"]);
-    if(fin)chips.push(["","full frozen protocol"]);
+    if(fin)chips.push(["","final protocol · test sets previously exposed"]);
     html+=item("done",e.fetched_at?tlFmt(new Date(e.fetched_at)):"done",
-      "@"+tlK(s)+" "+(fin?"final frozen eval":"preview eval"),
-      fin?"4k MATE + official 10k puzzles, archived on HF":"",chips);
+      "@"+tlK(s)+" "+(fin?"final eval":"monitoring eval (dev diagnostic)"),
+      fin?"4k MATE + official 10k puzzles, archived on HF; not an untouched holdout":"",chips);
   });
   html+=item("now","now","training — step "+last.step.toLocaleString()+" ("+pct.toFixed(1)+"%)",
     (k?"on "+esc(k.account):"no kernel")+(complete?" · complete":" · next eval @"+tlK(next)+" in "+tlIn(etaT(next)-nowT)+" · finish in "+tlIn(etaT(FINAL_STEP)-nowT)),
@@ -1068,8 +1076,8 @@ function renderTimeline(){
   TL_TARGETS.filter(s=>s>last.step).forEach(s=>{
     const fin=(s===1620000||s===3896658);
     html+=item("future",tlFmt(new Date(etaT(s))),
-      "@"+tlK(s)+" "+(fin?"final frozen eval":"preview eval"),
-      "projected · in "+tlIn(etaT(s)-nowT)+(fin?" · full protocol: 4k MATE + official 10k puzzles":""),
+      "@"+tlK(s)+" "+(fin?"final eval":"monitoring eval"),
+      "projected · in "+tlIn(etaT(s)-nowT)+(fin?" · 4k MATE + official 10k puzzles (test sets previously exposed)":""),
       fin?[["","4k MATE"],["","10k puzzles"]]:[]);
   });
   html+=item("future","tbd","Stage 2B-B / next decision","Final 16 shards (~269M rows) append after stage 2B-A; then decide on further scaling from the shard-content insights.",[]);

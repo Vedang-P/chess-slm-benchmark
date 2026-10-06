@@ -1,5 +1,95 @@
 # Project Status — Chess SLM Benchmark (2026-08-30)
 
+## 2026-10-06 — Independent review: corrections, measured audits, corrected-v2 (training DISARMED)
+
+An independent code review produced 19 findings. Status of each, with the fix
+or the measured number. Nothing here is retroactive: checkpoints already on HF
+under `ccgavn-5m-seed0/` were produced by the legacy recipe and are kept as
+the historical record.
+
+**Training- and data-integrity fixes (landed 2026-10-06):**
+1. LR schedule updated only optimizer group 0 (embeddings/biases/LayerNorm
+   stayed at 5e-4 while logged LR decayed). Fixed: `set_learning_rate` applies
+   every group (`scripts/data_hygiene.py`), tested.
+2. Continuation built the full-budget shard schedule and indexed it by global
+   step, so whole shard blocks were skipped. Reproduced on the live legacy
+   schedule: **41 of 102 tags were never sampled at all after step 1.62M**.
+   Fixed: stage-relative schedule (`--stage-start-step`), schedule digest
+   pinned in checkpoints.
+3. Horizontal reflection was invalid for positions with castling rights
+   (e1g1 castle becomes e1b1). Fixed: reflect only positions with no castling
+   rights, tested.
+4. Development-fold exclusions applied only to the first shard. Fixed:
+   `eligible_mask` applies the folded hash + benchmark exclusions to every
+   shard.
+5. Development split was not augmentation-aware. Fixed: `position_hashes`
+   hashes the reflection orbit, tested for split invariance.
+6. ChessBench training lacked MATE/puzzle exclusions. Fixed at the trainer
+   level (`--exclusion-puzzles`); measured overlap below.
+13. Malformed records became zero-filled training examples. Fixed: the parser
+    raises and writes no dataset.
+14. Dev sampling consumed the training RNG and checkpoints were wall-clock
+    triggered, so checkpoint timing changed later batches. Fixed: separate
+    seeded dev RNG; CUDA RNG saved/restored.
+15. Deployments were not pinned. Fixed for the stage-2B kernel and eval
+    kernel: the watcher embeds the recorded `source_commit` and the kernel
+    fetches exactly that commit; the trainer refuses a resume whose checked-out
+    commit differs from the checkpoint's recorded one unless
+    `--allow-code-drift` is passed (which marks every later checkpoint).
+
+**Model fixes (new `--model-version v2`; v1 stays for the warm start):**
+16. Global metadata was embedded + positionally added and then averaged, which
+    is permutation-invariant. v2 adds per-field gates (init 1.0), making field
+    identity observable; tested.
+17. Half of the dynamic attention bias (the query-side term) is constant along
+    each softmax row and provably cancels. v2 keeps only the key-side term;
+    v1 keeps its dead parameters for checkpoint compatibility.
+
+**Measured data audit (`scripts/audit_train_contamination.py`; 4 shards,
+8,000,000 sampled rows, same exclusion digest the trainer uses):**
+- benchmark (MATE + puzzle) overlap in ChessBench: **0.0003%** (~2-8 rows per
+  2M; ≈5k rows over the 1.75B-row union) — small but nonzero, and now excluded;
+- development fold: **0.999%** (≈1/100 by construction), now excluded in every
+  shard;
+- duplicate positions: **0.241%** within a shard; **57,151** cross-shard
+  duplicate positions across the four sampled shards (~0.95% of later shards'
+  rows). MATE itself has 4,000 rows over **2,952 unique positions** (1,030
+  positions in more than one subset, often with swapped candidates), so
+  row-level binomial intervals overstate precision.
+
+**Evaluation fixes:**
+8. MATE non-independence: per-example JSONL + `scripts/analyze_mate.py`
+   (position-clustered bootstrap CIs, paired McNemar on common rows).
+9. Malformed MATE rows were silently skipped. Fixed: exact expected counts
+   (4,000/10,000) and hard failure on any malformed row or wrong total.
+10. Completion checks were weak (summary/DONE written even after failure).
+    Fixed in both eval kernels: DONE only on returncode 0 + exact totals;
+    `ensure_eval_preview.py` verifies the summary, not its existence.
+11. No per-example persistence/resume. Fixed: `--examples-out` JSONL is
+    appended as rows are scored and uploaded periodically; a killed session
+    resumes instead of rescoring.
+12. Watcher/kernel milestone lists disagreed (watcher to 3,896,658, kernel to
+    1,620,000). Fixed: one list in `ensure_eval_preview.py`, rendered into the
+    pushed kernel, so they cannot drift.
+7. Repeated preview evaluation of the frozen MATE/puzzle sets means they are
+    **not an untouched holdout**. This cannot be undone; it is now stated
+    explicitly. Model selection uses the development loss only; milestone
+    evals are labeled monitoring/dev-diagnostic; the one-shot final at
+    3,896,658 is labeled as a final protocol run on previously exposed sets.
+
+**Documentation/provenance (18/19):** causal claims below are downgraded to
+hypotheses; teacher-entropy homogeneity does not establish equivalent shard
+content; "frozen" now means an archived protocol run at a fixed commit, not an
+unseen holdout; the legacy 1.62M→1.715M trajectory (61/102 tags, no
+exclusions) is disclosed wherever the continuation is described.
+
+**Corrected-v2 staging (training DISARMED):** new prefix
+`ccgavn-5m-seed0-v2`, warm start from the latest complete legacy checkpoint
+(currently `checkpoint-1715000`), stage-relative schedule over all 102 tags,
+exclusions active, all-group LR. `scripts/watch_2b.py` will not push a
+training kernel unless armed (`configs/ccgavn-2b-ARMED` or `CCGAVN2B_ARMED=1`)
+— by design, pushing code cannot start training.
+
 ## 2026-10-05 — 1B continuation COMPLETE; final frozen eval
 
 The 1B continuation reached **1,620,000 steps** on 2026-09-30T21:51Z
@@ -50,13 +140,17 @@ produced +14.4pp puzzles.
 - Preview-eval milestones extended to 3.8M + a `3896k-frozen` final.
 
 First shard-content insights (curve + teacher sampling, 2026-10-05):
-ChessBench shards are statistically homogeneous (teacher entropy 2.59–2.62
+ChessBench shards look statistically similar (teacher entropy 2.59–2.62
 nats, top-prob ~0.30; per-block dev effects within ±0.02, Spearman vs
-entropy/rows 0.17 / −0.12) — more ChessBench shards are more of the same
-distribution, with no "golden shard". The puzzle curriculum is the only
-qualitatively different type: softer teacher (2.88 nats) and the only blocks
-that move dev (+0.17 to +0.22 during the block, fully recovered after);
-every large MATE/puzzle jump so far is downstream of those blocks.
+entropy/rows 0.17 / −0.12). This is a hypothesis, not an equivalence result:
+similar teacher entropy does not establish equivalent shard content, and the
+2026-10-06 audit found only ~0.0003% benchmark overlap and ~0.24% duplicate
+positions, so the shards are not simply repeats either. The puzzle curriculum
+is the only qualitatively different type: softer teacher (2.88 nats) and the
+only blocks that move dev (+0.17 to +0.22 during the block, fully recovered
+after). That every large MATE/puzzle jump so far is *downstream* of those
+blocks is a timing observation, not evidence of causation; data quantity,
+training duration, curriculum, and schedule all changed together.
 
 ## 2026-09-20 — 1B continuation: push-only gate bug found & fixed; frozen corpus
 
@@ -97,7 +191,9 @@ runs the frozen protocol when checkpoint-320000 lands.
 | CC-GAVN @260k (preview) | 88.78% | 57.86% |
 | Ruoss 9M (target) | 98.72% | 86.13% |
 
-The +6.0pp puzzle jump at 260k is the tactic-curriculum effect; MATE +1.4pp.
+The +6.0pp puzzle jump at 260k coincides with the tactic-curriculum blocks
+(downgraded from "is the effect": curriculum, data, and schedule changed
+together, so this is a hypothesis, not an isolated control). MATE +1.4pp.
 
 **Stockfish-anchored ladder (CC-GAVN @160k):** 1W 20D 19L vs UCI_Elo=1400
 (score 0.275, implied ~1230 anchored Elo); the ladder stopped early by the
@@ -122,8 +218,11 @@ primary target of matching or exceeding Ruoss 9M on MATE and official puzzles,
 then test whether the same method can approach the 136M/270M accuracy frontier.
 Target: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026. Compute:
 Kaggle free tier only (T4/P100, ~30h/week/account, 3 accounts). Honesty
-protocol: the exact frozen MATE sets and official 10K puzzle protocol are never
-used for training or model selection.
+protocol (corrected 2026-10-06): MATE and puzzle positions are excluded from
+training, and model selection uses the development split only. The MATE/puzzle
+sets have been scored repeatedly during development (milestone monitoring), so
+they are **not an untouched holdout**; final numbers must state that exposure,
+and no claim of a clean holdout may be made for them.
 
 ## Direction history
 
@@ -262,7 +361,9 @@ protocol before any frontier claim is made.
 
 ## Two-model endgame + fixed-slim geometry arm (2026-09-09, user decision)
 
-Focus narrows to exactly two models: CC-GAVN (parked, do not modify) and the
+Focus narrows to exactly two models: CC-GAVN (superseded text: it became the
+active direction and is now under corrected-v2; this line previously said
+"parked, do not modify", which no longer reflects the run history) and the
 fixed-bias geometry arm trimmed to its true trained size. The ablation matrix
 justified this: the no-Q and dynamic-bias ingredients changed nothing, and the
 geometry arm's `bias_mode="fixed"` forward never reads the dynamic projection

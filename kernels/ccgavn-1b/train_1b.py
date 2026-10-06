@@ -1,4 +1,12 @@
-"""Wait briefly for the frozen 1B corpus + checkpoint-320000, then continue CC-GAVN.
+"""HISTORICAL: legacy-recipe 1B continuation launcher (run COMPLETE 2026-09-30).
+
+This launcher is retained for provenance only. Its run finished at
+checkpoint-1,620,000 and `scripts/watch_1b.py` stops pushing it. The current
+trainer rejects legacy checkpoints without an explicit new-run warm start and
+requires `--exclusion-puzzles`, so a re-push of this file will not train;
+stage-2B is handled by kernels/ccgavn-2b under the corrected-v2 recipe.
+
+Wait briefly for the frozen 1B corpus + checkpoint-320000, then continue CC-GAVN.
 
 Continuation of `ccgavn-5m-seed0` from step 320,000 to 1,620,000 (+1.3M steps)
 on the frozen 1B-first corpus (configs/ccgavn-1b-shard-tags.json). The exact

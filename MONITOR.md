@@ -5,13 +5,19 @@ Live dashboard for the whole project, phone-friendly:
 
 ## What it shows
 
-- **Stages** — 320k training → 320k frozen eval → 1B corpus labeling → 1B
-  continuation (→1.62M steps) → 1B frozen eval, each with a progress bar.
-- **Loss curves** — train and dev loss per checkpoint of `ccgavn-5m-seed0`
-  (all checkpoints, from the first 5k step to the latest upload).
-- **Frozen evals** — bar chart + table of every `eval-summary.json` ever
-  archived on HF (MATE % / puzzles %), with the Ruoss 9M teacher and legacy
-  GAVN reference rows.
+- **Stages** — 320k training → 320k archived eval → 1B corpus labeling →
+  1B continuation (→1.62M steps) → archived eval → corrected-v2 2B
+  continuation (disarmed until explicitly armed) → 3.90M final, each with a
+  progress bar.
+- **Loss curves** — train and dev loss per checkpoint across the legacy
+  `ccgavn-5m-seed0` prefix and the corrected `ccgavn-5m-seed0-v2` prefix
+  (steps continue across both; legacy points are never rewritten).
+- **Monitoring + final evals** — bar chart + table of every
+  `eval-summary.json` on HF (MATE % / puzzles %), with the Ruoss 9M teacher
+  and legacy GAVN reference rows. Milestone evals are development
+  diagnostics, not a holdout: the MATE/puzzle sets were scored repeatedly
+  during training, and only the one-shot `*-final` run is the protocol result
+  (with that exposure disclosed).
 - **1B corpus** — labeled new rows vs the 920M target, shards done/planned.
 - **Runs** — kernel statuses per account, GPU quota left per account, and each
   run's `run-status.txt` from HF.
@@ -34,8 +40,9 @@ Live dashboard for the whole project, phone-friendly:
 - **Full cloud automation, no local machine involved:** the Worker's `*/10`
   cron also sends a `repository_dispatch` tick to GitHub (throttled to ~10 min
   via KV). The `pipeline-tick` GitHub Action then runs the keep-alive checks
-  (`ensure_build_2b.py`, `watch_1b.py`, `ensure_eval_320k.py`) and
-  `scripts/push_monitor.py`, which assembles the heavy sections — full
+  (`ensure_build_2b.py`, `watch_1b.py`, `watch_2b.py`, `ensure_eval_320k.py`,
+  `ensure_eval_preview.py`) and `scripts/push_monitor.py`, which assembles the
+  heavy sections — full
   training curve, eval summaries, corpus progress, PGN games, kernel
   statuses, quotas — and POSTs them to `/api/ingest`. A 30-minute cron in the
   same workflow acts as a fallback; if both stall, the page shows the last

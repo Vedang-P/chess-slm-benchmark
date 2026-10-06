@@ -91,8 +91,10 @@ ChessBench-trained action-values transfer to MATE-style expert tasks.
 **Next:** establish a valid sub-9M frontier. The first priority is a repaired
 5M controlled baseline, followed by a square-token geometric action-value
 model in the 3–6M range. Final training must use the ChessBench training
-distribution, frozen held-out evaluation, and resumable Hugging Face
-checkpoints.
+distribution, archived evaluation at a fixed commit, and resumable Hugging
+Face checkpoints. (Correction 2026-10-06: the MATE/puzzle sets are *not* an
+untouched holdout — they were scored repeatedly during development; see
+`PROJECT-STATUS.md`.)
 
 Update (2026-09-09): after correcting an evaluator that selected an untrained
 auxiliary head for one arm, the three completed legacy 5.30M GAVN checkpoints
@@ -106,8 +108,9 @@ for legacy GAVN at 5M. The next preregistered candidate is CC-GAVN, a
 `PROJECT-STATUS.md` for the complete, current result record.
 
 **Decision (2026-09-09): two-model endgame.** All further work focuses on
-exactly two models — CC-GAVN (parked, untouched until called) and the
-fixed-bias geometry arm trimmed to its true trained size. The full ablation
+exactly two models — CC-GAVN (this became the active direction; now continued
+under corrected-v2) and the fixed-bias geometry arm trimmed to its true
+trained size. The full ablation
 matrix showed the other arms' distinguishing ingredients add nothing, and the
 geometry arm's `bias_mode="fixed"` never reads its dynamic projection: that
 module (~1.84M params) sits at random init with zero gradient. The trimmed
@@ -128,9 +131,9 @@ retrain the slim arm under the identical recipe and confirm it matches the
 3. ~~Train and ablate a 3–6M square-token Geometric Action-Value Network
    (GAVN).~~ ✅ done (ablation matrix closed 2026-09-09)
 4. Two-model focus: (a) trimmed fixed-bias geometry `fixed-slim` @ 3,461,377
-   params — replicate the 5.30M arm exactly, then improve one change at a
-   time (e.g. corrected v2 relation schema); (b) CC-GAVN @ 4,762,088 params
-   (parked until its turn; do not modify).
+   params — replicate the 5.30M arm exactly; (b) CC-GAVN @ 4,762,088 params,
+   the active direction (corrected-v2 recipe, new run prefix, training
+   disarmed until explicitly armed; see `PROJECT-STATUS.md`).
 5. Report the parameter/accuracy/latency frontier with confidence intervals,
    calibration, error overlap, and an ablation table suitable for a workshop
    paper.
@@ -149,7 +152,8 @@ scripts/
   eval_searchless_mate.py   ACTIVE — MATE 2-choice eval for searchless models
   train_gavn.py              ACTIVE — square-token geometric student trainer
   train_ccgavn.py            ACTIVE — 4.76M candidate-conditioned GAVN trainer
-  eval_gavn.py               ACTIVE — frozen MATE + puzzle evaluator for GAVN
+  eval_gavn.py               ACTIVE — exact-set MATE + puzzle evaluator
+                             (per-example JSONL resume; clustered analysis)
   build_search_traces.py    ACTIVE — verbalized search traces (5000 built)
   train_mate_lora.py        SFT trainer (reusable)
   run_mate_eval.py          eval protocol (gemma/DeepSeek baseline scoring)

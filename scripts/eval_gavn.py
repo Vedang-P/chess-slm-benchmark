@@ -1,4 +1,15 @@
-"""Evaluate a GAVN checkpoint on MATE and the official puzzle protocol."""
+"""Evaluate a GAVN / CC-GAVN checkpoint on MATE and the official puzzle protocol.
+
+Exact-set semantics (2026-10-06 review fixes):
+  - every requested MATE row and puzzle is scored in full; a malformed row or
+    a wrong total aborts the run with a nonzero exit code instead of silently
+    reporting accuracy over fewer rows,
+  - per-example records are appended to ``<examples-out>/mate.jsonl`` and
+    ``<examples-out>/puzzles.jsonl`` so a killed session resumes instead of
+    rescoring, and so downstream analysis can cluster by position,
+  - ``--summary-out`` writes a machine-readable summary the eval kernels gate
+    DONE on (returncode, exact totals, completion).
+"""
 from __future__ import annotations
 
 import argparse
@@ -40,33 +51,72 @@ def tokenize_fen(fen: str) -> np.ndarray:
     return np.asarray([_CHARS[x] for x in expanded], dtype=np.int64)
 
 
-def main():
-    import chess
-    import chess.pgn
-    import pandas as pd
-    import torch
+def position_key(fen: str) -> str:
+    """Exact piece-placement + side + castling + ep: the clustering key."""
+    return " ".join(fen.split()[:4])
 
+
+def _append_jsonl(path: Path, record: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def _load_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            records.append(json.loads(line))
+    return records
+
+
+def _row_candidates(row: dict) -> tuple[str, str, str]:
+    extra = row.get("task_extra") or {}
+    return (row.get("candidate_a") or row.get("move_a") or extra.get("candidate_a"),
+            row.get("candidate_b") or row.get("move_b") or extra.get("candidate_b"),
+            row.get("truth_label") or row.get("label") or extra.get("truth_label"))
+
+
+def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", required=True, help="checkpoint-N directory")
     p.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "/kaggle/working/searchless_chess"))
     p.add_argument("--eval", default="", help="comma-separated MATE JSON files")
-    p.add_argument("--max-rows", type=int, default=0)
+    p.add_argument("--max-rows", type=int, default=0,
+                   help="smoke only: score a prefix and mark the run partial")
     p.add_argument("--puzzles", default="", help="official puzzles.csv path")
     p.add_argument("--num-puzzles", type=int, default=10000)
     p.add_argument("--score", choices=["auto", "q", "dist"], default="auto",
                    help="Decision score. auto/dist uses the trained return\n"
                         "distribution expectation; q is only a diagnostic\n"
                         "for checkpoints trained with a nonzero --w-q.")
-    args = p.parse_args()
+    p.add_argument("--examples-out", default="",
+                   help="directory for resumable per-example mate.jsonl/puzzles.jsonl")
+    p.add_argument("--summary-out", default="",
+                   help="write the machine-readable summary JSON here")
+    p.add_argument("--expect-mate-rows", type=int, default=4000)
+    return p.parse_args()
 
+
+def main() -> int:
+    import chess
+    import chess.pgn
+    import pandas as pd
+    import torch
+
+    args = parse_args()
     cp = Path(args.checkpoint)
     cfg = json.loads((cp / "config.json").read_text(encoding="utf-8"))
     src, dst, promo, _ = action_tables(Path(args.sl_repo))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model_version = str(cfg.get("model_version", "v1"))
     if cfg.get("architecture") == "cc-gavn-v1":
         from scripts.train_ccgavn import CCGAVN, candidate_relation_types
         model = CCGAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
-                      src, dst, promo, candidate_relation_types()).to(device)
+                       src, dst, promo, candidate_relation_types(),
+                       model_version=model_version).to(device)
         architecture = "cc-gavn-v1"
     else:
         legacy_relations = (cfg.get("relation_schema") is None
@@ -92,7 +142,8 @@ def main():
             "Use --score dist, which is the canonical action-value output.")
     if architecture == "cc-gavn-v1" and score_mode == "q":
         raise ValueError("CC-GAVN has no scalar q_head; use --score dist")
-    print(f"[gavn] architecture={architecture} decision score={score_mode}", flush=True)
+    print(f"[gavn] architecture={architecture} model={model_version} "
+          f"decision score={score_mode}", flush=True)
 
     def scores(board):
         # The official engine specifies its own stable ordering.  Ordering only
@@ -120,55 +171,137 @@ def main():
             board.pop()
         return moves, values
 
+    examples_dir = Path(args.examples_out) if args.examples_out else None
+    mate_jsonl = examples_dir / "mate.jsonl" if examples_dir else None
+    puz_jsonl = examples_dir / "puzzles.jsonl" if examples_dir else None
+    summary = {"checkpoint": str(cp), "architecture": architecture,
+               "model_version": model_version, "score": score_mode,
+               "returncode": 1, "complete": False, "partial": bool(args.max_rows),
+               "mate": None, "puzzles": None, "errors": []}
+
     if args.eval:
+        done = {(r["file"], r["row"]) for r in _load_jsonl(mate_jsonl)} if mate_jsonl else set()
+        files = [Path(f.strip()) for f in args.eval.split(",")]
         rows = []
-        for filename in args.eval.split(","):
-            rows.extend(json.loads(Path(filename.strip()).read_text(encoding="utf-8")))
+        for f in files:
+            if not f.exists():
+                raise FileNotFoundError(f"MATE file missing: {f}")
+            payload = json.loads(f.read_text(encoding="utf-8"))
+            if not isinstance(payload, list):
+                raise ValueError(f"{f}: MATE file must contain a JSON list")
+            rows.extend((str(f), i, row) for i, row in enumerate(payload))
         if args.max_rows:
             rows = rows[:args.max_rows]
-        correct = total = 0
-        for row in rows:
-            fen = row.get("fen") or row.get("position")
-            ca = row.get("candidate_a") or row.get("move_a")
-            cb = row.get("candidate_b") or row.get("move_b")
-            truth = row.get("truth_label") or row.get("label")
-            extra = row.get("task_extra") or {}
-            ca, cb, truth = ca or extra.get("candidate_a"), cb or extra.get("candidate_b"), truth or extra.get("truth_label")
-            if not (fen and ca and cb and truth):
+        elif len(rows) != args.expect_mate_rows:
+            raise ValueError(f"MATE rows {len(rows)} != required {args.expect_mate_rows}")
+        scored_correct = scored_total = 0
+        for file_name, i, row in rows:
+            if (file_name, i) in done:
                 continue
+            fen = row.get("fen") or row.get("position")
+            ca, cb, truth = _row_candidates(row)
+            if not (fen and ca and cb and truth in ("A", "B")):
+                raise ValueError(f"{file_name} row {i}: malformed MATE row")
             board = chess.Board(fen)
             moves, values = scores(board)
             by_uci = {m.uci(): float(v) for m, v in zip(moves, values)}
+            if ca not in by_uci or cb not in by_uci:
+                raise ValueError(f"{file_name} row {i}: candidate not legal in {fen}")
             pred = "A" if by_uci[ca] > by_uci[cb] else "B"
-            total += 1
-            correct += pred == truth
-        if total == 0:
-            print("[gavn] MATE: no parseable rows (check eval file schema)")
+            record = {"file": file_name, "row": i, "position": position_key(fen),
+                      "truth": truth, "pred": pred, "correct": pred == truth,
+                      "score_a": by_uci[ca], "score_b": by_uci[cb],
+                      "candidate_a": ca, "candidate_b": cb}
+            if mate_jsonl:
+                _append_jsonl(mate_jsonl, record)
+            scored_correct += int(record["correct"])
+            scored_total += 1
+            done.add((file_name, i))
+        if mate_jsonl:
+            records = _load_jsonl(mate_jsonl)
+            correct = sum(bool(r["correct"]) for r in records)
+            total = len(records)
         else:
-            print(f"[gavn] MATE: {correct}/{total} = {100*correct/total:.2f}%")
+            records = []
+            correct, total = scored_correct, scored_total
+        expected = min(args.expect_mate_rows, len(rows) if args.max_rows else args.expect_mate_rows)
+        summary["mate"] = {"correct": correct, "total": total, "expected": expected,
+                           "unique_positions": len({r["position"] for r in records})}
+        print(f"[gavn] MATE: {correct}/{total} = {100*correct/max(1,total):.2f}% "
+              f"(unique positions {summary['mate']['unique_positions']})", flush=True)
+        if total != expected:
+            summary["errors"].append(f"MATE scored {total} != expected {expected}")
+            _finish(summary, args)
+            return 1
 
     if args.puzzles:
-        puzzles = pd.read_csv(args.puzzles, nrows=args.num_puzzles)
-        solved = 0
-        for _, puzzle in puzzles.iterrows():
+        puz = pd.read_csv(args.puzzles, nrows=args.num_puzzles)
+        if not args.max_rows and len(puz) != args.num_puzzles:
+            raise ValueError(f"puzzles.csv has {len(puz)} rows, expected {args.num_puzzles}")
+        done = {r["row"] for r in _load_jsonl(puz_jsonl)} if puz_jsonl else set()
+        solved_new = total_new = 0
+        for i, puzzle in puz.iterrows():
+            if i in done:
+                continue
             game = chess.pgn.read_game(io.StringIO(puzzle["PGN"]))
+            if game is None or game.errors:
+                raise ValueError(f"puzzle row {i}: invalid PGN")
             board = game.end().board()
-            moves = puzzle["Moves"].split(" ")
+            moves_uci = str(puzzle["Moves"]).split()
             ok = True
-            for i, uci in enumerate(moves):
-                if i % 2 == 1:
+            for j, uci in enumerate(moves_uci):
+                move = chess.Move.from_uci(uci)
+                if move not in board.legal_moves:
+                    raise ValueError(f"puzzle row {i}: illegal official move {uci}")
+                if j % 2 == 1:
                     legal, values = scores(board)
                     predicted = legal[int(np.argmax(values))].uci()
                     if predicted != uci:
                         board.push(chess.Move.from_uci(predicted))
                         ok = board.is_checkmate()
                         break
-                board.push(chess.Move.from_uci(uci))
-            solved += ok
-            if (int(_) + 1) % 100 == 0:
-                print(f"[gavn] puzzle progress row={_+1} solved={solved}", flush=True)
-        print(f"[gavn] puzzles: {solved}/{len(puzzles)} = {100*solved/len(puzzles):.2f}%")
+                board.push(move)
+            if puz_jsonl:
+                _append_jsonl(puz_jsonl, {"row": int(i), "correct": bool(ok),
+                                          "puzzle_id": str(puzzle.get("PuzzleId", i))})
+            solved_new += int(ok)
+            total_new += 1
+            done.add(i)
+            if (int(i) + 1) % 100 == 0:
+                print(f"[gavn] puzzle progress row={int(i)+1} solved={solved_new}", flush=True)
+        if puz_jsonl:
+            records = _load_jsonl(puz_jsonl)
+            solved = sum(bool(r["correct"]) for r in records)
+            total = len(records)
+        else:
+            solved, total = solved_new, total_new
+        expected = min(args.num_puzzles, len(puz) if args.max_rows else args.num_puzzles)
+        summary["puzzles"] = {"solved": solved, "total": total, "expected": expected}
+        print(f"[gavn] puzzles: {solved}/{total} = {100*solved/max(1,total):.2f}%", flush=True)
+        if total != expected:
+            summary["errors"].append(f"puzzles scored {total} != expected {expected}")
+            _finish(summary, args)
+            return 1
+
+    if args.max_rows:
+        summary["errors"].append("partial run (--max-rows) is not a complete evaluation")
+        _finish(summary, args)
+        return 0
+    if not args.eval and not args.puzzles:
+        summary["errors"].append("nothing requested")
+        _finish(summary, args)
+        return 1
+    summary["returncode"] = 0
+    summary["complete"] = True
+    _finish(summary, args)
+    return 0
+
+
+def _finish(summary: dict, args) -> None:
+    if args.summary_out:
+        Path(args.summary_out).write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print("[gavn] SUMMARY " + json.dumps(summary), flush=True)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

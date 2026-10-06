@@ -1,5 +1,37 @@
 # 2B-Pair Scaling Plan (kickoff 2026-09-19)
 
+## 2026-10-06 — Correction: the launched 2B-A segment is a legacy 61-tag run; corrected-v2 replaces it
+
+The 2026-10-05 launch below was executed with two defects that were only found
+by the 2026-10-06 review:
+
+- the schedule was built for the full step budget and then indexed by the
+  *global* step, so the first 1,620,000 slots of the 102-tag schedule were
+  skipped: **41 of the 102 declared tags were never sampled**. The 1.62M→
+  ~1.715M checkpoints on HF therefore trained on the 61-tag subset that
+  happened to fall after the skip point, without MATE/puzzle exclusions, with
+  the LR schedule applied to optimizer group 0 only, and with the
+  castling-reflection / dev-RNG issues listed in `PROJECT-STATUS.md`;
+- the "~2.67 passes over the union" arithmetic is not what the executed
+  schedule did.
+
+Corrected-v2 (training disarmed until explicitly armed):
+
+- new HF prefix `ccgavn-5m-seed0-v2`; warm start from the latest complete
+  legacy checkpoint (weights + optimizer state, disclosed as a
+  `historical_training_caveat` in every checkpoint);
+- stage-relative schedule over **all 102 tags** (`--stage-start-step`), so no
+  block is skipped; from stage start `s0` the stage length is
+  `3,896,658 − s0` steps and the schedule digest is pinned in checkpoint
+  configs;
+- MATE (4,000 rows / 2,952 unique positions) and all official puzzle decision
+  positions excluded from training; exclusions also remove the development
+  fold globally;
+- one list of eval milestones in `scripts/ensure_eval_preview.py` is rendered
+  into the pushed eval kernel (no watcher/kernel drift);
+- `scripts/watch_2b.py` refuses to push any training kernel unless armed via
+  `configs/ccgavn-2b-ARMED` or `CCGAVN2B_ARMED=1`.
+
 ## 2026-10-05 — Stage 2B-A: user decisions, exact arithmetic, launch
 
 This plan was written for a single ~2B / 2.67-epoch stage. On 2026-10-05 the
@@ -158,14 +190,19 @@ the CI watcher enforces this stop rule.
   the 1B corpus to be complete, then resumes. It never starts on a partial
   corpus (the shard list is snapshotted at process start).
 - Evaluate after the continuation; only then decide on the deferred 2B stage.
-- Stop rule: development loss plateau plus the frozen protocol at the end.
-  No probing against frozen sets.
+- Stop rule: development loss plateau plus the final protocol at the end.
+  (Historical note: milestone preview evals *did* repeatedly score the frozen
+  MATE/puzzle sets, so they are not an untouched holdout; that exposure is now
+  disclosed, and selection uses development loss only.)
 
 ## Evaluation (Phase D)
 
-- Frozen protocol only, once per completed stage: 4 x 1,000 MATE + the
-  official 10K puzzles, `--score auto`, on Kaggle CPU, archived on HF under
-  `eval-results/`.
+- One-shot final protocol per completed stage: 4 x 1,000 MATE + the official
+  10K puzzles, `--score auto`, archived on HF under `eval-results/`. Milestone
+  evals are monitoring/dev diagnostics and are labeled as such; they are not a
+  holdout, and final numbers must state that these sets were scored during
+  development. Per-example JSONL is persisted so analyses cluster by position
+  (4,000 MATE rows cover 2,952 unique positions).
 
 ## Artifacts and where things live
 

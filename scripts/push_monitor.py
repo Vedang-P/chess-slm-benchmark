@@ -20,8 +20,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 HF_REPO = "vedangfake/chess-slm-benchmark"
-RUN = "ccgavn-5m-seed0"
-LIVE_RUNS = ["ccgavn-5m-seed0", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum"]
+# Historical prefix first, corrected-v2 continuation second; steps continue
+# across both, so the curve merges by step and never rewrites legacy points.
+RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2"]
+LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build",
+             "ccgavn-1b", "puzzle-curriculum"]
 ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shoumikmitra"]
 KERNELS = [
     ("vedanggggg", "build-2b-slice"), ("softmaxsimp", "build-2b-slice"),
@@ -64,8 +67,9 @@ def stage1_schedule():
 
 
 def checkpoint_times(token: str, min_step: int) -> dict:
-    """step -> ISO upload time for metrics.json files, from commit history.
-    Gives throughput charts a real time axis even before the trainer logs it."""
+    """(run, step) -> ISO upload time for metrics.json files, from commit
+    history. Gives throughput charts a real time axis even before the trainer
+    logs it."""
     import requests as rq
     out = {}
     for page in range(20):
@@ -78,39 +82,43 @@ def checkpoint_times(token: str, min_step: int) -> dict:
             break
         for x in commits:
             t = x.get("title", "")
-            if t.startswith(f"Upload {RUN}/checkpoint-") and t.endswith("/metrics.json with huggingface_hub"):
-                step = t.split("checkpoint-")[1].split("/")[0]
-                d = x["date"]
-                if step not in out or d < out[step]:
-                    out[step] = d
-        if str(min_step) in out:
-            break
+            if not t.endswith("/metrics.json with huggingface_hub"):
+                continue
+            for run in RUNS:
+                prefix = f"Upload {run}/checkpoint-"
+                if t.startswith(prefix):
+                    step = t.split("checkpoint-")[1].split("/")[0]
+                    d = x["date"]
+                    key = (run, step)
+                    if key not in out or d < out[key]:
+                        out[key] = d
     return out
 
 
 def build_curve(api, token: str) -> list[dict]:
     from huggingface_hub import hf_hub_download
     files = hf_files(api)
-    steps = sorted({int(m.group(1)) for f in files
-                    if (m := re.search(rf"{RUN}/checkpoint-(\d+)/metrics\.json$", f))})
+    entries = sorted({(run, int(m.group(1))) for f in files for run in RUNS
+                      if (m := re.search(rf"{re.escape(run)}/checkpoint-(\d+)/metrics\.json$", f))},
+                     key=lambda x: x[1])
     sched = stage1_schedule()
-    times = checkpoint_times(token, steps[0] if steps else 0)
+    times = checkpoint_times(token, entries[0][1] if entries else 0)
     curve = []
-    for s in steps:
+    for run, s in entries:
         try:
-            p = hf_hub_download(HF_REPO, f"{RUN}/checkpoint-{s}/metrics.json",
+            p = hf_hub_download(HF_REPO, f"{run}/checkpoint-{s}/metrics.json",
                                 repo_type="dataset", token=token)
             m = json.loads(Path(p).read_text())
-            point = {"step": m.get("step", s), "train": m.get("train_loss"),
-                     "dev": m.get("dev_loss")}
+            point = {"step": m.get("step", s), "run": run,
+                     "train": m.get("train_loss"), "dev": m.get("dev_loss")}
             for k in ("dev_dist", "dev_ce", "lr", "grad_norm", "samples_per_s", "shard"):
                 if m.get(k) is not None:
                     point[k] = m[k]
-            if "shard" not in point:
+            if "shard" not in point and run != "ccgavn-5m-seed0-v2":
                 idx = int(point["step"]) - 1
                 if 0 <= idx < len(sched):
                     point["shard"] = str(sched[idx])
-            t = times.get(str(point["step"]))
+            t = times.get((run, str(point["step"])))
             if t:
                 point["t"] = t
             curve.append(point)

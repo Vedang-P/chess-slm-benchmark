@@ -107,3 +107,6 @@ notebooks/kaggle_mate_*_w*.ipynb
 .opencode/
 .omp/
 
+
+# local corpus audit downloads (large shards)
+data/audit-cache/

@@ -1,14 +1,14 @@
-"""Wait for ccgavn-5m-seed0/checkpoint-320000 on HF, then run the frozen protocol.
+"""HISTORICAL one-shot eval for ccgavn-5m-seed0/checkpoint-320000 (archived).
 
 Polls HF every 5 minutes (up to ~9.5h), then evaluates all four MATE sets and
-the official 10K puzzles with the distribution score, and uploads logs, a
-summary, and a wake-up summary to HF. CPU kernel; no GPU quota.
+the official 10K puzzles with the distribution score. DONE is written only
+when eval_gavn.py exits 0 with exact totals (4,000 MATE rows / 10,000 puzzles);
+otherwise INCOMPLETE plus the partial artifacts are uploaded. CPU kernel.
 """
 import glob
 import io
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -80,9 +80,11 @@ MATE = ",".join(str(REPO / "data/positions" / f) for f in
                 ["mate-selection-test-noexplain.json", "mate-selection-test-both.json",
                  "mate-selection-test-tactic.json", "mate-selection-test.json"])
 out = WORK / "eval-full.log"
+summary_path = WORK / "eval-summary.json"
 cmd = [sys.executable, str(REPO / "scripts" / "eval_gavn.py"),
        "--checkpoint", str(ck / CKPT), "--sl-repo", str(SL), "--eval", MATE,
-       "--puzzles", str(pz), "--num-puzzles", "10000", "--score", "auto"]
+       "--puzzles", str(pz), "--num-puzzles", "10000", "--score", "auto",
+       "--examples-out", str(WORK / "examples"), "--summary-out", str(summary_path)]
 print("[eval] " + " ".join(cmd), flush=True)
 last = time.time()
 lines = []
@@ -96,23 +98,26 @@ with open(out, "w") as fh:
             last = time.time()
     proc.wait()
 
-mate = re.findall(r"\[gavn\] MATE: (\d+)/(\d+) = ([\d.]+)%", "\n".join(lines))
-puz = re.findall(r"\[gavn\] puzzles: (\d+)/(\d+) = ([\d.]+)%", "\n".join(lines))
-summary = {"checkpoint": CKPT, "returncode": proc.returncode,
-           "mate": [{"correct": int(a), "total": int(b), "pct": float(c)} for a, b, c in mate],
-           "puzzles": [{"correct": int(a), "total": int(b), "pct": float(c)} for a, b, c in puz]}
-(WORK / "eval-summary.json").write_text(json.dumps(summary, indent=2))
+summary = {}
+if summary_path.exists():
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+mate = summary.get("mate") or {}
+puz = summary.get("puzzles") or {}
+complete = (proc.returncode == 0 and summary.get("complete")
+            and mate.get("total") == 4000 and puz.get("total") == 10000)
+summary.update({"checkpoint": CKPT, "returncode": proc.returncode,
+                "complete": bool(complete)})
+summary_path.write_text(json.dumps(summary, indent=2))
 upload(out, f"{PREFIX}/eval-full.log")
-upload(WORK / "eval-summary.json", f"{PREFIX}/eval-summary.json")
-wake = (f"# CC-GAVN 320k frozen eval\n\n"
-        f"- MATE (4,000): {mate[0][0]}/{mate[0][1]} = {mate[0][2]}%\n" if mate else "MATE missing\n")
-if mate and puz:
+if complete:
+    upload(summary_path, f"{PREFIX}/eval-summary.json")
     wake = (f"# CC-GAVN 320k frozen eval\n\n"
-            f"- MATE (4,000): {mate[0][0]}/{mate[0][1]} = {mate[0][2]}%\n"
-            f"- Puzzles (10,000): {puz[0][0]}/{puz[0][1]} = {puz[0][2]}%\n\n"
+            f"- MATE (4,000): {mate['correct']}/{mate['total']}\n"
+            f"- Puzzles (10,000): {puz['solved']}/{puz['total']}\n\n"
             f"Baselines — CC-GAVN@160k: 87.38% / 51.86%; 9M teacher: 98.72% / 86.13%\n")
-(WORK / "wake-up-summary.md").write_text(wake)
-upload(WORK / "wake-up-summary.md", f"{PREFIX}/wake-up-summary.md")
-api.upload_file(path_or_fileobj=("DONE\n" + json.dumps(summary)).encode(),
+    (WORK / "wake-up-summary.md").write_text(wake)
+    upload(WORK / "wake-up-summary.md", f"{PREFIX}/wake-up-summary.md")
+state = "DONE " if complete else "INCOMPLETE "
+api.upload_file(path_or_fileobj=(state + json.dumps(summary)).encode(),
                 path_in_repo=f"{PREFIX}/run-status.txt", repo_id=HF_REPO, repo_type="dataset")
-print("[eval] DONE", json.dumps(summary))
+print(f"[eval] {state}{json.dumps(summary)}")

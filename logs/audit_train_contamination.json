@@ -1,0 +1,73 @@
+{
+  "exclusion_digest": "14ab422a1bbd3e1c220d318d539216c4f15c93421b9165fb63bf6fe3b48d2b36",
+  "mate": {
+    "files": {
+      "mate-selection-test-both.json": {
+        "rows": 1000,
+        "unique_positions": 1000
+      },
+      "mate-selection-test-noexplain.json": {
+        "rows": 1000,
+        "unique_positions": 1000
+      },
+      "mate-selection-test-tactic.json": {
+        "rows": 1000,
+        "unique_positions": 1000
+      },
+      "mate-selection-test.json": {
+        "rows": 1000,
+        "unique_positions": 1000
+      }
+    },
+    "rows": 4000,
+    "unique_positions": 2952
+  },
+  "dev_mod": 100,
+  "dev_fold": 0,
+  "shards": {
+    "00000": {
+      "rows": 16764154,
+      "sampled": 2000000,
+      "excluded_frac": 0.0099165,
+      "dev_fold_frac": 0.0099135,
+      "benchmark_frac": 3e-06,
+      "duplicate_frac": 0.0023895000000000444,
+      "cross_shard_duplicate_positions": 0
+    },
+    "01194": {
+      "rows": 23914165,
+      "sampled": 2000000,
+      "excluded_frac": 0.0100925,
+      "dev_fold_frac": 0.0100915,
+      "benchmark_frac": 1e-06,
+      "duplicate_frac": 0.0024260000000000392,
+      "cross_shard_duplicate_positions": 9596
+    },
+    "01748": {
+      "rows": 23940056,
+      "sampled": 2000000,
+      "excluded_frac": 0.009991,
+      "dev_fold_frac": 0.009987,
+      "benchmark_frac": 4e-06,
+      "duplicate_frac": 0.002386499999999958,
+      "cross_shard_duplicate_positions": 19038
+    },
+    "02109": {
+      "rows": 23821592,
+      "sampled": 2000000,
+      "excluded_frac": 0.0099775,
+      "dev_fold_frac": 0.009975,
+      "benchmark_frac": 2.5e-06,
+      "duplicate_frac": 0.0024530000000000385,
+      "cross_shard_duplicate_positions": 28517
+    }
+  },
+  "totals": {
+    "shards": 4,
+    "rows": 88439967,
+    "sampled": 8000000,
+    "excluded_frac": 0.009994375,
+    "duplicate_frac": 0.00241375,
+    "cross_shard_duplicate_positions": 57151
+  }
+}

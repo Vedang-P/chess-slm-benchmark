@@ -39,16 +39,24 @@ def main() -> None:
     if f"{CKPT}/config.json" not in files or f"{CKPT}/state.pt" not in files:
         print("[ensure] checkpoint not on HF yet; nothing to do")
         return
-    status_file = f"{PREFIX}/run-status.txt"
-    if status_file in files:
+    summary_file = f"{PREFIX}/eval-summary.json"
+    if summary_file in files:
+        import json
         from huggingface_hub import hf_hub_download
         sys.path.insert(0, str(ROOT / "scripts"))
         from kaggle_checkpoint import hf_token
-        p = hf_hub_download(HF_REPO, status_file, repo_type="dataset",
+        p = hf_hub_download(HF_REPO, summary_file, repo_type="dataset",
                             token=hf_token(ROOT))
-        if Path(p).read_text().startswith("DONE"):
-            print("[ensure] eval already DONE; nothing to do")
+        summary = json.loads(Path(p).read_text(encoding="utf-8"))
+        if (
+            summary.get("complete")
+            and summary.get("returncode") == 0
+            and (summary.get("mate") or {}).get("total") == 4000
+            and (summary.get("puzzles") or {}).get("total") == 10000
+        ):
+            print("[ensure] eval summary complete; nothing to do")
             return
+        print("[ensure] eval summary incomplete; re-pushing for resume")
     st = kernel_status()
     if "RUNNING" in st or "QUEUED" in st or "PENDING" in st:
         print(f"[ensure] eval kernel active: {st}")

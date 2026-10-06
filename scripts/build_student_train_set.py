@@ -51,9 +51,8 @@ def main() -> None:
             tokens[i] = tokenizer.tokenize(fen)
             actions[i] = utils.MOVE_TO_ACTION[move]
             winprob[i] = float(wp)
-        except Exception:
-            bad += 1
-            continue
+        except Exception as exc:
+            raise ValueError(f"invalid record {i} in {args.bag}; no dataset written") from exc
         if (i + 1) % 200000 == 0:
             print(f"[parse] {i+1}/{n} (bad={bad})", flush=True)
     print(f"[parse] done: {n - bad} good, {bad} bad", flush=True)
