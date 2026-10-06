@@ -94,6 +94,16 @@ def main() -> None:
             print(f"[build-2b] {account}: slice complete ({len(want)} shards)")
             continue
         env = env_for_account(account)
+        # Never fight the corrected-v2 training kernel for the same account's
+        # single GPU session / quota: labeling is for the later 2B-B segment.
+        train = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "status",
+                                f"{account}/ccgavn-2b"], capture_output=True,
+                               text=True, timeout=90, env=env)
+        train_status = (train.stdout or train.stderr).strip()
+        if any(x in train_status for x in ("RUNNING", "QUEUED", "PENDING")):
+            print(f"[build-2b] {account}: training kernel active; deferring labeling "
+                  f"({len(missing)} shards left for 2B-B) — {train_status[-40:]}")
+            continue
         r = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "status",
                             f"{account}/build-2b-slice"], capture_output=True,
                            text=True, timeout=90, env=env)
