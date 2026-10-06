@@ -8,8 +8,11 @@ training. The single one-shot final protocol result is stored separately (the
 Guarantees (2026-10-06 review fixes):
   - the repository is checked out at the exact source commit embedded at push
     time (no silent default-branch drift),
-  - per-example JSONL is downloaded before scoring and uploaded periodically,
-    so a killed session resumes instead of rescoring,
+  - each checkpoint gets its OWN examples directory (examples-<step>) and the
+    saved rows carry a checkpoint/dataset/score identity that is validated, so
+    checkpoint N's rows can never be skipped and republished under checkpoint
+    N+1; per-example JSONL is downloaded before scoring and uploaded
+    periodically, so a killed session resumes instead of rescoring,
   - a target is only marked DONE when eval_gavn.py exits 0 with exact expected
     totals (4,000 MATE rows / 10,000 puzzles); otherwise INCOMPLETE is written
     and CI re-pushes.
@@ -65,7 +68,7 @@ def upload(local: Path, remote: str) -> None:
 
 
 def upload_examples(examples: Path, prefix: str) -> None:
-    for name in ("mate.jsonl", "puzzles.jsonl"):
+    for name in ("mate.jsonl", "puzzles.jsonl", "identity.json"):
         path = examples / name
         if path.exists():
             upload(path, f"{prefix}/examples/{name}")
@@ -73,7 +76,7 @@ def upload_examples(examples: Path, prefix: str) -> None:
 
 def download_examples(prefix: str, examples: Path) -> None:
     examples.mkdir(parents=True, exist_ok=True)
-    for name in ("mate.jsonl", "puzzles.jsonl"):
+    for name in ("mate.jsonl", "puzzles.jsonl", "identity.json"):
         remote = f"{prefix}/examples/{name}"
         try:
             cached = hf_hub_download(HF_REPO, remote, repo_type="dataset", token=TOKEN)
@@ -81,6 +84,27 @@ def download_examples(prefix: str, examples: Path) -> None:
             print(f"[preview] resumed {remote}", flush=True)
         except Exception:
             pass
+
+
+def run_eval_streamed(cmd: list[str], out: Path, prefix: str,
+                      examples: Path) -> tuple[int, bool]:
+    """Run eval_gavn.py, uploading partial artifacts every 5 minutes.
+    Returns (returncode, identity_mismatch)."""
+    mismatch = False
+    last = time.time()
+    with open(out, "w") as fh:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True)
+        for line in proc.stdout:
+            fh.write(line); fh.flush(); print(line.rstrip(), flush=True)
+            if "identity mismatch" in line:
+                mismatch = True
+            if time.time() - last > 300:
+                upload(out, f"{prefix}/eval-full.partial.log")
+                upload_examples(examples, prefix)
+                last = time.time()
+        proc.wait()
+    return proc.returncode, mismatch
 
 
 def summary_complete(summary: dict) -> bool:
@@ -156,34 +180,37 @@ for step in TARGETS:
     ck = WORK / "ckpt"
     snapshot_download(repo_id=HF_REPO, repo_type="dataset", token=TOKEN, local_dir=str(ck),
                       allow_patterns=[f"{ckpt}/*"])
-    examples = WORK / "examples"
+    # Per-checkpoint examples directory: resume state can never leak across
+    # targets (a shared dir let checkpoint N's rows be skipped and re-published
+    # under checkpoint N+1, 2026-10-06 review).
+    examples = WORK / f"examples-{step}"
+    shutil.rmtree(examples, ignore_errors=True)
     download_examples(prefix, examples)
     out = WORK / "eval-full.log"
     summary_path = WORK / "eval-summary.json"
-    if summary_path.exists():
-        summary_path.unlink()
     cmd = [sys.executable, str(REPO / "scripts" / "eval_gavn.py"),
            "--checkpoint", str(ck / ckpt), "--sl-repo", str(SL), "--eval", MATE,
            "--puzzles", str(pz), "--num-puzzles", str(EXPECT_PUZ), "--score", "auto",
            "--examples-out", str(examples), "--summary-out", str(summary_path)]
     print("[preview] " + " ".join(cmd), flush=True)
-    last = time.time()
-    with open(out, "w") as fh:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        for line in proc.stdout:
-            fh.write(line); fh.flush(); print(line.rstrip(), flush=True)
-            if time.time() - last > 300:
-                upload(out, f"{prefix}/eval-full.partial.log")
-                upload_examples(examples, prefix)
-                last = time.time()
-        proc.wait()
+    summary_path.unlink(missing_ok=True)
+    returncode, mismatch = run_eval_streamed(cmd, out, prefix, examples)
+    if mismatch and returncode != 0:
+        # Saved rows belong to a different checkpoint/dataset/score: discard
+        # them locally and rescore this target from scratch (the fresh upload
+        # overwrites the stale artifacts on HF).
+        print("[preview] identity mismatch in saved examples; rescoring from scratch",
+              flush=True)
+        shutil.rmtree(examples, ignore_errors=True)
+        summary_path.unlink(missing_ok=True)
+        returncode, _ = run_eval_streamed(cmd, out, prefix, examples)
 
     summary = {}
     if summary_path.exists():
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    complete = proc.returncode == 0 and summary_complete(summary)
+    complete = returncode == 0 and summary_complete(summary)
     summary["checkpoint"] = ckpt
-    summary["returncode"] = proc.returncode
+    summary["returncode"] = returncode
     summary["complete"] = bool(complete)
     summary["source_commit"] = SOURCE_COMMIT
     summary["searchless_commit"] = sl_commit

@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -86,14 +88,19 @@ class CorrectnessTests(unittest.TestCase):
         permuted[0, 0] = tokens[0, 71]
         permuted[0, 71] = tokens[0, 0]
         action = np.array([0])
+        torch.manual_seed(0)
         v1, v2 = tiny_ccgavn("v1").eval(), tiny_ccgavn("v2").eval()
         with torch.no_grad():
-            self.assertTrue(torch.allclose(
-                v1(torch.as_tensor(tokens), torch.as_tensor(action)),
-                v1(torch.as_tensor(permuted), torch.as_tensor(action))))
+            # v1 is exactly permutation-invariant up to float summation order
+            # (measured max |delta| ~2.4e-7); v2 changes by ~2e-2 or more.
+            v1_difference = (v1(torch.as_tensor(tokens), torch.as_tensor(action))
+                             - v1(torch.as_tensor(permuted), torch.as_tensor(action))).abs().max()
+            self.assertLess(v1_difference.item(), 1e-5)
             v2.global_field.data.copy_(torch.ones(13, 8))
             v2.global_field.data[0] *= 2.0
             v2.global_field.data[11] *= 0.4
+            v2.global_embed.weight.data[3].fill_(1.0)
+            v2.global_embed.weight.data[7].fill_(3.0)
             difference = (v2(torch.as_tensor(tokens), torch.as_tensor(action))
                           - v2(torch.as_tensor(permuted), torch.as_tensor(action))).abs().max()
             self.assertGreater(difference.item(), 1e-4)
@@ -129,6 +136,59 @@ class CorrectnessTests(unittest.TestCase):
         result = compare(records, other, np.random.default_rng(0), 200)
         self.assertEqual(result["common_rows"], 3)
         self.assertAlmostEqual(result["delta_b_minus_a"], -1 / 3)
+
+    def test_eval_resume_is_checkpoint_scoped(self):
+        from scripts.eval_gavn import (checkpoint_identity, dataset_identity,
+                                       validate_examples_identity)
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            cfg = {"dim": 8, "layers": 1, "heads": 2, "source_commit": "abc"}
+            checkpoints = {}
+            for name in ("checkpoint-1800000", "checkpoint-1900000"):
+                cp = tmp / name
+                cp.mkdir()
+                (cp / "state.pt").write_bytes(b"weights-" + name.encode())
+                checkpoints[name] = cp
+            mate = tmp / "mate.json"
+            mate.write_text("[]")
+            dataset = dataset_identity([mate], None)
+            id_a = {"checkpoint": checkpoint_identity(
+                        checkpoints["checkpoint-1800000"], cfg, "cc-gavn-v1", "v1", "dist"),
+                    "dataset": dataset}
+            id_b = {"checkpoint": checkpoint_identity(
+                        checkpoints["checkpoint-1900000"], cfg, "cc-gavn-v1", "v1", "dist"),
+                    "dataset": dataset}
+            self.assertNotEqual(id_a, id_b)
+            dir_a = tmp / "examples-1800000"
+            validate_examples_identity(dir_a, id_a)
+            (dir_a / "mate.jsonl").write_text(json.dumps(
+                {"file": "mate.json", "row": 0, "position": "P", "correct": True}) + "\n")
+            validate_examples_identity(dir_a, id_a)  # same checkpoint resumes
+            # Consecutive checkpoint evaluation with a fresh dir is clean...
+            dir_b = tmp / "examples-1900000"
+            validate_examples_identity(dir_b, id_b)
+            self.assertFalse((dir_b / "mate.jsonl").exists())
+            # ...and reusing the previous checkpoint's dir must fail hard.
+            with self.assertRaises(ValueError):
+                validate_examples_identity(dir_a, id_b)
+            # Dataset or score changes invalidate saved rows too.
+            changed = json.loads(json.dumps(id_a))
+            changed["checkpoint"]["score"] = "q"
+            with self.assertRaises(ValueError):
+                validate_examples_identity(dir_a, changed)
+            changed_dataset = json.loads(json.dumps(id_a))
+            changed_dataset["dataset"]["mate_sha256"] = "0" * 64
+            with self.assertRaises(ValueError):
+                validate_examples_identity(dir_a, changed_dataset)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_eval_kernel_scopes_examples_per_checkpoint(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (root / "kernels/eval-preview/eval_preview.py").read_text(encoding="utf-8")
+        self.assertIn('examples = WORK / f"examples-{step}"', source)
+        self.assertNotIn('examples = WORK / "examples"', source)
+        self.assertIn('"identity.json"', source)
 
     def test_2b_launcher_renders_corrected_config(self):
         import ast

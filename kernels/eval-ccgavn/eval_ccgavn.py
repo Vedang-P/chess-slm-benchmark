@@ -84,7 +84,8 @@ summary_path = WORK / "eval-summary.json"
 cmd = [sys.executable, str(REPO / "scripts" / "eval_gavn.py"),
        "--checkpoint", str(ck / CKPT), "--sl-repo", str(SL), "--eval", MATE,
        "--puzzles", str(pz), "--num-puzzles", "10000", "--score", "auto",
-       "--examples-out", str(WORK / "examples"), "--summary-out", str(summary_path)]
+       "--examples-out", str(WORK / f"examples-{STEP}"),
+       "--summary-out", str(summary_path)]
 print("[eval] " + " ".join(cmd), flush=True)
 last = time.time()
 lines = []

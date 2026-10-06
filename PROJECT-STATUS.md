@@ -67,7 +67,15 @@ the historical record.
     `ensure_eval_preview.py` verifies the summary, not its existence.
 11. No per-example persistence/resume. Fixed: `--examples-out` JSONL is
     appended as rows are scored and uploaded periodically; a killed session
-    resumes instead of rescoring.
+    resumes instead of rescoring. Follow-up review finding (2026-10-06, fixed
+    same day): the eval kernel shared one examples directory across targets,
+    so a checkpoint without saved rows inherited the previous checkpoint's
+    JSONL and could republish its scores. Each target now gets
+    `examples-<step>`, and `eval_gavn.py` validates a checkpoint/dataset/score
+    identity (including the state-file hash) before accepting saved rows;
+    mismatch aborts and the kernel rescoring from scratch. Regression tests:
+    `test_eval_resume_is_checkpoint_scoped`,
+    `test_eval_kernel_scopes_examples_per_checkpoint`.
 12. Watcher/kernel milestone lists disagreed (watcher to 3,896,658, kernel to
     1,620,000). Fixed: one list in `ensure_eval_preview.py`, rendered into the
     pushed kernel, so they cannot drift.

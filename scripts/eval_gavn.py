@@ -13,6 +13,7 @@ Exact-set semantics (2026-10-06 review fixes):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -54,6 +55,65 @@ def tokenize_fen(fen: str) -> np.ndarray:
 def position_key(fen: str) -> str:
     """Exact piece-placement + side + castling + ep: the clustering key."""
     return " ".join(fen.split()[:4])
+
+
+def _sha256_file(path: Path, chunk: int = 1 << 20) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(chunk), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def checkpoint_identity(cp: Path, cfg: dict, architecture: str,
+                        model_version: str, score_mode: str) -> dict:
+    """Everything that determines which checkpoint produced a score."""
+    return {
+        "checkpoint": cp.name,
+        "state_sha256": _sha256_file(cp / "state.pt"),
+        "architecture": architecture,
+        "model_version": model_version,
+        "score": score_mode,
+        "source_commit": cfg.get("source_commit"),
+        "dim": cfg.get("dim"), "layers": cfg.get("layers"), "heads": cfg.get("heads"),
+    }
+
+
+def dataset_identity(mate_files: list[Path], puzzles: Path | None) -> dict:
+    """Content identity of the evaluation sets, in scoring order."""
+    mate = hashlib.sha256()
+    for path in mate_files:
+        mate.update(path.name.encode())
+        mate.update(b"\0")
+        mate.update(path.read_bytes())
+    identity = {"mate_files": [p.name for p in mate_files],
+                "mate_sha256": mate.hexdigest(), "puzzles": None}
+    if puzzles is not None:
+        identity["puzzles"] = {"name": puzzles.name,
+                               "sha256": _sha256_file(puzzles)}
+    return identity
+
+
+def validate_examples_identity(examples_dir: Path, identity: dict) -> None:
+    """Refuse to append to per-example files that belong to a different
+    checkpoint, dataset, or scoring mode. The 2026-10-06 review found the eval
+    kernel reused one examples dir across checkpoints; stale rows were then
+    skipped by key and the old scores could be re-published under the new
+    checkpoint."""
+    examples_dir.mkdir(parents=True, exist_ok=True)
+    marker = examples_dir / "identity.json"
+    existing_rows = [p for name in ("mate.jsonl", "puzzles.jsonl")
+                     if (p := examples_dir / name).exists() and p.stat().st_size]
+    if marker.exists():
+        stored = json.loads(marker.read_text(encoding="utf-8"))
+        if stored != identity:
+            raise ValueError(
+                "identity mismatch for saved eval examples: refusing to reuse "
+                "rows scored for a different checkpoint, dataset, or score mode")
+    elif existing_rows:
+        raise ValueError(
+            "saved eval examples exist without identity.json; refusing to reuse")
+    marker.write_text(json.dumps(identity, indent=2), encoding="utf-8")
 
 
 def _append_jsonl(path: Path, record: dict) -> None:
@@ -172,6 +232,15 @@ def main() -> int:
         return moves, values
 
     examples_dir = Path(args.examples_out) if args.examples_out else None
+    if examples_dir is not None:
+        mate_files = ([Path(f.strip()) for f in args.eval.split(",")]
+                      if args.eval else [])
+        validate_examples_identity(examples_dir, {
+            "checkpoint": checkpoint_identity(cp, cfg, architecture,
+                                              model_version, score_mode),
+            "dataset": dataset_identity(
+                mate_files, Path(args.puzzles) if args.puzzles else None),
+        })
     mate_jsonl = examples_dir / "mate.jsonl" if examples_dir else None
     puz_jsonl = examples_dir / "puzzles.jsonl" if examples_dir else None
     summary = {"checkpoint": str(cp), "architecture": architecture,
