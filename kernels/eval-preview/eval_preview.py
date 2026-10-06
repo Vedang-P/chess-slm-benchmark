@@ -11,9 +11,10 @@ Guarantees (2026-10-06 review fixes):
   - each checkpoint gets its OWN examples directory (examples-<step>) and the
     saved rows carry a checkpoint/dataset/score identity that is validated, so
     checkpoint N's rows can never be skipped and republished under checkpoint
-    N+1; identity.json is uploaded before the JSONL, and an interrupted upload
-    (rows without marker) or a wrong identity triggers deletion of the remote
-    artifacts and a clean rescore,
+    N+1; identity.json is uploaded before the JSONL; an interrupted upload
+    (rows without marker) or a wrong identity triggers strict deletion of the
+    remote artifacts (identity first) and only then a clean rescore — if any
+    deletion fails the target is marked INCOMPLETE with nothing republished,
   - a target is only marked DONE when eval_gavn.py exits 0 with exact expected
     totals (4,000 MATE rows / 10,000 puzzles); otherwise INCOMPLETE is written
     and CI re-pushes.
@@ -94,15 +95,6 @@ def download_examples(prefix: str, examples: Path) -> None:
             pass
 
 
-def delete_remote_examples(prefix: str) -> None:
-    for name in ("identity.json", "mate.jsonl", "puzzles.jsonl"):
-        try:
-            api.delete_file(f"{prefix}/examples/{name}", repo_id=HF_REPO,
-                            repo_type="dataset")
-        except Exception:
-            pass
-
-
 def run_eval_streamed(cmd: list[str], out: Path, prefix: str,
                       examples: Path) -> tuple[int, bool]:
     """Run eval_gavn.py, uploading partial artifacts every 5 minutes.
@@ -163,6 +155,10 @@ print("[preview] preparing environment", flush=True)
 REPO = WORK / "chess-slm-benchmark"
 SL = WORK / "searchless_chess"
 fetch_pinned_repo("https://github.com/Vedang-P/chess-slm-benchmark.git", REPO, SOURCE_COMMIT)
+sys.path.insert(0, str(REPO))
+# Strict cleanup-before-rescore policy lives with the evaluator code at the
+# pinned commit (unit-tested in the repo).
+from scripts.eval_recovery import recover_from_unusable  # noqa: E402
 if not SL.exists():
     subprocess.run(["git", "clone", "-q", "--depth", "1",
                     "https://github.com/google-deepmind/searchless_chess.git", str(SL)], check=True)
@@ -215,14 +211,34 @@ for step in TARGETS:
     if unusable and returncode != 0:
         # Saved rows belong to a different checkpoint/dataset/score, or an
         # earlier session died between the JSONL and identity uploads. Delete
-        # the remote artifacts so a later interrupted run cannot re-download
-        # the same unusable state, then rescore from scratch.
+        # the remote artifacts FIRST; only if every deletion succeeded may a
+        # replacement identity be published by the rescore (2026-10-06 review:
+        # silently ignored cleanup failures could leave old rows under a new
+        # marker).
         print("[preview] saved examples unusable (wrong identity or interrupted "
-              "upload); deleting them and rescoring from scratch", flush=True)
-        delete_remote_examples(prefix)
-        shutil.rmtree(examples, ignore_errors=True)
-        summary_path.unlink(missing_ok=True)
-        returncode, _ = run_eval_streamed(cmd, out, prefix, examples)
+              "upload); strict cleanup, then rescore from scratch", flush=True)
+
+        def _clean_rescore() -> int:
+            summary_path.unlink(missing_ok=True)
+            code, _ = run_eval_streamed(cmd, out, prefix, examples)
+            return code
+
+        recovered, new_code = recover_from_unusable(api, HF_REPO, prefix, examples,
+                                                    _clean_rescore)
+        if not recovered:
+            summary = {"checkpoint": ckpt, "returncode": returncode,
+                       "complete": False, "source_commit": SOURCE_COMMIT,
+                       "searchless_commit": sl_commit,
+                       "errors": ["remote examples cleanup failed; refusing to "
+                                  "publish a replacement identity"]}
+            summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+            api.upload_file(path_or_fileobj=("INCOMPLETE " + json.dumps(summary)).encode(),
+                            path_in_repo=f"{prefix}/run-status.txt", repo_id=HF_REPO,
+                            repo_type="dataset")
+            print("[preview] cleanup failed; wrote INCOMPLETE and exiting", flush=True)
+            incomplete += 1
+            break
+        returncode = new_code
 
     summary = {}
     if summary_path.exists():

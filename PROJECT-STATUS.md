@@ -78,10 +78,15 @@ the historical record.
     and interrupted upload with rows but no marker) share the
     `eval examples unusable` token the kernel detects, and recovery deletes
     the remote artifacts before rescoring so a repeated crash cannot re-download
-    the same incomplete state. Regression tests:
+    the same incomplete state. Third follow-up: cleanup is strict and
+    fail-closed (`scripts/eval_recovery.py`) — identity marker first, any
+    unexpected HF deletion error aborts and the target is marked INCOMPLETE
+    with nothing republished, so a replacement identity can never be published
+    over stale rows. Regression tests:
     `test_eval_resume_is_checkpoint_scoped`,
     `test_eval_kernel_scopes_examples_per_checkpoint`,
-    `test_eval_interrupted_upload_recovers`.
+    `test_eval_interrupted_upload_recovers`,
+    `test_eval_cleanup_failure_blocks_replacement_identity`.
 12. Watcher/kernel milestone lists disagreed (watcher to 3,896,658, kernel to
     1,620,000). Fixed: one list in `ensure_eval_preview.py`, rendered into the
     pushed kernel, so they cannot drift.

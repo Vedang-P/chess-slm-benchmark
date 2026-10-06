@@ -202,9 +202,10 @@ class CorrectnessTests(unittest.TestCase):
                       (root / "scripts/eval_gavn.py").read_text(encoding="utf-8"))
         # identity.json uploads before the row files...
         self.assertIn('for name in ("identity.json", "mate.jsonl", "puzzles.jsonl")', source)
-        # ...and the recovery handler deletes the remote artifacts.
-        self.assertIn("delete_remote_examples(prefix)", source)
-        self.assertIn("api.delete_file", source)
+        # ...and recovery goes through the strict, tested cleanup module.
+        self.assertIn("from scripts.eval_recovery import recover_from_unusable", source)
+        self.assertIn("recover_from_unusable(api, HF_REPO, prefix, examples", source)
+        self.assertNotIn("def delete_remote_examples", source)
 
         tmp = Path(tempfile.mkdtemp())
         try:
@@ -232,6 +233,72 @@ class CorrectnessTests(unittest.TestCase):
             clean = tmp / "examples-1900000"
             validate_examples_identity(clean, identity)
             self.assertTrue((clean / "identity.json").exists())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_eval_cleanup_failure_blocks_replacement_identity(self):
+        from scripts.eval_recovery import delete_remote_examples, recover_from_unusable
+
+        class NotFound(Exception):
+            def __init__(self):
+                self.response = type("R", (), {"status_code": 404})()
+
+        class FakeApi:
+            def __init__(self, fail_delete=None, missing=()):
+                self.events = []
+                self.fail_delete = fail_delete
+                self.missing = set(missing)
+
+            def delete_file(self, path, repo_id, repo_type):
+                name = path.rsplit("/", 1)[-1]
+                self.events.append(("delete", name))
+                if name in self.missing:
+                    raise NotFound()
+                if name == self.fail_delete:
+                    raise RuntimeError("storage 500")
+
+            def upload_file(self, path_or_fileobj, path_in_repo, repo_id, repo_type):
+                self.events.append(("upload", path_in_repo.rsplit("/", 1)[-1]))
+                raise RuntimeError("upload unavailable")
+
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            # Injected deletion failure: no rescore (hence no replacement
+            # identity upload), identity deleted before the row files.
+            api = FakeApi(fail_delete="mate.jsonl")
+            rescored = []
+            recovered, result = recover_from_unusable(
+                api, "repo", "p/ev", tmp, lambda: rescored.append(1))
+            self.assertFalse(recovered)
+            self.assertIsNone(result)
+            self.assertEqual(rescored, [])
+            self.assertEqual([e[1] for e in api.events],
+                             ["identity.json", "mate.jsonl"])
+            self.assertFalse(any(e[0] == "upload" for e in api.events))
+
+            # Injected upload failure after successful cleanup: all deletions
+            # complete before the first replacement identity upload.
+            api2 = FakeApi()
+
+            def rescore():
+                api2.upload_file(None, "p/ev/examples/identity.json", "repo", "dataset")
+                return 7
+
+            with self.assertRaises(RuntimeError):
+                recover_from_unusable(api2, "repo", "p/ev", tmp, rescore)
+            self.assertEqual([e[0] for e in api2.events[:3]], ["delete"] * 3)
+            self.assertEqual(api2.events[3], ("upload", "identity.json"))
+
+            # Missing remote files are not failures.
+            api3 = FakeApi(missing=("identity.json",))
+            recovered, _ = recover_from_unusable(api3, "repo", "p/ev", tmp, lambda: None)
+            self.assertTrue(recovered)
+
+            # Strict deletion order: identity first, then rows.
+            api4 = FakeApi()
+            delete_remote_examples(api4, "repo", "p/ev")
+            self.assertEqual([e[1] for e in api4.events],
+                             ["identity.json", "mate.jsonl", "puzzles.jsonl"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
