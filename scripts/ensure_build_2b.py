@@ -67,7 +67,7 @@ def main() -> None:
         return
     files = hf_files()
     sys.path.insert(0, str(ROOT / "scripts"))
-    from launch_trainers import env_for_account
+    from kaggle_accounts import env_for_account
     # 2026-10-05 user decision: finish the full planned 108-shard corpus.
     # Stage 2B-A trains on the 102 already-built tags (1.746B rows) while the
     # last 16 (~269M rows) are labeled; the fleet now runs to the full plan

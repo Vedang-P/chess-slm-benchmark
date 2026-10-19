@@ -171,7 +171,8 @@ class CCGAVN:
                 self.register_buffer("action_promo", torch.tensor(action_promo, dtype=torch.long))
                 self.register_buffer("relation_index", torch.tensor(relation_index, dtype=torch.long))
 
-            def forward(self, tokens, actions):
+            def forward(self, tokens, actions=None, *, null_token=None,
+                        return_hidden=False):
                 bsz = tokens.size(0)
                 x = self.board_embed(tokens[:, 1:65].clamp(0, 31)) + self.square_embed[None]
                 context_ids = torch.cat((tokens[:, :1], tokens[:, 65:77]), dim=1).clamp(0, 31)
@@ -180,13 +181,18 @@ class CCGAVN:
                     context = context * self.global_field[None]
                 context = context.mean(dim=1)
                 x = x + context[:, None]
-                src, dst = self.action_src[actions], self.action_dst[actions]
-                batch = torch.arange(bsz, device=tokens.device)
-                src_h, dst_h = x[batch, src], x[batch, dst]
-                move = self.candidate(torch.cat((
-                    src_h, dst_h, src_h * dst_h,
-                    self.promo_embed(self.action_promo[actions]),
-                ), dim=-1)) + context
+                if actions is None:
+                    if null_token is None:
+                        raise ValueError("a state pass requires null_token")
+                    move = null_token.expand(bsz, -1) + context
+                else:
+                    src, dst = self.action_src[actions], self.action_dst[actions]
+                    batch = torch.arange(bsz, device=tokens.device)
+                    src_h, dst_h = x[batch, src], x[batch, dst]
+                    move = self.candidate(torch.cat((
+                        src_h, dst_h, src_h * dst_h,
+                        self.promo_embed(self.action_promo[actions]),
+                    ), dim=-1)) + context
                 x = torch.cat((x, move[:, None]), dim=1)
                 head_dim = dim // heads
                 for i, block in enumerate(self.blocks):
@@ -215,7 +221,8 @@ class CCGAVN:
                         x, (dim,), block["norm2"].weight,
                         block["norm2"].bias, block["norm2"].eps)
                     x = x + block["dropout"](block["ff2"](torch.nn.functional.gelu(block["ff1"](z))))
-                return self.dist_head(x[:, 64])
+                logits = self.dist_head(x[:, 64])
+                return (logits, x) if return_hidden else logits
         return _Model()
 
 

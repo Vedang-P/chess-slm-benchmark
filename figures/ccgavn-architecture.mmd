@@ -1,0 +1,80 @@
+%% CC-GAVN corrected-v2: current implemented architecture
+%% One model evaluation is performed for one (position, candidate move) pair.
+flowchart LR
+    subgraph INPUT[Inputs for one candidate]
+        TURN[Side to move<br/>1 token]
+        BOARD[Board squares<br/>64 tokens]
+        META[Castling, en-passant,<br/>move-clock fields<br/>12 tokens]
+        ACTION[Candidate legal move<br/>from, to, promotion]
+    end
+
+    subgraph ENCODER[Token and position encoding]
+        SQE[Square token embedding<br/>32-token vocabulary<br/>+ learned 64-square positions]
+        ME[Metadata embeddings<br/>32-token vocabulary<br/>+ 13 learned field positions<br/>active model_version=v1]
+        POOL[Mean pool 13 context tokens<br/>→ one 208-d context]
+        ADD[Add context to each<br/>of the 64 square vectors]
+        CAND[Candidate token MLP<br/>concat: from, to, from × to,<br/>promotion embedding (24-d)<br/>→ 208-d move token]
+        CTX[Add same context<br/>to candidate token]
+        SEQ[65-token sequence<br/>64 contextual square tokens<br/>+ 1 candidate-move token]
+    end
+
+    subgraph TRUNK[Shared candidate-conditioned geometric transformer · active model_version=v1]
+        direction TB
+        BLOCKS[8 repeated blocks · width 208 · 8 attention heads]
+        ATTN[Multi-head self-attention<br/>content Q/K/V + learned pairwise chess-geometry bias<br/>+ dynamic query/key bias (query term cancels)]
+        RES1[Residual connection]
+        FFN[LayerNorm → Linear 208→416<br/>→ GELU → Linear 416→208]
+        RES2[Residual connection]
+        BLOCKS --> ATTN --> RES1 --> FFN --> RES2
+        RES2 -. repeat through 8 blocks .-> ATTN
+    end
+
+    subgraph OUTPUT[Action-value output]
+        MOVEV[Final candidate-token vector<br/>208 dimensions]
+        HEAD[LayerNorm + Linear<br/>208 → 128]
+        LOGITS[128 return-bin logits]
+        DIST[Softmax distribution<br/>over return bins]
+        VALUE[Expected return / action value<br/>used to rank legal moves]
+    end
+
+    TURN --> ME
+    META --> ME
+    ME --> POOL
+    SQE --> ADD
+    BOARD --> SQE
+    POOL --> ADD
+    ACTION --> CAND
+    ADD --> SEQ
+    CAND --> CTX
+    POOL --> CTX
+    CTX --> SEQ
+    SEQ --> BLOCKS
+    RES2 --> MOVEV --> HEAD --> LOGITS --> DIST --> VALUE
+
+    classDef input fill:#eef4fb,stroke:#607d9b,color:#17283a;
+    classDef encode fill:#f3f1fb,stroke:#8175a8,color:#211c34;
+    classDef trunk fill:#eaf4ef,stroke:#5d8a70,color:#1a3022;
+    classDef output fill:#fbf1e8,stroke:#b1784a,color:#3d2818;
+    class TURN,BOARD,META,ACTION input;
+    class SQE,ME,POOL,ADD,CAND,CTX,SEQ encode;
+    class BLOCKS,ATTN,RES1,FFN,RES2 trunk;
+    class MOVEV,HEAD,LOGITS,DIST,VALUE output;
+
+%%
+%% Run-level use (not a second network stage): enumerate legal moves with the
+%% chess rules library; evaluate the same network once per candidate; choose
+%% the legal move with the highest expected return. No board-after-move is
+%% input to this model and no engine/search runs at inference. The forward
+%% method also has an optional null-action state pass for experiments, but
+%% normal action scoring does not invoke it; the active model has no integrated
+%% reply planner or post-move-board branch. Here, "corrected-v2" names the
+%% training recipe. It does not mean model_version=v2.
+%%
+%% Training: teacher's 128-bin log-probabilities supervise the distribution
+%% (soft distillation); a second weighted cross-entropy target is a smoothed
+%% bucket derived from win probability. Train only on eligible ChessBench
+%% positions; corrected-v2 also uses exact horizontal-reflection augmentation,
+%% with castling-right positions excluded from reflection. The separately
+%% implemented model_version=v2 architecture adds field gates and removes
+%% the ineffective query-side dynamic bias, but the active warm-started run
+%% uses model_version=v1.

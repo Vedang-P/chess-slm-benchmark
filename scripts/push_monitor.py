@@ -3,7 +3,7 @@
 The Worker cannot fetch hundreds of HF files per invocation (subrequest
 limits), so this local/CI helper assembles the heavy sections - training
 curve, eval summaries, corpus progress, PGN games, kernel statuses, quotas -
-and POSTs them to /api/ingest. Intended to run from scripts/supervise_all.py
+and POSTs them to /api/ingest. Intended to run from the scheduled pipeline
 every 15 minutes; harmless to run by hand.
 
 Requires in .env: MONITOR_URL, MONITOR_INGEST_KEY, HF_WRITE_TOKEN.
@@ -213,7 +213,7 @@ def build_runs(api, token: str) -> dict:
 
 def build_kernels_quota() -> tuple[list, dict, str]:
     sys.path.insert(0, str(ROOT / "scripts"))
-    from launch_trainers import env_for_account
+    from kaggle_accounts import env_for_account
     kernels, quota = [], {}
     reset = ""
     for acct, slug in KERNELS:

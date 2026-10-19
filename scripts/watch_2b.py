@@ -157,7 +157,7 @@ def hf_files() -> set[str]:
 
 def gpu_quota(account: str) -> float:
     sys.path.insert(0, str(ROOT / "scripts"))
-    from launch_trainers import env_for_account
+    from kaggle_accounts import env_for_account
     try:
         r = subprocess.run([sys.executable, "-m", "kaggle", "quota"],
                            env=env_for_account(account), capture_output=True,
@@ -173,7 +173,7 @@ def gpu_quota(account: str) -> float:
 
 def kernel_status(account: str) -> str:
     sys.path.insert(0, str(ROOT / "scripts"))
-    from launch_trainers import env_for_account
+    from kaggle_accounts import env_for_account
     try:
         r = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "status",
                             f"{account}/ccgavn-2b"], env=env_for_account(account),
@@ -185,7 +185,7 @@ def kernel_status(account: str) -> str:
 
 def push(account: str, cfg: dict) -> tuple[int, str]:
     sys.path.insert(0, str(ROOT / "scripts"))
-    from launch_trainers import env_for_account
+    from kaggle_accounts import env_for_account
     with tempfile.TemporaryDirectory(prefix=f"ccgavn2b_{account}_") as tmp:
         tmpd = Path(tmp)
         (tmpd / "train_2b.py").write_text(render_kernel(cfg), encoding="utf-8")

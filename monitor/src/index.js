@@ -604,7 +604,24 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
 <!-- timeline -->
 <section id="tab-timeline" class="hidden">
   <div class="section">
-    <div class="section-title">2B continuation · legacy 320k → 1.62m → corrected-v2 → 3.90m steps</div>
+    <div class="section-title">next research run · CC-GAVN-R</div>
+    <div class="card" style="padding:18px 20px">
+      <div class="card-head">
+        <div class="card-title">counterfactual refutation training</div>
+        <span class="chip warn">planned · preflight blocked</span>
+      </div>
+      <p class="chart-note" style="margin:10px 0 14px">Reuse the 4.76M-parameter CC-GAVN trunk across exact chess transitions. Score every legal candidate, follow two learned opponent replies, train on oracle-labeled future boards and the model's own continuations, then distill the planner back into a one-pass model.</p>
+      <div class="stat-row">
+        <span class="stat"><span class="stat-label">parameter limit</span><span class="stat-val">&lt; 5M</span></span>
+        <span class="stat"><span class="stat-label">planned model</span><span class="stat-val">4.846M · analytic</span></span>
+        <span class="stat"><span class="stat-label">puzzle target</span><span class="stat-val">≥ 90.13%</span></span>
+        <span class="stat"><span class="stat-label">measured gain</span><span class="stat-val">none yet</span></span>
+      </div>
+      <div class="chart-note" style="margin-top:12px">Run has not started: no eligible position corpus or base checkpoint is present in the checkout. The score is an experimental target, not a forecast. Kaggle account quota and remote artifacts are still unverified. The planner uses more inference compute than the one-pass teacher.</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">completed training · legacy 320k → 1.62m → corrected-v2 → 3.90m steps</div>
     <div class="card tl-hero" id="tl-hero"></div>
   </div>
   <div class="section">
@@ -1038,6 +1055,7 @@ const TL_HISTORY=[
  ["2026-10-05T17:00:00Z","Stage 2B-A launched (legacy recipe)","102 tags (1.746B rows) warm-started from checkpoint-1,620,000; target 3,896,658 steps; last 16 planned shards labeling in parallel.",[]],
  ["2026-10-06T12:00:00Z","Review: legacy 2B schedule skipped 41/102 shards","The committed trainer rebuilt the full-budget schedule and indexed it by global step, so whole shard blocks in the skipped prefix never trained; also no MATE/puzzle exclusions, LR on group 0 only, castling reflections and dev-sampling RNG issues.",[["warn","41/102 tags never sampled"]]],
  ["2026-10-06T13:00:00Z","Corrected-v2 continuation designed; training disarmed","New prefix warm-starts from the latest legacy checkpoint with a stage-relative schedule over all 102 tags, MATE+puzzle exclusions, all-group LR, checkpoint-independent dev RNG, source-commit pinning, per-example eval resume; audits: 0.0003% benchmark overlap, ~0.24% duplicate positions.",[["warn","awaiting explicit arm"]]],
+ ["2026-10-20T00:00:00Z","CC-GAVN-R designed; preflight blocked","Sub-5M shared-weight refutation planner, oracle and on-policy labeling, controls, and one-pass distillation implemented in the research checkout. Training has not started: no local eligible corpus or base checkpoint was found. No score gain is measured.",[["warn","awaiting training artifacts"]]],
 ];
 function renderTimeline(){
   const c=(snap.curve||[]).filter(p=>p.step);

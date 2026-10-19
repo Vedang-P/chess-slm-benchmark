@@ -101,7 +101,7 @@ def summary_complete(prefix: str) -> bool:
 
 
 def env_for(account: str) -> dict:
-    from launch_trainers import env_for_account
+    from kaggle_accounts import env_for_account
     return env_for_account(account)
 
 

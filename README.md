@@ -1,213 +1,62 @@
-# Chess SLM Benchmark: Small Models vs Frontier Models at Chess
+# Chess SLM Benchmark
 
-**Vedang Pandey** — Efficient and On-Device AI Agents Workshop @ NeurIPS 2026
+Research code for compact, searchless chess action-value models and the
+CC-GAVN-R post-training study. Training runs use Kaggle GPUs; complete model
+and optimizer checkpoints are uploaded to Hugging Face so runs can resume.
 
-## Objective
+## Current state
 
-Make a small language model play chess better than DeepSeek V4 Flash via
-reasoning — no external search, no engine at inference time. Chess is the
-probe: state, legal actions, and oracles are explicit, making it a clean
-testbed for reasoning in small models.
+- Base: corrected-v2 CC-GAVN, 4,762,088 parameters.
+- Latest recorded preview: 3,697/4,000 MATE and 7,577/10,000 puzzles at 3.4M
+  steps. This is not the final run result.
+- Post-training: CC-GAVN-R code is written, but no new training run or score
+  has been produced. It adds a learned two-line refutation planner and keeps
+  the planned model under 5M parameters. See
+  [the plan](POSTTRAINING-PLANNER-PLAN.md).
+- The repeated MATE and puzzle sets are development diagnostics, not untouched
+  holdouts. See [project status](PROJECT-STATUS.md) for details and caveats.
 
-Compute constraint: Kaggle free tier only (T4/P100, ~30h/week/account, 3
-accounts). Everything in this repo is designed to fit that budget (~90 GPU
-hours/week).
+## Run the core tools
 
-Honesty protocol: evaluation always uses the exact noexplain-1000 test set
-(same 1000 positions used to score gemma base = 58.1% and DeepSeek V4 Flash).
-No subsets, no cherry-picking.
+Install dependencies with `make setup`. Use a GPU environment for training.
+The main entry points are:
 
----
+| Purpose | Entry point |
+| --- | --- |
+| Train the base model | `scripts/train_ccgavn.py` |
+| Score MATE and puzzle benchmarks | `scripts/eval_gavn.py` |
+| Build oracle-labeled refutation data | `scripts/refutation_data.py` |
+| Train, evaluate, or export CC-GAVN-R | `scripts/posttrain.py` |
+| Monitor active Kaggle runs | `scripts/watch_1b.py`, `scripts/watch_2b.py` |
 
-## What has been tried (and what we learned)
+Training and evaluation commands, experiment gates, and the five-account
+compute schedule are documented in the post-training plan. The Cloudflare
+project monitor lives in `monitor/`; deploy it from that directory with
+`npx wrangler deploy` after installing its locked dependencies.
 
-### 1. RLVR / GRPO on gemma-4-E2B-it (ABANDONED — measured infeasible)
+## Repository map
 
-Plan: GRPO with Stockfish rewards, thinking ON, on a 2B model.
+- `scripts/`: model, dataset, checkpoint, evaluation, and orchestration code.
+- `kernels/`: Kaggle entry points and the shard-build scripts they run.
+- `configs/`: frozen data schedules and the existing run-arm marker.
+- `data/positions/`: compact benchmark inputs; large training data stays
+  remote or in local ignored storage.
+- `monitor/`: Cloudflare Worker dashboard.
+- `figures/`: source diagram for the base architecture.
+- `tests/`: correctness and recovery checks.
 
-**Results (all measured, all dead ends):**
-- **v9** (256-token cap): trained 2 steps, but every rollout clipped,
-  reward 0 — the model never emits EOS on the MoveA/B prompt, producing
-  `MoveMoveMove` repetition instead of an answer.
-- **v10**: `_ThinkingProcessor` wrapper not callable (fixed, but moot).
-- **v11** (G8, uncapped): 2h notebook timeout; 0 rollouts completed.
-- **v12** (G2, uncapped): step 0 never completed in 3h+; watchdog SIGINT
-  ineffective against CUDA-blocked generation. Killed.
-- **Live-thinking demo** (the one working piece): streamed real gemma
-  reasoning token-by-token to stdout + HF (`live-thinking.txt`, 15s
-  cadence). Demo-2 verified: real reasoning, terminates with
-  `MoveA:...<turn|>`, 4695 tokens / 163s on an easy position.
+## Checkpoint requirement
 
-**Verdict:** uncapped thinking on the base 2B model never terminates on
-P100. RLVR at this compute is infeasible. **Infrastructure built here is
-reusable**: HF checkpoint persistence (adapter + optimizer + scheduler +
-trainer_state), live trace streaming, `_ThinkingProcessor`, era-pinned
-stack knowledge.
+Every long training or evaluation run must persist weights, optimizer and
+scheduler state, RNG state, configuration, and metrics to Hugging Face; support
+resume; upload a final artifact; and publish failure status. The shared helpers
+are in `scripts/kaggle_checkpoint.py`; `scripts/posttrain.py` shows their use.
+See [AGENTS.md](AGENTS.md) for the full rule.
 
-### 2. EGSD / SIL (PROPOSED, PARKED)
+## Research references
 
-- **EGSD** (engine-graded self-distillation): iterative SFT-only loop
-  (sample → Stockfish grade → SFT on accepted). User rejected as "caveman
-  SFT with a filter + a loop" — a fair critique.
-- **SIL** (Search-in-Language): SFT on verbalized engine search trees +
-  self-consistency voting at inference. 5000 verbalized traces built
-  (`results/searchlang-traces.jsonl` + `_sft.jsonl`) — reusable data.
-
-### 3. Improve open searchless_chess models (ACTIVE)
-
-Open-source DeepMind chess models (Ruoss et al., NeurIPS 2024):
-9M/136M/270M transformers, searchless, trained on ChessBench (10M games,
-15.3B Stockfish-16 action-values). The 270M reaches 2895 Lichess Elo vs
-humans (grandmaster level).
-
-**The master table — all models × all 4 MATE subsets (exact 1000s).**
-Baselines archived from the 2026-08-19 campaign (git); searchless models
-measured locally with the official ActionValueEngine (2026-08-27).
-
-| model | params | noexplain | tactic | both | full | puzzles (10K) | status |
-|---|---|---|---|---|---|---|---|
-| deepseek-v4-flash (thinking, unbounded) | frontier | **85.8%** | **92.2%** | **94.0%** | **92.8%** | — | ✅ complete |
-| gemma4-e2b (thinking, 32768) | 2B | **58.1%** | **60.5%** | **61.5%** | **60.8%** | — | ✅ complete |
-| gemma4-e2b caveman-SFT | 2B | **55.4%** | — | — | — | — | ✅ complete (regressed) |
-| **searchless 9M** (Ruoss) | 9M | **98.2%** | **98.9%** | **98.9%** | **98.9%** | **86.1%** / 88.9%† | ✅ MATE + puzzle measured (local / paper) |
-| **searchless 136M** (Ruoss) | 136M | **99.4%** | **99.4%** | **99.4%** | **99.4%** | **94.5%**† | ✅ MATE measured; puzzle = paper Table 1 |
-| **searchless 270M** (Ruoss) | 270M | **99.4%** | **99.4%** | **99.4%** | **99.5%** | **95.4%**† | ✅ MATE measured; puzzle = paper Table 1 |
-
-† Ruoss et al., *Amortized Planning with Large-Scale Transformers: A Case Study on Chess*, arXiv:2402.04494v2, Table 1 — puzzle accuracy is full-solution-sequence match on the 10K Lichess puzzles (official `puzzles.csv` protocol). 9M local harness = 86.1% (8613/10000, `scripts/run_sl_puzzles.py` with `use_ema_params=True`); paper reports 88.9%.
-
-Reference points:
-- MATE paper (fine-tuned LLaMA-3-8B zero-shot): 63.5% (N), 89.7% (S),
-  94.6% (T), 95.2% (ST).
-- Ruoss et al. (2024) puzzle accuracy (official eval, full-solution-sequence
-  match on the 10K Lichess puzzles, Table 1): 9M = 88.9%, 136M = 94.5%,
-  270M = 95.4%.
-
-**The result so far:** a 9M-param searchless chess specialist (98.2%)
-beats the 2B generalist gemma (58.1%) AND the frontier model DeepSeek V4
-Flash (85.8%) at expert 2-choice chess judgment — at 1/300th of gemma's
-params, no engine at inference. The transfer question is answered:
-ChessBench-trained action-values transfer to MATE-style expert tasks.
-
-**Next:** establish a valid sub-9M frontier. The first priority is a repaired
-5M controlled baseline, followed by a square-token geometric action-value
-model in the 3–6M range. Final training must use the ChessBench training
-distribution, archived evaluation at a fixed commit, and resumable Hugging
-Face checkpoints. (Correction 2026-10-06: the MATE/puzzle sets are *not* an
-untouched holdout — they were scored repeatedly during development; see
-`PROJECT-STATUS.md`.)
-
-Update (2026-09-09): after correcting an evaluator that selected an untrained
-auxiliary head for one arm, the three completed legacy 5.30M GAVN checkpoints
-score 85.9%, 85.8%, and 85.0% on the canonical noexplain-1000 MATE set using
-their trained return distributions. The full frozen protocol is now complete
-for all three arms: MATE 4,000 rows 85.35% (seed0) / 85.25% (no-Q) / 84.72%
-(fixed geometry), official 10K puzzles 43.83% / 41.59% / 43.88% — a three-way
-tie far below the 9M teacher (98.7% MATE, 86.1% puzzles): a decisive negative
-for legacy GAVN at 5M. The next preregistered candidate is CC-GAVN, a
-4,762,088-parameter candidate-conditioned geometric model; see
-`PROJECT-STATUS.md` for the complete, current result record.
-
-**Decision (2026-09-09): two-model endgame.** All further work focuses on
-exactly two models — CC-GAVN (this became the active direction; now continued
-under corrected-v2) and the fixed-bias geometry arm trimmed to its true
-trained size. The full ablation
-matrix showed the other arms' distinguishing ingredients add nothing, and the
-geometry arm's `bias_mode="fixed"` never reads its dynamic projection: that
-module (~1.84M params) sits at random init with zero gradient. The trimmed
-`fixed-slim` variant (`notebooks/08_kaggle_train_gavn_slim.ipynb`) removes
-it — **3,461,377 trained parameters** instead of 5,304,577 — verified
-bitwise-identical in forward pass on the trained checkpoint. First gate:
-retrain the slim arm under the identical recipe and confirm it matches the
-5.30M arm (84.72% MATE / 43.88% puzzles) before any improvement variants.
-
----
-
-## The plan (current)
-
-1. ~~Freeze the measured Ruoss 9M/136M/270M baselines and evaluation
-   protocol.~~ ✅ done
-2. ~~Repair and fully validate the existing 5M distillation baseline.~~
-   ✅ done (three completed arms, full frozen protocol, decisive negative)
-3. ~~Train and ablate a 3–6M square-token Geometric Action-Value Network
-   (GAVN).~~ ✅ done (ablation matrix closed 2026-09-09)
-4. Two-model focus: (a) trimmed fixed-bias geometry `fixed-slim` @ 3,461,377
-   params — replicate the 5.30M arm exactly; (b) CC-GAVN @ 4,762,088 params,
-   the active direction (corrected-v2 recipe, new run prefix, training
-   disarmed until explicitly armed; see `PROJECT-STATUS.md`).
-5. Report the parameter/accuracy/latency frontier with confidence intervals,
-   calibration, error overlap, and an ablation table suitable for a workshop
-   paper.
-## External resources
-
-- Paper: Ruoss et al., arXiv:2402.04494 (NeurIPS 2024)
-- Repo (open, Apache-2.0): github.com/google-deepmind/searchless_chess
-- Weights: storage.googleapis.com/searchless_chess/checkpoints/{9M,136M,270M}.zip
-- Dataset (ChessBench): data/download.sh in the repo
-- MAV (DeepMind successor, weights NOT released): arXiv:2412.12119
-
-## Repo layout
-
-```
-scripts/
-  eval_searchless_mate.py   ACTIVE — MATE 2-choice eval for searchless models
-  train_gavn.py              ACTIVE — square-token geometric student trainer
-  train_ccgavn.py            ACTIVE — 4.76M candidate-conditioned GAVN trainer
-  eval_gavn.py               ACTIVE — exact-set MATE + puzzle evaluator
-                             (per-example JSONL resume; clustered analysis)
-  build_search_traces.py    ACTIVE — verbalized search traces (5000 built)
-  train_mate_lora.py        SFT trainer (reusable)
-  run_mate_eval.py          eval protocol (gemma/DeepSeek baseline scoring)
-notebooks/
-  00_kaggle_setup_audit.ipynb
-  01_kaggle_baseline_5m.ipynb
-  02_kaggle_train_gavn.ipynb
-  03_kaggle_eval_frontier.ipynb
-  04_kaggle_prepare_full_data.ipynb
-  07_kaggle_train_ccgavn.ipynb
-src/                        eval/SFT support (models, mate_metrics, report)
-data/positions/             the 4 MATE eval sets (noexplain/both/tactic/full)
-results/                    searchlang traces + rlvr-pool (reusable data)
-PROJECT-STATUS.md           current status
-engineering-decisions.md    decision log
-```
-
-## Environment gotchas (measured)
-
-- The 2024 searchless checkpoints are orbax-ocdbt format: need
-  **jax 0.4.35 + orbax 0.5.5** era stack (modern jax can't read them;
-  `PositionalSharding` removed in jax 0.5). Kaggle preinstalls jax 0.11 →
-  era pins hit `ResolutionImpossible` there; **run inference locally in a
-  venv with the era stack
-- Local CPU speed: 9M ~0.28s/position, 270M ~0.85s/fwd (jit-less).
-- Run sweeps foreground/streaming — background jobs with pipes can look
-  hung (low CPU).
-
-## Status
-
-See `PROJECT-STATUS.md` for the current snapshot. Short version: Ruoss 9M,
-136M, and 270M are now measured on the exact MATE subsets; the research target
-is to match or exceed the 9M frontier below 9M parameters and then push the
-same design toward the 136M/270M accuracy level.
-
-## Current direction: sub-9M student (searchless_chess)
-
-Active work (2026-08-31): distilling a sub-9M student (5M FEN/action-ID
-control + 3-5M GAVN square-token geometry model) from the released **9M**
-teacher on the full ChessBench train distribution, run on Kaggle free tier
-across three accounts.
-
-### Decision record — training phasing (2026-08-31)
-
-The full dataset is 8 train shards (~80M rows, ~25GB processed; shards vary
-in size, so shard count does not map linearly to rows).
-
-- **Wave 1 (now):** the six training configurations run on the full 8-shard
-  dataset (`assembled` on HF / the `chessbench-full` Kaggle dataset, ~25GB).
-  This validates the trainer, HF persistence/resume, and eval end-to-end and
-  produces the first comparable numbers.
-- **Later (required):** extend the dataset to ~45GB (~14 shards, wave-2 build)
-  and re-run before any final claim. Wave-1 numbers are pipeline validation
-  and iteration material; only full-data results are paper material.
-
-This is a deliberate phasing decision, not a quality reduction: the larger
-dataset remains the target for final measurements.
+- [Literature review](lit-review.md)
+- [Measured project status](PROJECT-STATUS.md)
+- [CC-GAVN-R implementation and compute plan](POSTTRAINING-PLANNER-PLAN.md)
+- [Searchless Chess paper](https://arxiv.org/abs/2402.04494) and
+  [official code](https://github.com/google-deepmind/searchless_chess)

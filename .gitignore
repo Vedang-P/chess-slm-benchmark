@@ -1,112 +1,44 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
-dist/
-build/
-.eggs/
-*.egg
-
-# Virtual environment
 venv/
-env/
 .venv/
 
-# Model files
+# Local credentials and environment files
+.env
+.env.*
+
+# Model weights, caches, and generated run output
+*.pt
+*.pth
 *.bin
 *.safetensors
 *.gguf
-*.pt
-*.pth
 models/
-
-# Data
+data/models/
 data/raw/
-data/gridroute/*.csv
-data/mazes/*.json
+data/audit-cache/
+results/
+logs/*.log
+.cache/
+huggingface/
+unsloth_compiled_cache/
 
-# Results
-data/results/*.csv
-data/results/*.png
-data/results/*.json
-
-# Jupyter
-.ipynb_checkpoints/
+# Generated notebooks and editor/OS files
 *.ipynb
-
-# IDE
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Hugging Face cache
-.cache/
-huggingface/
-
-# Environment variables
-.env
-.env.local
-
-# Logs
-*.log
-
-# LaTeX build artifacts (paper/main.pdf is rebuilt with `tectonic paper/main.tex`)
-paper/*.pdf
-paper/*.aux
-paper/*.bbl
-paper/*.blg
-paper/*.out
-paper/*.synctex.gz
-
-# RStack plumbing and local experiment output
+# Tool state and build output
 .rstack/
-/results/
-
-# Unsloth's per-model compiled-kernel cache (regenerated on first import,
-# multi-thousand-line generated files -- never commit this)
-unsloth_compiled_cache/
-
-# Local model weights downloaded for eval/training (re-downloadable from HF)
-data/models/
-
-# Notebooks: ignored by default (outputs/checkpoints are noisy in diffs), but
-# the Kaggle training notebook itself is source we want tracked.
-*.ipynb
-!notebooks/*.ipynb
-/results_check*/
-docs/capability-analysis.md
-docs/anti-goal-analysis.md
-monitor/node_modules/
-
-# Generated figure/table outputs
-analysis/
-
-# Wrangler/Cloudflare local caches (account ids, pages state -- never commit)
 .wrangler/
-frontend/.wrangler/
-worker/.wrangler/
-
-# Kaggle deployment scaffolding (notebooks embed API keys at build time)
-notebooks/push_*/
-notebooks/kaggle_mate_*_w*.ipynb
-
-# >100MB training artifacts
-/data/positions/mate-lora/train.jsonl
-
-# noexplain slice (HF-hosted, >100MB)
-/data/positions/noexplain-slice/train.jsonl
-
-# pre-tokenized datasets (HF-hosted, >100MB)
-/data/positions/noexplain-slice/*pretok*.jsonl
-.opencode/
-.omp/
-
-
-# local corpus audit downloads (large shards)
-data/audit-cache/
+monitor/node_modules/
+build/
+dist/

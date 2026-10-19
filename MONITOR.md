@@ -40,8 +40,8 @@ Live dashboard for the whole project, phone-friendly:
 - **Full cloud automation, no local machine involved:** the Worker's `*/10`
   cron also sends a `repository_dispatch` tick to GitHub (throttled to ~10 min
   via KV). The `pipeline-tick` GitHub Action then runs the keep-alive checks
-  (`ensure_build_2b.py`, `watch_1b.py`, `watch_2b.py`, `ensure_eval_320k.py`,
-  `ensure_eval_preview.py`) and `scripts/push_monitor.py`, which assembles the
+    (`ensure_build_2b.py`, `watch_1b.py`, `watch_2b.py`,
+     `ensure_eval_preview.py`) and `scripts/push_monitor.py`, which assembles the
   heavy sections — full
   training curve, eval summaries, corpus progress, PGN games, kernel
   statuses, quotas — and POSTs them to `/api/ingest`. A 30-minute cron in the

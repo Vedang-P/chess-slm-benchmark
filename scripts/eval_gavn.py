@@ -68,7 +68,7 @@ def _sha256_file(path: Path, chunk: int = 1 << 20) -> str:
 def checkpoint_identity(cp: Path, cfg: dict, architecture: str,
                         model_version: str, score_mode: str) -> dict:
     """Everything that determines which checkpoint produced a score."""
-    return {
+    identity = {
         "checkpoint": cp.name,
         "state_sha256": _sha256_file(cp / "state.pt"),
         "architecture": architecture,
@@ -77,6 +77,10 @@ def checkpoint_identity(cp: Path, cfg: dict, architecture: str,
         "source_commit": cfg.get("source_commit"),
         "dim": cfg.get("dim"), "layers": cfg.get("layers"), "heads": cfg.get("heads"),
     }
+    if architecture == "cc-gavn-refutation-v1":
+        identity["planner_config_sha256"] = hashlib.sha256(
+            json.dumps(cfg, sort_keys=True).encode()).hexdigest()
+    return identity
 
 
 def dataset_identity(mate_files: list[Path], puzzles: Path | None) -> dict:
@@ -180,7 +184,11 @@ def main() -> int:
     src, dst, promo, _ = action_tables(Path(args.sl_repo))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_version = str(cfg.get("model_version", "v1"))
-    if cfg.get("architecture") == "cc-gavn-v1":
+    if cfg.get("architecture") == "cc-gavn-refutation-v1":
+        from scripts.refutation import load_network
+        model, _, _ = load_network(cp, args.sl_repo, device)
+        architecture = "cc-gavn-refutation-v1"
+    elif cfg.get("architecture") == "cc-gavn-v1":
         from scripts.train_ccgavn import CCGAVN, candidate_relation_types
         model = CCGAVN(torch, int(cfg["dim"]), int(cfg["layers"]), int(cfg["heads"]),
                        src, dst, promo, candidate_relation_types(),
@@ -208,7 +216,7 @@ def main() -> int:
         raise ValueError(
             "This checkpoint's q_head was not trained (w_q=0). "
             "Use --score dist, which is the canonical action-value output.")
-    if architecture == "cc-gavn-v1" and score_mode == "q":
+    if architecture.startswith("cc-gavn") and score_mode == "q":
         raise ValueError("CC-GAVN has no scalar q_head; use --score dist")
     print(f"[gavn] architecture={architecture} model={model_version} "
           f"decision score={score_mode}", flush=True)
@@ -217,6 +225,16 @@ def main() -> int:
         # The official engine specifies its own stable ordering.  Ordering only
         # affects ties, but exact puzzle sequences make those ties observable.
         moves = engine_lib.get_ordered_legal_moves(board)
+        if architecture == "cc-gavn-refutation-v1":
+            from scripts.refutation import score_moves
+            values = score_moves(model, board, moves, utils,
+                                 mode=cfg.get("inference_mode", "planner"))
+            for i, move in enumerate(moves):
+                board.push(move)
+                if board.is_fivefold_repetition() or board.can_claim_threefold_repetition():
+                    values[i] = 0.5
+                board.pop()
+            return moves, values
         action_ids = [utils.MOVE_TO_ACTION[m.uci()] for m in moves]
         tokens = np.repeat(tokenize_fen(board.fen())[None, :], len(moves), axis=0)
         with torch.inference_mode():
