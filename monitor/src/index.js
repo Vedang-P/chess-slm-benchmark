@@ -983,8 +983,9 @@ function refStatus(){
 function refStep(r,key,label){
   const sourcePct=r.source&&r.source.pct!=null?Number(r.source.pct):0;
   const pct=key==="source"?(r.source_ready?100:sourcePct):(key==="eval"?(r.eval&&r.eval.complete?100:(r.phase==="evaluation"?55:0)):(key==="labeling"?(r.label_pct||0):(key==="training"?(r.train_pct||0):0)));
+  const pending=!r.source_ready&&(key==="labeling"||key==="training");
   const note=key==="source"?(r.source_ready?"1,944 exact positions":(r.source?sourceLine(r):"building source")):(key==="labeling"?(r.source_ready?((r.label_done||0)+" / "+(r.label_total||1944)):"after source"):(key==="training"?(r.source_ready?((r.train_step||0)+" / 12,500"):"after labels"):(r.eval&&r.eval.complete?"archived":"not started")));
-  return '<div class="ref-step '+(pct>=100?"done":(pct>0?"now":""))+'" data-ref-step="'+key+'"><div class="n">'+label+'</div><div class="p">'+Math.round(pct)+'%</div><div class="phase-track"><div class="phase-fill" style="width:'+Math.min(100,pct)+'%"></div></div><div class="chart-note" style="margin-top:4px">'+esc(note)+'</div></div>';
+  return '<div class="ref-step '+(pct>=100?"done":(pct>0?"now":""))+'" data-ref-step="'+key+'"><div class="n">'+label+'</div><div class="p">'+(pending?"—":Math.round(pct)+"%")+'</div><div class="phase-track"><div class="phase-fill" style="width:'+Math.min(100,pct)+'%"></div></div><div class="chart-note" style="margin-top:4px">'+esc(note)+'</div></div>';
 }
 function drawBar(id,key,color){
   const el=document.getElementById(id);if(!el||!window.Chart)return;
