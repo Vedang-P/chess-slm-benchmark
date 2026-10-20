@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -9,6 +10,7 @@ from pathlib import Path
 import chess
 import numpy as np
 import torch
+import zstandard
 
 from scripts.data_hygiene import eligible_mask, position_hashes, set_learning_rate
 from scripts.eval_gavn import tokenize_fen
@@ -302,6 +304,49 @@ class CorrectnessTests(unittest.TestCase):
                              ["identity.json", "mate.jsonl", "puzzles.jsonl"])
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_source_scan_prefilters_and_matches_multiprocess(self):
+        from scripts.prepare_refutation_sources import game_positions
+
+        def make_game(site, white_elo, black_elo, plies, variant="Standard"):
+            game = chess.pgn.Game()
+            game.headers.update({
+                "Event": "Rated Blitz game", "Site": site, "Date": "2025.04.01",
+                "White": "white", "Black": "black", "Result": "*",
+                "WhiteElo": str(white_elo), "BlackElo": str(black_elo),
+                "Variant": variant,
+            })
+            board = chess.Board()
+            node = game
+            rng = random.Random(site)
+            for _ in range(plies):
+                if board.is_game_over():
+                    break
+                move = rng.choice(list(board.legal_moves))
+                board.push(move)
+                node = node.add_variation(move)
+            return str(game)
+
+        games = [
+            make_game("https://lichess.org/keep1", 2000, 2100, 32),
+            make_game("https://lichess.org/keep2", 1900, 1800, 28),
+            make_game("", 2050, 1950, 36),
+            make_game("https://lichess.org/low", 1200, 1700, 40),
+            make_game("https://lichess.org/short", 2000, 2000, 20),
+            make_game("https://lichess.org/chess960", 2000, 2000, 30, "Chess960"),
+        ]
+        raw = "\n\n".join(games) + "\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "games.pgn.zst"
+            path.write_bytes(zstandard.ZstdCompressor().compress(raw.encode()))
+            serial = game_positions(path, 3, 1729, workers=1)
+            parallel = game_positions(path, 3, 1729, workers=2)
+        self.assertEqual(serial, parallel)
+        self.assertEqual(len(serial), 3)
+        fens = [row["fen"] for row in serial]
+        self.assertEqual(len(set(fens)), 3)
+        self.assertFalse(any("low" in row["game_id"] or "short" in row["game_id"]
+                             or "chess960" in row["game_id"] for row in serial))
 
     def test_monitor_inline_script_renders(self):
         node = shutil.which("node")

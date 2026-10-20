@@ -5,10 +5,16 @@ import argparse
 import csv
 import hashlib
 import io
+import itertools
 import json
+import multiprocessing
+import os
 import random
+import re
 import sys
 import time
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import chess
@@ -21,51 +27,173 @@ if str(ROOT) not in sys.path:
 from scripts.kaggle_checkpoint import SourceProgress
 
 
-def game_positions(path: Path, count: int, seed: int, progress: SourceProgress | None = None):
+_HEADER_RE = re.compile(r'^\[([A-Za-z0-9_]+)\s+"(.*)"\]\s*$')
+_SOURCE_BLOCK = 128
+
+
+def _header_map(header_text: str) -> dict[str, str]:
+    headers = {}
+    for line in header_text.splitlines():
+        if not line.startswith("["):
+            continue
+        match = _HEADER_RE.match(line)
+        if match:
+            headers[match.group(1)] = match.group(2)
+    return headers
+
+
+def _iter_game_blocks(stream):
+    """Yield (headers, movetext) without asking python-chess to parse a game."""
+    headers = []
+    moves = []
+    state = "headers"
+    for line in stream:
+        if state == "headers":
+            if line.startswith("["):
+                headers.append(line)
+            elif not line.strip() and headers:
+                state = "moves"
+        else:
+            if line.strip():
+                moves.append(line)
+            elif headers:
+                yield "".join(headers), "".join(moves)
+                headers = []
+                moves = []
+                state = "headers"
+    if headers:
+        yield "".join(headers), "".join(moves)
+
+
+def _parse_blocks(blocks):
+    """Parse eligible PGN blocks in a worker; return None for filtered games."""
+    parsed = []
+    for header_text, move_text in blocks:
+        game = chess.pgn.read_game(io.StringIO(header_text + "\n" + move_text))
+        if game is None or game.errors or len(game.variations) != 1:
+            parsed.append(None)
+            continue
+        if game.board().chess960:
+            parsed.append(None)
+            continue
+        moves = [move.uci() for move in game.mainline_moves()]
+        if len(moves) < 24:
+            parsed.append(None)
+            continue
+        headers = game.headers
+        parsed.append((headers.get("Site") or "", headers.get("Date", ""),
+                       headers.get("White", ""), headers.get("Black", ""), moves))
+    return parsed
+
+
+def _eligible_blocks(stream, raw, total_bytes, progress, state):
+    """Header-only prefilter; only ELO/variant-eligible games reach a parser."""
+    blocks = []
+    header_eligible = 0
+    last_progress = time.monotonic()
+    for header_text, move_text in _iter_game_blocks(stream):
+        headers = _header_map(header_text)
+        if headers.get("Variant", "Standard") != "Standard":
+            continue
+        try:
+            elo = min(int(headers.get("WhiteElo", 0)), int(headers.get("BlackElo", 0)))
+        except ValueError:
+            elo = 0
+        if elo < 1800:
+            continue
+        header_eligible += 1
+        blocks.append((header_text, move_text))
+        if len(blocks) >= _SOURCE_BLOCK:
+            state["bytes"], state["header_eligible"] = raw.tell(), header_eligible
+            yield blocks
+            blocks = []
+        if progress and time.monotonic() - last_progress >= 5:
+            state["bytes"], state["header_eligible"] = raw.tell(), header_eligible
+            progress.update("scanning_games", bytes_done=state["bytes"],
+                            bytes_total=total_bytes,
+                            pct=100 * state["bytes"] / total_bytes,
+                            games=header_eligible)
+            last_progress = time.monotonic()
+    state["bytes"], state["header_eligible"] = total_bytes, header_eligible
+    if blocks:
+        yield blocks
+
+
+def game_positions(path: Path, count: int, seed: int, progress: SourceProgress | None = None,
+                   workers: int | None = None):
     rng = random.Random(seed)
     chosen: list[dict] = []
     total_bytes = path.stat().st_size
+    if workers is None:
+        workers = int(os.environ.get("SOURCE_SCAN_WORKERS", "0"))
+    if not workers:
+        try:
+            workers = len(os.sched_getaffinity(0))
+        except (AttributeError, OSError):
+            workers = os.cpu_count() or 1
+    workers = max(1, min(4, workers))
+    print(f"[source] scanning games with {workers} workers", flush=True)
+    state = {"bytes": 0, "header_eligible": 0}
+    eligible = 0
     last_progress = time.monotonic()
+    executor = None
     with path.open("rb") as raw:
         reader = zstandard.ZstdDecompressor().stream_reader(raw)
         text = io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
-        eligible = 0
-        while game := chess.pgn.read_game(text):
-            if game.errors or game.end().board().chess960 or len(game.variations) != 1:
-                continue
-            headers = game.headers
-            if headers.get("Variant", "Standard") != "Standard":
-                continue
-            try:
-                elo = min(int(headers.get("WhiteElo", 0)), int(headers.get("BlackElo", 0)))
-            except ValueError:
-                elo = 0
-            if elo < 1800:
-                continue
-            moves = list(game.mainline_moves())
-            if len(moves) < 24:
-                continue
-            ply = rng.randrange(18, min(len(moves) - 4, 54))
-            board = game.board()
-            for move in moves[:ply]:
-                board.push(move)
-            if board.is_game_over() or not board.is_valid():
-                continue
-            game_id = headers.get("Site") or hashlib.sha256(
-                (headers.get("Date", "") + headers.get("White", "") + headers.get("Black", "") +
-                 " ".join(m.uci() for m in moves)).encode()).hexdigest()
-            row = {"fen": board.fen(), "game_id": f"lichess:{game_id}", "source": "lichess-rated-game"}
-            eligible += 1
-            if len(chosen) < count:
-                chosen.append(row)
+        blocks = _eligible_blocks(text, raw, total_bytes, progress, state)
+        try:
+            if workers == 1:
+                results = itertools.chain.from_iterable(_parse_blocks(block) for block in blocks)
             else:
-                j = rng.randrange(eligible)
-                if j < count:
-                    chosen[j] = row
-            if progress and time.monotonic() - last_progress >= 5:
-                progress.update("scanning_games", bytes_done=raw.tell(), bytes_total=total_bytes,
-                                games=eligible)
-                last_progress = time.monotonic()
+                try:
+                    mp_context = multiprocessing.get_context("fork")
+                except ValueError:
+                    mp_context = None
+                executor = ProcessPoolExecutor(max_workers=workers, mp_context=mp_context)
+                pending = deque()
+                for _ in range(workers * 2):
+                    try:
+                        pending.append(executor.submit(_parse_blocks, next(blocks)))
+                    except StopIteration:
+                        break
+                def completed():
+                    while pending:
+                        future = pending.popleft()
+                        yield from future.result()
+                        try:
+                            pending.append(executor.submit(_parse_blocks, next(blocks)))
+                        except StopIteration:
+                            pass
+                results = completed()
+            for record in results:
+                if record is None:
+                    continue
+                site, date, white, black, moves = record
+                ply = rng.randrange(18, min(len(moves) - 4, 54))
+                board = chess.Board()
+                for uci in moves[:ply]:
+                    board.push(chess.Move.from_uci(uci))
+                if board.is_game_over() or not board.is_valid():
+                    continue
+                game_id = site or hashlib.sha256(
+                    (date + white + black + " ".join(moves)).encode()).hexdigest()
+                row = {"fen": board.fen(), "game_id": f"lichess:{game_id}",
+                       "source": "lichess-rated-game"}
+                eligible += 1
+                if len(chosen) < count:
+                    chosen.append(row)
+                else:
+                    j = rng.randrange(eligible)
+                    if j < count:
+                        chosen[j] = row
+                if progress and time.monotonic() - last_progress >= 5:
+                    progress.update("scanning_games", bytes_done=state["bytes"],
+                                    bytes_total=total_bytes,
+                                    pct=100 * state["bytes"] / total_bytes, games=eligible)
+                    last_progress = time.monotonic()
+        finally:
+            if executor is not None:
+                executor.shutdown(wait=True)
     if progress:
         progress.update("scanning_games", force=True, bytes_done=total_bytes,
                         bytes_total=total_bytes, games=eligible, pct=100)
