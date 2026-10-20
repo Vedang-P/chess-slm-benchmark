@@ -57,13 +57,30 @@ def main():
 
     inputs = WORK / "inputs"
     inputs.mkdir(exist_ok=True)
-    games = inputs / "lichess-standard-2025-04.pgn.zst"
-    tactics = inputs / "lichess-puzzles.csv.zst"
-    disagreements = inputs / "rlvr-train-5k.jsonl"
+    source = WORK / "parents-r0.jsonl"
+    source_remote = f"{DATA_RUN}/input/parents-r0.jsonl"
     official = inputs / "official-puzzles.csv"
-    download("https://database.lichess.org/standard/lichess_db_standard_rated_2025-04.pgn.zst", games)
-    download("https://database.lichess.org/lichess_db_puzzle.csv.zst", tactics)
-    download("https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/resolve/main/rlvr-pool/train-5k.jsonl", disagreements)
+    api = HfApi()
+    files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
+    if source_remote in files:
+        cached = hf_hub_download(HF_REPO, source_remote, repo_type="dataset", token=os.environ["HF_WRITE_TOKEN"])
+        shutil.copy2(cached, source)
+        print("[source] restored deterministic pilot input from HF", flush=True)
+    else:
+        games = Path("/kaggle/temp") / "lichess-standard-2025-04.pgn.zst"
+        Path("/kaggle/temp").mkdir(exist_ok=True)
+        tactics = inputs / "lichess-puzzles.csv.zst"
+        disagreements = inputs / "rlvr-train-5k.jsonl"
+        download("https://database.lichess.org/standard/lichess_db_standard_rated_2025-04.pgn.zst", games)
+        download("https://database.lichess.org/lichess_db_puzzle.csv.zst", tactics)
+        download("https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/resolve/main/rlvr-pool/train-5k.jsonl", disagreements)
+        download("https://storage.googleapis.com/searchless_chess/data/puzzles.csv", official)
+        run([sys.executable, "scripts/prepare_refutation_sources.py",
+             "--games", games, "--tactics", tactics, "--disagreements", disagreements,
+             "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "2000"])
+        api.upload_file(path_or_fileobj=str(source), path_in_repo=source_remote,
+                        repo_id=HF_REPO, repo_type="dataset")
+        print(f"[source] uploaded deterministic input: {source_remote}", flush=True)
     download("https://storage.googleapis.com/searchless_chess/data/puzzles.csv", official)
 
     archive = inputs / "stockfish-16.tar"
@@ -78,14 +95,9 @@ def main():
     engine_hash = hashlib.sha256(engine.read_bytes()).hexdigest()
     print(f"[engine] path={engine} sha256={engine_hash}", flush=True)
 
-    source = WORK / "parents-r0.jsonl"
-    run([sys.executable, "scripts/prepare_refutation_sources.py",
-         "--games", games, "--tactics", tactics, "--disagreements", disagreements,
-         "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "2000"])
-
     labels = DATA / "labels"
     labels.mkdir(parents=True, exist_ok=True)
-    files = set(HfApi().list_repo_files(HF_REPO, repo_type="dataset"))
+    files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
     data_cmd = [sys.executable, "scripts/refutation_data.py", "--input", source,
                 "--outdir", labels, "--stockfish", engine, "--engine-sha256", engine_hash,
                 "--nodes", "50000", "--horizon", "4", "--width", "2",
