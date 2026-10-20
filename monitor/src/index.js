@@ -1277,7 +1277,9 @@ function renderLiveProgress(){
     '<div class="card-head"><div class="card-title">pipeline progress</div><span class="badge '+(r.phase==="complete"?"ok":(k&&/RUNNING|QUEUED/i.test(k.status||"")?"live":"warn"))+'">'+esc(r.phase?phaseLabel(r.phase):"awaiting")+'</span></div>'+
     '<div class="ref-steps">'+refStep(r,"source","source")+refStep(r,"labeling","labels")+refStep(r,"training","planner")+refStep(r,"eval","evaluation")+'</div>'+
     body+
-    '<div class="chart-note" style="margin-top:8px">'+(r.updated_at?"telemetry updated "+esc(ago(new Date(r.updated_at).getTime())):"no progress.json yet — supervisor waits for the first checkpoint")+'</div>';
+    '<div class="chart-note" style="margin-top:8px">'+((sourcePhase?r.source&&r.source.updated_at:r.updated_at)
+      ?"telemetry updated "+esc(ago(new Date((sourcePhase?r.source.updated_at:r.updated_at)).getTime()))
+      :(sourcePhase?"waiting for source telemetry":"no progress.json yet — supervisor waits for the first checkpoint"))+'</div>';
 }
 
 function renderLiveKernel(){
