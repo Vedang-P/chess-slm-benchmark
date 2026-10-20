@@ -65,7 +65,7 @@ def main():
     source = WORK / "parents-r0.jsonl"
     source_remote = f"{DATA_RUN}/input/parents-r0.jsonl"
     official = inputs / "official-puzzles.csv"
-    api = HfApi()
+    api = HfApi(token=os.environ["HF_WRITE_TOKEN"])
     from scripts.kaggle_checkpoint import write_status
     write_status(api, HF_REPO, PHASE_RUN, "IN PROGRESS: boot / restore")
     files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
