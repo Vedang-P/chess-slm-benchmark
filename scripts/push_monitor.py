@@ -24,12 +24,18 @@ HF_REPO = "vedangfake/chess-slm-benchmark"
 # across both, so the curve merges by step and never rewrites legacy points.
 RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2"]
 LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build",
-             "ccgavn-1b", "puzzle-curriculum"]
+             "ccgavn-1b", "puzzle-curriculum", "refutation-r0",
+             "refutation-data-r0", "ccgavn-refutation-r0-seed0"]
+REF_KERNEL = "ccgavn-refutation-r0"
+REF_DATA = "refutation-data-r0"
+REF_TRAIN = "ccgavn-refutation-r0-seed0"
+REF_EVAL = "eval-results/ccgavn-refutation-r0"
+REF_STEPS = 12500
 ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shoumikmitra"]
 KERNELS = [
     ("vedanggggg", "build-2b-slice"), ("softmaxsimp", "build-2b-slice"),
     ("samaltmannnn", "build-2b-slice"), ("shoumikmitra", "build-2b-slice"),
-] + [(acct, "ccgavn-1b") for acct in ACCOUNTS] + [(acct, "ccgavn-2b") for acct in ACCOUNTS]
+] + [(acct, "ccgavn-1b") for acct in ACCOUNTS] + [(acct, "ccgavn-2b") for acct in ACCOUNTS] + [(acct, REF_KERNEL) for acct in ACCOUNTS]
 
 
 def load_env() -> dict:
@@ -95,20 +101,21 @@ def checkpoint_times(token: str, min_step: int) -> dict:
     return out
 
 
-def build_curve(api, token: str) -> list[dict]:
-    from huggingface_hub import hf_hub_download
-    files = hf_files(api)
+def build_curve(api, token: str, files: list[str]) -> list[dict]:
+    from huggingface_hub import snapshot_download
     entries = sorted({(run, int(m.group(1))) for f in files for run in RUNS
                       if (m := re.search(rf"{re.escape(run)}/checkpoint-(\d+)/metrics\.json$", f))},
                      key=lambda x: x[1])
     sched = stage1_schedule()
     times = checkpoint_times(token, entries[0][1] if entries else 0)
+    cache = Path(snapshot_download(
+        HF_REPO, repo_type="dataset", token=token,
+        allow_patterns=[f"{run}/checkpoint-*/metrics.json" for run in RUNS]))
     curve = []
     for run, s in entries:
         try:
-            p = hf_hub_download(HF_REPO, f"{run}/checkpoint-{s}/metrics.json",
-                                repo_type="dataset", token=token)
-            m = json.loads(Path(p).read_text())
+            p = cache / f"{run}/checkpoint-{s}/metrics.json"
+            m = json.loads(p.read_text())
             point = {"step": m.get("step", s), "run": run,
                      "train": m.get("train_loss"), "dev": m.get("dev_loss")}
             for k in ("dev_dist", "dev_ce", "lr", "grad_norm", "samples_per_s", "shard"):
@@ -127,14 +134,18 @@ def build_curve(api, token: str) -> list[dict]:
     return curve
 
 
-def build_evals(api, token: str) -> dict:
-    from huggingface_hub import hf_hub_download
+def build_evals(api, token: str, files: list[str]) -> dict:
+    from huggingface_hub import snapshot_download
     out = {}
-    for f in hf_files(api):
-        if re.match(r"^eval-results/.*/eval-summary\.json$", f):
+    cache = Path(snapshot_download(
+        HF_REPO, repo_type="dataset", token=token,
+        allow_patterns=["eval-results/*/eval-summary.json",
+                        f"{REF_EVAL}/*/summary.json"]))
+    for f in files:
+        if re.match(r"^eval-results/.*/eval-summary\.json$", f) or (
+                f.startswith(f"{REF_EVAL}/") and f.endswith("/summary.json")):
             try:
-                p = hf_hub_download(HF_REPO, f, repo_type="dataset", token=token)
-                out[f] = json.loads(Path(p).read_text())
+                out[f] = json.loads((cache / f).read_text())
             except Exception:
                 continue
     return out
@@ -211,6 +222,108 @@ def build_runs(api, token: str) -> dict:
     return out
 
 
+def _ref_json(token: str, path: str):
+    from huggingface_hub import hf_hub_download
+    try:
+        p = hf_hub_download(HF_REPO, path, repo_type="dataset", token=token)
+        return json.loads(Path(p).read_text())
+    except Exception:
+        return None
+
+
+def _ref_text(token: str, path: str) -> str:
+    from huggingface_hub import hf_hub_download
+    try:
+        p = hf_hub_download(HF_REPO, path, repo_type="dataset", token=token)
+        return Path(p).read_text()
+    except Exception:
+        return ""
+
+
+def _eval_counts(summary):
+    if not summary:
+        return None
+    def one(m, key):
+        if not m:
+            return None
+        if isinstance(m, list):
+            m = m[0] if m else None
+        if not m:
+            return None
+        n = m.get(key, m.get("correct"))
+        total = m.get("total", m.get("expected"))
+        if n is None or not total:
+            return None
+        return {"n": n, "total": total, "pct": round(100*n/total, 2)}
+    return {"mate": one(summary.get("mate"), "correct"),
+            "puzzles": one(summary.get("puzzles"), "solved"),
+            "complete": bool(summary.get("complete"))}
+
+
+def build_refutation(token: str, files: list[str], kernels: list) -> dict:
+    source_ready = f"{REF_DATA}/input/parents-r0.jsonl" in files
+    data_progress = _ref_json(token, f"{REF_DATA}/data/progress.json") or {}
+    train_progress = _ref_json(token, f"{REF_TRAIN}/progress.json") or {}
+    top_status = _ref_text(token, "refutation-r0/run-status.txt")
+    data_status = _ref_text(token, f"{REF_DATA}/run-status.txt")
+    train_status = _ref_text(token, f"{REF_TRAIN}/run-status.txt")
+    accepted = int(data_progress.get("accepted") or 0)
+    rejected = int(data_progress.get("rejected") or 0)
+    total = int(data_progress.get("total_rows") or (1944 if source_ready else 0))
+    done = int(data_progress.get("input_rows") or accepted+rejected)
+    label_rate = float(data_progress.get("rows_per_second") or 0)
+    train_step = int(train_progress.get("step") or 0)
+    if not train_step:
+        steps = [int(m.group(1)) for f in files
+                 if (m := re.search(rf"{re.escape(REF_TRAIN)}/checkpoint-(\d+)/config\.json$", f))]
+        train_step = max(steps, default=0)
+    eval_summary = None
+    for path in files:
+        if path.startswith(f"{REF_EVAL}/") and path.endswith("/summary.json"):
+            eval_summary = _ref_json(token, path) or eval_summary
+    eval_counts = _eval_counts(eval_summary)
+    if eval_counts and eval_counts.get("complete"):
+        phase = "complete"
+    elif train_step >= REF_STEPS or train_status.upper().startswith("DONE"):
+        phase = "evaluation"
+    elif done and total and done >= total:
+        phase = "training"
+    elif done:
+        phase = "labeling"
+    elif source_ready:
+        phase = "labeling"
+    else:
+        phase = "source"
+    if "FAILED" in top_status.upper() or "FAILED" in train_status.upper():
+        phase = "failed"
+    live = next((k for k in kernels if k.get("kernel") == REF_KERNEL
+                 and any(x in str(k.get("status", "")) for x in ("RUNNING", "QUEUED", "PENDING"))), None)
+    if live and phase == "source" and "QUEUED" in live.get("status", ""):
+        phase = "queued"
+    eta = None
+    if phase == "labeling" and label_rate > 0 and total > done:
+        eta = (total-done)/label_rate
+    session_start = train_progress.get("session_start_step")
+    session_s = float(train_progress.get("session_seconds") or 0)
+    if phase == "training" and session_start is not None and session_s > 0:
+        rate = (train_step-int(session_start))/session_s
+        if rate > 0:
+            eta = (REF_STEPS-train_step)/rate
+    return {"phase": phase, "source_ready": source_ready,
+            "kernel": live, "kernel_status": (live or {}).get("status", ""),
+            "top_status": top_status[:240], "data_status": data_status[:240],
+            "train_status": train_status[:240],
+            "accepted": accepted, "rejected": rejected,
+            "label_done": done, "label_total": total,
+            "label_pct": round(100*done/total, 2) if total else 0,
+            "label_rate": round(label_rate, 3), "eta_seconds": round(eta) if eta else None,
+            "train_step": train_step, "train_total": REF_STEPS,
+            "train_pct": round(100*train_step/REF_STEPS, 2),
+            "train_loss": train_progress.get("loss"),
+            "train_dev": (train_progress.get("dev") or {}).get("oracle_group_top1") if isinstance(train_progress.get("dev"), dict) else None,
+            "eval": eval_counts, "updated_at": data_progress.get("updated_at") or train_progress.get("updated_at")}
+
+
 def build_kernels_quota() -> tuple[list, dict, str]:
     sys.path.insert(0, str(ROOT / "scripts"))
     from kaggle_accounts import env_for_account
@@ -233,6 +346,8 @@ def build_kernels_quota() -> tuple[list, dict, str]:
         # The labeling fleet is finished; keep its rows only while actually
         # running (the corpus card reports the labeled-shard state instead).
         if slug == "build-2b-slice" and st not in ("RUNNING", "QUEUED", "PENDING"):
+            continue
+        if slug == REF_KERNEL and st == "not created":
             continue
         kernels.append({"account": acct, "kernel": slug, "status": st})
     for acct in ACCOUNTS:
@@ -266,14 +381,21 @@ def main() -> None:
         return
     api = HfApi(token=token)
     files = hf_files(api)
+    print(f"[monitor] {len(files)} files", flush=True)
     kernels, quota, quota_reset = build_kernels_quota()
+    print(f"[monitor] kernels={len(kernels)} accounts={len(quota)}", flush=True)
+    curve = build_curve(api, token, files)
+    print(f"[monitor] curve={len(curve)}", flush=True)
+    evals = build_evals(api, token, files)
+    print(f"[monitor] evals={len(evals)}", flush=True)
     payload = {
-        "curve": build_curve(api, token),
-        "evals": build_evals(api, token),
+        "curve": curve,
+        "evals": evals,
         "corpus": build_corpus(api, files),
         "games": build_games(token),
         "runs": build_runs(api, token),
         "kernels": kernels,
+        "refutation": build_refutation(token, files, kernels),
         "quota": quota,
         "quota_reset": quota_reset,
     }

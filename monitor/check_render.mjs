@@ -24,6 +24,7 @@ const snapshot = {
   curve: [
     { step: 1715000, run: "ccgavn-5m-seed0", train: 3.6, dev: 3.5, shard: "00000", t: new Date(now - 3600e3).toISOString() },
     { step: 1725000, run: "ccgavn-5m-seed0-v2", train: 3.5, dev: 3.4, shard: "02084", t: new Date(now - 60e3).toISOString() },
+    { step: 3896658, run: "ccgavn-5m-seed0-v2", train: 3.2, dev: 3.1, shard: "10200", t: new Date(now - 30e3).toISOString() },
   ],
   evals: {
     "eval-results/ccgavn-5m-seed0-1620k-frozen/eval-summary.json": {
@@ -35,6 +36,10 @@ const snapshot = {
       checkpoint: "ccgavn-5m-seed0-v2/checkpoint-1800000", returncode: 0,
       mate: { correct: 3600, total: 4000 }, puzzles: { solved: 7200, total: 10000 },
     },
+    "eval-results/ccgavn-5m-seed0-v2-3896k-final/eval-summary.json": {
+      checkpoint: "ccgavn-5m-seed0-v2/checkpoint-3896658", returncode: 0, complete: true,
+      mate: { correct: 3710, total: 4000 }, puzzles: { solved: 7620, total: 10000 },
+    },
   },
   reference: [
     { name: "Ruoss 9M (teacher)", mate: 98.72, puzzles: 86.13, ref: true },
@@ -42,12 +47,24 @@ const snapshot = {
   kernels: [
     { account: "acct-1", kernel: "ccgavn-2b", status: "RUNNING" },
     { account: "acct-3", kernel: "build-2b-slice", status: "COMPLETE" },
+    { account: "acct-1", kernel: "ccgavn-refutation-r0", status: "RUNNING" },
   ],
   quota: { "acct-1": "28.9", "acct-3": "28.7" },
   quota_reset: "2026-10-10T00:00:00Z",
   runs: {
     "ccgavn-5m-seed0/run-status.txt": "DONE — 1.62M steps",
-    "ccgavn-5m-seed0-v2/run-status.txt": "INCOMPLETE — eval cleanup failed",
+    "ccgavn-5m-seed0-v2/run-status.txt": "DONE — final eval archived",
+    "refutation-r0/run-status.txt": "IN PROGRESS: planner training",
+    "refutation-data-r0/run-status.txt": "DONE — 1944 rows",
+    "ccgavn-refutation-r0-seed0/run-status.txt": "IN PROGRESS: post-training",
+  },
+  refutation: {
+    phase: "training", source_ready: true, label_done: 1944, label_total: 1944, label_pct: 100,
+    accepted: 1900, rejected: 44, label_rate: 0.35, eta_seconds: 3600,
+    train_step: 4200, train_pct: 33.6, train_loss: 2.31, train_dev: 0.42, eval: null,
+    top_status: "IN PROGRESS: planner training", data_status: "DONE — 1944 rows",
+    train_status: "IN PROGRESS: post-training", kernel_status: "RUNNING",
+    updated_at: new Date(now - 45e3).toISOString(),
   },
   notices: [{ t: now, text: "corrected-v2 training armed — steps 1.715M → 3.896M" }],
   corpus: {
@@ -95,10 +112,26 @@ const runnable = script.replace(/load\(\);setInterval\(load,60000\);/, "globalTh
 await vm.runInNewContext(runnable, sandbox, { filename: "monitor-inline.js" });
 await sandbox.__loadPromise;
 
-const required = ["runs", "kernels", "quota", "stages", "notices", "evaltable", "ckpttable", "corpus", "tl-hero"];
+const required = ["headline", "live-hero", "live-progress", "live-kernel", "live-eval", "live-spec",
+  "live-log", "res-hero", "res-table", "res-base", "res-ref", "res-notes", "tl-ref",
+  "runs", "kernels", "quota", "stages", "notices", "evaltable", "ckpttable", "corpus", "tl-hero"];
 const empty = required.filter((id) => !(elements.get(id)?.innerHTML || "").length);
 if (empty.length) {
   console.error(`FAIL: empty dashboard sections: ${empty.join(", ")}`);
   process.exit(1);
 }
-console.log(`render ok: ${required.length} sections populated`);
+const htmlFor = (id) => elements.get(id)?.innerHTML || "";
+const checks = [
+  [htmlFor("headline").includes("92.75"), "headline has final MATE"],
+  [htmlFor("res-table").includes("CC-GAVN 5M"), "results table has model rows"],
+  [htmlFor("live-hero").includes("planner training"), "live page shows phase"],
+  [htmlFor("tl-ref").includes("1,944"), "timeline shows pilot contract"],
+  [!HTML.includes("Run has not started"), "stale preflight copy is gone"],
+  [required.every((id) => !/undefined|NaN/.test(htmlFor(id))), "no undefined/NaN in sections"],
+];
+const failed = checks.filter(([ok]) => !ok).map(([, name]) => name);
+if (failed.length) {
+  console.error(`FAIL: ${failed.join(", ")}`);
+  process.exit(1);
+}
+console.log(`render ok: ${required.length} sections populated, ${checks.length} content checks`);

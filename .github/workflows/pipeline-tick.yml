@@ -50,6 +50,11 @@ jobs:
                      "$HOME/.kaggle/profiles/softmaxsimp/access_token" \
                      "$HOME/.kaggle/profiles/samaltmannnn/access_token" \
                      "$HOME/.kaggle/profiles/shoumikmitra/access_token"
+      - name: Refutation supervisor
+        continue-on-error: true
+        env:
+          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        run: python3 scripts/watch_refutation.py
       - name: Pipeline keep-alive
         env:
           HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}

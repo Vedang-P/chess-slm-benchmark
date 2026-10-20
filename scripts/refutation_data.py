@@ -225,16 +225,34 @@ def main():
                         raise ValueError("prior datasets have conflicting train/dev ownership")
                     db.execute("INSERT OR IGNORE INTO positions VALUES (?, ?)", (h, record["split"]))
     journal = out/"groups.jsonl"
-    consumed = 0
+    source_total = sum(1 for _ in Path(args.input).open())
+    consumed = accepted = rejected = 0
     if journal.exists():
         with journal.open() as f:
             for line in f:
                 row = json.loads(line)  # partial/corrupt rows fail closed
                 consumed = row["input_row"]+1
                 if "branches" in row:
+                    accepted += 1
                     db.executemany("INSERT OR IGNORE INTO positions VALUES (?, ?)",
                                    ((h, row["split"]) for h in row["hashes"]))
+                elif "rejected" in row:
+                    rejected += 1
     db.commit()
+    session_start_row = consumed
+    session_started = time.monotonic()
+
+    def write_progress(rows_done):
+        elapsed = time.monotonic()-session_started
+        payload = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                   "total_rows": source_total, "input_rows": rows_done,
+                   "accepted": accepted, "rejected": rejected,
+                   "session_rows": rows_done-session_start_row,
+                   "session_seconds": elapsed,
+                   "rows_per_second": (rows_done-session_start_row)/max(elapsed, 1e-9)}
+        (out/"progress.json").write_text(json.dumps(payload, sort_keys=True))
+
+    write_progress(consumed)
     student = utils = None
     if args.student_checkpoint:
         student, student_cfg, utils = load_network(args.student_checkpoint, args.sl_repo,
@@ -245,6 +263,7 @@ def main():
     started, last = time.monotonic(), 0.
     engine = None
     def upload():
+        write_progress(consumed)
         client.upload_folder(repo_id=args.hf_repo, repo_type="dataset", folder_path=str(out),
                              path_in_repo=f"{args.hf_run}/data", allow_patterns=["*.json", "*.jsonl"])
     try:
@@ -282,6 +301,11 @@ def main():
                         db.commit()
                 sink.write(json.dumps({"input_row": i, **group})+"\n")
                 sink.flush(); os.fsync(sink.fileno())
+                consumed = i+1
+                if "branches" in group:
+                    accepted += 1
+                else:
+                    rejected += 1
                 if time.monotonic()-last >= args.hf_upload_every:
                     upload(); last = time.monotonic()
                     print(json.dumps({"input_rows": i+1, "elapsed_s": last-started}), flush=True)

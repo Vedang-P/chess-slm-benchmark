@@ -219,6 +219,7 @@ def train(args):
     started = last_upload = time.monotonic()
     total_branches = 0
     last_saved_step = step if args.resume_from_hf else None
+    session_start_step = step
     def save():
         nonlocal last_saved_step
         if step == last_saved_step:
@@ -234,6 +235,13 @@ def train(args):
         # remote checkpoint unless it is the identical resumed step.
         client.upload_folder(repo_id=args.hf_repo, repo_type="dataset", folder_path=str(cp),
                              path_in_repo=f"{args.hf_run}/{cp.name}")
+        progress = dict(metrics, step=step, total_steps=args.steps,
+                        session_start_step=session_start_step,
+                        updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+        (out/"progress.json").write_text(json.dumps(progress, indent=2, sort_keys=True))
+        client.upload_file(path_or_fileobj=str(out/"progress.json"),
+                           path_in_repo=f"{args.hf_run}/progress.json",
+                           repo_id=args.hf_repo, repo_type="dataset")
         last_saved_step = step
     try:
         write_status(client, args.hf_repo, args.hf_run, "IN PROGRESS: post-training")

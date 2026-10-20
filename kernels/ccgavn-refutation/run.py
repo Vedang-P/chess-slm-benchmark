@@ -16,6 +16,9 @@ HF_REPO = "vedangfake/chess-slm-benchmark"
 DATA_RUN = "refutation-data-r0"
 TRAIN_RUN = "ccgavn-refutation-r0-seed0"
 BASE = WORK / "base-checkpoint"
+PHASE_RUN = "refutation-r0"
+EVAL_RUN = "eval-results/ccgavn-refutation-r0"
+STEPS = 12500
 
 
 def run(cmd, **kwargs):
@@ -61,12 +64,15 @@ def main():
     source_remote = f"{DATA_RUN}/input/parents-r0.jsonl"
     official = inputs / "official-puzzles.csv"
     api = HfApi()
+    from scripts.kaggle_checkpoint import write_status
+    write_status(api, HF_REPO, PHASE_RUN, "IN PROGRESS: boot / restore")
     files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
     if source_remote in files:
         cached = hf_hub_download(HF_REPO, source_remote, repo_type="dataset", token=os.environ["HF_WRITE_TOKEN"])
         shutil.copy2(cached, source)
         print("[source] restored deterministic pilot input from HF", flush=True)
     else:
+        write_status(api, HF_REPO, PHASE_RUN, "IN PROGRESS: source preparation")
         games = Path("/kaggle/temp") / "lichess-standard-2025-04.pgn.zst"
         Path("/kaggle/temp").mkdir(exist_ok=True)
         tactics = inputs / "lichess-puzzles.csv.zst"
@@ -97,6 +103,7 @@ def main():
     engine_hash = hashlib.sha256(engine.read_bytes()).hexdigest()
     print(f"[engine] path={engine} sha256={engine_hash}", flush=True)
 
+    write_status(api, HF_REPO, PHASE_RUN, "IN PROGRESS: oracle labeling")
     labels = DATA / "labels"
     labels.mkdir(parents=True, exist_ok=True)
     files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
@@ -120,6 +127,7 @@ def main():
     if accepted == 0:
         raise RuntimeError("all source positions rejected; no training data")
     print(f"[job] labels complete: accepted={accepted} rejected={rejected}; starting planner optimizer", flush=True)
+    write_status(api, HF_REPO, PHASE_RUN, "IN PROGRESS: planner training")
 
     train_out = WORK / "planner-r0"
     train_cmd = [sys.executable, "scripts/posttrain.py", "train", "--init-checkpoint", BASE,
@@ -131,6 +139,28 @@ def main():
     if any(name.startswith(f"{TRAIN_RUN}/checkpoint-") and name.endswith("/config.json") for name in files):
         train_cmd.append("--resume-from-hf")
     run(train_cmd)
+
+    final = train_out / f"checkpoint-{STEPS}"
+    if not final.exists():
+        final = train_out / "resume" / TRAIN_RUN / f"checkpoint-{STEPS}"
+    if not final.exists():
+        print("[job] training paused; final evaluation deferred", flush=True)
+        return
+    write_status(api, HF_REPO, PHASE_RUN, "IN PROGRESS: final evaluation")
+    eval_out = WORK / "eval-r0"
+    files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
+    eval_cmd = [sys.executable, "scripts/posttrain.py", "eval", "--checkpoint", final,
+                "--puzzles", official, "--sl-repo", SL, "--outdir", eval_out,
+                "--hf-repo", HF_REPO, "--hf-run", EVAL_RUN,
+                "--hf-upload-every", "900", "--session-hours", "10.5"]
+    if any(name.startswith(f"{EVAL_RUN}/eval-") for name in files):
+        eval_cmd.append("--resume-from-hf")
+    run(eval_cmd)
+    summary = eval_out / "summary.json"
+    if not summary.exists() or not json.loads(summary.read_text()).get("complete"):
+        write_status(api, HF_REPO, PHASE_RUN, "PAUSED: evaluation resume required")
+        return
+    write_status(api, HF_REPO, PHASE_RUN, "DONE: CC-GAVN-R pilot complete")
 
 
 if __name__ == "__main__":
