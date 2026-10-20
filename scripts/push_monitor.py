@@ -101,18 +101,40 @@ def checkpoint_times(token: str, min_step: int) -> dict:
     return out
 
 
-def build_curve(api, token: str, files: list[str]) -> list[dict]:
+def fetch_previous(url: str) -> dict:
+    if not url:
+        return {}
+    try:
+        req = urllib.request.Request(f"{url.rstrip('/')}/api/snapshot",
+                                     headers={"user-agent": "chess-slm-monitor/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+    except Exception as exc:
+        print(f"[monitor] previous snapshot unavailable: {exc}", flush=True)
+        return {}
+
+
+def build_curve(api, token: str, files: list[str], prior: list[dict] | None = None) -> list[dict]:
     from huggingface_hub import snapshot_download
     entries = sorted({(run, int(m.group(1))) for f in files for run in RUNS
                       if (m := re.search(rf"{re.escape(run)}/checkpoint-(\d+)/metrics\.json$", f))},
                      key=lambda x: x[1])
     sched = stage1_schedule()
     times = checkpoint_times(token, entries[0][1] if entries else 0)
-    cache = Path(snapshot_download(
-        HF_REPO, repo_type="dataset", token=token,
-        allow_patterns=[f"{run}/checkpoint-*/metrics.json" for run in RUNS]))
-    curve = []
-    for run, s in entries:
+    # Reuse the curve already in KV and fetch only newly uploaded metrics.
+    # HEADing all 1,559 historical files every ten minutes trips HF's rate
+    # limit (429) and stalls the whole monitor tick.
+    prior = [dict(p) for p in (prior or [])]
+    known = {(str(p.get("run")), int(p.get("step"))) for p in prior
+             if p.get("run") is not None and p.get("step") is not None}
+    new = [(run, s) for run, s in entries if (run, s) not in known]
+    cache = None
+    if new:
+        cache = Path(snapshot_download(
+            HF_REPO, repo_type="dataset", token=token,
+            allow_patterns=[f"{run}/checkpoint-{s}/metrics.json" for run, s in new]))
+    curve = prior
+    for run, s in new:
         try:
             p = cache / f"{run}/checkpoint-{s}/metrics.json"
             m = json.loads(p.read_text())
@@ -131,23 +153,26 @@ def build_curve(api, token: str, files: list[str]) -> list[dict]:
             curve.append(point)
         except Exception:
             continue
+    curve.sort(key=lambda p: p.get("step", 0))
     return curve
 
 
-def build_evals(api, token: str, files: list[str]) -> dict:
+def build_evals(api, token: str, files: list[str], prior: dict | None = None) -> dict:
     from huggingface_hub import snapshot_download
-    out = {}
+    prior = dict(prior or {})
+    paths = [f for f in files if re.match(r"^eval-results/.*/eval-summary\.json$", f) or (
+        f.startswith(f"{REF_EVAL}/") and f.endswith("/summary.json"))]
+    new = [f for f in paths if f not in prior]
+    if not new:
+        return prior
     cache = Path(snapshot_download(
-        HF_REPO, repo_type="dataset", token=token,
-        allow_patterns=["eval-results/*/eval-summary.json",
-                        f"{REF_EVAL}/*/summary.json"]))
-    for f in files:
-        if re.match(r"^eval-results/.*/eval-summary\.json$", f) or (
-                f.startswith(f"{REF_EVAL}/") and f.endswith("/summary.json")):
-            try:
-                out[f] = json.loads((cache / f).read_text())
-            except Exception:
-                continue
+        HF_REPO, repo_type="dataset", token=token, allow_patterns=new))
+    out = prior
+    for f in new:
+        try:
+            out[f] = json.loads((cache / f).read_text())
+        except Exception:
+            continue
     return out
 
 
@@ -387,11 +412,12 @@ def main() -> None:
     api = HfApi(token=token)
     files = hf_files(api)
     print(f"[monitor] {len(files)} files", flush=True)
+    prior = fetch_previous(url)
     kernels, quota, quota_reset = build_kernels_quota()
     print(f"[monitor] kernels={len(kernels)} accounts={len(quota)}", flush=True)
-    curve = build_curve(api, token, files)
+    curve = build_curve(api, token, files, prior.get("curve"))
     print(f"[monitor] curve={len(curve)}", flush=True)
-    evals = build_evals(api, token, files)
+    evals = build_evals(api, token, files, prior.get("evals"))
     print(f"[monitor] evals={len(evals)}", flush=True)
     payload = {
         "curve": curve,
