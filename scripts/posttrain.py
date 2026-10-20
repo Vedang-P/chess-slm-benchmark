@@ -237,6 +237,7 @@ def train(args):
                              path_in_repo=f"{args.hf_run}/{cp.name}")
         progress = dict(metrics, step=step, total_steps=args.steps,
                         session_start_step=session_start_step,
+                        session_seconds=round(time.monotonic()-started, 3),
                         updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
         (out/"progress.json").write_text(json.dumps(progress, indent=2, sort_keys=True))
         client.upload_file(path_or_fileobj=str(out/"progress.json"),
