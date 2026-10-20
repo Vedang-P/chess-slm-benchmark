@@ -305,6 +305,26 @@ class CorrectnessTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_source_progress_throttles_and_survives_upload_errors(self):
+        from scripts.kaggle_checkpoint import SourceProgress, write_status
+
+        class Boom:
+            def __init__(self):
+                self.calls = 0
+
+            def upload_file(self, **kwargs):
+                self.calls += 1
+                raise RuntimeError("429 Too Many Requests")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            progress = SourceProgress(Path(tmp) / "progress.json")
+            progress.client = Boom()
+            progress.repo_id, progress.remote_prefix, progress.every = "repo", "run", 100.0
+            progress.update("scanning_games", bytes_done=1, bytes_total=2)
+            progress.update("scanning_games", bytes_done=2, bytes_total=2)
+        self.assertEqual(progress.client.calls, 1)
+        write_status(Boom(), "repo", "run", "FAILED: test")
+
     def test_source_scan_prefilters_and_matches_multiprocess(self):
         from scripts.prepare_refutation_sources import game_positions
 

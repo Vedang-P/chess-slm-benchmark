@@ -133,12 +133,15 @@ def write_status(api_client, repo_id: str, remote_prefix: str, status: str) -> N
         import datetime
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         status = f"# {stamp}\n{status}"
-    api_client.upload_file(
-        path_or_fileobj=status.encode("utf-8"),
-        path_in_repo=f"{remote_prefix.strip('/')}/run-status.txt",
-        repo_id=repo_id,
-        repo_type="dataset",
-    )
+    try:
+        api_client.upload_file(
+            path_or_fileobj=status.encode("utf-8"),
+            path_in_repo=f"{remote_prefix.strip('/')}/run-status.txt",
+            repo_id=repo_id,
+            repo_type="dataset",
+        )
+    except Exception as exc:  # rate limits or network flaps must not kill a run
+        print(f"[status] upload failed: {exc}", flush=True)
 
 
 class SourceProgress:
@@ -146,7 +149,7 @@ class SourceProgress:
 
     def __init__(self, path: Path, repo_id: str | None = None,
                  remote_prefix: str | None = None, token: str | None = None,
-                 every: float = 20.0):
+                 every: float = 120.0):
         self.path = Path(path)
         self.repo_id = repo_id
         self.remote_prefix = remote_prefix
@@ -167,12 +170,12 @@ class SourceProgress:
         now = time.monotonic()
         if not self.client or (not force and now - self.last_upload < self.every):
             return
+        self.last_upload = now
         try:
             self.client.upload_file(
                 path_or_fileobj=str(self.path),
                 path_in_repo=f"{self.remote_prefix.strip('/')}/source-progress.json",
                 repo_id=self.repo_id, repo_type="dataset")
-            self.last_upload = now
         except Exception as exc:
             print(f"[progress] upload failed: {exc}", flush=True)
 
