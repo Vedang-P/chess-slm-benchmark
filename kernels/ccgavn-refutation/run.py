@@ -130,12 +130,28 @@ def main():
         download("https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/resolve/main/rlvr-pool/train-5k.jsonl",
                  disagreements, progress, "downloading_disagreements")
         download("https://storage.googleapis.com/searchless_chess/data/puzzles.csv", official)
+        scan_checkpoint = WORK / "source-scan-checkpoint.json"
+        resume_scan = f"{DATA_RUN}/scan-checkpoint.json" in files
+        if resume_scan:
+            try:
+                cached = hf_hub_download(HF_REPO, f"{DATA_RUN}/scan-checkpoint.json",
+                                         repo_type="dataset", token=os.environ["HF_WRITE_TOKEN"])
+                shutil.copy2(cached, scan_checkpoint)
+                print("[source] restored scan checkpoint from HF", flush=True)
+            except Exception as exc:
+                print(f"[source] scan checkpoint restore failed; starting scan fresh: {exc}",
+                      flush=True)
+                resume_scan = False
         progress.update("scanning_games", force=True, pct=0)
-        run([sys.executable, "scripts/prepare_refutation_sources.py",
-             "--games", games, "--tactics", tactics, "--disagreements", disagreements,
-             "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "1944",
-             "--progress-file", WORK/"source-progress.json",
-             "--hf-repo", HF_REPO, "--hf-run", DATA_RUN])
+        source_cmd = [sys.executable, "scripts/prepare_refutation_sources.py",
+                      "--games", games, "--tactics", tactics, "--disagreements", disagreements,
+                      "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "1944",
+                      "--progress-file", WORK/"source-progress.json",
+                      "--scan-checkpoint", scan_checkpoint,
+                      "--hf-repo", HF_REPO, "--hf-run", DATA_RUN]
+        if resume_scan:
+            source_cmd.append("--resume-scan")
+        run(source_cmd)
         api.upload_file(path_or_fileobj=str(source), path_in_repo=source_remote,
                         repo_id=HF_REPO, repo_type="dataset")
         print(f"[source] uploaded deterministic input: {source_remote}", flush=True)

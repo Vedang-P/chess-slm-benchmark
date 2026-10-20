@@ -24,7 +24,7 @@ import zstandard
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from scripts.kaggle_checkpoint import SourceProgress
+from scripts.kaggle_checkpoint import JsonCheckpoint, SourceProgress
 
 
 _HEADER_RE = re.compile(r'^\[([A-Za-z0-9_]+)\s+"(.*)"\]\s*$')
@@ -86,10 +86,11 @@ def _parse_blocks(blocks):
     return parsed
 
 
-def _eligible_blocks(stream, raw, total_bytes, progress, state):
+def _eligible_blocks(stream, raw, total_bytes, progress, state, skip=0):
     """Header-only prefilter; only ELO/variant-eligible games reach a parser."""
     blocks = []
     header_eligible = 0
+    seen = 0
     last_progress = time.monotonic()
     for header_text, move_text in _iter_game_blocks(stream):
         headers = _header_map(header_text)
@@ -100,6 +101,9 @@ def _eligible_blocks(stream, raw, total_bytes, progress, state):
         except ValueError:
             elo = 0
         if elo < 1800:
+            continue
+        seen += 1
+        if seen <= skip:
             continue
         header_eligible += 1
         blocks.append((header_text, move_text))
@@ -119,8 +123,16 @@ def _eligible_blocks(stream, raw, total_bytes, progress, state):
         yield blocks
 
 
+def _as_tuple(value):
+    if isinstance(value, list):
+        return tuple(_as_tuple(item) for item in value)
+    return value
+
+
 def game_positions(path: Path, count: int, seed: int, progress: SourceProgress | None = None,
-                   workers: int | None = None):
+                   workers: int | None = None, checkpoint: Path | None = None,
+                   resume: bool = False, checkpoint_repo: str | None = None,
+                   checkpoint_run: str | None = None):
     rng = random.Random(seed)
     chosen: list[dict] = []
     total_bytes = path.stat().st_size
@@ -133,14 +145,43 @@ def game_positions(path: Path, count: int, seed: int, progress: SourceProgress |
             workers = os.cpu_count() or 1
     workers = max(1, min(4, workers))
     print(f"[source] scanning games with {workers} workers", flush=True)
-    state = {"bytes": 0, "header_eligible": 0}
+    checkpoint_path = Path(checkpoint) if checkpoint else None
+    checkpoint_obj = JsonCheckpoint(
+        checkpoint_path, checkpoint_repo,
+        f"{checkpoint_run}/scan-checkpoint.json" if checkpoint_path and checkpoint_run else None,
+        token=os.environ.get("HF_WRITE_TOKEN") or os.environ.get("HF_TOKEN"),
+        every=300.0) if checkpoint_path else None
+    processed = 0
     eligible = 0
+    if resume and checkpoint_path and checkpoint_path.exists():
+        try:
+            saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            if (saved.get("count"), saved.get("seed"), saved.get("bytes_total")) == (
+                    count, seed, total_bytes):
+                rng.setstate(_as_tuple(saved["rng_state"]))
+                chosen = list(saved["chosen"])
+                processed = int(saved["processed"])
+                eligible = int(saved["eligible"])
+                print(f"[source] resuming scan at {processed} header-eligible games; "
+                      f"{len(chosen)}/{count} sampled", flush=True)
+            else:
+                print("[source] ignoring stale scan checkpoint", flush=True)
+        except Exception as exc:
+            print(f"[source] ignoring unreadable scan checkpoint: {exc}", flush=True)
+    state = {"bytes": 0, "header_eligible": 0}
     last_progress = time.monotonic()
+    last_checkpoint = time.monotonic()
     executor = None
     with path.open("rb") as raw:
         reader = zstandard.ZstdDecompressor().stream_reader(raw)
         text = io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
-        blocks = _eligible_blocks(text, raw, total_bytes, progress, state)
+        blocks = _eligible_blocks(text, raw, total_bytes, progress, state, skip=processed)
+
+        def checkpoint_payload():
+            return {"bytes_total": total_bytes, "count": count, "seed": seed,
+                    "processed": processed, "eligible": eligible,
+                    "rng_state": rng.getstate(), "chosen": chosen}
+
         try:
             if workers == 1:
                 results = itertools.chain.from_iterable(_parse_blocks(block) for block in blocks)
@@ -166,31 +207,39 @@ def game_positions(path: Path, count: int, seed: int, progress: SourceProgress |
                             pass
                 results = completed()
             for record in results:
-                if record is None:
-                    continue
-                site, date, white, black, moves = record
-                ply = rng.randrange(18, min(len(moves) - 4, 54))
-                board = chess.Board()
-                for uci in moves[:ply]:
-                    board.push(chess.Move.from_uci(uci))
-                if board.is_game_over() or not board.is_valid():
-                    continue
-                game_id = site or hashlib.sha256(
-                    (date + white + black + " ".join(moves)).encode()).hexdigest()
-                row = {"fen": board.fen(), "game_id": f"lichess:{game_id}",
-                       "source": "lichess-rated-game"}
-                eligible += 1
-                if len(chosen) < count:
-                    chosen.append(row)
-                else:
-                    j = rng.randrange(eligible)
-                    if j < count:
-                        chosen[j] = row
-                if progress and time.monotonic() - last_progress >= 5:
+                if record is not None:
+                    site, date, white, black, moves = record
+                    ply = rng.randrange(18, min(len(moves) - 4, 54))
+                    board = chess.Board()
+                    for uci in moves[:ply]:
+                        board.push(chess.Move.from_uci(uci))
+                    if not board.is_game_over() and board.is_valid():
+                        game_id = site or hashlib.sha256(
+                            (date + white + black + " ".join(moves)).encode()).hexdigest()
+                        row = {"fen": board.fen(), "game_id": f"lichess:{game_id}",
+                               "source": "lichess-rated-game"}
+                        eligible += 1
+                        if len(chosen) < count:
+                            chosen.append(row)
+                        else:
+                            j = rng.randrange(eligible)
+                            if j < count:
+                                chosen[j] = row
+                processed += 1
+                now = time.monotonic()
+                if progress and now - last_progress >= 5:
                     progress.update("scanning_games", bytes_done=state["bytes"],
                                     bytes_total=total_bytes,
                                     pct=100 * state["bytes"] / total_bytes, games=eligible)
-                    last_progress = time.monotonic()
+                    last_progress = now
+                if checkpoint_obj and now - last_checkpoint >= 300:
+                    checkpoint_obj.save(checkpoint_payload())
+                    last_checkpoint = now
+        except BaseException:
+            raise
+        else:
+            if checkpoint_obj:
+                checkpoint_obj.save(checkpoint_payload(), force=True)
         finally:
             if executor is not None:
                 executor.shutdown(wait=True)
@@ -310,6 +359,8 @@ def main():
     p.add_argument("--seed", type=int, default=1729)
     p.add_argument("--count", type=int, default=2000)
     p.add_argument("--progress-file", type=Path)
+    p.add_argument("--scan-checkpoint", type=Path)
+    p.add_argument("--resume-scan", action="store_true")
     p.add_argument("--hf-repo")
     p.add_argument("--hf-run")
     args = p.parse_args()
@@ -317,7 +368,9 @@ def main():
         raise ValueError("pilot size must be divisible by four")
     broad, tactical, disagreements = args.count // 2, args.count // 4, args.count // 4
     progress = SourceProgress(args.progress_file, args.hf_repo, args.hf_run) if args.progress_file else None
-    rows = game_positions(args.games, broad, args.seed, progress)
+    rows = game_positions(args.games, broad, args.seed, progress,
+                          checkpoint=args.scan_checkpoint, resume=args.resume_scan,
+                          checkpoint_repo=args.hf_repo, checkpoint_run=args.hf_run)
     rows += tactical_positions(args.tactics, tactical, args.seed, progress)
     rows += disagreement_positions(args.disagreements, disagreements, args.seed,
                                    args.checkpoint, args.sl_repo, progress)

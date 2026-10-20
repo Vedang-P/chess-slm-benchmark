@@ -401,7 +401,15 @@ class CorrectnessTests(unittest.TestCase):
             path.write_bytes(zstandard.ZstdCompressor().compress(raw.encode()))
             serial = game_positions(path, 3, 1729, workers=1)
             parallel = game_positions(path, 3, 1729, workers=2)
+            checkpoint = Path(tmp) / "scan-checkpoint.json"
+            first = game_positions(path, 3, 1729, workers=1, checkpoint=checkpoint)
+            saved = json.loads(checkpoint.read_text())
+            resumed = game_positions(path, 3, 1729, workers=1, checkpoint=checkpoint,
+                                     resume=True)
         self.assertEqual(serial, parallel)
+        self.assertEqual(first, serial)
+        self.assertEqual(resumed, serial)
+        self.assertEqual(saved["processed"], 4)
         self.assertEqual(len(serial), 3)
         fens = [row["fen"] for row in serial]
         self.assertEqual(len(set(fens)), 3)
