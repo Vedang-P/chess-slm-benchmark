@@ -1,6 +1,6 @@
 # Project Status
 
-Updated 2026-10-20. Detailed historical notes remain in Git history.
+Updated 2026-10-21. Detailed historical notes remain in Git history.
 
 ## Research target
 
@@ -13,19 +13,15 @@ they are development diagnostics, not untouched holdouts.
 
 The active model is corrected-v2 CC-GAVN: 4,762,088 parameters, eight layers,
 width 208, and eight heads. It conditions every geometric layer on a candidate
-move. The final training and evaluation runs have been reported complete, but
-their final summary is not present in this checkout. The latest local
-corrected-v2 result is a preview, so do not report it as the final score.
+move. The final corrected-v2 evaluation is archived at
+`eval-results/ccgavn-5m-seed0-v2-3896k-final/eval-summary.json`.
 
 | Run | MATE / 4,000 | Puzzles / 10,000 | Status |
 |---|---:|---:|---|
 | CC-GAVN @1.62M | 3,668 (91.70%) | 7,431 (74.31%) | complete |
 | corrected-v2 @3.4M | 3,697 (92.425%) | 7,577 (75.77%) | historical preview |
+| corrected-v2 final @3,896,658 | 3,710 (92.75%) | 7,620 (76.20%) | complete |
 | Searchless Chess 9M reference | 3,949 (98.72%) | 8,613 (86.13%) | measured reference |
-
-Use the checkpoint-scoped Hugging Face evaluation summary and per-example
-rows to record the completed final run. Keep the preview and final results
-distinct.
 
 ## Integrity requirements
 
@@ -68,8 +64,10 @@ The 23-paper review supports a controlled counterfactual-refutation study,
 not a guaranteed score improvement. The user permits learned internal
 planning while retaining the strict 5M cap and no external engine at inference.
 
-The project monitor source now lists this study as planned and blocked at
-preflight; no score gain is claimed. Its deployment dry run could not resolve
-the declared `chess.js` dependency from the local checkout, so the website
-update is not published. Under the project P0 rule, deployment stopped at this
-failed check rather than changing the build setup without review.
+The CC-GAVN-R pilot is running on `vedanggggg/ccgavn-refutation-r0` with
+resumable source, labels, planner training, and final 4k/10k evaluation.
+`scripts/watch_refutation.py` runs from the GitHub Actions `pipeline-tick`
+workflow and relaunches across the five pooled Kaggle accounts when no copy is
+active. `scripts/push_monitor.py` publishes progress and results to the KV
+snapshot consumed by https://chess-slm-monitor.vedangpandeyy.workers.dev.
+No refutation score gain is claimed until the final evaluation is complete.
