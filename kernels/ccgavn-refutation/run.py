@@ -47,6 +47,8 @@ def main():
         run(["git", "clone", "https://github.com/google-deepmind/searchless_chess.git", SL])
         run(["git", "-C", SL, "checkout", "90ae0e6b121673fc3079aaeffa047580bb600c0a"])
     os.chdir(REPO)
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
     run([sys.executable, "-m", "pip", "install", "--quiet",
          "python-chess==1.999", "zstandard==0.23.0", "pandas==2.2.3", "huggingface_hub==0.34.4"])
 
