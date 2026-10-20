@@ -263,6 +263,7 @@ def _eval_counts(summary):
 def build_refutation(token: str, files: list[str], kernels: list) -> dict:
     source_ready = f"{REF_DATA}/input/parents-r0.jsonl" in files
     data_progress = _ref_json(token, f"{REF_DATA}/data/progress.json") or {}
+    source_progress = _ref_json(token, f"{REF_DATA}/source-progress.json") or {}
     train_progress = _ref_json(token, f"{REF_TRAIN}/progress.json") or {}
     top_status = _ref_text(token, "refutation-r0/run-status.txt")
     data_status = _ref_text(token, f"{REF_DATA}/run-status.txt")
@@ -309,7 +310,11 @@ def build_refutation(token: str, files: list[str], kernels: list) -> dict:
         rate = (train_step-int(session_start))/session_s
         if rate > 0:
             eta = (REF_STEPS-train_step)/rate
-    return {"phase": phase, "source_ready": source_ready,
+    source = {k: source_progress[k] for k in
+              ("stage", "pct", "bytes_done", "bytes_total", "games", "rows",
+               "rows_scanned", "rows_total", "found", "updated_at")
+              if k in source_progress}
+    return {"phase": phase, "source_ready": source_ready, "source": source,
             "kernel": live, "kernel_status": (live or {}).get("status", ""),
             "top_status": top_status[:240], "data_status": data_status[:240],
             "train_status": train_status[:240],

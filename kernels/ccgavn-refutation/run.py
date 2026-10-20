@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
+import urllib.request
 
 WORK = Path("/kaggle/working")
 REPO = WORK / "chess-slm-benchmark"
@@ -26,11 +28,43 @@ def run(cmd, **kwargs):
     subprocess.run(list(map(str, cmd)), check=True, **kwargs)
 
 
-def download(url, path):
+def download(url, path, progress=None, stage="download"):
     path = Path(path)
     if path.exists() and path.stat().st_size:
+        if progress:
+            progress.update(stage, force=True, bytes_done=path.stat().st_size,
+                            bytes_total=path.stat().st_size, pct=100)
         return
-    run(["curl", "-fL", "--retry", "5", "--retry-all-errors", "-o", path, url])
+    part = Path(str(path) + ".part")
+    last_exc = None
+    for attempt in range(1, 5):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "chess-slm-benchmark/1.0"})
+            with urllib.request.urlopen(req, timeout=120) as src, part.open("wb") as dst:
+                total = int(src.headers.get("Content-Length") or 0)
+                done = 0
+                last = time.monotonic()
+                while True:
+                    chunk = src.read(1 << 20)
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+                    done += len(chunk)
+                    if progress and time.monotonic() - last >= 10:
+                        progress.update(stage, bytes_done=done, bytes_total=total,
+                                        pct=round(100*done/total, 2) if total else None)
+                        last = time.monotonic()
+            part.replace(path)
+            if progress:
+                progress.update(stage, force=True, bytes_done=done, bytes_total=total or done,
+                                pct=100)
+            return
+        except Exception as exc:
+            last_exc = exc
+            print(f"[download] attempt {attempt}/4 failed for {url}: {exc}", flush=True)
+            part.unlink(missing_ok=True)
+            time.sleep(10 * attempt)
+    raise RuntimeError(f"download failed: {url}") from last_exc
 
 
 def main():
@@ -53,6 +87,11 @@ def main():
          "python-chess==1.999", "zstandard==0.23.0", "pandas==2.2.3", "huggingface_hub==0.34.4"])
 
     from huggingface_hub import HfApi, hf_hub_download
+    from scripts.kaggle_checkpoint import SourceProgress, write_status
+    api = HfApi(token=os.environ["HF_WRITE_TOKEN"])
+    progress = SourceProgress(WORK/"source-progress.json", HF_REPO, DATA_RUN,
+                              token=os.environ["HF_WRITE_TOKEN"])
+    progress.update("downloading_base_checkpoint", force=True)
     for name in ("config.json", "state.pt"):
         src = hf_hub_download(HF_REPO, f"ccgavn-5m-seed0-v2/checkpoint-3896658/{name}",
                               repo_type="dataset", token=False)
@@ -65,8 +104,6 @@ def main():
     source = WORK / "parents-r0.jsonl"
     source_remote = f"{DATA_RUN}/input/parents-r0.jsonl"
     official = inputs / "official-puzzles.csv"
-    api = HfApi(token=os.environ["HF_WRITE_TOKEN"])
-    from scripts.kaggle_checkpoint import write_status
     write_status(api, HF_REPO, PHASE_RUN, "IN PROGRESS: boot / restore")
     files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
     if source_remote in files:
@@ -79,18 +116,25 @@ def main():
         Path("/kaggle/temp").mkdir(exist_ok=True)
         tactics = inputs / "lichess-puzzles.csv.zst"
         disagreements = inputs / "rlvr-train-5k.jsonl"
-        download("https://database.lichess.org/standard/lichess_db_standard_rated_2025-04.pgn.zst", games)
-        download("https://database.lichess.org/lichess_db_puzzle.csv.zst", tactics)
-        download("https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/resolve/main/rlvr-pool/train-5k.jsonl", disagreements)
+        download("https://database.lichess.org/standard/lichess_db_standard_rated_2025-04.pgn.zst", games,
+                 progress, "downloading_games")
+        download("https://database.lichess.org/lichess_db_puzzle.csv.zst", tactics,
+                 progress, "downloading_tactics")
+        download("https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/resolve/main/rlvr-pool/train-5k.jsonl",
+                 disagreements, progress, "downloading_disagreements")
         download("https://storage.googleapis.com/searchless_chess/data/puzzles.csv", official)
+        progress.update("scanning_games", force=True, pct=0)
         run([sys.executable, "scripts/prepare_refutation_sources.py",
              "--games", games, "--tactics", tactics, "--disagreements", disagreements,
-             "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "1944"])
+             "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "1944",
+             "--progress-file", WORK/"source-progress.json",
+             "--hf-repo", HF_REPO, "--hf-run", DATA_RUN])
         api.upload_file(path_or_fileobj=str(source), path_in_repo=source_remote,
                         repo_id=HF_REPO, repo_type="dataset")
         print(f"[source] uploaded deterministic input: {source_remote}", flush=True)
     source_count = sum(1 for _ in source.open())
     print(f"[source] rows={source_count}", flush=True)
+    progress.update("source_ready", force=True, rows=source_count, pct=100)
     download("https://storage.googleapis.com/searchless_chess/data/puzzles.csv", official)
 
     archive = inputs / "stockfish-16.tar"

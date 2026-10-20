@@ -945,6 +945,30 @@ function phaseLabel(p){
     evaluation:"final evaluation",complete:"complete",failed:"failed",
     queued:"queued",running:"running"})[p]||"awaiting first tick";
 }
+function sourceLabel(s){
+  return ({downloading_base_checkpoint:"restoring base checkpoint",
+    downloading_games:"downloading Lichess games",downloading_tactics:"downloading Lichess tactics",
+    downloading_disagreements:"downloading disagreement pool",scanning_games:"scanning Lichess games",
+    scanning_tactics:"scanning tactical puzzles",scoring_disagreements:"scoring disagreements",
+    writing_source:"writing source input",source_ready:"source ready",
+    downloading_puzzles:"downloading eval puzzles",downloading_stockfish:"downloading Stockfish"})[s.stage]||
+    (s.stage?String(s.stage).replace(/_/g," "):"preparing source");
+}
+function fmtBytes(n){
+  if(n==null||!isFinite(n))return "—";
+  const u=["B","KB","MB","GB","TB"];let i=0,v=Number(n);
+  while(v>=1024&&i<u.length-1){v/=1024;i++;}
+  return v.toFixed(i?1:0)+" "+u[i];
+}
+function sourceLine(r){
+  const s=r.source||{};
+  const pct=s.pct!=null?Math.round(Number(s.pct))+"%":"…";
+  let detail="";
+  if(s.bytes_total!=null)detail=" · "+fmtBytes(s.bytes_done)+" / "+fmtBytes(s.bytes_total);
+  else if(s.games!=null)detail=" · "+fmt(s.games)+" games";
+  else if(s.rows!=null)detail=" · "+fmt(s.rows)+" rows";
+  return sourceLabel(s)+" · "+pct+detail;
+}
 function fmtDur(s){
   if(s==null||!isFinite(s))return "—";
   if(s<3600)return Math.max(1,Math.round(s/60))+"m";
@@ -957,8 +981,9 @@ function refStatus(){
   return {r:r,k:k};
 }
 function refStep(r,key,label){
-  const pct=key==="source"?(r.source_ready?100:0):(key==="eval"?(r.eval&&r.eval.complete?100:(r.phase==="evaluation"?55:0)):(key==="labeling"?(r.label_pct||0):(key==="training"?(r.train_pct||0):0)));
-  const note=key==="source"?(r.source_ready?"1,944 exact positions":"building source"):(key==="labeling"?((r.label_done||0)+" / "+(r.label_total||1944)):(key==="training"?((r.train_step||0)+" / 12,500"):(r.eval&&r.eval.complete?"archived":"not started")));
+  const sourcePct=r.source&&r.source.pct!=null?Number(r.source.pct):0;
+  const pct=key==="source"?(r.source_ready?100:sourcePct):(key==="eval"?(r.eval&&r.eval.complete?100:(r.phase==="evaluation"?55:0)):(key==="labeling"?(r.label_pct||0):(key==="training"?(r.train_pct||0):0)));
+  const note=key==="source"?(r.source_ready?"1,944 exact positions":(r.source?sourceLine(r):"building source")):(key==="labeling"?(r.source_ready?((r.label_done||0)+" / "+(r.label_total||1944)):"after source"):(key==="training"?(r.source_ready?((r.train_step||0)+" / 12,500"):"after labels"):(r.eval&&r.eval.complete?"archived":"not started")));
   return '<div class="ref-step '+(pct>=100?"done":(pct>0?"now":""))+'" data-ref-step="'+key+'"><div class="n">'+label+'</div><div class="p">'+Math.round(pct)+'%</div><div class="phase-track"><div class="phase-fill" style="width:'+Math.min(100,pct)+'%"></div></div><div class="chart-note" style="margin-top:4px">'+esc(note)+'</div></div>';
 }
 function drawBar(id,key,color){
@@ -1133,13 +1158,17 @@ function renderHeadline(){
   const active=k&&/RUNNING|QUEUED|PENDING/i.test(k.status||"");
   const labelDone=r.label_done||0, labelTotal=r.label_total||1944;
   const trainPct=Math.round(r.train_pct||0);
+  const sourcePhase=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
+  const labelsText=sourcePhase?"—":labelDone+" / "+labelTotal;
+  const plannerText=sourcePhase?"—":trainPct+"%";
   const gm=base.mate!=null&&teacher.mate!=null?(base.mate-teacher.mate):null;
   const gp=base.puz!=null&&teacher.puz!=null?(base.puz-teacher.puz):null;
   const refLine=r.eval&&r.eval.complete
     ?("MATE "+(r.eval.mate?r.eval.mate.pct:"—")+"% · puzzles "+(r.eval.puzzles?r.eval.puzzles.pct:"—")+"%")
     :(r.phase==="training"?("planner "+trainPct+"% · step "+fmt(r.train_step||0)+" / 12,500")
       :(r.phase==="labeling"?("labels "+labelDone+" / "+labelTotal)
-      :(r.phase==="evaluation"?"final 4k / 10k evaluation":"source preparation")));
+      :(r.phase==="evaluation"?"final 4k / 10k evaluation"
+      :(r.source?sourceLine(r):"source preparation"))));
   document.getElementById("headline").innerHTML=
     '<div class="hero-grid"><div>'+
       '<div class="kicker">latest frozen result · corrected-v2</div>'+
@@ -1161,8 +1190,8 @@ function renderHeadline(){
           (r.phase==="complete"?"archived":(active?"active":(r.phase?"waiting":"armed")))+'</span></div>'+
         '<div class="chart-note" style="margin:6px 0 0">'+esc(refLine)+'</div>'+
         '<div class="stat-row" style="margin-top:10px">'+
-          '<span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+labelDone+" / "+labelTotal+'</span></span>'+
-          '<span class="stat"><span class="stat-label">planner</span><span class="stat-val">'+trainPct+'%</span></span>'+
+          '<span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+labelsText+'</span></span>'+
+          '<span class="stat"><span class="stat-label">planner</span><span class="stat-val">'+plannerText+'</span></span>'+
           '<span class="stat"><span class="stat-label">kernel</span><span class="stat-val">'+(k?esc(k.status):"not launched")+'</span></span>'+
         '</div>'+
         '<div class="chart-note" style="margin-top:10px">Automated by GitHub Actions across five Kaggle accounts. Every phase resumes from Hugging Face.</div>'+
@@ -1175,27 +1204,34 @@ function renderLiveHero(){
   const phase=r.phase?phaseLabel(r.phase):"awaiting first tick";
   const active=k&&/RUNNING|QUEUED|PENDING/i.test(k.status||"");
   const done=r.label_done||0,total=r.label_total||1944,tp=Math.round(r.train_pct||0);
+  const sourcePhase=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
+  const sourcePct=r.source&&r.source.pct!=null?Math.round(Number(r.source.pct)):null;
   const title=r.phase==="complete"?"The pilot has an archived result."
     :(r.phase==="evaluation"?"The planner is in final evaluation."
     :(r.phase==="training"?"The planner is training on exact refutation targets."
-    :(r.phase==="labeling"?"Oracle labels are being generated.":"The pilot is waiting for a Kaggle worker.")));
+    :(r.phase==="labeling"?"Oracle labels are being generated."
+    :(sourcePhase?"Preparing the deterministic pilot source.":"The pilot is waiting for a Kaggle worker."))));
   const sub=r.phase==="complete"
     ?("MATE "+(r.eval.mate?r.eval.mate.pct:"—")+"% · puzzles "+(r.eval.puzzles?r.eval.puzzles.pct:"—")+"% on the frozen protocol.")
-    :"1,944 positions, exact depth fallback, 12,500 planner steps, then the same 4k MATE and 10k puzzle evaluation as the base model.";
+    :(sourcePhase?(r.source?("Exact 1,944-row input · "+sourceLine(r)+". Labels begin only after this input is fixed."):"Waiting for the first source-progress upload. Labels begin only after the 1,944-row input is fixed.")
+    :"1,944 positions, exact depth fallback, 12,500 planner steps, then the same 4k MATE and 10k puzzle evaluation as the base model.");
   document.getElementById("live-hero").innerHTML=
     '<div class="hero-grid"><div><div class="kicker">CC-GAVN-R · counterfactual refutation</div>'+
       '<h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p>'+
       '<div class="hero-metrics">'+
         '<div class="hero-metric"><div class="k">phase</div><div class="v" style="font-size:16px">'+esc(phase)+'</div><div class="s">'+(active?"kernel active":"supervisor armed")+'</div></div>'+
-        '<div class="hero-metric"><div class="k">labels</div><div class="v">'+done+" / "+total+'</div><div class="s">'+(r.label_pct!=null?r.label_pct.toFixed(1)+"%":"0%")+'</div></div>'+
-        '<div class="hero-metric"><div class="k">planner</div><div class="v">'+tp+'%</div><div class="s">step '+fmt(r.train_step||0)+' / 12,500</div></div>'+
+        (sourcePhase
+          ? '<div class="hero-metric"><div class="k">source</div><div class="v">'+(sourcePct!=null?sourcePct+"%":"…")+'</div><div class="s">'+esc(r.source?sourceLabel(r.source):"starting")+'</div></div>'+
+            '<div class="hero-metric"><div class="k">labels</div><div class="v">—</div><div class="s">begins after source</div></div>'
+          : '<div class="hero-metric"><div class="k">labels</div><div class="v">'+done+" / "+total+'</div><div class="s">'+(r.label_pct!=null?r.label_pct.toFixed(1)+"%":"0%")+'</div></div>'+
+            '<div class="hero-metric"><div class="k">planner</div><div class="v">'+tp+'%</div><div class="s">step '+fmt(r.train_step||0)+' / 12,500</div></div>')+
         '<div class="hero-metric"><div class="k">kernel</div><div class="v" style="font-size:16px">'+(k?esc(k.status):"—")+'</div><div class="s">'+(k?esc(k.account):"not launched")+'</div></div>'+
       '</div></div>'+
       '<div class="hero-side"><div class="kicker">automation posture</div>'+
         '<div class="phase-line"><b>GitHub Actions</b><span class="badge ok">supervisor</span></div>'+
         '<div class="chart-note">A Cloudflare tick dispatches the workflow every ~10 min. The watcher refuses duplicate kernels, backs off after failures, and relaunches on the account with the most GPU quota.</div>'+
         '<div class="stat-row" style="margin-top:10px">'+
-          '<span class="stat"><span class="stat-label">source</span><span class="stat-val">'+(r.source_ready?"ready":"pending")+'</span></span>'+
+          '<span class="stat"><span class="stat-label">source</span><span class="stat-val">'+(r.source_ready?"ready":(sourcePct!=null?sourcePct+"%":"pending"))+'</span></span>'+
           '<span class="stat"><span class="stat-label">label rate</span><span class="stat-val">'+(r.label_rate?r.label_rate.toFixed(2)+"/s":"—")+'</span></span>'+
           '<span class="stat"><span class="stat-label">eta</span><span class="stat-val">'+fmtDur(r.eta_seconds)+'</span></span>'+
         '</div>'+
@@ -1209,10 +1245,21 @@ function renderLiveProgress(){
   const loss=r.train_loss!=null?Number(r.train_loss).toFixed(4):"—";
   const dev=r.train_dev!=null?Number(r.train_dev).toFixed(4):"—";
   const pct=r.label_total?Math.round(100*done/r.label_total):0;
-  document.getElementById("live-progress").innerHTML=
-    '<div class="card-head"><div class="card-title">pipeline progress</div><span class="badge '+(r.phase==="complete"?"ok":(k&&/RUNNING|QUEUED/i.test(k.status||"")?"live":"warn"))+'">'+esc(r.phase?phaseLabel(r.phase):"awaiting")+'</span></div>'+
-    '<div class="ref-steps">'+refStep(r,"source","source")+refStep(r,"labeling","labels")+refStep(r,"training","planner")+refStep(r,"eval","evaluation")+'</div>'+
-    '<div class="stat-row">'+
+  const sourcePhase=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
+  const src=r.source||{};
+  const srcPct=src.pct!=null?Math.min(100,Math.max(0,Number(src.pct))):0;
+  let body;
+  if(sourcePhase){
+    body='<div class="stat-row">'+
+      '<span class="stat"><span class="stat-label">stage</span><span class="stat-val" style="font-size:12px">'+esc(r.source?sourceLabel(src):"starting")+'</span></span>'+
+      '<span class="stat"><span class="stat-label">downloaded</span><span class="stat-val">'+(src.bytes_done!=null?fmtBytes(src.bytes_done):"—")+'</span><span class="delta">'+(src.bytes_total!=null?"/ "+fmtBytes(src.bytes_total):"")+'</span></span>'+
+      '<span class="stat"><span class="stat-label">scanned</span><span class="stat-val">'+(src.games!=null?fmt(src.games):(src.rows!=null?fmt(src.rows):"—"))+'</span><span class="delta">'+(src.games!=null?"games":"rows")+'</span></span>'+
+      '<span class="stat"><span class="stat-label">labels</span><span class="stat-val">—</span><span class="delta">after source</span></span>'+
+    '</div>'+
+    '<div class="phase-track" style="margin-top:10px"><div class="phase-fill" style="width:'+srcPct+'%"></div></div>'+
+    '<div class="chart-note" style="margin-top:8px">'+esc(sourceLine(r))+' · labels begin only after the 1,944-row input is fixed.</div>';
+  } else {
+    body='<div class="stat-row">'+
       '<span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+done+" / "+total+'</span><span class="delta">'+pct+'%</span></span>'+
       '<span class="stat"><span class="stat-label">accepted</span><span class="stat-val">'+accepted+'</span><span class="delta">'+(done?Math.round(100*accepted/Math.max(1,done))+"%":"—")+'</span></span>'+
       '<span class="stat"><span class="stat-label">rejected</span><span class="stat-val">'+rejected+'</span><span class="delta">'+(done?Math.round(100*rejected/Math.max(1,done))+"%":"—")+'</span></span>'+
@@ -1223,7 +1270,12 @@ function renderLiveProgress(){
       '<span class="stat"><span class="stat-label">train loss</span><span class="stat-val">'+loss+'</span></span>'+
       '<span class="stat"><span class="stat-label">dev top1</span><span class="stat-val">'+dev+'</span></span>'+
       '<span class="stat"><span class="stat-label">eta</span><span class="stat-val">'+fmtDur(r.eta_seconds)+'</span></span>'+
-    '</div>'+
+    '</div>';
+  }
+  document.getElementById("live-progress").innerHTML=
+    '<div class="card-head"><div class="card-title">pipeline progress</div><span class="badge '+(r.phase==="complete"?"ok":(k&&/RUNNING|QUEUED/i.test(k.status||"")?"live":"warn"))+'">'+esc(r.phase?phaseLabel(r.phase):"awaiting")+'</span></div>'+
+    '<div class="ref-steps">'+refStep(r,"source","source")+refStep(r,"labeling","labels")+refStep(r,"training","planner")+refStep(r,"eval","evaluation")+'</div>'+
+    body+
     '<div class="chart-note" style="margin-top:8px">'+(r.updated_at?"telemetry updated "+esc(ago(new Date(r.updated_at).getTime())):"no progress.json yet — supervisor waits for the first checkpoint")+'</div>';
 }
 
@@ -1364,9 +1416,10 @@ function renderResultsRef(){
       '<div class="hero-metric"><div class="k">vs 9M</div><div class="v">'+(teacher&&teacher.mate!=null?(e.mate.pct-teacher.mate).toFixed(2):"—")+'</div><div class="s">MATE pp</div></div>'+
     '</div>';
   } else {
+    const preSource=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
     body='<div class="empty" style="padding:6px 0">In progress: '+esc(r.phase?phaseLabel(r.phase):"awaiting first tick")+'. No result is claimed before the 4k/10k archive is complete.</div>'+
-      '<div class="stat-row"><span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+(r.label_done||0)+" / "+(r.label_total||1944)+'</span></span>'+
-      '<span class="stat"><span class="stat-label">planner</span><span class="stat-val">'+(r.train_step||0)+" / 12,500</span></span>"+
+      '<div class="stat-row"><span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+(preSource?"—":((r.label_done||0)+" / "+(r.label_total||1944)))+'</span></span>'+
+      '<span class="stat"><span class="stat-label">planner</span><span class="stat-val">'+(preSource?"—":((r.train_step||0)+" / 12,500"))+'</span></span>'+
       '<span class="stat"><span class="stat-label">eta</span><span class="stat-val">'+fmtDur(r.eta_seconds)+'</span></span></div>';
   }
   document.getElementById("res-ref").innerHTML='<div class="card-head"><div class="card-title">CC-GAVN-R pilot</div><div class="card-note">1,944 positions · 12.5k steps</div></div>'+body+

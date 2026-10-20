@@ -141,6 +141,42 @@ def write_status(api_client, repo_id: str, remote_prefix: str, status: str) -> N
     )
 
 
+class SourceProgress:
+    """Throttled source-preparation telemetry for long, non-checkpoint phases."""
+
+    def __init__(self, path: Path, repo_id: str | None = None,
+                 remote_prefix: str | None = None, token: str | None = None,
+                 every: float = 20.0):
+        self.path = Path(path)
+        self.repo_id = repo_id
+        self.remote_prefix = remote_prefix
+        self.every = float(every)
+        self.last_upload = 0.0
+        self.client = None
+        if repo_id and remote_prefix:
+            from huggingface_hub import HfApi
+            resolved = token or os.environ.get("HF_WRITE_TOKEN") or os.environ.get("HF_TOKEN")
+            self.client = HfApi(token=resolved)
+
+    def update(self, stage: str, force: bool = False, **fields) -> None:
+        payload = {"stage": stage,
+                   "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        payload.update(fields)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        now = time.monotonic()
+        if not self.client or (not force and now - self.last_upload < self.every):
+            return
+        try:
+            self.client.upload_file(
+                path_or_fileobj=str(self.path),
+                path_in_repo=f"{self.remote_prefix.strip('/')}/source-progress.json",
+                repo_id=self.repo_id, repo_type="dataset")
+            self.last_upload = now
+        except Exception as exc:
+            print(f"[progress] upload failed: {exc}", flush=True)
+
+
 class UploadTimer:
     def __init__(self, interval_s: float):
         self.interval_s = float(interval_s)

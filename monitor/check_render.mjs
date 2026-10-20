@@ -108,7 +108,8 @@ const sandbox = {
 };
 sandbox.window = sandbox; sandbox.globalThis = sandbox; sandbox.self = sandbox;
 
-const runnable = script.replace(/load\(\);setInterval\(load,60000\);/, "globalThis.__loadPromise = load();");
+const runnable = script.replace(/load\(\);setInterval\(load,60000\);/, "globalThis.__loadPromise = load();") +
+  "\nglobalThis.__load = load;";
 await vm.runInNewContext(runnable, sandbox, { filename: "monitor-inline.js" });
 await sandbox.__loadPromise;
 
@@ -121,12 +122,25 @@ if (empty.length) {
   process.exit(1);
 }
 const htmlFor = (id) => elements.get(id)?.innerHTML || "";
+const trainingHero = htmlFor("live-hero");
+snapshot.refutation = Object.assign({}, snapshot.refutation, {
+  phase: "source", source_ready: false, label_done: 0, label_pct: 0, train_step: 0, train_pct: 0,
+  source: { stage: "scanning_games", pct: 42.7, bytes_done: 12680000000,
+            bytes_total: 29700000000, games: 814000, updated_at: new Date(now).toISOString() },
+});
+await sandbox.__load();
+const sourceHero = htmlFor("live-hero");
+const sourceProgress = htmlFor("live-progress");
 const checks = [
   [htmlFor("headline").includes("92.75"), "headline has final MATE"],
   [htmlFor("res-table").includes("CC-GAVN 5M"), "results table has model rows"],
-  [htmlFor("live-hero").includes("planner training"), "live page shows phase"],
+  [trainingHero.includes("planner training"), "live page shows phase"],
   [htmlFor("tl-ref").includes("1,944"), "timeline shows pilot contract"],
   [!HTML.includes("Run has not started"), "stale preflight copy is gone"],
+  [sourceHero.includes("Preparing the deterministic pilot source"), "source phase has its own headline"],
+  [sourceProgress.includes("scanning Lichess games") && sourceProgress.includes("43%"),
+   "source progress shows stage and percent"],
+  [!sourceProgress.includes("0 / 1,944"), "source phase hides empty label count"],
   [required.every((id) => !/undefined|NaN/.test(htmlFor(id))), "no undefined/NaN in sections"],
 ];
 const failed = checks.filter(([ok]) => !ok).map(([, name]) => name);

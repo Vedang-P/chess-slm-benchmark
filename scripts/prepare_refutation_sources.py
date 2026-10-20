@@ -7,16 +7,25 @@ import hashlib
 import io
 import json
 import random
+import sys
+import time
 from pathlib import Path
 
 import chess
 import chess.pgn
 import zstandard
 
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from scripts.kaggle_checkpoint import SourceProgress
 
-def game_positions(path: Path, count: int, seed: int):
+
+def game_positions(path: Path, count: int, seed: int, progress: SourceProgress | None = None):
     rng = random.Random(seed)
     chosen: list[dict] = []
+    total_bytes = path.stat().st_size
+    last_progress = time.monotonic()
     with path.open("rb") as raw:
         reader = zstandard.ZstdDecompressor().stream_reader(raw)
         text = io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
@@ -53,15 +62,24 @@ def game_positions(path: Path, count: int, seed: int):
                 j = rng.randrange(eligible)
                 if j < count:
                     chosen[j] = row
+            if progress and time.monotonic() - last_progress >= 5:
+                progress.update("scanning_games", bytes_done=raw.tell(), bytes_total=total_bytes,
+                                games=eligible)
+                last_progress = time.monotonic()
+    if progress:
+        progress.update("scanning_games", force=True, bytes_done=total_bytes,
+                        bytes_total=total_bytes, games=eligible, pct=100)
     if len(chosen) != count:
         raise RuntimeError(f"only found {len(chosen)}/{count} eligible game positions")
     return chosen
 
 
-def tactical_positions(path: Path, count: int, seed: int):
+def tactical_positions(path: Path, count: int, seed: int, progress: SourceProgress | None = None):
     rng = random.Random(seed + 1)
     chosen: list[dict] = []
     eligible = 0
+    total_bytes = path.stat().st_size
+    last_progress = time.monotonic()
     with path.open("rb") as raw:
         reader = zstandard.ZstdDecompressor().stream_reader(raw)
         text = io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
@@ -88,12 +106,20 @@ def tactical_positions(path: Path, count: int, seed: int):
                 j = rng.randrange(eligible)
                 if j < count:
                     chosen[j] = item
+            if progress and time.monotonic() - last_progress >= 5:
+                progress.update("scanning_tactics", bytes_done=raw.tell(), bytes_total=total_bytes,
+                                rows=eligible)
+                last_progress = time.monotonic()
+    if progress:
+        progress.update("scanning_tactics", force=True, bytes_done=total_bytes,
+                        bytes_total=total_bytes, rows=eligible, pct=100)
     if len(chosen) != count:
         raise RuntimeError(f"only found {len(chosen)}/{count} tactical positions")
     return chosen
 
 
-def disagreement_positions(path: Path, count: int, seed: int, checkpoint: Path, sl_repo: Path):
+def disagreement_positions(path: Path, count: int, seed: int, checkpoint: Path, sl_repo: Path,
+                           progress: SourceProgress | None = None):
     import numpy as np
     import torch
     from scripts.eval_gavn import tokenize_fen
@@ -105,8 +131,13 @@ def disagreement_positions(path: Path, count: int, seed: int, checkpoint: Path, 
     rng = random.Random(seed + 2)
     chosen: list[dict] = []
     seen: set[str] = set()
+    total_rows = sum(1 for _ in path.open())
     with path.open(encoding="utf-8") as stream, torch.inference_mode():
-        for line in stream:
+        for row_number, line in enumerate(stream, 1):
+            if progress and row_number % 25 == 0:
+                progress.update("scoring_disagreements", rows_scanned=row_number,
+                                rows_total=total_rows,
+                                pct=round(100*row_number/max(1,total_rows), 2))
             row = json.loads(line)
             a, b = row.get("candidate_a"), row.get("candidate_b")
             if not a or not b or row.get("truth_label") not in ("A", "B"):
@@ -131,6 +162,9 @@ def disagreement_positions(path: Path, count: int, seed: int, checkpoint: Path, 
                 j = rng.randrange(len(seen))
                 if j < count:
                     chosen[j] = item
+    if progress:
+        progress.update("scoring_disagreements", force=True, rows_scanned=total_rows,
+                        rows_total=total_rows, pct=100, found=len(chosen))
     if len(chosen) < count:
         print(json.dumps({"warning": "fewer genuine base/oracle disagreements than requested",
                           "requested": count, "found": len(chosen)}), flush=True)
@@ -147,14 +181,20 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--seed", type=int, default=1729)
     p.add_argument("--count", type=int, default=2000)
+    p.add_argument("--progress-file", type=Path)
+    p.add_argument("--hf-repo")
+    p.add_argument("--hf-run")
     args = p.parse_args()
     if args.count % 4:
         raise ValueError("pilot size must be divisible by four")
     broad, tactical, disagreements = args.count // 2, args.count // 4, args.count // 4
-    rows = game_positions(args.games, broad, args.seed)
-    rows += tactical_positions(args.tactics, tactical, args.seed)
+    progress = SourceProgress(args.progress_file, args.hf_repo, args.hf_run) if args.progress_file else None
+    rows = game_positions(args.games, broad, args.seed, progress)
+    rows += tactical_positions(args.tactics, tactical, args.seed, progress)
     rows += disagreement_positions(args.disagreements, disagreements, args.seed,
-                                   args.checkpoint, args.sl_repo)
+                                   args.checkpoint, args.sl_repo, progress)
+    if progress:
+        progress.update("writing_source", force=True, rows=len(rows), pct=100)
     random.Random(args.seed).shuffle(rows)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8") as sink:
