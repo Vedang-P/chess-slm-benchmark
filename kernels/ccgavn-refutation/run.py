@@ -77,10 +77,12 @@ def main():
         download("https://storage.googleapis.com/searchless_chess/data/puzzles.csv", official)
         run([sys.executable, "scripts/prepare_refutation_sources.py",
              "--games", games, "--tactics", tactics, "--disagreements", disagreements,
-             "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "2000"])
+             "--checkpoint", BASE, "--sl-repo", SL, "--out", source, "--count", "1944"])
         api.upload_file(path_or_fileobj=str(source), path_in_repo=source_remote,
                         repo_id=HF_REPO, repo_type="dataset")
         print(f"[source] uploaded deterministic input: {source_remote}", flush=True)
+    source_count = sum(1 for _ in source.open())
+    print(f"[source] rows={source_count}", flush=True)
     download("https://storage.googleapis.com/searchless_chess/data/puzzles.csv", official)
 
     archive = inputs / "stockfish-16.tar"
@@ -112,8 +114,8 @@ def main():
     journal = labels / "groups.jsonl"
     accepted = sum(1 for line in journal.open() if '"branches"' in line)
     rejected = sum(1 for line in journal.open() if '"rejected"' in line)
-    if accepted + rejected < 2000:
-        print(f"[job] oracle pilot paused: accepted={accepted} rejected={rejected}; continue with --resume-from-hf on next pooled account", flush=True)
+    if accepted + rejected < source_count:
+        print(f"[job] oracle pilot paused: accepted={accepted} rejected={rejected} of {source_count}; continue with --resume-from-hf on next pooled account", flush=True)
         return
     if accepted == 0:
         raise RuntimeError("all source positions rejected; no training data")

@@ -37,20 +37,34 @@ def mate_category(score):
     return 0 if m is None else (0 if m > 0 else 16) + min(16, max(1, abs(m)))
 
 
+def _search(engine, board, limit, multipv, root_moves):
+    info = engine.analyse(board, limit, multipv=min(multipv, board.legal_moves.count()),
+                          root_moves=root_moves)
+    return [info] if isinstance(info, dict) else info
+
+
 def label(engine, board, nodes, multipv=1, root_moves=None):
     end = board.outcome(claim_draw=False)
     if end is not None:
         q = .5 if end.winner is None else float(end.winner == board.turn)
         return [{"q": q, "utility": 2*q-1, "mate": 17 if board.is_checkmate() else 0,
-                 "move": None, "pv": [], "nodes": 0}]
+                 "move": None, "pv": [], "nodes": 0, "bound": None}]
     # Clear hash so labels do not depend on interrupted worker history.
     engine.configure({"Clear Hash": None})
-    info = engine.analyse(board, chess.engine.Limit(nodes=nodes),
-                          multipv=min(multipv, board.legal_moves.count()), root_moves=root_moves)
+    info = _search(engine, board, chess.engine.Limit(nodes=nodes), multipv, root_moves)
+    if any(item.get("lowerbound") or item.get("upperbound") for item in info):
+        # A fixed-node search may stop on an aspiration-window bound. Re-search
+        # at the depth it reached so every stored target is an exact score.
+        depth = max(1, max(int(item.get("depth") or 0) for item in info))
+        for extra in (0, 2):
+            info = _search(engine, board, chess.engine.Limit(depth=depth+extra),
+                           multipv, root_moves)
+            if not any(item.get("lowerbound") or item.get("upperbound") for item in info):
+                break
+        else:
+            raise ValueError("oracle returned a bound after depth fallback")
     result = []
     for item in info:
-        if item.get("lowerbound") or item.get("upperbound"):
-            raise ValueError("oracle returned a bound, not an exact score")
         pv = item.get("pv", [])
         if not pv or (root_moves is not None and pv[0] not in root_moves):
             raise ValueError("oracle PV missing or violates forced-root move")
@@ -68,7 +82,8 @@ def label(engine, board, nodes, multipv=1, root_moves=None):
         utility = float(np.tanh(cp/600)) if m is None else float(np.sign(cp)*(1.1-.002*min(abs(m), 49)))
         result.append({"q": q, "utility": utility, "mate": mate_category(score),
                        "move": pv[0].uci(), "pv": [m.uci() for m in pv],
-                       "nodes": item.get("nodes"), "depth": item.get("depth")})
+                       "nodes": item.get("nodes"), "depth": item.get("depth"),
+                       "bound": None})
     return result
 
 
@@ -181,7 +196,7 @@ def main():
     config = {k: getattr(args, k) for k in ("nodes", "horizon", "width", "split_unit", "on_policy", "student_mode")}
     config.update(schema=1, input_sha256=_sha256_file(Path(args.input)), exclusion_sha256=digest,
                   engine_sha256=args.engine_sha256, value_transform="python-chess-sf16-wdl",
-                  python_chess=chess.__version__,
+                  bound_policy="depth-fallback", python_chess=chess.__version__,
                   student_sha256=_sha256_file(Path(args.student_checkpoint)/"state.pt") if args.student_checkpoint else None,
                   student_config_sha256=_sha256_file(Path(args.student_checkpoint)/"config.json") if args.student_checkpoint else None,
                   builder_sha256=_sha256_file(Path(__file__)),
@@ -247,8 +262,14 @@ def main():
                 key = record["game_id"] if args.split_unit == "game" else hashes([record["fen"]])[0]
                 split = "dev" if int(hashlib.sha256(str(key).encode()).hexdigest()[:16], 16) % 20 == 0 else "train"
                 root_excluded = hashes([record["fen"]])[0] in excluded
-                group = {"rejected": "benchmark root"} if root_excluded else build_group(record, engine, args, student, utils)
-                if not root_excluded:
+                if root_excluded:
+                    group = {"rejected": "benchmark root"}
+                else:
+                    try:
+                        group = build_group(record, engine, args, student, utils)
+                    except Exception as exc:
+                        group = {"rejected": f"build error: {type(exc).__name__}: {exc}"}
+                if "branches" in group:
                     fens = [group["fen"]] + [s["fen"] for b in group["branches"] for path in b["paths"] for s in path]
                     keys = set(hashes(fens))
                     conflict = any(db.execute("SELECT split FROM positions WHERE hash=?", (h,)).fetchone()

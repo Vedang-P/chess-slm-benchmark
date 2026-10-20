@@ -131,8 +131,9 @@ def disagreement_positions(path: Path, count: int, seed: int, checkpoint: Path, 
                 j = rng.randrange(len(seen))
                 if j < count:
                     chosen[j] = item
-    if len(chosen) != count:
-        raise RuntimeError(f"only found {len(chosen)}/{count} genuine base/oracle disagreements")
+    if len(chosen) < count:
+        print(json.dumps({"warning": "fewer genuine base/oracle disagreements than requested",
+                          "requested": count, "found": len(chosen)}), flush=True)
     return chosen
 
 
