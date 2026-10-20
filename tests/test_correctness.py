@@ -325,6 +325,46 @@ class CorrectnessTests(unittest.TestCase):
         self.assertEqual(progress.client.calls, 1)
         write_status(Boom(), "repo", "run", "FAILED: test")
 
+    def test_parallel_download_writes_exact_bytes(self):
+        import http.server
+        import threading
+        from scripts.kaggle_checkpoint import parallel_download
+
+        payload = bytes(range(256)) * 8192
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_HEAD(self):
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+
+            def do_GET(self):
+                header = self.headers.get("Range", "")
+                start_s, _, end_s = header.removeprefix("bytes=").partition("-")
+                start, end = int(start_s), int(end_s)
+                body = payload[start:end + 1]
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{len(payload)}")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "ranges.bin"
+                parallel_download(f"http://127.0.0.1:{server.server_port}/data", path, connections=4)
+                self.assertEqual(path.read_bytes(), payload)
+                self.assertFalse(Path(str(path) + ".part").exists())
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_source_scan_prefilters_and_matches_multiprocess(self):
         from scripts.prepare_refutation_sources import game_positions
 

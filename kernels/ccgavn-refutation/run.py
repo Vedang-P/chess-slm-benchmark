@@ -28,13 +28,20 @@ def run(cmd, **kwargs):
     subprocess.run(list(map(str, cmd)), check=True, **kwargs)
 
 
-def download(url, path, progress=None, stage="download"):
+def download(url, path, progress=None, stage="download", connections=1):
     path = Path(path)
     if path.exists() and path.stat().st_size:
         if progress:
             progress.update(stage, force=True, bytes_done=path.stat().st_size,
                             bytes_total=path.stat().st_size, pct=100)
         return
+    if connections > 1:
+        from scripts.kaggle_checkpoint import parallel_download
+        try:
+            parallel_download(url, path, progress, stage, connections)
+            return
+        except Exception as exc:
+            print(f"[download] parallel download failed, falling back: {exc}", flush=True)
     part = Path(str(path) + ".part")
     last_exc = None
     for attempt in range(1, 5):
@@ -117,7 +124,7 @@ def main():
         tactics = inputs / "lichess-puzzles.csv.zst"
         disagreements = inputs / "rlvr-train-5k.jsonl"
         download("https://database.lichess.org/standard/lichess_db_standard_rated_2025-04.pgn.zst", games,
-                 progress, "downloading_games")
+                 progress, "downloading_games", connections=4)
         download("https://database.lichess.org/lichess_db_puzzle.csv.zst", tactics,
                  progress, "downloading_tactics")
         download("https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/resolve/main/rlvr-pool/train-5k.jsonl",
