@@ -40,6 +40,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.kaggle_checkpoint import (  # noqa: E402
     api as make_hf_api, write_status,
 )
+from scripts.shard_data import npz_member_shape  # noqa: E402
 
 GCS_BASE = "https://storage.googleapis.com/searchless_chess/data/train"
 TOTAL_SHARDS = 2148
@@ -204,12 +205,11 @@ def main() -> None:
     done = set(manifest.get("shards", {}))
     if args.shard_list:
         targets = [int(x) for x in args.shard_list.split(",") if x.strip()]
-        total = len(targets)
     else:
         end = args.shard_end if args.shard_end >= 0 else args.n_shards
         targets = ([args.force_shard] if args.force_shard >= 0
                    else range(args.shard_start, min(end, args.n_shards)))
-        total = args.n_shards
+    total = len(targets)
     print(f"[build] {len(done)} shards in manifest, {total} target shards, "
           f"resume={args.resume_from_hf}", flush=True)
     for i in targets:
@@ -242,7 +242,7 @@ def main() -> None:
             cmd += ["--max-records", str(args.max_shard_records)]
         print(f"[build] shard {tag}: parsing", flush=True)
         subprocess.run(cmd, check=True)
-        n_parsed = int(np.load(npz_out)["tokens"].shape[0])
+        n_parsed = int(npz_member_shape(npz_out, "tokens")[0])
         if args.max_shard_records:
             expected_rows = args.max_shard_records
         if n_parsed < expected_rows:
