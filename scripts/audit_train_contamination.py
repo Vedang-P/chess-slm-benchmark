@@ -59,17 +59,21 @@ def shard_tags(args) -> list[str]:
 
 
 def mate_stats(mate_dir: Path) -> dict:
+    from scripts.eval_gavn import tokenize_fen
     exact, orbits = set(), set()
     per_file = {}
     for path in sorted(Path(mate_dir).glob("mate-selection-test*.json")):
         rows = json.loads(path.read_text(encoding="utf-8"))
-        keys = []
-        for row in rows:
-            keys.append(" ".join((row.get("fen") or row["position"]).split()[:4]))
-        per_file[path.name] = {"rows": len(rows), "unique_positions": len(set(keys))}
+        fens = [(row.get("fen") or row["position"]) for row in rows]
+        keys = {" ".join(fen.split()[:4]) for fen in fens}
+        hashes = position_hashes(np.asarray([tokenize_fen(fen) for fen in fens]))
+        orbit_hashes = {int(h) for h in np.unique(hashes)}
+        per_file[path.name] = {"rows": len(rows), "unique_positions": len(keys),
+                               "unique_orbits": len(orbit_hashes)}
         exact.update(keys)
+        orbits.update(orbit_hashes)
     return {"files": per_file, "rows": sum(v["rows"] for v in per_file.values()),
-            "unique_positions": len(exact)}
+            "unique_positions": len(exact), "unique_orbits": len(orbits)}
 
 
 def main() -> None:
