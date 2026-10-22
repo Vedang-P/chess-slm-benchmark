@@ -458,6 +458,27 @@ class CorrectnessTests(unittest.TestCase):
         regenerated = m.schedule(n, np.random.default_rng(0))
         np.testing.assert_array_equal(schedule[1234:], regenerated[1234:])
 
+    def test_shard_schedule_never_drops_a_shard_on_tiny_budgets(self):
+        # Rounding every fraction up then clawing the excess back from one
+        # block can drive that block to zero or negative, dropping a declared
+        # shard (and np.repeat rejects a negative count).
+        m = object.__new__(ShardManager)
+        m.tags = ['a', 'b', 'c', 'd', 'e']
+        m.rows = {'a': 33393, 'b': 779204, 'c': 10237, 'd': 783653,
+                  'e': 771638}
+        schedule = m.schedule(len(m.tags), np.random.default_rng(0))
+        self.assertEqual(len(schedule), len(m.tags))
+        self.assertEqual(set(schedule.tolist()), set(m.tags))
+        # Same failure with the shipped 102-shard config at a smoke budget.
+        root = Path(__file__).resolve().parents[1]
+        real = object.__new__(ShardManager)
+        real.tags = json.loads(
+            (root / 'configs/ccgavn-2b-shard-tags.json').read_text())['tags']
+        real.rows = real._override_rows()
+        schedule = real.schedule(1000, np.random.default_rng(0))
+        self.assertEqual(len(schedule), 1000)
+        self.assertEqual(set(schedule.tolist()), set(real.tags))
+
 
 if __name__ == '__main__':
     unittest.main()

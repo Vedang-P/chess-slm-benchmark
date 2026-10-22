@@ -195,7 +195,19 @@ class ShardManager:
             raise ValueError("shard row counts must be positive")
         frac = rows / rows.sum()
         counts = np.maximum(1, np.round(frac * steps).astype(int))
-        counts[int(np.argmax(counts))] += steps - counts.sum()
+        residual = steps - int(counts.sum())
+        if residual >= 0:
+            counts[int(np.argmax(counts))] += residual
+        else:
+            # Rounding can over-allocate when many shards round up. Take the
+            # excess back from the largest blocks first, never below one step;
+            # steps >= len(wanted) guarantees the excess is fully absorbable.
+            for i in np.argsort(-counts, kind="stable"):
+                take = min(-residual, int(counts[i]) - 1)
+                counts[i] -= take
+                residual += take
+                if residual == 0:
+                    break
         order = rng.permutation(len(wanted))
         sched = np.concatenate([np.repeat(wanted[i], counts[i]) for i in order])
         return sched
