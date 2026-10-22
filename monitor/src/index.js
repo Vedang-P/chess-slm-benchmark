@@ -9,7 +9,7 @@ const FINAL_STEP = 3_896_658;   // stage 2B-A target (2026-10-05)
 const STAGE1 = 320_000;
 const STAGE1B = 1_620_000;      // end of stage 1B
 const CORPUS_TARGET = 1_920_690_429;
-const LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum", "refutation-r0", "refutation-data-r0", "ccgavn-refutation-r0-seed0"];
+const LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum", "refutation-r0", "refutation-data-r0", "ccgavn-refutation-r0-seed0", "ccgavn-refutation-r0-seed0-v2"];
 const REF = { total: 1944, steps: 12500, final: "ccgavn-5m-seed0-v2/checkpoint-3896658",
               eval: "eval-results/ccgavn-refutation-r0" };
 const REFERENCE = [
@@ -1330,7 +1330,7 @@ function renderLiveSpec(){
       '<p><b>Claim rule:</b> the pilot only supports a claim if it clears the base and the pre-registered puzzle gate; otherwise it is reported as a negative result.</p>'+
     '</div>'+
     '<div class="chart-note" style="margin-top:8px">Artifacts: <a class="mono dim" href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/refutation-data-r0" target="_blank" rel="noopener">labels ↗</a> · '+
-    '<a class="mono dim" href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/ccgavn-refutation-r0-seed0" target="_blank" rel="noopener">planner ↗</a> · '+
+    '<a class="mono dim" href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/ccgavn-refutation-r0-seed0-v2" target="_blank" rel="noopener">planner ↗</a> · '+
     '<a class="mono dim" href="https://github.com/Vedang-P/chess-slm-benchmark/actions/workflows/pipeline-tick.yml" target="_blank" rel="noopener">workflow ↗</a></div>';
 }
 

@@ -25,10 +25,11 @@ HF_REPO = "vedangfake/chess-slm-benchmark"
 RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2"]
 LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build",
              "ccgavn-1b", "puzzle-curriculum", "refutation-r0",
-             "refutation-data-r0", "ccgavn-refutation-r0-seed0"]
+             "refutation-data-r0", "ccgavn-refutation-r0-seed0",
+             "ccgavn-refutation-r0-seed0-v2"]
 REF_KERNEL = "ccgavn-refutation-r0"
 REF_DATA = "refutation-data-r0"
-REF_TRAIN = "ccgavn-refutation-r0-seed0"
+REF_TRAIN = "ccgavn-refutation-r0-seed0-v2"
 REF_EVAL = "eval-results/ccgavn-refutation-r0"
 REF_STEPS = 12500
 ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shoumikmitra"]

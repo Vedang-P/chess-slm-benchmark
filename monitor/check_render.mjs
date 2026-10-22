@@ -56,7 +56,7 @@ const snapshot = {
     "ccgavn-5m-seed0-v2/run-status.txt": "DONE — final eval archived",
     "refutation-r0/run-status.txt": "IN PROGRESS: planner training",
     "refutation-data-r0/run-status.txt": "DONE — 1944 rows",
-    "ccgavn-refutation-r0-seed0/run-status.txt": "IN PROGRESS: post-training",
+    "ccgavn-refutation-r0-seed0-v2/run-status.txt": "IN PROGRESS: post-training",
   },
   refutation: {
     phase: "training", source_ready: true, label_done: 1944, label_total: 1944, label_pct: 100,

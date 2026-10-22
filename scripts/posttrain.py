@@ -198,7 +198,7 @@ def train(args):
         teacher.eval().requires_grad_(False)
     optimizer = torch.optim.AdamW(network.parameters(), lr=args.lr, weight_decay=.01)
     scaler = torch.amp.GradScaler("cuda")
-    step = 0; metrics = {}
+    step = 0; metrics = {}; skipped_updates = 0
     if args.resume_from_hf:
         cp = download_latest(client, args.hf_repo, args.hf_run, out/"resume")
         if cp is None:
@@ -278,9 +278,22 @@ def train(args):
                 loss_total += float(loss.detach()); total_branches += len(batch["actions"])
             scaler.unscale_(optimizer)
             grad = torch.nn.utils.clip_grad_norm_(network.parameters(), 1.)
-            if not torch.isfinite(grad):
-                raise FloatingPointError("non-finite gradient; recipe unchanged")
+            scale_before = scaler.get_scale()
             scaler.step(optimizer); scaler.update()
+            # The initial 65536 scale routinely overflows on the first backward;
+            # GradScaler skips that update and backs the scale off, which is the
+            # normal AMP path (train_ccgavn.py has no fatal guard). Same
+            # behavior here: a skip is healthy until the scale has annealed and
+            # the overflow persists, which means the gradients are genuinely
+            # non-finite rather than merely unscaled.
+            if scaler.get_scale() < scale_before:
+                skipped_updates += 1
+                if scaler.get_scale() <= 1.0 and skipped_updates >= 20:
+                    raise FloatingPointError(
+                        f"non-finite gradient at scaler scale {scaler.get_scale()} "
+                        f"(norm {grad}); recipe unchanged")
+            else:
+                skipped_updates = 0
             step += 1
             metrics = {"step": step, "loss": loss_total, "lr": lr,
                        "branch_rows_per_second": total_branches/(time.monotonic()-started),
