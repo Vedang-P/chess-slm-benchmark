@@ -242,7 +242,11 @@ for step in TARGETS:
 
     summary = {}
     if summary_path.exists():
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print(f"[preview] unreadable eval summary, treating as incomplete: {exc}",
+                  flush=True)
     complete = returncode == 0 and summary_complete(summary)
     summary["checkpoint"] = ckpt
     summary["returncode"] = returncode

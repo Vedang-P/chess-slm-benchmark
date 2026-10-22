@@ -131,9 +131,15 @@ def build_curve(api, token: str, files: list[str], prior: list[dict] | None = No
     new = [(run, s) for run, s in entries if (run, s) not in known]
     cache = None
     if new:
-        cache = Path(snapshot_download(
-            HF_REPO, repo_type="dataset", token=token,
-            allow_patterns=[f"{run}/checkpoint-{s}/metrics.json" for run, s in new]))
+        try:
+            cache = Path(snapshot_download(
+                HF_REPO, repo_type="dataset", token=token,
+                allow_patterns=[f"{run}/checkpoint-{s}/metrics.json" for run, s in new]))
+        except Exception as exc:
+            # A transient HF failure must not abort the whole monitor tick.
+            print(f"[monitor] metrics download failed; keeping prior curve: {exc}",
+                  flush=True)
+            return prior
     curve = prior
     for run, s in new:
         try:
@@ -166,8 +172,12 @@ def build_evals(api, token: str, files: list[str], prior: dict | None = None) ->
     new = [f for f in paths if f not in prior]
     if not new:
         return prior
-    cache = Path(snapshot_download(
-        HF_REPO, repo_type="dataset", token=token, allow_patterns=new))
+    try:
+        cache = Path(snapshot_download(
+            HF_REPO, repo_type="dataset", token=token, allow_patterns=new))
+    except Exception as exc:
+        print(f"[monitor] eval download failed; keeping prior evals: {exc}", flush=True)
+        return prior
     out = prior
     for f in new:
         try:
