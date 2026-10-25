@@ -117,7 +117,9 @@ function render(s){
   const evaluation=s.evaluation||null;
   const labelCount=Number(s.label_count||0), labelTarget=Number(s.label_target||10000), step=Number(training.step||0), target=Number(training.target||20000);
   const labelDone=labelCount>=labelTarget, trainDone=step>=target, evalDone=!!evaluation;
-  const phase=evalDone?'Complete':trainDone?'Evaluation':step>0?'RL training':'Verifier labels';
+  const labelActive=labels.some(item=>['RUNNING','QUEUED','PENDING'].includes(item.kernel));
+  const learnerActive=accounts.some(item=>['RUNNING','QUEUED','PENDING'].includes(item.learner));
+  const phase=evalDone?'Complete':trainDone?'Evaluation':step>0||learnerActive?'RL training':'Verifier labels';
   byId('phase-label').textContent=phase;
   byId('label-count').textContent=num(labelCount);byId('label-note').textContent='of '+num(labelTarget)+' positions · depth '+(s.label_depth||14);byId('label-bar').style.transform='scaleX('+(pct(labelCount,labelTarget)/100)+')';
   byId('train-step').textContent=num(step);byId('train-note').textContent='of '+num(target)+' RL updates · T4 pool';byId('train-bar').style.transform='scaleX('+(pct(step,target)/100)+')';
@@ -129,8 +131,8 @@ function render(s){
   byId('rl-mate').textContent=evalDone?mate.toFixed(2)+'%':'Pending';byId('rl-puzzle').textContent=evalDone?puzzle.toFixed(2)+'%':'Pending';
   byId('rl-params').textContent=training.parameter_count?(Number(training.parameter_count)/1e6).toFixed(2)+'M':'3.90M';
   byId('result-note').textContent=evalDone?'Complete frozen evaluation: '+num(evaluation.mate.correct)+'/4,000 MATE, '+num(evaluation.puzzles.solved)+'/10,000 puzzles. Historical benchmark exposure applies.':'RL numbers appear only after the complete checkpoint scoped evaluation has all 4,000 MATE rows and 10,000 puzzles.';
-  byId('phases').innerHTML=stage('Verifier labels',num(labelCount)+' / '+num(labelTarget)+' all legal move roots',labelDone?'done':labelCount?'live':'waiting','01')+
-    stage('RL post training',num(step)+' / '+num(target)+' updates',trainDone?'done':step?'live':'waiting','02')+
+  byId('phases').innerHTML=stage('Verifier labels',num(labelCount)+' / '+num(labelTarget)+' all legal move roots',labelDone?'done':labelActive||labelCount?'live':'waiting','01')+
+    stage('RL post training',num(step)+' / '+num(target)+' updates',trainDone?'done':learnerActive||step?'live':'waiting','02')+
     stage('Frozen evaluation',evalDone?'4,000 MATE rows and 10,000 puzzles complete':trainDone?'Scoring final checkpoint':'Waiting for final checkpoint',evalDone?'done':trainDone?'live':'waiting','03');
   byId('account-rows').innerHTML=labels.length?labels.map((item,i)=>{const pool=accounts[i]||{};return '<tr><td>'+esc(item.account)+'</td><td><span class="bar"><i style="width:'+pct(item.count,item.target)+'%"></i></span>'+num(item.count)+' / '+num(item.target)+'</td><td>'+esc(item.kernel)+'</td><td>'+esc(pool.gpu_hours==null?'—':Number(pool.gpu_hours).toFixed(1)+'h')+'</td><td>'+esc(pool.learner||'—')+'</td></tr>';}).join(''):'<tr><td colspan="5">Waiting for first update</td></tr>';
   const errors=[];
