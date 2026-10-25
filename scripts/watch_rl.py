@@ -192,6 +192,9 @@ def main(check_only: bool = False):
             continue
         if status in ("ERROR", "FAILED"):
             raise RuntimeError(f"{account}: Kaggle verifier kernel {status}")
+        if status == "COMPLETE":
+            raise RuntimeError(f"{account}: verifier kernel completed with only "
+                               f"{count}/{ROOTS_PER_ACCOUNT} persisted labels")
         if not check_only:
             push(account, LABEL_SLUG, {"mode": "labels", "account": account,
                                       "shard_tag": tags[index], "depth": DEPTH,
@@ -216,6 +219,9 @@ def main(check_only: bool = False):
         evaluator.FINAL_STEP = TOTAL_STEPS
         evaluator.TARGETS = [TOTAL_STEPS]
         evaluator.KERNEL_SLUG = "eval-ccgavn-rl"
+        eval_status = remote_status(api, evaluator.out_prefix(TOTAL_STEPS), files)
+        if "INCOMPLETE" in eval_status or "FAILED" in eval_status:
+            raise RuntimeError(f"frozen evaluation failed: {eval_status[-300:]}")
         evaluator.main(check_only=check_only)
         return
     status_text = remote_status(api, RUN, files)
@@ -228,6 +234,9 @@ def main(check_only: bool = False):
             active.append((account, status))
         elif status in ("ERROR", "FAILED"):
             raise RuntimeError(f"{account}: Kaggle learner kernel {status}")
+        elif status == "COMPLETE":
+            raise RuntimeError(f"{account}: learner kernel completed before "
+                               f"the {TOTAL_STEPS}-step checkpoint was persisted")
     if active:
         print(f"[rl-watch] learner active: {active}", flush=True)
         return
