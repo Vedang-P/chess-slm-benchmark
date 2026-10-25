@@ -1,7 +1,8 @@
 import { HTML } from "./page.js";
 
 const GITHUB = "https://api.github.com/repos/Vedang-P/chess-slm-benchmark/dispatches";
-const RUN = "ccgavn-rl-root-v1-seed0";
+const RUN = "ccgavn-rl-root-v2-seed0";
+const MONITOR_KEY = "rl_monitor_v2";
 const SECURITY = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
@@ -34,10 +35,10 @@ async function dispatchTick(env) {
 
 function statusClass(value) {
   const text = String(value || "").toUpperCase();
-  if (/FAILED|ERROR|INCOMPLETE/.test(text)) return "error";
-  if (/DONE|COMPLETE|SUCCEEDED/.test(text)) return "done";
-  if (/RUNNING/.test(text)) return "running";
-  if (/QUEUED|PENDING/.test(text)) return "queued";
+  if (/\b(?:FAILED|ERROR|INCOMPLETE)\b/.test(text)) return "error";
+  if (/\b(?:DONE|COMPLETE|SUCCEEDED)\b/.test(text)) return "done";
+  if (/\bRUNNING\b/.test(text)) return "running";
+  if (/\b(?:QUEUED|PENDING)\b/.test(text)) return "queued";
   return "waiting";
 }
 
@@ -128,14 +129,10 @@ function metricPoint(item, observedAt) {
 }
 
 async function ingest(env, body) {
-  const bundle = await env.SNAPSHOT.get("rl_monitor", "json");
+  const bundle = await env.SNAPSHOT.get(MONITOR_KEY, "json");
   const [previous, oldHistory, oldEvents] = bundle
     ? [bundle.snapshot, bundle.history, bundle.events]
-    : await Promise.all([
-      env.SNAPSHOT.get("rl_snapshot", "json"),
-      env.SNAPSHOT.get("rl_history", "json"),
-      env.SNAPSHOT.get("rl_events", "json"),
-    ]);
+    : [null, null, null];
   if (previous?.updated_at && body.updated_at < previous.updated_at) {
     return { ok: false, stale: true };
   }
@@ -152,7 +149,7 @@ async function ingest(env, body) {
   history.metrics = [...metrics.values()].sort((a, b) => a.step - b.step).slice(-MAX_METRICS);
   const events = [...(oldEvents || []), ...eventsFrom(previous, body)];
   const unique = [...new Map(events.map(item => [item.id, item])).values()].slice(-MAX_EVENTS);
-  await env.SNAPSHOT.put("rl_monitor", JSON.stringify({ snapshot: body, history, events: unique }));
+  await env.SNAPSHOT.put(MONITOR_KEY, JSON.stringify({ snapshot: body, history, events: unique }));
   return { ok: true, observations: history.observations.length, metrics: history.metrics.length };
 }
 
@@ -163,14 +160,10 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/snapshot" && request.method === "GET") {
-      const bundle = await env.SNAPSHOT.get("rl_monitor", "json");
+      const bundle = await env.SNAPSHOT.get(MONITOR_KEY, "json");
       const [snapshot, history, events] = bundle
         ? [bundle.snapshot, bundle.history, bundle.events]
-        : await Promise.all([
-          env.SNAPSHOT.get("rl_snapshot", "json"),
-          env.SNAPSHOT.get("rl_history", "json"),
-          env.SNAPSHOT.get("rl_events", "json"),
-        ]);
+        : [null, null, null];
       return Response.json({ ...(snapshot || {}), history: history || { observations: [], metrics: [] },
         events: events || [] }, { headers: JSON_HEADERS });
     }

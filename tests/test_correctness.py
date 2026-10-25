@@ -9,11 +9,14 @@ from pathlib import Path
 import chess
 import numpy as np
 import torch
+from types import SimpleNamespace
 
 from scripts.data_hygiene import eligible_mask, position_hashes, set_learning_rate
 from scripts.eval_gavn import tokenize_fen
 from scripts.shard_data import ShardManager
 from scripts.train_ccgavn import development_mask, reflect_horizontal
+from scripts.rl_labels import fen_from_tokens, reward_for_cp
+from scripts.train_rl import development_fold, objective, policy_logprobs
 
 
 def tiny_ccgavn(version):
@@ -26,6 +29,43 @@ def tiny_ccgavn(version):
 
 
 class CorrectnessTests(unittest.TestCase):
+    def test_rl_fen_roundtrip_preserves_move_counters(self):
+        fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 87 137"
+        tokens = tokenize_fen(fen)
+        self.assertEqual(fen_from_tokens(tokens), fen)
+        np.testing.assert_array_equal(tokenize_fen(fen_from_tokens(tokens)), tokens)
+
+    def test_rl_reward_uses_pinned_searchless_transform(self):
+        utils = SimpleNamespace(centipawns_to_win_probability=lambda cp:
+            0.5 + 0.5 * (2 / (1 + np.exp(-0.00368208 * cp)) - 1))
+        self.assertAlmostEqual(reward_for_cp(100, utils),
+                               float(utils.centipawns_to_win_probability(100)), places=8)
+
+    def test_rl_objective_uses_every_counterfactual_action(self):
+        values = torch.tensor([0.1, 0.4, -0.2], requires_grad=True)
+        rewards = torch.tensor([0.2, 0.8, 0.1])
+        offsets = [0, 3]
+        args = SimpleNamespace(policy_temperature=0.2, kl_coef=0.2,
+                               value_coef=0.2, entropy_coef=0.002)
+        ref = policy_logprobs(torch.tensor([0.3, 0.2, 0.1]), offsets,
+                              args.policy_temperature)
+        loss, parts = objective(values, ref, rewards, offsets, args)
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+        self.assertTrue(torch.isfinite(values.grad).all())
+        self.assertGreater(float(values.grad.abs().sum()), 0.0)
+        self.assertEqual(len(parts), 4)
+
+    def test_rl_development_split_spans_all_account_shards(self):
+        folds_by_account = {
+            account: [development_fold(account + 5 * index) for index in range(500)]
+            for account in range(5)
+        }
+        for folds in folds_by_account.values():
+            dev_fraction = sum(fold == 0 for fold in folds) / len(folds)
+            self.assertGreater(dev_fraction, 0.05)
+            self.assertLess(dev_fraction, 0.15)
+
     def test_all_optimizer_groups_follow_lr(self):
         a, b = torch.nn.Parameter(torch.ones(1)), torch.nn.Parameter(torch.ones(1))
         opt = torch.optim.AdamW([{'params': [a]}, {'params': [b]}], lr=5e-4)
@@ -308,8 +348,14 @@ class CorrectnessTests(unittest.TestCase):
         if not node:
             self.skipTest("node not available")
         root = Path(__file__).resolve().parents[1]
-        result = subprocess.run([node, str(root / "monitor" / "check_render.mjs")],
-                                capture_output=True, text=True, timeout=180)
+        script = ("import { HTML } from './src/page.js'; "
+                  "const blocks = [...HTML.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)]; "
+                  "if (!blocks.length) throw new Error('no inline monitor script found'); "
+                  "for (const block of blocks) new Function(block[1]); "
+                  "console.log(`parsed ${blocks.length} inline monitor script(s)`);")
+        result = subprocess.run([node, "--input-type=module", "-e", script],
+                                cwd=root / "monitor", capture_output=True,
+                                text=True, timeout=180)
         self.assertEqual(result.returncode, 0,
                          f"stdout={result.stdout}\nstderr={result.stderr}")
 

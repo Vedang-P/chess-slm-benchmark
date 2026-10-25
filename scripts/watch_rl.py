@@ -25,15 +25,17 @@ from scripts.kaggle_checkpoint import api as make_api, latest_remote_checkpoint
 from scripts.rl_labels import ACCOUNTS
 
 HF_REPO = "vedangfake/chess-slm-benchmark"
-LABEL_PREFIX = "rl-root-v1-labels"
-RUN = "ccgavn-rl-root-v1-seed0"
+LABEL_PREFIX = "rl-root-v2-labels"
+RUN = "ccgavn-rl-root-v2-seed0"
 SOURCE_RUN = "ccgavn-5m-seed0-v2"
 SOURCE_CHECKPOINT = "checkpoint-3896658"
 DEPTH = 14
 ROOTS_PER_ACCOUNT = 2000
 TOTAL_STEPS = 20_000
-LABEL_SLUG = "ccgavn-rl-labels"
-TRAIN_SLUG = "ccgavn-rl-train"
+LABEL_SLUG = "ccgavn-rl-v2-labels"
+TRAIN_SLUG = "ccgavn-rl-v2-train"
+SEARCHLESS_COMMIT = "90ae0e6b121673fc3079aaeffa047580bb600c0a"
+REWARD_ID = "searchless-centipawns-to-win-probability-v1"
 TEMPLATE = ROOT / "kernels/rl/run.py"
 TAGS = ROOT / "configs/ccgavn-2b-shard-tags.json"
 CREDS = {"vedanggggg": "vedanggggg/chess-creds",
@@ -107,7 +109,10 @@ def label_state(api, account: str, files: set[str]):
     state = json.loads(Path(source).read_text(encoding="utf-8"))
     identity = state["identity"]
     if (identity["account"] != account or identity["depth"] != DEPTH
-            or identity["target"] != ROOTS_PER_ACCOUNT):
+            or identity["target"] != ROOTS_PER_ACCOUNT
+            or identity.get("searchless_commit") != SEARCHLESS_COMMIT
+            or identity.get("reward") != REWARD_ID
+            or identity.get("fen_counters") != "preserved-v1"):
         raise ValueError(f"{account}: verifier identity changed")
     return state
 
@@ -158,6 +163,7 @@ def manifest_from_states(states: dict) -> dict:
     if len(commits) != 1:
         raise ValueError("label jobs used different pinned source commits")
     return {"label_prefix": LABEL_PREFIX, "depth": DEPTH,
+            "searchless_commit": SEARCHLESS_COMMIT, "reward": REWARD_ID,
             "source_commit": commits.pop(),
             "exclusion_digest": digests.pop(),
             "sources": {account: {"count": ROOTS_PER_ACCOUNT,
@@ -210,7 +216,9 @@ def main(check_only: bool = False):
             push(account, LABEL_SLUG, {"mode": "labels", "account": account,
                                       "shard_tag": tags[index], "depth": DEPTH,
                                       "target": ROOTS_PER_ACCOUNT,
-                                      "source_commit": commit}, gpu=False)
+                                      "label_prefix": LABEL_PREFIX,
+                                      "source_commit": commit,
+                                      "searchless_commit": SEARCHLESS_COMMIT}, gpu=False)
     if len(states) != len(ACCOUNTS):
         print(f"[rl-watch] verifier collection {len(states)}/{len(ACCOUNTS)} complete; "
               "learner remains gated", flush=True)
@@ -263,7 +271,8 @@ def main(check_only: bool = False):
     if not check_only:
         push(selected, TRAIN_SLUG, {"mode": "train", "run": RUN,
                                     "steps": TOTAL_STEPS, "manifest_json": payload,
-                                    "source_commit": commit}, gpu=True)
+                                    "source_commit": commit,
+                                    "searchless_commit": SEARCHLESS_COMMIT}, gpu=True)
 
 
 if __name__ == "__main__":

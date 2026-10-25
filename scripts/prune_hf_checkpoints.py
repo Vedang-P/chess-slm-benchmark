@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from scripts.kaggle_checkpoint import api as make_api
 REPO = "vedangfake/chess-slm-benchmark"
-RL_RUN = "ccgavn-rl-root-v1-seed0"
+RL_RUNS = {"ccgavn-rl-root-v1-seed0", "ccgavn-rl-root-v2-seed0"}
 
 # Endpoints with archived benchmark use. The selected 76.20% baseline and its
 # earlier warm-start anchors are pinned by exact step, not inferred by recency.
@@ -60,7 +60,7 @@ def plan(files: set[str]) -> tuple[list[str], list[str]]:
     folders = checkpoint_folders(files)
     to_delete, preserved = [], []
     for run, steps in sorted(folders.items()):
-        if run == RL_RUN:
+        if run in RL_RUNS:
             complete = sorted(step for step, contents in steps.items()
                               if {"state.pt", "config.json"} <= contents)
             keep = set(complete[-2:]) | ({0} if 0 in steps else set())

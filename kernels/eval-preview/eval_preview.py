@@ -160,8 +160,11 @@ sys.path.insert(0, str(REPO))
 # pinned commit (unit-tested in the repo).
 from scripts.eval_recovery import recover_from_unusable  # noqa: E402
 if not SL.exists():
-    subprocess.run(["git", "clone", "-q", "--depth", "1",
-                    "https://github.com/google-deepmind/searchless_chess.git", str(SL)], check=True)
+    searchless = CFG.get("searchless_commit")
+    if not searchless:
+        raise RuntimeError("checkpoint config has no pinned Searchless revision")
+    fetch_pinned_repo("https://github.com/google-deepmind/searchless_chess.git", SL,
+                      searchless)
 pz = SL / "data" / "puzzles.csv"
 if not pz.exists():
     subprocess.run(["curl", "-sL", "--fail", "-o", str(pz),

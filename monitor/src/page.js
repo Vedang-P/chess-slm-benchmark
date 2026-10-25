@@ -294,7 +294,7 @@ document.querySelectorAll("[data-axis]").forEach(node=>node.addEventListener("cl
   renderMetrics(current);
 }));
 function define(label,value){return '<div class="definition"><span>'+esc(label)+'</span><strong>'+esc(value==null||value===""?"Pending":value)+'</strong></div>';}
-function statusClass(value){const x=String(value||"").toUpperCase();if(/FAILED|ERROR|INCOMPLETE/.test(x))return "error";if(/DONE|COMPLETE|SUCCEEDED/.test(x))return "done";if(/RUNNING/.test(x))return "running";if(/QUEUED|PENDING/.test(x))return "queued";return "waiting";}
+function statusClass(value){const x=String(value||"").toUpperCase();if(/\b(?:FAILED|ERROR|INCOMPLETE)\b/.test(x))return "error";if(/\b(?:DONE|COMPLETE|SUCCEEDED)\b/.test(x))return "done";if(/\bRUNNING\b/.test(x))return "running";if(/\b(?:QUEUED|PENDING)\b/.test(x))return "queued";return "waiting";}
 function statusSpan(value){return '<span class="statusword '+statusClass(value)+'">'+esc(value||"—")+'</span>';}
 function stage(index,title,detail,value,target,state,foot){
  return '<div class="card stage"><div class="topline"><span>0'+index+' / 03</span><span class="state '+esc(state)+'">'+esc(state)+'</span></div><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p><div class="track"><i style="width:'+percent(value,target)+'%"></i></div><div class="foot">'+esc(foot)+'</div></div>';
@@ -391,7 +391,8 @@ function render(s){
  byId("fact-score").textContent=evalComplete?(100*s.evaluation.puzzles.solved/s.evaluation.puzzles.total).toFixed(2)+"%":"Pending";
  byId("snapshot-time").textContent=s.updated_at?"OBSERVED "+time(s.updated_at):"AWAITING SNAPSHOT";
  renderLabelChart(s);
- const events=(s.events||[]).slice().reverse();
+ const validEvaluation=!!s.evaluation&&s.evaluation.complete===true&&s.evaluation.returncode===0&&Array.isArray(s.evaluation.errors)&&s.evaluation.errors.length===0;
+ const events=(s.events||[]).filter(item=>!(validEvaluation&&item.title==="Evaluation reported an error")).slice().reverse();
  byId("activity-feed").innerHTML=events.length?events.map(item=>'<div class="event '+esc(item.tone)+'"><div class="eventtop"><strong>'+esc(item.title)+'</strong><time title="'+esc(time(item.at))+'">'+esc(age(item.at))+'</time></div><p>'+esc(item.detail)+'</p></div>').join(""):'<div class="emptyfeed">Activity appears after the next supervisor publish.</div>';
  const labelDone=count>=labelTarget;
  byId("stages").innerHTML=
@@ -411,8 +412,8 @@ function render(s){
  if(statusClass(s.evaluation_status)==="error")errors.push("Evaluation: "+String(s.evaluation_status).split(String.fromCharCode(10)).at(-1));
  byId("problem").hidden=!errors.length;byId("problem").textContent=errors.join(" · ");
  const c=training.config||{};
- byId("method-verifier").innerHTML=define("Run",s.run||"ccgavn-rl-root-v1-seed0")+define("Positions",number(labelTarget)+" exact roots")+define("Verifier depth",s.label_depth||14)+define("Account shards",labels.length||5)+define("Learner size",training.parameter_count?number(training.parameter_count)+" parameters":"Awaiting checkpoint")+define("Source checkpoint",c.source_checkpoint);
- byId("method-train").innerHTML=define("Algorithm",c.algorithm||"Awaiting checkpoint")+define("Steps",number(target))+define("Batch roots",c.batch_positions)+define("Group size",c.group_size)+define("PPO epochs",c.ppo_epochs)+define("Learning rate",c.lr)+define("KL coefficient",c.kl_coef)+define("Seed",c.seed)+define("Source commit",c.source_commit);
+ byId("method-verifier").innerHTML=define("Run",s.run||"ccgavn-rl-root-v2-seed0")+define("Positions",number(labelTarget)+" exact roots")+define("Verifier depth",s.label_depth||14)+define("Account shards",labels.length||5)+define("Learner size",training.parameter_count?number(training.parameter_count)+" parameters":"Awaiting checkpoint")+define("Source checkpoint",c.source_checkpoint);
+ byId("method-train").innerHTML=define("Algorithm",c.algorithm||"Awaiting checkpoint")+define("Steps",number(target))+define("Batch roots",c.batch_positions)+define("Warmup steps",c.warmup_steps)+define("Learning rate",c.lr)+define("Policy temperature",c.policy_temperature)+define("KL coefficient",c.kl_coef)+define("Verifier value coefficient",c.value_coef)+define("Seed",c.seed)+define("Source commit",c.source_commit);
  const links=s.links||{};
  byId("artifact-links").innerHTML=[["GitHub workflow",links.github],["Verifier labels",links.labels],["RL checkpoints",links.checkpoints],["Evaluation",links.evaluation]].filter(x=>x[1]).map(x=>'<a target="_blank" rel="noopener noreferrer" href="'+esc(x[1])+'">'+esc(x[0])+' ↗</a>').join("");
  if(!byId("metrics").hidden)renderMetrics(s);

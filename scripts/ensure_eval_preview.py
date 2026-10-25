@@ -88,6 +88,21 @@ def source_commit(files: set[str]) -> str:
                                    text=True).strip()
 
 
+def searchless_commit(files: set[str]) -> str | None:
+    """Return the immutable dependency revision recorded by the checkpoint."""
+    from huggingface_hub import hf_hub_download
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from kaggle_checkpoint import hf_token as token, latest_remote_checkpoint
+    from huggingface_hub import HfApi
+    api = HfApi(token=token(ROOT))
+    name = latest_remote_checkpoint(api, HF_REPO, RUN)
+    if name is None:
+        return None
+    cached = hf_hub_download(HF_REPO, f"{RUN}/{name}/config.json",
+                             repo_type="dataset", token=api.token)
+    return json.loads(Path(cached).read_text(encoding="utf-8")).get("searchless_commit")
+
+
 def summary_complete(prefix: str) -> bool:
     from huggingface_hub import hf_hub_download
     try:
@@ -210,6 +225,7 @@ def main(check_only: bool = False) -> None:
             return
     cfg = {"hf_repo": HF_REPO, "run": RUN, "targets": TARGETS,
            "final_step": FINAL_STEP, "source_commit": source_commit(files),
+           "searchless_commit": searchless_commit(files),
            "expect_mate_rows": EXPECT_MATE, "expect_puzzles": EXPECT_PUZ}
     for acct in sorted(usable, key=usable.get, reverse=True):
         rc, out = push(acct, cfg)

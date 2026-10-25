@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import shutil
 from pathlib import Path
 
@@ -46,21 +45,26 @@ def fen_from_tokens(tokens: np.ndarray) -> str:
         ranks.append(rank)
     castling = "".join(c for c in chars[65:69] if c != ".") or "-"
     ep = "".join(chars[69:71]) if chars[69] != "." else "-"
-    fen = f"{'/'.join(ranks)} {chars[0]} {castling} {ep} 0 1"
+    halfmoves = "".join(chars[71:74]).rstrip(".") or "0"
+    fullmoves = "".join(chars[74:77]).rstrip(".") or "1"
+    if not halfmoves.isdigit() or not fullmoves.isdigit() or int(fullmoves) < 1:
+        raise ValueError("source tokens contain invalid FEN move counters")
+    fen = (f"{'/'.join(ranks)} {chars[0]} {castling} {ep} "
+           f"{int(halfmoves)} {int(fullmoves)}")
     board = chess.Board(fen)
     if not board.is_valid():
         raise ValueError(f"source tokens decoded to invalid chess board: {fen}")
-    if not np.array_equal(tokenize_fen(fen)[:71], np.asarray(tokens[:71])):
+    if not np.array_equal(tokenize_fen(fen), np.asarray(tokens)):
         raise ValueError("source token round trip failed")
     return fen
 
 
-def reward_for_cp(cp: int) -> float:
-    return 0.5 + 0.5 * math.tanh(cp / 400.0)
+def reward_for_cp(cp: int, utils) -> float:
+    return float(utils.centipawns_to_win_probability(cp))
 
 
 def label_root(board: chess.Board, engine: chess.engine.SimpleEngine, depth: int,
-               move_to_action: dict[str, int]) -> dict:
+               move_to_action: dict[str, int], utils) -> dict:
     """Rescore each legal root move at the same exact depth with no bounds."""
     actions, uci_moves, cp_scores, rewards = [], [], [], []
     for move in board.legal_moves:
@@ -75,7 +79,7 @@ def label_root(board: chess.Board, engine: chess.engine.SimpleEngine, depth: int
         actions.append(int(move_to_action[uci]))
         uci_moves.append(uci)
         cp_scores.append(int(score))
-        rewards.append(reward_for_cp(int(score)))
+        rewards.append(reward_for_cp(int(score), utils))
     if len(actions) < 2:
         raise ValueError("root has fewer than two legal moves")
     return {"actions": actions, "moves": uci_moves, "scores_cp": cp_scores,
@@ -146,7 +150,9 @@ def run(args) -> None:
                 "source_commit": args.source_commit,
                 "exclusion_digest": exclusion_digest,
                 "source": "chessbench-full-build/train_set.npz",
-                "reward": "0.5+0.5*tanh(cp/400)", "all_legal": True}
+                "fen_counters": "preserved-v1",
+                "reward": "searchless-centipawns-to-win-probability-v1",
+                "searchless_commit": args.searchless_commit, "all_legal": True}
     cursor, count = restore(api, args.hf_repo, prefix, outdir, identity)
     labels = outdir / "labels.jsonl"
     if not labels.exists():
@@ -184,7 +190,7 @@ def run(args) -> None:
                 board = chess.Board(fen)
                 if len(list(board.legal_moves)) < 2:
                     continue
-                result = label_root(board, engine, args.depth, utils.MOVE_TO_ACTION)
+                result = label_root(board, engine, args.depth, utils.MOVE_TO_ACTION, utils)
                 record = {"fen": fen, "position_hash": position_hash,
                           "source_tag": args.shard_tag, "source_row": row,
                           "engine": engine_id, "depth": args.depth, **result}
@@ -213,8 +219,9 @@ def main():
     p.add_argument("--target", type=int, default=2000)
     p.add_argument("--seed", type=int, default=20261025)
     p.add_argument("--source-commit", required=True)
+    p.add_argument("--searchless-commit", required=True)
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
-    p.add_argument("--prefix", default="rl-root-v1-labels")
+    p.add_argument("--prefix", default="rl-root-v2-labels")
     p.add_argument("--outdir", type=Path, required=True)
     p.add_argument("--mate-dir", type=Path, default=ROOT / "data/positions")
     p.add_argument("--puzzles", type=Path, required=True)

@@ -32,8 +32,16 @@ actual = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"],
                                  text=True).strip()
 if actual != CFG["source_commit"]:
     raise RuntimeError(f"pinned source mismatch: {actual}")
-subprocess.run(["git", "clone", "-q", "--depth", "1",
-                "https://github.com/google-deepmind/searchless_chess.git", str(sl)], check=True)
+subprocess.run(["git", "init", "-q", str(sl)], check=True)
+subprocess.run(["git", "-C", str(sl), "remote", "add", "origin",
+                "https://github.com/google-deepmind/searchless_chess.git"], check=True)
+subprocess.run(["git", "-C", str(sl), "fetch", "-q", "--depth", "1", "origin",
+                CFG["searchless_commit"]], check=True)
+subprocess.run(["git", "-C", str(sl), "checkout", "-q", "FETCH_HEAD"], check=True)
+sl_commit = subprocess.check_output(["git", "-C", str(sl), "rev-parse", "HEAD"],
+                                    text=True).strip()
+if sl_commit != CFG["searchless_commit"]:
+    raise RuntimeError(f"pinned Searchless commit mismatch: {sl_commit}")
 puzzles = sl / "data" / "puzzles.csv"
 if not puzzles.exists():
     subprocess.run(["curl", "-sSL", "--fail", "-o", str(puzzles),
@@ -49,6 +57,8 @@ if CFG["mode"] == "labels":
            "--account", CFG["account"], "--shard-tag", CFG["shard_tag"],
            "--depth", str(CFG["depth"]), "--target", str(CFG["target"]),
            "--source-commit", CFG["source_commit"],
+           "--searchless-commit", CFG["searchless_commit"],
+           "--prefix", CFG["label_prefix"],
            "--outdir", str(WORK / "rl-labels"), "--puzzles", str(puzzles)]
 elif CFG["mode"] == "train":
     manifest = WORK / "rl-manifest.json"
@@ -57,6 +67,7 @@ elif CFG["mode"] == "train":
            "--manifest", str(manifest), "--outdir", str(WORK / "ccgavn-rl"),
            "--sl-repo", str(sl), "--puzzles", str(puzzles),
            "--steps", str(CFG["steps"]), "--hf-run", CFG["run"]]
+    cmd += ["--searchless-commit", CFG["searchless_commit"]]
 else:
     raise ValueError(f"unknown RL mode {CFG['mode']}")
 print(f"[rl-kernel] mode={CFG['mode']} commit={actual[:12]} cmd={' '.join(cmd)}", flush=True)

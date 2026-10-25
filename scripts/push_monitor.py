@@ -95,9 +95,10 @@ def snapshot() -> dict:
                          "checkpoint": f"{RUN}/checkpoint-{latest}" if latest else None,
                          "parameter_count": (config or {}).get("parameter_count"),
                          "config": {key: (config or {}).get(key) for key in
-                                    ("algorithm", "batch_positions", "group_size", "ppo_epochs",
-                                     "lr", "clip", "kl_coef", "value_coef", "entropy_coef",
-                                     "seed", "source_commit", "source_checkpoint",
+                                    ("algorithm", "batch_positions", "warmup_steps", "lr",
+                                     "policy_temperature", "kl_coef", "value_coef",
+                                     "entropy_coef", "seed", "source_commit",
+                                     "source_checkpoint", "searchless_commit",
                                      "manifest_sha256", "exclusion_digest")},
                          "checkpoints": checkpoints},
             "evaluation": evaluation,

@@ -33,12 +33,20 @@ from scripts.repair_checkpoint import make_model, repair
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def development_fold(position_hash: int) -> int:
+    digest = hashlib.sha256(str(int(position_hash)).encode("ascii")).digest()
+    return int.from_bytes(digest[:8], "big") % 10
+
+
 def source_commit() -> str:
     return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT,
                                    text=True).strip()
 
 
-def load_labels(api, repo: str, manifest: dict, excluded: np.ndarray):
+def load_labels(api, repo: str, manifest: dict, excluded: np.ndarray, utils):
+    if (manifest.get("reward") != "searchless-centipawns-to-win-probability-v1"
+            or manifest.get("searchless_commit") is None):
+        raise ValueError("manifest lacks the corrected verifier reward identity")
     records, seen = [], set()
     for account, source in sorted(manifest["sources"].items()):
         remote = f"{manifest['label_prefix']}/{account}/labels.jsonl"
@@ -58,11 +66,16 @@ def load_labels(api, repo: str, manifest: dict, excluded: np.ndarray):
             fen = record["fen"]
             board = chess.Board(fen)
             moves = [move.uci() for move in board.legal_moves]
-            if set(moves) != set(record["moves"]) or len(moves) != len(record["moves"]):
+            if moves != record["moves"]:
                 raise ValueError(f"{account}: verifier labels do not cover all legal moves")
+            expected_actions = [int(utils.MOVE_TO_ACTION[move]) for move in moves]
+            if expected_actions != record["actions"]:
+                raise ValueError(f"{account}: verifier action IDs do not match move order")
             if len(record["actions"]) != len(moves) or len(record["rewards"]) != len(moves):
                 raise ValueError(f"{account}: action/reward length mismatch")
             tokens = tokenize_fen(fen)
+            if not (0 <= int(fen.split()[4]) < 1000 and 1 <= int(fen.split()[5]) < 1000):
+                raise ValueError(f"{account}: non-roundtrippable FEN move counters")
             position_hash = int(position_hashes(tokens[None])[0])
             if position_hash != int(record["position_hash"]) or position_hash in excluded:
                 raise ValueError(f"{account}: label identity or frozen exclusion failure")
@@ -72,14 +85,21 @@ def load_labels(api, repo: str, manifest: dict, excluded: np.ndarray):
             rewards = np.asarray(record["rewards"], dtype=np.float32)
             if not np.all(np.isfinite(rewards)) or np.any(rewards < 0) or np.any(rewards > 1):
                 raise ValueError("invalid verifier rewards")
+            if record.get("engine") is None or len(record["scores_cp"]) != len(moves):
+                raise ValueError(f"{account}: missing exact verifier score identity")
+            expected_rewards = np.asarray([
+                utils.centipawns_to_win_probability(int(score))
+                for score in record["scores_cp"]], dtype=np.float32)
+            if not np.allclose(rewards, expected_rewards, rtol=0.0, atol=1e-6):
+                raise ValueError(f"{account}: verifier rewards disagree with frozen utility")
             records.append((tokens, np.asarray(record["actions"], dtype=np.int64), rewards,
                             position_hash))
     if len(records) < 1000:
         raise ValueError(f"only {len(records)} verified roots; require at least 1000")
-    train = [row for row in records if row[3] % 100 != 0]
-    dev = [row for row in records if row[3] % 100 == 0]
-    if len(dev) < 10:
-        raise ValueError(f"only {len(dev)} development roots")
+    train = [row for row in records if development_fold(row[3]) != 0]
+    dev = [row for row in records if development_fold(row[3]) == 0]
+    if len(dev) < 500:
+        raise ValueError(f"only {len(dev)} development roots; require at least 500")
     return train, dev
 
 
@@ -106,17 +126,16 @@ def values_for(model, tokens, actions, bucket_values, device):
     return torch.softmax(logits.float(), dim=-1) @ bucket_values
 
 
-def objective(values, old_logs, ref_logs, rewards, offsets, samples,
-              advantages, args):
+def objective(values, ref_logs, rewards, offsets, args):
     logs = policy_logprobs(values, offsets, args.policy_temperature)
     policy_losses, kl_terms, value_terms, entropy_terms = [], [], [], []
     for group, (a, b) in enumerate(zip(offsets[:-1], offsets[1:])):
-        indices = samples[group]
-        ratio = torch.exp(logs[group][indices] - old_logs[group][indices])
-        adv = advantages[group]
-        clipped = ratio.clamp(1 - args.clip, 1 + args.clip)
-        policy_losses.append(-torch.minimum(ratio * adv, clipped * adv).mean())
         probs = logs[group].exp()
+        centered = rewards[a:b] - rewards[a:b].mean()
+        centered = centered / centered.std(unbiased=False).clamp_min(1e-4)
+        # Exact counterfactual expectation over every legal action; there is
+        # no replacement sampling or sampled PPO ratio in this root bandit.
+        policy_losses.append(-(probs * centered).sum())
         kl_terms.append((probs * (logs[group] - ref_logs[group])).sum())
         value_terms.append(torch.mean((values[a:b] - rewards[a:b]) ** 2))
         entropy_terms.append(-(probs * logs[group]).sum())
@@ -143,27 +162,29 @@ def evaluate_dev(model, dev, bucket_values, device, args) -> dict:
     return {"roots": count, "top1": correct / count, "mean_regret": regret / count}
 
 
-def save_checkpoint(api, args, model, reference, optimizer, scaler, rng,
+def save_checkpoint(api, args, model, reference, optimizer, scheduler, scaler, rng,
                     manifest, manifest_sha, step, metrics, repair_report):
     folder = args.outdir / f"checkpoint-{step}"
     folder.mkdir(parents=True, exist_ok=True)
     torch.save({"model": model.state_dict(), "reference": reference.state_dict(),
-                "optimizer": optimizer.state_dict(), "scaler": scaler.state_dict(),
+                "optimizer": optimizer.state_dict(), "scheduler": scheduler.state_dict(),
+                "scaler": scaler.state_dict(),
                 "step": step, "numpy_rng": rng.bit_generator.state,
                 "torch_rng": torch.get_rng_state(),
                 "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None},
                folder / "state.pt")
     config = {"architecture": "cc-gavn-v1", "model_version": "v2",
-              "recipe_version": "rl-root-v1", "dim": 208, "layers": 8, "heads": 8,
+              "recipe_version": "rl-root-v2", "dim": 208, "layers": 8, "heads": 8,
               "parameter_count": sum(p.numel() for p in model.parameters()),
               "source_commit": source_commit(), "source_checkpoint": args.init_run + "/" + args.init_checkpoint,
+              "searchless_commit": manifest["searchless_commit"],
               "repair": repair_report, "manifest_sha256": manifest_sha,
               "exclusion_digest": manifest["exclusion_digest"],
               "canonical_decision_head": "distribution_expectation",
-              "algorithm": "group-relative-clipped-root-policy",
+              "algorithm": "exact-all-legal-counterfactual-policy-gradient",
               "steps": args.steps, "batch_positions": args.batch_positions,
-              "group_size": args.group_size, "ppo_epochs": args.ppo_epochs,
-              "lr": args.lr, "clip": args.clip,
+              "warmup_steps": min(args.warmup_steps, args.steps - 1),
+              "lr": args.lr,
               "kl_coef": args.kl_coef, "value_coef": args.value_coef,
               "entropy_coef": args.entropy_coef,
               "policy_temperature": args.policy_temperature,
@@ -180,9 +201,9 @@ def save_checkpoint(api, args, model, reference, optimizer, scaler, rng,
 
 
 def run(args):
-    if args.policy_temperature <= 0 or not 0 < args.clip < 1:
-        raise ValueError("policy temperature and PPO clip are invalid")
-    if args.steps < 1 or args.batch_positions < 1 or args.group_size < 2:
+    if args.policy_temperature <= 0:
+        raise ValueError("policy temperature must be positive")
+    if args.steps < 2 or args.batch_positions < 1:
         raise ValueError("invalid training budget")
     api = make_api(ROOT)
     args.outdir.mkdir(parents=True, exist_ok=True)
@@ -191,15 +212,17 @@ def run(args):
     manifest = json.loads(manifest_bytes)
     if manifest.get("source_commit") != source_commit():
         raise ValueError("frozen verifier source commit differs from learner code")
+    if manifest.get("searchless_commit") != args.searchless_commit:
+        raise ValueError("frozen verifier Searchless commit differs from learner")
     excluded, exclusion_digest = load_exclusions(args.mate_dir, args.puzzles)
     if manifest["exclusion_digest"] != exclusion_digest:
         raise ValueError("frozen-label and training exclusions differ")
-    train, dev = load_labels(api, args.hf_repo, manifest, excluded)
+    from searchless_chess.src import utils
+    train, dev = load_labels(api, args.hf_repo, manifest, excluded, utils)
     print(f"[rl] verified {len(train)} train and {len(dev)} dev roots", flush=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device.type != "cuda":
         raise RuntimeError("RL learner requires a Kaggle T4 GPU")
-    from searchless_chess.src import utils
     bucket_values = torch.as_tensor(np.asarray(
         utils.get_uniform_buckets_edges_values(128)[1], dtype=np.float32), device=device)
     rng = np.random.default_rng(args.seed)
@@ -222,8 +245,10 @@ def run(args):
         start_step = 0
     else:
         cfg = json.loads((resume / "config.json").read_text(encoding="utf-8"))
-        if (cfg["recipe_version"] != "rl-root-v1" or cfg["manifest_sha256"] != manifest_sha
-                or cfg["source_commit"] != source_commit() or cfg["steps"] != args.steps):
+        if (cfg["recipe_version"] != "rl-root-v2" or cfg["manifest_sha256"] != manifest_sha
+                or cfg["source_commit"] != source_commit()
+                or cfg["searchless_commit"] != args.searchless_commit
+                or cfg["steps"] != args.steps):
             raise ValueError("RL resume identity, source code, or budget changed")
         repair_report = cfg["repair"]
         model, _ = make_model(cfg, "v2", args.sl_repo)
@@ -248,12 +273,20 @@ def run(args):
     optimizer = torch.optim.AdamW([{"params": decay, "weight_decay": 0.01},
                                    {"params": no_decay, "weight_decay": 0.0}],
                                   lr=args.lr, betas=(0.9, 0.95))
+    warmup = min(args.warmup_steps, args.steps - 1)
+    def lr_scale(step):
+        if step < warmup:
+            return max(1, step + 1) / max(1, warmup)
+        progress = (step - warmup) / max(1, args.steps - warmup)
+        return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_scale)
     scaler = torch.amp.GradScaler("cuda", enabled=True)
     if resume is not None:
         optimizer.load_state_dict(state["optimizer"])
+        scheduler.load_state_dict(state["scheduler"])
         scaler.load_state_dict(state["scaler"])
     else:
-        save_checkpoint(api, args, model, reference, optimizer, scaler, rng,
+        save_checkpoint(api, args, model, reference, optimizer, scheduler, scaler, rng,
                         manifest, manifest_sha, 0, {"step": 0, "dev": evaluate_dev(
                             model, dev, bucket_values, device, args)}, repair_report)
     timer = UploadTimer(args.upload_every)
@@ -264,33 +297,29 @@ def run(args):
         batch = [train[int(index)] for index in indices]
         tokens, actions, rewards, offsets = flatten_batch(batch, device)
         with torch.no_grad():
-            old_values = values_for(model, tokens, actions, bucket_values, device)
             ref_values = values_for(reference, tokens, actions, bucket_values, device)
-            old_logs = policy_logprobs(old_values, offsets, args.policy_temperature)
             ref_logs = policy_logprobs(ref_values, offsets, args.policy_temperature)
-            samples, advantages = [], []
-            for group, (a, b) in enumerate(zip(offsets[:-1], offsets[1:])):
-                indices_g = torch.multinomial(old_logs[group].exp(), args.group_size,
-                                               replacement=True)
-                sampled_rewards = rewards[a:b][indices_g]
-                adv = (sampled_rewards - sampled_rewards.mean()) / \
-                      (sampled_rewards.std(unbiased=False) + 1e-6)
-                samples.append(indices_g)
-                advantages.append(adv)
-        for epoch in range(args.ppo_epochs):
-            optimizer.zero_grad(set_to_none=True)
-            values = values_for(model, tokens, actions, bucket_values, device)
-            loss, parts = objective(values, old_logs, ref_logs, rewards, offsets,
-                                    samples, advantages, args)
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            if step == 0 and epoch == 0:
-                missing = [name for name, parameter in model.named_parameters()
-                           if parameter.grad is None]
-                if missing:
-                    raise RuntimeError(f"trainable parameters outside RL graph: {missing}")
-            grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0))
-            scaler.step(optimizer); scaler.update()
+        before = ({name: parameter.detach().clone() for name, parameter in model.named_parameters()}
+                  if step == 0 else None)
+        optimizer.zero_grad(set_to_none=True)
+        values = values_for(model, tokens, actions, bucket_values, device)
+        loss, parts = objective(values, ref_logs, rewards, offsets, args)
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        if step == 0:
+            missing = [name for name, parameter in model.named_parameters()
+                       if parameter.grad is None]
+            invalid = [name for name, parameter in model.named_parameters()
+                       if parameter.grad is not None and not torch.isfinite(parameter.grad).all()]
+            if missing or invalid:
+                raise RuntimeError(f"incomplete/nonfinite RL gradients; missing={missing}; invalid={invalid}")
+        grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0))
+        scaler.step(optimizer); scaler.update(); scheduler.step()
+        if step == 0:
+            unchanged = [name for name, parameter in model.named_parameters()
+                         if torch.equal(before[name], parameter.detach())]
+            if unchanged:
+                raise RuntimeError(f"RL optimizer did not update trainable tensors: {unchanged}")
         if (step + 1) % 20 == 0:
             print(f"[rl] step={step+1}/{args.steps} loss={loss.item():.4f} "
                   f"pg={parts[0].item():.4f} kl={parts[1].item():.4f} "
@@ -301,7 +330,7 @@ def run(args):
                        "value": float(parts[2].detach()), "grad_norm": grad_norm,
                        "dev": evaluate_dev(model, dev, bucket_values, device, args)}
             print(f"[rl] checkpoint={step+1} dev={metrics['dev']}", flush=True)
-            save_checkpoint(api, args, model, reference, optimizer, scaler, rng,
+            save_checkpoint(api, args, model, reference, optimizer, scheduler, scaler, rng,
                             manifest, manifest_sha, step + 1, metrics, repair_report)
             timer.mark()
     write_status(api, args.hf_repo, args.hf_run, f"DONE {args.steps} steps")
@@ -315,19 +344,18 @@ def main():
     p.add_argument("--puzzles", type=Path, required=True)
     p.add_argument("--mate-dir", type=Path, default=ROOT / "data/positions")
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
-    p.add_argument("--hf-run", default="ccgavn-rl-root-v1-seed0")
+    p.add_argument("--hf-run", default="ccgavn-rl-root-v2-seed0")
     p.add_argument("--init-run", default="ccgavn-5m-seed0-v2")
     p.add_argument("--init-checkpoint", default="checkpoint-3896658")
     p.add_argument("--steps", type=int, default=20_000)
     p.add_argument("--batch-positions", type=int, default=8)
-    p.add_argument("--group-size", type=int, default=8)
-    p.add_argument("--ppo-epochs", type=int, default=2)
-    p.add_argument("--lr", type=float, default=2e-5)
-    p.add_argument("--clip", type=float, default=0.2)
-    p.add_argument("--kl-coef", type=float, default=0.04)
+    p.add_argument("--lr", type=float, default=1e-5)
+    p.add_argument("--warmup-steps", type=int, default=500)
+    p.add_argument("--kl-coef", type=float, default=0.2)
     p.add_argument("--value-coef", type=float, default=0.2)
     p.add_argument("--entropy-coef", type=float, default=0.002)
-    p.add_argument("--policy-temperature", type=float, default=0.05)
+    p.add_argument("--policy-temperature", type=float, default=0.2)
+    p.add_argument("--searchless-commit", required=True)
     p.add_argument("--ckpt-every", type=int, default=500)
     p.add_argument("--upload-every", type=float, default=900)
     p.add_argument("--seed", type=int, default=20261025)
