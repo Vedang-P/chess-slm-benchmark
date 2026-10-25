@@ -1,8 +1,8 @@
 import { HTML } from "./page.js";
 
 const GITHUB = "https://api.github.com/repos/Vedang-P/chess-slm-benchmark/dispatches";
-const RUN = "ccgavn-rl-root-v3-seed0";
-const MONITOR_KEY = "rl_monitor_v3";
+const RUN = "ccgavn-rl-root-v4-seed0";
+const MONITOR_KEY = "rl_monitor_v4";
 const SECURITY = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",

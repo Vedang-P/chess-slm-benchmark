@@ -26,14 +26,14 @@ from scripts.rl_labels import ACCOUNTS
 
 HF_REPO = "vedangfake/chess-slm-benchmark"
 LABEL_PREFIX = "rl-root-v2-labels"
-RUN = "ccgavn-rl-root-v3-seed0"
+RUN = "ccgavn-rl-root-v4-seed0"
 SOURCE_RUN = "ccgavn-5m-seed0-v2"
 SOURCE_CHECKPOINT = "checkpoint-3896658"
 DEPTH = 14
 ROOTS_PER_ACCOUNT = 2000
 TOTAL_STEPS = 20_000
 LABEL_SLUG = "ccgavn-rl-v2-labels"
-TRAIN_SLUG = "ccgavn-rl-v3-train"
+TRAIN_SLUG = "ccgavn-rl-v4-train"
 SEARCHLESS_COMMIT = "90ae0e6b121673fc3079aaeffa047580bb600c0a"
 REWARD_ID = "searchless-centipawns-to-win-probability-v1"
 TEMPLATE = ROOT / "kernels/rl/run.py"

@@ -46,6 +46,21 @@ def gradient_issues(model):
     return missing, invalid
 
 
+def validate_optimizer_coverage(model, optimizer):
+    expected = {id(parameter): name for name, parameter in model.named_parameters()
+                if parameter.requires_grad}
+    grouped = [parameter for group in optimizer.param_groups
+               for parameter in group["params"]]
+    actual = {id(parameter) for parameter in grouped}
+    duplicates = len(grouped) - len(actual)
+    missing = [name for identity, name in expected.items() if identity not in actual]
+    extra = sum(id(parameter) not in expected for parameter in grouped)
+    if duplicates or missing or extra:
+        raise RuntimeError(
+            f"optimizer coverage mismatch; duplicates={duplicates}; "
+            f"missing={missing}; extra_tensors={extra}")
+
+
 def development_fold(position_hash: int) -> int:
     digest = hashlib.sha256(str(int(position_hash)).encode("ascii")).digest()
     return int.from_bytes(digest[:8], "big") % 10
@@ -187,8 +202,15 @@ def save_checkpoint(api, args, model, reference, optimizer, scheduler, scaler, r
                 "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None},
                folder / "state.pt")
     config = {"architecture": "cc-gavn-v1", "model_version": "v2",
-              "recipe_version": "rl-root-v3", "dim": 208, "layers": 8, "heads": 8,
+              "recipe_version": "rl-root-v4", "dim": 208, "layers": 8, "heads": 8,
               "parameter_count": sum(p.numel() for p in model.parameters()),
+              "trainable_parameter_count": sum(p.numel() for p in model.parameters()
+                                               if p.requires_grad),
+              "optimized_parameter_count": sum(p.numel() for group in optimizer.param_groups
+                                                for p in group["params"]),
+              "trainable_tensor_count": sum(1 for p in model.parameters() if p.requires_grad),
+              "optimized_tensor_count": sum(len(group["params"])
+                                             for group in optimizer.param_groups),
               "source_commit": source_commit(), "source_checkpoint": args.init_run + "/" + args.init_checkpoint,
               "searchless_commit": manifest["searchless_commit"],
               "repair": repair_report, "manifest_sha256": manifest_sha,
@@ -261,7 +283,7 @@ def run(args):
         start_step = 0
     else:
         cfg = json.loads((resume / "config.json").read_text(encoding="utf-8"))
-        if (cfg["recipe_version"] != "rl-root-v3" or cfg["manifest_sha256"] != manifest_sha
+        if (cfg["recipe_version"] != "rl-root-v4" or cfg["manifest_sha256"] != manifest_sha
                 or cfg["source_commit"] != source_commit()
                 or cfg["label_source_commit"] != args.label_source_commit
                 or cfg["searchless_commit"] != args.searchless_commit
@@ -290,6 +312,7 @@ def run(args):
     optimizer = torch.optim.AdamW([{"params": decay, "weight_decay": 0.01},
                                    {"params": no_decay, "weight_decay": 0.0}],
                                   lr=args.lr, betas=(0.9, 0.95))
+    validate_optimizer_coverage(model, optimizer)
     warmup = min(args.warmup_steps, args.steps - 1)
     def lr_scale(step):
         if step < warmup:
@@ -349,10 +372,13 @@ def run(args):
             raise RuntimeError(f"AMP retry loop exhausted at step {step + 1}")
         scheduler.step()
         if step == 0:
-            unchanged = [name for name, parameter in model.named_parameters()
-                         if torch.equal(before[name], parameter.detach())]
-            if unchanged:
-                raise RuntimeError(f"RL optimizer did not update trainable tensors: {unchanged}")
+            changed = [name for name, parameter in model.named_parameters()
+                       if not torch.equal(before[name], parameter.detach())]
+            if not changed:
+                raise RuntimeError("RL optimizer completed step 1 without changing any parameters")
+            print(f"[rl] first optimizer update: changed {len(changed)}/"
+                  f"{len(before)} parameter tensors; all trainable tensors were in the "
+                  "optimizer and had finite gradients", flush=True)
         if (step + 1) % 20 == 0:
             print(f"[rl] step={step+1}/{args.steps} loss={loss.item():.4f} "
                   f"pg={parts[0].item():.4f} kl={parts[1].item():.4f} "
@@ -378,7 +404,7 @@ def main():
     p.add_argument("--puzzles", type=Path, required=True)
     p.add_argument("--mate-dir", type=Path, default=ROOT / "data/positions")
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
-    p.add_argument("--hf-run", default="ccgavn-rl-root-v3-seed0")
+    p.add_argument("--hf-run", default="ccgavn-rl-root-v4-seed0")
     p.add_argument("--init-run", default="ccgavn-5m-seed0-v2")
     p.add_argument("--init-checkpoint", default="checkpoint-3896658")
     p.add_argument("--steps", type=int, default=20_000)
