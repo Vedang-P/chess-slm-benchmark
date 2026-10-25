@@ -68,6 +68,7 @@ elif CFG["mode"] == "train":
            "--sl-repo", str(sl), "--puzzles", str(puzzles),
            "--steps", str(CFG["steps"]), "--hf-run", CFG["run"]]
     cmd += ["--searchless-commit", CFG["searchless_commit"]]
+    cmd += ["--label-source-commit", CFG["label_source_commit"]]
 else:
     raise ValueError(f"unknown RL mode {CFG['mode']}")
 print(f"[rl-kernel] mode={CFG['mode']} commit={actual[:12]} cmd={' '.join(cmd)}", flush=True)

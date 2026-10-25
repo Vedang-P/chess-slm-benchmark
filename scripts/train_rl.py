@@ -31,6 +31,19 @@ from scripts.kaggle_checkpoint import (UploadTimer, api as make_api,
 from scripts.repair_checkpoint import make_model, repair
 
 ROOT = Path(__file__).resolve().parent.parent
+AMP_INIT_SCALE = 128.0
+AMP_MAX_SCALE_RETRIES = 12
+
+
+def gradient_issues(model):
+    named = list(model.named_parameters())
+    missing = [name for name, parameter in named if parameter.grad is None]
+    with_grad = [(name, parameter) for name, parameter in named
+                 if parameter.grad is not None]
+    flags = torch.stack([~torch.isfinite(parameter.grad).all()
+                         for _, parameter in with_grad]).detach().cpu().tolist()
+    invalid = [name for (name, _), bad in zip(with_grad, flags) if bad]
+    return missing, invalid
 
 
 def development_fold(position_hash: int) -> int:
@@ -174,7 +187,7 @@ def save_checkpoint(api, args, model, reference, optimizer, scheduler, scaler, r
                 "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None},
                folder / "state.pt")
     config = {"architecture": "cc-gavn-v1", "model_version": "v2",
-              "recipe_version": "rl-root-v2", "dim": 208, "layers": 8, "heads": 8,
+              "recipe_version": "rl-root-v3", "dim": 208, "layers": 8, "heads": 8,
               "parameter_count": sum(p.numel() for p in model.parameters()),
               "source_commit": source_commit(), "source_checkpoint": args.init_run + "/" + args.init_checkpoint,
               "searchless_commit": manifest["searchless_commit"],
@@ -182,6 +195,9 @@ def save_checkpoint(api, args, model, reference, optimizer, scheduler, scaler, r
               "exclusion_digest": manifest["exclusion_digest"],
               "canonical_decision_head": "distribution_expectation",
               "algorithm": "exact-all-legal-counterfactual-policy-gradient",
+              "label_source_commit": args.label_source_commit,
+              "amp_init_scale": AMP_INIT_SCALE,
+              "amp_max_scale_retries": AMP_MAX_SCALE_RETRIES,
               "steps": args.steps, "batch_positions": args.batch_positions,
               "warmup_steps": min(args.warmup_steps, args.steps - 1),
               "lr": args.lr,
@@ -210,8 +226,8 @@ def run(args):
     manifest_bytes = args.manifest.read_bytes()
     manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
     manifest = json.loads(manifest_bytes)
-    if manifest.get("source_commit") != source_commit():
-        raise ValueError("frozen verifier source commit differs from learner code")
+    if manifest.get("source_commit") != args.label_source_commit:
+        raise ValueError("frozen verifier source commit differs from label identity")
     if manifest.get("searchless_commit") != args.searchless_commit:
         raise ValueError("frozen verifier Searchless commit differs from learner")
     excluded, exclusion_digest = load_exclusions(args.mate_dir, args.puzzles)
@@ -245,8 +261,9 @@ def run(args):
         start_step = 0
     else:
         cfg = json.loads((resume / "config.json").read_text(encoding="utf-8"))
-        if (cfg["recipe_version"] != "rl-root-v2" or cfg["manifest_sha256"] != manifest_sha
+        if (cfg["recipe_version"] != "rl-root-v3" or cfg["manifest_sha256"] != manifest_sha
                 or cfg["source_commit"] != source_commit()
+                or cfg["label_source_commit"] != args.label_source_commit
                 or cfg["searchless_commit"] != args.searchless_commit
                 or cfg["steps"] != args.steps):
             raise ValueError("RL resume identity, source code, or budget changed")
@@ -280,7 +297,7 @@ def run(args):
         progress = (step - warmup) / max(1, args.steps - warmup)
         return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_scale)
-    scaler = torch.amp.GradScaler("cuda", enabled=True)
+    scaler = torch.amp.GradScaler("cuda", init_scale=AMP_INIT_SCALE, enabled=True)
     if resume is not None:
         optimizer.load_state_dict(state["optimizer"])
         scheduler.load_state_dict(state["scheduler"])
@@ -301,20 +318,36 @@ def run(args):
             ref_logs = policy_logprobs(ref_values, offsets, args.policy_temperature)
         before = ({name: parameter.detach().clone() for name, parameter in model.named_parameters()}
                   if step == 0 else None)
-        optimizer.zero_grad(set_to_none=True)
-        values = values_for(model, tokens, actions, bucket_values, device)
-        loss, parts = objective(values, ref_logs, rewards, offsets, args)
-        scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
-        if step == 0:
-            missing = [name for name, parameter in model.named_parameters()
-                       if parameter.grad is None]
-            invalid = [name for name, parameter in model.named_parameters()
-                       if parameter.grad is not None and not torch.isfinite(parameter.grad).all()]
-            if missing or invalid:
-                raise RuntimeError(f"incomplete/nonfinite RL gradients; missing={missing}; invalid={invalid}")
-        grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0))
-        scaler.step(optimizer); scaler.update(); scheduler.step()
+        for retry in range(AMP_MAX_SCALE_RETRIES + 1):
+            optimizer.zero_grad(set_to_none=True)
+            values = values_for(model, tokens, actions, bucket_values, device)
+            loss, parts = objective(values, ref_logs, rewards, offsets, args)
+            if not torch.isfinite(loss):
+                raise RuntimeError(f"nonfinite RL loss at step {step + 1}")
+            scale_before = scaler.get_scale()
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            if step == 0:
+                missing = [name for name, parameter in model.named_parameters()
+                           if parameter.grad is None]
+                if missing:
+                    raise RuntimeError(f"incomplete RL gradients; missing={missing}")
+            grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0))
+            scaler.step(optimizer)
+            scaler.update()
+            scale_after = scaler.get_scale()
+            if scale_after >= scale_before:
+                break
+            _, invalid = gradient_issues(model)
+            if retry >= AMP_MAX_SCALE_RETRIES:
+                raise RuntimeError(
+                    f"nonfinite RL gradients after {retry + 1} attempts; "
+                    f"scale={scale_after}; invalid={invalid}")
+            print(f"[rl] nonfinite gradients at step={step+1}; retry={retry+1}/"
+                  f"{AMP_MAX_SCALE_RETRIES} scale={scale_after:g}", flush=True)
+        else:
+            raise RuntimeError(f"AMP retry loop exhausted at step {step + 1}")
+        scheduler.step()
         if step == 0:
             unchanged = [name for name, parameter in model.named_parameters()
                          if torch.equal(before[name], parameter.detach())]
@@ -328,6 +361,7 @@ def run(args):
             metrics = {"step": step + 1, "loss": float(loss.detach()),
                        "pg": float(parts[0].detach()), "kl": float(parts[1].detach()),
                        "value": float(parts[2].detach()), "grad_norm": grad_norm,
+                       "amp_scale": scaler.get_scale(),
                        "dev": evaluate_dev(model, dev, bucket_values, device, args)}
             print(f"[rl] checkpoint={step+1} dev={metrics['dev']}", flush=True)
             save_checkpoint(api, args, model, reference, optimizer, scheduler, scaler, rng,
@@ -344,7 +378,7 @@ def main():
     p.add_argument("--puzzles", type=Path, required=True)
     p.add_argument("--mate-dir", type=Path, default=ROOT / "data/positions")
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
-    p.add_argument("--hf-run", default="ccgavn-rl-root-v2-seed0")
+    p.add_argument("--hf-run", default="ccgavn-rl-root-v3-seed0")
     p.add_argument("--init-run", default="ccgavn-5m-seed0-v2")
     p.add_argument("--init-checkpoint", default="checkpoint-3896658")
     p.add_argument("--steps", type=int, default=20_000)
@@ -356,6 +390,7 @@ def main():
     p.add_argument("--entropy-coef", type=float, default=0.002)
     p.add_argument("--policy-temperature", type=float, default=0.2)
     p.add_argument("--searchless-commit", required=True)
+    p.add_argument("--label-source-commit", required=True)
     p.add_argument("--ckpt-every", type=int, default=500)
     p.add_argument("--upload-every", type=float, default=900)
     p.add_argument("--seed", type=int, default=20261025)

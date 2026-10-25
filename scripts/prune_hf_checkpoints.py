@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from scripts.kaggle_checkpoint import api as make_api
 REPO = "vedangfake/chess-slm-benchmark"
-RL_RUNS = {"ccgavn-rl-root-v1-seed0", "ccgavn-rl-root-v2-seed0"}
+RL_RUNS = {"ccgavn-rl-root-v1-seed0", "ccgavn-rl-root-v2-seed0",
+           "ccgavn-rl-root-v3-seed0"}
 
 # Endpoints with archived benchmark use. The selected 76.20% baseline and its
 # earlier warm-start anchors are pinned by exact step, not inferred by recency.

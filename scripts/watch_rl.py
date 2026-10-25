@@ -26,14 +26,14 @@ from scripts.rl_labels import ACCOUNTS
 
 HF_REPO = "vedangfake/chess-slm-benchmark"
 LABEL_PREFIX = "rl-root-v2-labels"
-RUN = "ccgavn-rl-root-v2-seed0"
+RUN = "ccgavn-rl-root-v3-seed0"
 SOURCE_RUN = "ccgavn-5m-seed0-v2"
 SOURCE_CHECKPOINT = "checkpoint-3896658"
 DEPTH = 14
 ROOTS_PER_ACCOUNT = 2000
 TOTAL_STEPS = 20_000
 LABEL_SLUG = "ccgavn-rl-v2-labels"
-TRAIN_SLUG = "ccgavn-rl-v2-train"
+TRAIN_SLUG = "ccgavn-rl-v3-train"
 SEARCHLESS_COMMIT = "90ae0e6b121673fc3079aaeffa047580bb600c0a"
 REWARD_ID = "searchless-centipawns-to-win-probability-v1"
 TEMPLATE = ROOT / "kernels/rl/run.py"
@@ -187,7 +187,7 @@ def main(check_only: bool = False):
               if state is not None}
     if len(pinned) > 1:
         raise ValueError("verifier jobs have different pinned source commits")
-    commit = pinned.pop() if pinned else current_commit
+    label_commit = pinned.pop() if pinned else current_commit
     states = {}
     listed = {account: available_slugs(account) for account in ACCOUNTS}
     for index, account in enumerate(ACCOUNTS):
@@ -217,7 +217,7 @@ def main(check_only: bool = False):
                                       "shard_tag": tags[index], "depth": DEPTH,
                                       "target": ROOTS_PER_ACCOUNT,
                                       "label_prefix": LABEL_PREFIX,
-                                      "source_commit": commit,
+                                      "source_commit": label_commit,
                                       "searchless_commit": SEARCHLESS_COMMIT}, gpu=False)
     if len(states) != len(ACCOUNTS):
         print(f"[rl-watch] verifier collection {len(states)}/{len(ACCOUNTS)} complete; "
@@ -228,8 +228,9 @@ def main(check_only: bool = False):
         name = f"{RUN}/{checkpoint}/config.json"
         cfg = json.loads(Path(hf_hub_download(HF_REPO, name, repo_type="dataset",
                                               token=api.token)).read_text(encoding="utf-8"))
-        if cfg.get("source_commit") != commit:
-            raise ValueError("RL checkpoint source commit differs from frozen labels")
+        if (cfg.get("source_commit") != current_commit
+                or cfg.get("label_source_commit") != label_commit):
+            raise ValueError("RL checkpoint code or frozen-label identity changed")
     if checkpoint and int(checkpoint.rsplit("-", 1)[-1]) >= TOTAL_STEPS:
         print(f"[rl-watch] learner complete: {checkpoint}; checking frozen evaluation",
               flush=True)
@@ -265,13 +266,16 @@ def main(check_only: bool = False):
         raise RuntimeError(f"no verified T4 quota across five accounts: {quotas}")
     selected = max(eligible, key=lambda account: quotas[account])
     manifest = manifest_from_states(states)
+    if manifest["source_commit"] != label_commit:
+        raise ValueError("frozen verifier manifest differs from pinned label source")
     payload = json.dumps(manifest, sort_keys=True, separators=(",", ":"))
     print(f"[rl-watch] learner ready; checkpoint={checkpoint}; quotas={quotas}; "
           f"selected={selected}", flush=True)
     if not check_only:
         push(selected, TRAIN_SLUG, {"mode": "train", "run": RUN,
                                     "steps": TOTAL_STEPS, "manifest_json": payload,
-                                    "source_commit": commit,
+                                    "source_commit": current_commit,
+                                    "label_source_commit": label_commit,
                                     "searchless_commit": SEARCHLESS_COMMIT}, gpu=True)
 
 

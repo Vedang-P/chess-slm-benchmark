@@ -1,8 +1,8 @@
 import { HTML } from "./page.js";
 
 const GITHUB = "https://api.github.com/repos/Vedang-P/chess-slm-benchmark/dispatches";
-const RUN = "ccgavn-rl-root-v2-seed0";
-const MONITOR_KEY = "rl_monitor_v2";
+const RUN = "ccgavn-rl-root-v3-seed0";
+const MONITOR_KEY = "rl_monitor_v3";
 const SECURITY = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
@@ -122,6 +122,7 @@ function metricPoint(item, observedAt) {
     kl: finite(metrics.kl),
     value: finite(metrics.value),
     grad_norm: finite(metrics.grad_norm),
+    amp_scale: finite(metrics.amp_scale),
     dev_top1: finite(metrics.dev?.top1),
     dev_regret: finite(metrics.dev?.mean_regret),
     dev_roots: finite(metrics.dev?.roots),

@@ -261,7 +261,8 @@ const metricSpec = [
   {key:"pg", title:"Policy objective", sub:"Group-relative policy gradient component", format:v=>v.toFixed(4), color:"#79d9c8"},
   {key:"kl", title:"KL term", sub:"Reference policy regularization", format:v=>v.toFixed(4), color:"#f0c47a"},
   {key:"value", title:"Value term", sub:"Value-head training component", format:v=>v.toFixed(4), color:"#a7b8f2"},
-  {key:"grad_norm", title:"Gradient norm", sub:"After backward pass, before optimizer step", format:v=>v.toFixed(3), color:"#e5a6c9"}
+  {key:"grad_norm", title:"Gradient norm", sub:"After backward pass, before optimizer step", format:v=>v.toFixed(3), color:"#e5a6c9"},
+  {key:"amp_scale", title:"AMP gradient scale", sub:"Loss scale used for the optimizer update", format:v=>v.toLocaleString(), color:"#f0c47a"}
 ];
 function setTab(tab) {
   if(!["overview","metrics","method"].includes(tab))tab="overview";
@@ -412,8 +413,8 @@ function render(s){
  if(statusClass(s.evaluation_status)==="error")errors.push("Evaluation: "+String(s.evaluation_status).split(String.fromCharCode(10)).at(-1));
  byId("problem").hidden=!errors.length;byId("problem").textContent=errors.join(" · ");
  const c=training.config||{};
- byId("method-verifier").innerHTML=define("Run",s.run||"ccgavn-rl-root-v2-seed0")+define("Positions",number(labelTarget)+" exact roots")+define("Verifier depth",s.label_depth||14)+define("Account shards",labels.length||5)+define("Learner size",training.parameter_count?number(training.parameter_count)+" parameters":"Awaiting checkpoint")+define("Source checkpoint",c.source_checkpoint);
- byId("method-train").innerHTML=define("Algorithm",c.algorithm||"Awaiting checkpoint")+define("Steps",number(target))+define("Batch roots",c.batch_positions)+define("Warmup steps",c.warmup_steps)+define("Learning rate",c.lr)+define("Policy temperature",c.policy_temperature)+define("KL coefficient",c.kl_coef)+define("Verifier value coefficient",c.value_coef)+define("Seed",c.seed)+define("Source commit",c.source_commit);
+ byId("method-verifier").innerHTML=define("Run",s.run||"ccgavn-rl-root-v3-seed0")+define("Positions",number(labelTarget)+" exact roots")+define("Verifier depth",s.label_depth||14)+define("Account shards",labels.length||5)+define("Learner size",training.parameter_count?number(training.parameter_count)+" parameters":"Awaiting checkpoint")+define("Source checkpoint",c.source_checkpoint);
+ byId("method-train").innerHTML=define("Algorithm",c.algorithm||"Awaiting checkpoint")+define("Steps",number(target))+define("Batch roots",c.batch_positions)+define("Warmup steps",c.warmup_steps)+define("Learning rate",c.lr)+define("Policy temperature",c.policy_temperature)+define("KL coefficient",c.kl_coef)+define("Verifier value coefficient",c.value_coef)+define("AMP start scale",c.amp_init_scale)+define("AMP scale retries",c.amp_max_scale_retries)+define("Learner code commit",c.source_commit)+define("Verifier label code commit",c.label_source_commit)+define("Seed",c.seed);
  const links=s.links||{};
  byId("artifact-links").innerHTML=[["GitHub workflow",links.github],["Verifier labels",links.labels],["RL checkpoints",links.checkpoints],["Evaluation",links.evaluation]].filter(x=>x[1]).map(x=>'<a target="_blank" rel="noopener noreferrer" href="'+esc(x[1])+'">'+esc(x[0])+' ↗</a>').join("");
  if(!byId("metrics").hidden)renderMetrics(s);
