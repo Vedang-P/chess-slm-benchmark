@@ -86,7 +86,7 @@ def snapshot() -> dict:
     return {"updated_at": datetime.now(timezone.utc).isoformat(),
             "run": RUN, "phase": ("evaluated" if evaluation else
                                    "evaluation" if latest >= TOTAL_STEPS else
-                                   "training" if latest else "labels"),
+                                   "training" if steps else "labels"),
             "labels": labels, "accounts": accounts,
             "label_depth": DEPTH, "label_count": sum(item["count"] for item in labels),
             "label_target": ROOTS_PER_ACCOUNT * len(ACCOUNTS),
