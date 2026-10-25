@@ -1,7 +1,7 @@
 # Project Status
 
-Updated 2026-10-25. The project is reset to its best verified baseline; no
-successor experiment is active.
+Updated 2026-10-25. The best verified result remains the baseline below. The
+root-policy RL successor is deployed as a new experiment; its score is pending.
 
 ## Best model
 
@@ -34,8 +34,20 @@ Face dataset `vedangfake/chess-slm-benchmark`.
 - Long runs must upload complete resumable checkpoints and status to Hugging
   Face. The shared checkpoint helpers are in `scripts/kaggle_checkpoint.py`.
 
-## Working tree
+## Root-policy RL experiment
 
-The maintained code covers the CC-GAVN baseline, its frozen evaluation, the
-training corpus, and the existing project monitor. The next research direction
-is undecided; use this result as the starting point for that decision.
+- Starting checkpoint: `ccgavn-5m-seed0-v2/checkpoint-3896658`.
+- Functional repair removes 869,440 softmax-null attention parameters and
+  initializes field gates to one. Local comparison over 71 legal candidates
+  found a maximum logit change of 1.36e-5, below the 1e-4 conversion gate.
+- Five CPU verifier jobs label 2,000 roots each, scoring every legal move at
+  Stockfish depth 14 and excluding frozen benchmark positions.
+- One T4 learner runs 20,000 group-relative clipped policy updates, resuming
+  complete weights, optimizer, RNG, and config from Hugging Face. The final
+  checkpoint receives the existing checkpoint-scoped MATE/puzzle evaluation.
+- The primary decision gate is more than 86.13% on all 10,000 puzzles. This
+  has not been achieved or measured for RL yet.
+
+The [monitor](https://chess-slm-monitor.vedangpandeyy.workers.dev/) shows only
+this run's live phases and archived baseline/teacher comparison. GitHub Actions
+drives the pool; Hugging Face holds restart state and final artifacts.

@@ -1,339 +1,116 @@
-"""Push the full dashboard snapshot to the Cloudflare monitor.
-
-The Worker cannot fetch hundreds of HF files per invocation (subrequest
-limits), so this local/CI helper assembles the heavy sections - training
-curve, eval summaries, corpus progress, PGN games, kernel statuses, quotas -
-and POSTs them to /api/ingest. Intended to run from the scheduled pipeline
-every 15 minutes; harmless to run by hand.
-
-Requires in .env: MONITOR_URL, MONITOR_INGEST_KEY, HF_WRITE_TOKEN.
-"""
+"""Publish a small, evidence-backed RL monitor snapshot from GitHub Actions."""
 from __future__ import annotations
 
-import io
 import json
-import re
-import subprocess
+import os
 import sys
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
+from huggingface_hub import hf_hub_download
+
 ROOT = Path(__file__).resolve().parent.parent
-HF_REPO = "vedangfake/chess-slm-benchmark"
-# Historical prefix first, corrected-v2 continuation second; steps continue
-# across both, so the curve merges by step and never rewrites legacy points.
-RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2"]
-LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build",
-             "ccgavn-1b", "puzzle-curriculum"]
-ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shoumikmitra"]
-KERNELS = [
-    ("vedanggggg", "build-2b-slice"), ("softmaxsimp", "build-2b-slice"),
-    ("samaltmannnn", "build-2b-slice"), ("shoumikmitra", "build-2b-slice"),
-]+ [(acct, "ccgavn-1b") for acct in ACCOUNTS] + [(acct, "ccgavn-2b") for acct in ACCOUNTS]
+sys.path.insert(0, str(ROOT))
+from scripts.kaggle_checkpoint import api as make_api  # noqa: E402
+from scripts.rl_labels import ACCOUNTS  # noqa: E402
+from scripts.watch_rl import (DEPTH, HF_REPO, LABEL_PREFIX, ROOTS_PER_ACCOUNT,
+                              RUN, TOTAL_STEPS, TRAIN_SLUG, LABEL_SLUG,
+                              available_slugs, kernel_status, quota)  # noqa: E402
+
+EVAL_PREFIX = f"eval-results/{RUN}-{TOTAL_STEPS // 1000}k-final"
 
 
-def load_env() -> dict:
-    """Real environment first (CI), then .env as a local convenience."""
-    import os
-    env = dict(os.environ)
-    envfile = ROOT / ".env"
-    if envfile.exists():
-        for line in envfile.read_text().splitlines():
-            if "=" in line and not line.strip().startswith("#"):
-                k, v = line.split("=", 1)
-                env.setdefault(k.strip(), v.strip())
-    return env
+def remote_json(api, files: set[str], path: str):
+    if path not in files:
+        return None
+    local = hf_hub_download(HF_REPO, path, repo_type="dataset", token=api.token)
+    return json.loads(Path(local).read_text(encoding="utf-8"))
 
 
-def hf_files(api) -> list[str]:
-    return api.list_repo_files(HF_REPO, repo_type="dataset")
+def remote_text(api, files: set[str], path: str):
+    if path not in files:
+        return ""
+    local = hf_hub_download(HF_REPO, path, repo_type="dataset", token=api.token)
+    return Path(local).read_text(encoding="utf-8").strip()
 
 
-def stage1_schedule():
-    """Reproduce the deterministic step->shard schedule of the 0..320k phase
-    (seed 0, the 10-shard mix) so the chart can shade puzzle-shard blocks for
-    checkpoints produced before the trainer logged its shard tag."""
-    import numpy as np
-    rows_cfg = json.loads((ROOT / "configs" / "chessbench_rows.json").read_text())
-    tags = list(rows_cfg)
-    rows = np.array([rows_cfg[t] for t in tags], dtype=np.float64)
-    steps = 320000
-    rng = np.random.default_rng(0)
-    frac = rows / rows.sum()
-    counts = np.maximum(1, np.round(frac * steps).astype(int))
-    counts[int(np.argmax(counts))] += steps - counts.sum()
-    order = rng.permutation(len(tags))
-    return np.concatenate([np.repeat(tags[i], counts[i]) for i in order])
-
-
-def checkpoint_times(token: str, min_step: int) -> dict:
-    """(run, step) -> ISO upload time for metrics.json files, from commit
-    history. Gives throughput charts a real time axis even before the trainer
-    logs it."""
-    import requests as rq
-    out = {}
-    for page in range(20):
-        r = rq.get(f"https://huggingface.co/api/datasets/{HF_REPO}/commits/main",
-                   params={"p": page}, headers={"Authorization": f"Bearer {token}"}, timeout=60)
-        if r.status_code != 200:
-            break
-        commits = r.json()
-        if not commits:
-            break
-        for x in commits:
-            t = x.get("title", "")
-            if not t.endswith("/metrics.json with huggingface_hub"):
-                continue
-            for run in RUNS:
-                prefix = f"Upload {run}/checkpoint-"
-                if t.startswith(prefix):
-                    step = t.split("checkpoint-")[1].split("/")[0]
-                    d = x["date"]
-                    key = (run, step)
-                    if key not in out or d < out[key]:
-                        out[key] = d
-    return out
-
-
-def fetch_previous(url: str) -> dict:
-    if not url:
-        return {}
-    try:
-        req = urllib.request.Request(f"{url.rstrip('/')}/api/snapshot",
-                                     headers={"user-agent": "chess-slm-monitor/1.0"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.loads(r.read())
-    except Exception as exc:
-        print(f"[monitor] previous snapshot unavailable: {exc}", flush=True)
-        return {}
-
-
-def build_curve(api, token: str, files: list[str], prior: list[dict] | None = None) -> list[dict]:
-    from huggingface_hub import snapshot_download
-    entries = sorted({(run, int(m.group(1))) for f in files for run in RUNS
-                      if (m := re.search(rf"{re.escape(run)}/checkpoint-(\d+)/metrics\.json$", f))},
-                     key=lambda x: x[1])
-    sched = stage1_schedule()
-    times = checkpoint_times(token, entries[0][1] if entries else 0)
-    # Reuse the curve already in KV and fetch only newly uploaded metrics.
-    # HEADing all 1,559 historical files every ten minutes trips HF's rate
-    # limit (429) and stalls the whole monitor tick.
-    prior = [dict(p) for p in (prior or [])]
-    known = {(str(p.get("run")), int(p.get("step"))) for p in prior
-             if p.get("run") is not None and p.get("step") is not None}
-    new = [(run, s) for run, s in entries if (run, s) not in known]
-    cache = None
-    if new:
-        try:
-            cache = Path(snapshot_download(
-                HF_REPO, repo_type="dataset", token=token,
-                allow_patterns=[f"{run}/checkpoint-{s}/metrics.json" for run, s in new]))
-        except Exception as exc:
-            # A transient HF failure must not abort the whole monitor tick.
-            print(f"[monitor] metrics download failed; keeping prior curve: {exc}",
-                  flush=True)
-            return prior
-    curve = prior
-    for run, s in new:
-        try:
-            p = cache / f"{run}/checkpoint-{s}/metrics.json"
-            m = json.loads(p.read_text())
-            point = {"step": m.get("step", s), "run": run,
-                     "train": m.get("train_loss"), "dev": m.get("dev_loss")}
-            for k in ("dev_dist", "dev_ce", "lr", "grad_norm", "samples_per_s", "shard"):
-                if m.get(k) is not None:
-                    point[k] = m[k]
-            if "shard" not in point and run != "ccgavn-5m-seed0-v2":
-                idx = int(point["step"]) - 1
-                if 0 <= idx < len(sched):
-                    point["shard"] = str(sched[idx])
-            t = times.get((run, str(point["step"])))
-            if t:
-                point["t"] = t
-            curve.append(point)
-        except Exception:
-            continue
-    curve.sort(key=lambda p: p.get("step", 0))
-    return curve
-
-
-def build_evals(api, token: str, files: list[str], prior: dict | None = None) -> dict:
-    from huggingface_hub import snapshot_download
-    prior = dict(prior or {})
-    paths = [f for f in files if re.match(r"^eval-results/.*/eval-summary\.json$", f) or (
-        f.startswith(f"{REF_EVAL}/") and f.endswith("/summary.json"))]
-    new = [f for f in paths if f not in prior]
-    if not new:
-        return prior
-    try:
-        cache = Path(snapshot_download(
-            HF_REPO, repo_type="dataset", token=token, allow_patterns=new))
-    except Exception as exc:
-        print(f"[monitor] eval download failed; keeping prior evals: {exc}", flush=True)
-        return prior
-    out = prior
-    for f in new:
-        try:
-            out[f] = json.loads((cache / f).read_text())
-        except Exception:
-            continue
-    return out
-
-
-def build_corpus(api, files: list[str]) -> dict:
-    rows_map = json.loads((ROOT / "kernels" / "build-2b" / "shard_rows.json").read_text())
-    done = [s for s in rows_map if f"chessbench-full-build/shard-{s}/teacher_logp.npy" in files]
-    labeled = sum(int(rows_map[s]) for s in done)
-    return {"target_rows": sum(int(v) for v in rows_map.values()), "labeled_rows": labeled,
-            "shards_planned": len(rows_map), "shards_done": len(done),
-            "original_rows": 94_277_038,
-            "done_tags": sorted(done),
-            "all_tags": sorted(rows_map),
-            "rows_by_tag": {t: int(rows_map[t]) for t in sorted(rows_map)}}
-
-
-def build_games(token: str, limit: int = 6) -> list[dict]:
-    import chess.pgn
-    from huggingface_hub import hf_hub_download
-    try:
-        p = hf_hub_download(HF_REPO, "elo-results/ccgavn-160k-stockfish-ladder/games-1400.pgn",
-                            repo_type="dataset", token=token)
-    except Exception:
-        return []
-    games = []
-    with open(p) as fh:
-        while len(games) < limit:
-            g = chess.pgn.read_game(fh)
-            if g is None:
-                break
-            board = g.board()
-            moves = []
-            for mv in g.mainline_moves():
-                san = board.san(mv)
-                board.push(mv)
-                moves.append({"san": san, "fen": board.fen(),
-                              "from": chess.square_name(mv.from_square),
-                              "to": chess.square_name(mv.to_square)})
-            games.append({"event": g.headers.get("Event", ""),
-                          "white": g.headers.get("White", "?"),
-                          "black": g.headers.get("Black", "?"),
-                          "result": g.headers.get("Result", "*"), "moves": moves})
-    return games
-
-
-def sanitize_status(txt: str) -> str:
-    t = " ".join(txt.split())
-    if any(w in t.lower() for w in ("traceback", "error", "exception", "killed")):
-        return "FAILED — log on HF"
-    return t[:120]
-
-
-ALIASES = {a: f"acct-{i+1}" for i, a in enumerate(ACCOUNTS)}
-
-
-def mask_accounts(payload: dict) -> dict:
-    s = json.dumps(payload)
-    for real, alias in ALIASES.items():
-        s = s.replace(real, alias)
-    return json.loads(s)
-
-
-def build_runs(api, token: str) -> dict:
-    from huggingface_hub import hf_hub_download
-    out = {}
-    for f in hf_files(api):
-        if re.match(r"^[^/]+/run-status\.txt$", f) and f.split("/")[0] in LIVE_RUNS:
+def checkpoint_steps(files: set[str]) -> list[int]:
+    prefix = f"{RUN}/checkpoint-"
+    found = set()
+    for name in files:
+        if name.startswith(prefix) and name.endswith("/state.pt"):
             try:
-                p = hf_hub_download(HF_REPO, f, repo_type="dataset", token=token)
-                out[f] = sanitize_status(Path(p).read_text()[:400])
-            except Exception:
+                step = int(name[len(prefix):].split("/", 1)[0])
+            except ValueError:
                 continue
-    return out
+            if f"{RUN}/checkpoint-{step}/config.json" in files:
+                found.add(step)
+    return sorted(found)
 
 
-def build_kernels_quota() -> tuple[list, dict, str]:
-    sys.path.insert(0, str(ROOT / "scripts"))
-    from kaggle_accounts import env_for_account
-    kernels, quota = [], {}
-    reset = ""
-    for acct, slug in KERNELS:
-        try:
-            r = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "status",
-                                f"{acct}/{slug}"], env=env_for_account(acct),
-                               capture_output=True, text=True, timeout=60)
-            out = (r.stdout or r.stderr).strip()
-            if "Cannot access kernel" in out:
-                st = "not created"
-            elif '"' in out:
-                st = out.split('"')[-2].split(".")[-1]
-            else:
-                st = out[:40]
-        except Exception as exc:
-            st = f"err {str(exc)[:30]}"
-        # The labeling fleet is finished; keep its rows only while actually
-        # running (the corpus card reports the labeled-shard state instead).
-        if slug == "build-2b-slice" and st not in ("RUNNING", "QUEUED", "PENDING"):
-            continue
-        kernels.append({"account": acct, "kernel": slug, "status": st})
-    for acct in ACCOUNTS:
-        try:
-            r = subprocess.run([sys.executable, "-m", "kaggle", "quota"],
-                               env=env_for_account(acct), capture_output=True,
-                               text=True, timeout=90)
-            for line in (r.stdout or "").splitlines():
-                parts = line.split()
-                if len(parts) >= 4 and parts[0] == "GPU":
-                    quota[acct] = parts[2].rstrip("h")
-                    if len(parts) >= 5 and not reset:
-                        # kaggle prints e.g. 2026-09-26T00:00:00 (UTC)
-                        stamp = parts[4]
-                        if not stamp.endswith(("Z", "z")) and "+" not in stamp:
-                            stamp += "Z"
-                        reset = stamp
-        except Exception:
-            continue
-    return kernels, quota, reset
+def snapshot() -> dict:
+    api = make_api(ROOT)
+    files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
+    labels = []
+    accounts = []
+    for index, account in enumerate(ACCOUNTS, 1):
+        state = remote_json(api, files, f"{LABEL_PREFIX}/{account}/state.json")
+        status = remote_text(api, files, f"{LABEL_PREFIX}/{account}/run-status.txt")
+        known = available_slugs(account)
+        label_kernel = kernel_status(account, LABEL_SLUG, known)
+        train_kernel = kernel_status(account, TRAIN_SLUG, known)
+        labels.append({"account": f"acct-{index}",
+                       "count": min(int(state["count"]), ROOTS_PER_ACCOUNT) if state else 0,
+                       "target": ROOTS_PER_ACCOUNT,
+                       "status": status.splitlines()[-1] if status else "waiting",
+                       "kernel": label_kernel})
+        accounts.append({"account": f"acct-{index}", "gpu_hours": quota(account),
+                         "learner": train_kernel})
+    steps = checkpoint_steps(files)
+    latest = steps[-1] if steps else 0
+    metrics = remote_json(api, files, f"{RUN}/checkpoint-{latest}/metrics.json") if steps else None
+    config = remote_json(api, files, f"{RUN}/checkpoint-{latest}/config.json") if steps else None
+    evaluation = remote_json(api, files, f"{EVAL_PREFIX}/eval-summary.json")
+    if evaluation and not (evaluation.get("complete") and evaluation.get("returncode") == 0
+                           and (evaluation.get("mate") or {}).get("total") == 4000
+                           and (evaluation.get("puzzles") or {}).get("total") == 10000):
+        evaluation = None
+    return {"updated_at": datetime.now(timezone.utc).isoformat(),
+            "run": RUN, "phase": ("evaluated" if evaluation else
+                                   "evaluation" if latest >= TOTAL_STEPS else
+                                   "training" if latest else "labels"),
+            "labels": labels, "accounts": accounts,
+            "label_depth": DEPTH, "label_count": sum(item["count"] for item in labels),
+            "label_target": ROOTS_PER_ACCOUNT * len(ACCOUNTS),
+            "training": {"step": latest, "target": TOTAL_STEPS,
+                         "metrics": metrics, "status": remote_text(api, files, f"{RUN}/run-status.txt"),
+                         "checkpoint": f"{RUN}/checkpoint-{latest}" if latest else None,
+                         "parameter_count": (config or {}).get("parameter_count")},
+            "evaluation": evaluation,
+            "evaluation_status": remote_text(api, files, f"{EVAL_PREFIX}/run-status.txt"),
+            "links": {"github": "https://github.com/Vedang-P/chess-slm-benchmark/actions/workflows/pipeline-tick.yml",
+                      "labels": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{LABEL_PREFIX}",
+                      "checkpoints": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{RUN}",
+                      "evaluation": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{EVAL_PREFIX}"}}
 
 
 def main() -> None:
-    from huggingface_hub import HfApi
-    env = load_env()
-    url = env.get("MONITOR_URL", "").rstrip("/")
-    key = env.get("MONITOR_INGEST_KEY", "")
-    token = env.get("HF_WRITE_TOKEN", "")
-    if not (url and key and token):
-        print("[monitor] MONITOR_URL / MONITOR_INGEST_KEY / HF_WRITE_TOKEN missing; skip")
-        return
-    api = HfApi(token=token)
-    files = hf_files(api)
-    print(f"[monitor] {len(files)} files", flush=True)
-    prior = fetch_previous(url)
-    kernels, quota, quota_reset = build_kernels_quota()
-    print(f"[monitor] kernels={len(kernels)} accounts={len(quota)}", flush=True)
-    curve = build_curve(api, token, files, prior.get("curve"))
-    print(f"[monitor] curve={len(curve)}", flush=True)
-    evals = build_evals(api, token, files, prior.get("evals"))
-    print(f"[monitor] evals={len(evals)}", flush=True)
-    payload = {
-        "curve": curve,
-        "evals": evals,
-        "corpus": build_corpus(api, files),
-        "games": build_games(token),
-        "runs": build_runs(api, token),
-        "kernels": kernels,
-        "quota": quota,
-        "quota_reset": quota_reset,
-    }
-    payload = mask_accounts(payload)
-    req = urllib.request.Request(f"{url}/api/ingest", method="POST",
-                                 data=json.dumps(payload).encode(),
-                                 headers={"content-type": "application/json",
-                                          "x-ingest-key": key,
-                                          "user-agent": "chess-slm-monitor/1.0"})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        print(f"[monitor] ingested: {r.status} curve={len(payload['curve'])} "
-              f"evals={len(payload['evals'])} games={len(payload['games'])} "
-              f"corpus={payload['corpus']['labeled_rows']/1e6:.0f}M rows")
+    url = os.environ.get("MONITOR_URL", "").rstrip("/")
+    key = os.environ.get("MONITOR_INGEST_KEY", "")
+    if not url or not key:
+        raise RuntimeError("MONITOR_URL and MONITOR_INGEST_KEY are required")
+    payload = snapshot()
+    request = urllib.request.Request(url + "/api/ingest",
+        data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        headers={"content-type": "application/json", "x-ingest-key": key}, method="POST")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        if response.status != 200:
+            raise RuntimeError(f"monitor ingest returned HTTP {response.status}")
+    print(f"[monitor] phase={payload['phase']} labels={payload['label_count']}/"
+          f"{payload['label_target']} step={payload['training']['step']}/"
+          f"{payload['training']['target']} evaluated={payload['evaluation'] is not None}",
+          flush=True)
 
 
 if __name__ == "__main__":

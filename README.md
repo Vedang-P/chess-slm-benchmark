@@ -18,6 +18,21 @@ These benchmark sets were inspected during development; they are fixed
 comparison sets, not untouched holdouts. See [project status](PROJECT-STATUS.md)
 for the run identity and evaluation caveats.
 
+## Automated RL run
+
+The successor run starts from the verified checkpoint above. It removes the
+attention parameters that cancel in softmax, preserving the baseline function,
+then trains a 3.90M-parameter root policy with exact-depth Stockfish rewards.
+Five Kaggle CPU jobs collect 10,000 all-legal-move labels from disjoint corpus
+shards. A supervisor rotates the learner across available T4 accounts and
+launches the frozen 4,000-row MATE / 10,000-puzzle evaluation after 20,000 RL
+updates. This is an experiment; no RL benchmark result exists yet.
+
+GitHub Actions runs the supervisor and publishes the [live monitor](https://chess-slm-monitor.vedangpandeyy.workers.dev/)
+every 10–30 minutes. The Kaggle jobs upload resumable labels, model weights,
+optimizer state, and status to [Hugging Face](https://huggingface.co/datasets/vedangfake/chess-slm-benchmark).
+The primary success gate is puzzle accuracy above the 9M reference's 86.13%.
+
 ## Core files
 
 | Purpose | Path |
@@ -29,6 +44,7 @@ for the run identity and evaluation caveats.
 | Kaggle training entry point | `kernels/ccgavn-2b/train_2b.py` |
 | Frozen benchmark positions | `data/positions/` |
 | Project monitor | `monitor/` |
+| RL verifier, trainer, and supervisor | `scripts/rl_labels.py`, `scripts/train_rl.py`, `scripts/watch_rl.py` |
 
 The baseline training checkpoint and optimizer state are persisted to the
 Hugging Face dataset `vedangfake/chess-slm-benchmark`. Long runs must support

@@ -24,6 +24,8 @@ Called by .github/workflows/pipeline-tick.yml; safe locally
 from __future__ import annotations
 
 import json
+import csv
+import io
 import re
 import subprocess
 import sys
@@ -37,6 +39,7 @@ from watch_2b import FINAL_STEP, RUN  # noqa: E402  single source of truth
 
 HF_REPO = "vedangfake/chess-slm-benchmark"
 KERNEL_DIR = ROOT / "kernels" / "eval-preview"
+KERNEL_SLUG = "eval-ccgavn-preview"
 ACCOUNTS = ["vedanggggg", "vedangpandeyyy", "softmaxsimp", "samaltmannnn", "shoumikmitra"]
 CRED_DS = {"vedanggggg": "vedanggggg/chess-creds",
            "vedangpandeyyy": "vedangpandeyyy/chess-creds",
@@ -106,13 +109,26 @@ def env_for(account: str) -> dict:
 
 
 def kernel_status(account: str) -> str:
-    try:
-        r = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "status",
-                            f"{account}/eval-ccgavn-preview"], env=env_for(account),
-                           capture_output=True, text=True, timeout=90)
-        return (r.stdout or r.stderr).strip()
-    except Exception as exc:
-        return f"status error: {exc}"
+    listing = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "list",
+                              "--mine", "--page-size", "200", "--csv"],
+                             env=env_for(account), capture_output=True, text=True, timeout=90)
+    if listing.returncode:
+        raise RuntimeError(f"{account}: kernel listing failed: {listing.stderr[-300:]}")
+    lines = listing.stdout.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith("ref,title,")), None)
+    if start is None:
+        raise RuntimeError(f"{account}: kernel listing schema changed")
+    refs = {row["ref"] for row in csv.DictReader(io.StringIO("\n".join(lines[start:])))
+            if row.get("ref")}
+    if f"{account}/{KERNEL_SLUG}" not in refs:
+        return "ABSENT"
+    result = subprocess.run([sys.executable, "-m", "kaggle", "kernels", "status",
+                             f"{account}/{KERNEL_SLUG}"], env=env_for(account),
+                            capture_output=True, text=True, timeout=90)
+    if result.returncode:
+        raise RuntimeError(f"{account}/{KERNEL_SLUG}: status failed: "
+                           f"{(result.stdout + result.stderr)[-300:]}")
+    return (result.stdout + result.stderr).strip()
 
 
 def gpu_quota(account: str) -> float:
@@ -141,7 +157,7 @@ def push(account: str, cfg: dict) -> tuple[int, str]:
         tmpd = Path(tmp)
         (tmpd / "eval_preview.py").write_text(render_kernel(cfg), encoding="utf-8")
         (tmpd / "kernel-metadata.json").write_text(json.dumps({
-            "id": f"{account}/eval-ccgavn-preview", "title": "eval-ccgavn-preview",
+            "id": f"{account}/{KERNEL_SLUG}", "title": KERNEL_SLUG,
             "code_file": "eval_preview.py", "language": "python", "kernel_type": "script",
             "is_private": True, "enable_gpu": True, "enable_tpu": False,
             "enable_internet": True, "machine_shape": "NvidiaTeslaT4",

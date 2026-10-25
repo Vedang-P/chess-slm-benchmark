@@ -50,7 +50,19 @@ jobs:
                      "$HOME/.kaggle/profiles/softmaxsimp/access_token" \
                      "$HOME/.kaggle/profiles/samaltmannnn/access_token" \
                      "$HOME/.kaggle/profiles/shoumikmitra/access_token"
-      - name: Pipeline keep-alive
+      - name: Root-policy RL pool
+        env:
+          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        run: |
+          python3 scripts/watch_rl.py
+      - name: Prune superseded Hugging Face checkpoints
+        if: success()
+        env:
+          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        run: |
+          python3 scripts/prune_hf_checkpoints.py --execute --max-folders 100
+      - name: Publish monitor
+        if: always()
         env:
           HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
           MONITOR_URL: https://chess-slm-monitor.vedangpandeyy.workers.dev
