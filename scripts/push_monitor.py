@@ -103,7 +103,8 @@ def main() -> None:
     payload = snapshot()
     request = urllib.request.Request(url + "/api/ingest",
         data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-        headers={"content-type": "application/json", "x-ingest-key": key}, method="POST")
+        headers={"content-type": "application/json", "x-ingest-key": key,
+                 "user-agent": "chess-slm-benchmark-monitor/1.0"}, method="POST")
     with urllib.request.urlopen(request, timeout=30) as response:
         if response.status != 200:
             raise RuntimeError(f"monitor ingest returned HTTP {response.status}")
