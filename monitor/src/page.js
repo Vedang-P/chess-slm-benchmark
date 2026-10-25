@@ -154,15 +154,15 @@ tr:hover td{background:#172223}
 <body>
 <header class="top"><div class="wrap topinner">
   <a class="brand" href="#overview"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>CC-GAVN <span class="muted">/ research monitor</span></span></a>
-  <nav class="topnav" aria-label="Monitor views">
-    <button data-tab="overview" aria-selected="true">Overview</button>
-    <button data-tab="metrics" aria-selected="false">Metrics</button>
-    <button data-tab="method" aria-selected="false">Run contract</button>
+  <nav class="topnav" role="tablist" aria-label="Monitor views">
+    <button id="tab-overview" role="tab" aria-controls="overview" data-tab="overview" aria-selected="true" tabindex="0">Overview</button>
+    <button id="tab-metrics" role="tab" aria-controls="metrics" data-tab="metrics" aria-selected="false" tabindex="-1">Metrics</button>
+    <button id="tab-method" role="tab" aria-controls="method" data-tab="method" aria-selected="false" tabindex="-1">Run contract</button>
   </nav>
   <div class="topright"><span class="fresh mono" id="top-fresh">Connecting</span><span class="pill" id="live-pill"><span class="dot"></span><span id="live-text">Connecting</span></span></div>
 </div></header>
 <main class="wrap">
-<section class="tabpage" id="overview">
+<section class="tabpage" id="overview" role="tabpanel" aria-labelledby="tab-overview">
   <div class="hero">
     <div class="heroleft">
       <div class="eyebrow">EXPERIMENT 01 / ROOT-POLICY REINFORCEMENT LEARNING</div>
@@ -211,7 +211,7 @@ tr:hover td{background:#172223}
   </section>
   <div class="notice" id="problem" hidden></div>
 </section>
-<section class="tabpage" id="metrics" hidden>
+<section class="tabpage" id="metrics" role="tabpanel" aria-labelledby="tab-metrics" hidden>
   <div class="eyebrow">TRAINING TELEMETRY / COMPLETE HF CHECKPOINTS</div>
   <h1>Metrics<span style="color:var(--accent)">.</span></h1>
   <p class="methodintro">Each point comes from a persisted checkpoint. Training losses and the fixed dev probe are shown separately from the final frozen benchmark.</p>
@@ -225,7 +225,7 @@ tr:hover td{background:#172223}
   <div class="metricgrid" id="metric-grid"></div>
   <div class="notice">Dev top-1 is a training probe. It is not puzzle accuracy. Frozen puzzle and MATE scores appear only after the full evaluation completes.</div>
 </section>
-<section class="tabpage" id="method" hidden>
+<section class="tabpage" id="method" role="tabpanel" aria-labelledby="tab-method" hidden>
   <div class="eyebrow">PREDECLARED EXPERIMENT CONTRACT</div>
   <h1>Run contract<span style="color:var(--accent)">.</span></h1>
   <p class="methodintro">This page documents the live run and the evidence behind each dashboard value. The five accounts share the label workload; training resumes from complete Hugging Face checkpoints.</p>
@@ -266,11 +266,27 @@ const metricSpec = [
 function setTab(tab) {
   if(!["overview","metrics","method"].includes(tab))tab="overview";
   document.querySelectorAll(".tabpage").forEach(node=>node.hidden=node.id!==tab);
-  document.querySelectorAll("[data-tab]").forEach(node=>node.setAttribute("aria-selected",String(node.dataset.tab===tab)));
+  document.querySelectorAll("[data-tab]").forEach(node=>{
+    const selected=node.dataset.tab===tab;
+    node.setAttribute("aria-selected",String(selected));
+    node.tabIndex=selected?0:-1;
+  });
   if(location.hash!=="#"+tab)history.replaceState(null,"","#"+tab);
   if(tab==="metrics")renderMetrics(current);
 }
 document.querySelectorAll("[data-tab]").forEach(node=>node.addEventListener("click",()=>{setTab(node.dataset.tab);window.scrollTo(0,0); }));
+byId("tab-overview").parentElement.addEventListener("keydown",event=>{
+  const tabs=[...document.querySelectorAll("[data-tab]")];
+  const currentIndex=tabs.indexOf(document.activeElement);
+  if(currentIndex<0)return;
+  let next=currentIndex;
+  if(event.key==="ArrowRight")next=(currentIndex+1)%tabs.length;
+  else if(event.key==="ArrowLeft")next=(currentIndex+tabs.length-1)%tabs.length;
+  else if(event.key==="Home")next=0;
+  else if(event.key==="End")next=tabs.length-1;
+  else return;
+  event.preventDefault();setTab(tabs[next].dataset.tab);tabs[next].focus();window.scrollTo(0,0);
+});
 window.addEventListener("hashchange",()=>setTab(location.hash.slice(1)));
 document.querySelectorAll("[data-axis]").forEach(node=>node.addEventListener("click",()=>{
   axis=node.dataset.axis;

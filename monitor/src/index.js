@@ -62,6 +62,14 @@ function eventsFrom(previous, current) {
       push("error", label.account + " verifier reported an error", label.status, "bad");
     }
   }
+  for (const account of current.accounts) {
+    const before = previous?.accounts?.find(item => item.account === account.account);
+    if (before && account.learner !== before.learner) {
+      push("worker", account.account + " RL worker " + String(account.learner).toLowerCase(),
+        "Kaggle learner kernel status observed by the supervisor.",
+        statusClass(account.learner) === "error" ? "bad" : "neutral");
+    }
+  }
   const oldStep = Number(previous?.training?.step || 0);
   const step = Number(current.training?.step || 0);
   if (step > oldStep) {
@@ -120,11 +128,14 @@ function metricPoint(item, observedAt) {
 }
 
 async function ingest(env, body) {
-  const [previous, oldHistory, oldEvents] = await Promise.all([
-    env.SNAPSHOT.get("rl_snapshot", "json"),
-    env.SNAPSHOT.get("rl_history", "json"),
-    env.SNAPSHOT.get("rl_events", "json"),
-  ]);
+  const bundle = await env.SNAPSHOT.get("rl_monitor", "json");
+  const [previous, oldHistory, oldEvents] = bundle
+    ? [bundle.snapshot, bundle.history, bundle.events]
+    : await Promise.all([
+      env.SNAPSHOT.get("rl_snapshot", "json"),
+      env.SNAPSHOT.get("rl_history", "json"),
+      env.SNAPSHOT.get("rl_events", "json"),
+    ]);
   if (previous?.updated_at && body.updated_at < previous.updated_at) {
     return { ok: false, stale: true };
   }
@@ -141,11 +152,7 @@ async function ingest(env, body) {
   history.metrics = [...metrics.values()].sort((a, b) => a.step - b.step).slice(-MAX_METRICS);
   const events = [...(oldEvents || []), ...eventsFrom(previous, body)];
   const unique = [...new Map(events.map(item => [item.id, item])).values()].slice(-MAX_EVENTS);
-  await Promise.all([
-    env.SNAPSHOT.put("rl_history", JSON.stringify(history)),
-    env.SNAPSHOT.put("rl_events", JSON.stringify(unique)),
-  ]);
-  await env.SNAPSHOT.put("rl_snapshot", JSON.stringify(body));
+  await env.SNAPSHOT.put("rl_monitor", JSON.stringify({ snapshot: body, history, events: unique }));
   return { ok: true, observations: history.observations.length, metrics: history.metrics.length };
 }
 
@@ -156,11 +163,14 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/snapshot" && request.method === "GET") {
-      const [snapshot, history, events] = await Promise.all([
-        env.SNAPSHOT.get("rl_snapshot", "json"),
-        env.SNAPSHOT.get("rl_history", "json"),
-        env.SNAPSHOT.get("rl_events", "json"),
-      ]);
+      const bundle = await env.SNAPSHOT.get("rl_monitor", "json");
+      const [snapshot, history, events] = bundle
+        ? [bundle.snapshot, bundle.history, bundle.events]
+        : await Promise.all([
+          env.SNAPSHOT.get("rl_snapshot", "json"),
+          env.SNAPSHOT.get("rl_history", "json"),
+          env.SNAPSHOT.get("rl_events", "json"),
+        ]);
       return Response.json({ ...(snapshot || {}), history: history || { observations: [], metrics: [] },
         events: events || [] }, { headers: JSON_HEADERS });
     }
