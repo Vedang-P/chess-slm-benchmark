@@ -63,6 +63,8 @@ def snapshot() -> dict:
         labels.append({"account": f"acct-{index}",
                        "count": min(int(state["count"]), ROOTS_PER_ACCOUNT) if state else 0,
                        "target": ROOTS_PER_ACCOUNT,
+                       "cursor": int(state.get("cursor", 0)) if state else 0,
+                       "shard": (state.get("identity") or {}).get("shard_tag") if state else None,
                        "status": status.splitlines()[-1] if status else "waiting",
                        "kernel": label_kernel})
         accounts.append({"account": f"acct-{index}", "gpu_hours": quota(account),
@@ -71,6 +73,11 @@ def snapshot() -> dict:
     latest = steps[-1] if steps else 0
     metrics = remote_json(api, files, f"{RUN}/checkpoint-{latest}/metrics.json") if steps else None
     config = remote_json(api, files, f"{RUN}/checkpoint-{latest}/config.json") if steps else None
+    checkpoints = []
+    for step in steps:
+        point = remote_json(api, files, f"{RUN}/checkpoint-{step}/metrics.json")
+        if point:
+            checkpoints.append({"step": step, "metrics": point})
     evaluation = remote_json(api, files, f"{EVAL_PREFIX}/eval-summary.json")
     if evaluation and not (evaluation.get("complete") and evaluation.get("returncode") == 0
                            and (evaluation.get("mate") or {}).get("total") == 4000
@@ -86,7 +93,13 @@ def snapshot() -> dict:
             "training": {"step": latest, "target": TOTAL_STEPS,
                          "metrics": metrics, "status": remote_text(api, files, f"{RUN}/run-status.txt"),
                          "checkpoint": f"{RUN}/checkpoint-{latest}" if latest else None,
-                         "parameter_count": (config or {}).get("parameter_count")},
+                         "parameter_count": (config or {}).get("parameter_count"),
+                         "config": {key: (config or {}).get(key) for key in
+                                    ("algorithm", "batch_positions", "group_size", "ppo_epochs",
+                                     "lr", "clip", "kl_coef", "value_coef", "entropy_coef",
+                                     "seed", "source_commit", "source_checkpoint",
+                                     "manifest_sha256", "exclusion_digest")},
+                         "checkpoints": checkpoints},
             "evaluation": evaluation,
             "evaluation_status": remote_text(api, files, f"{EVAL_PREFIX}/run-status.txt"),
             "links": {"github": "https://github.com/Vedang-P/chess-slm-benchmark/actions/workflows/pipeline-tick.yml",

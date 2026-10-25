@@ -1,6 +1,6 @@
 name: pipeline-tick
 
-# The single 24/7 supervisor for the whole project. Triggered every ~10 min by
+# The single 24/7 supervisor for the whole project. Triggered every ~5 min by
 # the Cloudflare Worker cron (repository_dispatch "tick"), with a 30-minute
 # cron as a fallback. Runs the keep-alive checks and pushes the monitor
 # snapshot. No local machine is involved.
@@ -55,12 +55,6 @@ jobs:
           HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
         run: |
           python3 scripts/watch_rl.py
-      - name: Prune superseded Hugging Face checkpoints
-        if: success()
-        env:
-          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
-        run: |
-          python3 scripts/prune_hf_checkpoints.py --execute --max-folders 100
       - name: Publish monitor
         if: always()
         env:
@@ -69,3 +63,9 @@ jobs:
           MONITOR_INGEST_KEY: ${{ secrets.MONITOR_INGEST_KEY }}
         run: |
           python3 scripts/push_monitor.py
+      - name: Prune superseded Hugging Face checkpoints
+        if: success()
+        env:
+          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        run: |
+          python3 scripts/prune_hf_checkpoints.py --execute --max-folders 100
