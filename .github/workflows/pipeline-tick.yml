@@ -50,19 +50,10 @@ jobs:
                      "$HOME/.kaggle/profiles/softmaxsimp/access_token" \
                      "$HOME/.kaggle/profiles/samaltmannnn/access_token" \
                      "$HOME/.kaggle/profiles/shoumikmitra/access_token"
-      - name: Refutation supervisor
-        continue-on-error: true
-        env:
-          HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
-        run: python3 scripts/watch_refutation.py
       - name: Pipeline keep-alive
         env:
           HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
           MONITOR_URL: https://chess-slm-monitor.vedangpandeyy.workers.dev
           MONITOR_INGEST_KEY: ${{ secrets.MONITOR_INGEST_KEY }}
         run: |
-          python3 scripts/ensure_build_2b.py || true
-          python3 scripts/watch_1b.py || true
-          python3 scripts/watch_2b.py || true
-          python3 scripts/ensure_eval_preview.py || true
           python3 scripts/push_monitor.py

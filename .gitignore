@@ -19,8 +19,11 @@ models/
 data/models/
 data/raw/
 data/audit-cache/
+inputs/
 results/
 logs/*.log
+source-progress.json
+source-scan-checkpoint.json
 .cache/
 huggingface/
 unsloth_compiled_cache/
@@ -42,3 +45,6 @@ Thumbs.db
 monitor/node_modules/
 build/
 dist/
+
+# External source checkout used by local and Kaggle runners
+/searchless_chess/

@@ -5,5 +5,8 @@
   "type": "module",
   "dependencies": {
     "chess.js": "^1.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.152.0"
   }
 }

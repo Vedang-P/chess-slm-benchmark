@@ -9,9 +9,7 @@ const FINAL_STEP = 3_896_658;   // stage 2B-A target (2026-10-05)
 const STAGE1 = 320_000;
 const STAGE1B = 1_620_000;      // end of stage 1B
 const CORPUS_TARGET = 1_920_690_429;
-const LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum", "refutation-r0", "refutation-data-r0", "ccgavn-refutation-r0-seed0", "ccgavn-refutation-r0-seed0-v2"];
-const REF = { total: 1944, steps: 12500, final: "ccgavn-5m-seed0-v2/checkpoint-3896658",
-              eval: "eval-results/ccgavn-refutation-r0" };
+const LIVE_RUNS = ["ccgavn-5m-seed0", "ccgavn-5m-seed0-v2", "chessbench-full-build", "ccgavn-1b", "puzzle-curriculum"];
 const REFERENCE = [
   { name: "Ruoss 9M (teacher)", mate: 98.72, puzzles: 86.13, ref: true },
   { name: "legacy GAVN 5.3M", mate: 85.35, puzzles: 43.83, ref: true },
@@ -99,12 +97,12 @@ function evalNumbers(s) {
     if (Array.isArray(m)) return m[0] ? m[0].pct : null;
     if (m.pct != null) return m.pct;
     const n = m[key];
-    return n != null && m.total ? 100 * n / m.total : null;
+    return n != null && m.total ? Math.round(1000 * n / m.total) / 10 : null;
   };
   return { mate: one(s.mate, "correct"), puz: one(s.puzzles, "solved") };
 }
 
-const NOTICE_KEEP = /corrected-v2|seed0-v2|training armed|stage reached|final evaluation|corpus complete|INCOMPLETE|CC-GAVN-R|refutation|pilot/;
+const NOTICE_KEEP = /corrected-v2|seed0-v2|training armed|stage reached|final evaluation|corpus complete|INCOMPLETE/;
 function appendNotices(prev, next) {
   // Important announcements only (2026-10-06 cleanup): drop historical /
   // per-checkpoint noise, keep corrected-v2 progress and failures.
@@ -114,33 +112,7 @@ function appendNotices(prev, next) {
   const push = (text) => {
     if (!seen.has(text)) { notices.unshift({ t: ts, text }); seen.add(text); }
   };
-  const refPrev = prev.refutation || null, refNext = next.refutation || null;
-  if (!refPrev && refNext) push("CC-GAVN-R supervisor online — 1,944 positions, exact depth fallback, five-account relaunch");
-  if (refPrev && refNext) {
-    if (refPrev.phase !== refNext.phase) {
-      const msg = {
-        source: "CC-GAVN-R source preparation started",
-        labeling: "CC-GAVN-R oracle labeling started — 1,944 positions",
-        training: "CC-GAVN-R labels complete — planner training started",
-        evaluation: "CC-GAVN-R training complete — final 4k/10k evaluation started",
-        complete: "CC-GAVN-R complete — result archived",
-        failed: "CC-GAVN-R failed — supervisor will retry after backoff",
-        queued: "CC-GAVN-R kernel queued on Kaggle",
-        running: "CC-GAVN-R kernel running",
-      }[refNext.phase];
-      if (msg) push(msg);
-    }
-    if ((refPrev.train_pct || 0) < 100 && (refNext.train_pct || 0) >= 100)
-      push("CC-GAVN-R planner reached step 12,500");
-    for (const pct of [25, 50, 75]) {
-      if ((refPrev.train_pct || 0) < pct && (refNext.train_pct || 0) >= pct)
-        push(`CC-GAVN-R training ${pct}%`);
-    }
-    if (refNext.eval && refNext.eval.complete && (!refPrev.eval || !refPrev.eval.complete)) {
-      const m = refNext.eval.mate, p = refNext.eval.puzzles;
-      push(`CC-GAVN-R eval — MATE ${m ? m.pct : "—"}% · puzzles ${p ? p.pct : "—"}%`);
-    }
-  }
+  push("corrected-v2 training armed — steps 1.715M → 3.896M, all 102 shards, MATE/puzzle exclusions active");
   const pe = prev.evals || {}, ne = next.evals || {};
   for (const [k, v] of Object.entries(ne)) {
     if (!k.includes("seed0-v2")) continue;
@@ -192,7 +164,6 @@ async function refresh(env) {
   snap.curve = [...(prev.curve || [])];
   snap.evals = { ...(prev.evals || {}) };
   snap.runs = {};
-  snap.refutation = prev.refutation || null;
   snap.games = [...(prev.games || [])];
   snap.kernels = prev.kernels || [];
   snap.quota = prev.quota || {};
@@ -213,8 +184,7 @@ async function refresh(env) {
   }
   snap.curve.sort((a, b) => a.step - b.step);
 
-  const evalPaths = [...paths].filter((p) => /^eval-results\/.*\/eval-summary\.json$/.test(p)
-    || /^eval-results\/ccgavn-refutation-r0\/.*\/summary\.json$/.test(p));
+  const evalPaths = [...paths].filter((p) => /^eval-results\/.*\/eval-summary\.json$/.test(p));
   for (const p of evalPaths) {
     if (snap.evals[p]) continue;
     const s = await hfJson(env, p);
@@ -319,7 +289,7 @@ export default {
       if (!body) return new Response("bad json", { status: 400, headers: SEC });
       const prior = (await env.SNAPSHOT.get("snapshot", "json")) || {};
       const snap = { ...prior };
-      for (const k of ["curve", "evals", "corpus", "games", "runs", "kernels", "quota", "quota_reset", "live", "refutation"]) {
+      for (const k of ["curve", "evals", "corpus", "games", "runs", "kernels", "quota", "quota_reset", "live"]) {
         if (k in body) snap[k] = masked(body[k]);
       }
       snap.reference = REFERENCE;
@@ -524,53 +494,6 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
 .chip.live{border-color:rgba(217,70,63,.5);color:#ef8a85}
 .chip.warn{border-color:rgba(201,162,39,.5);color:#e3c565}
 @media(max-width:700px){.tl-item{grid-template-columns:86px 18px 1fr;gap:8px}}
-/* headline + live */
-.hero{border:1px solid var(--border);border-radius:8px;background:
-  radial-gradient(1200px 300px at 0% 0%, rgba(57,135,229,.12), transparent 60%),
-  linear-gradient(135deg,var(--surface-2),var(--surface));padding:20px 22px}
-.hero-grid{display:grid;grid-template-columns:1.55fr .85fr;gap:24px;align-items:start}
-@media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:16px}}
-.kicker{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
-.hero h1{font-size:clamp(25px,3.4vw,40px);line-height:1.08;letter-spacing:-.025em;font-weight:600;margin:9px 0 10px;max-width:760px}
-.hero h1 .accent{color:#7cb4ff}
-.hero p{color:var(--ink-2);max-width:720px;font-size:13.5px}
-.hero-metrics{display:flex;gap:26px;flex-wrap:wrap;margin-top:16px}
-.hero-metric .k{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
-.hero-metric .v{font-family:var(--mono);font-size:21px;font-weight:600;margin-top:1px}
-.hero-metric .s{font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
-.hero-side{border-left:1px solid var(--border);padding-left:22px}
-@media(max-width:900px){.hero-side{border-left:0;border-top:1px solid var(--border);padding-left:0;padding-top:14px}}
-.hero-side .phase-line{display:flex;align-items:center;gap:9px;margin:8px 0 3px}
-.hero-side .phase-line b{font-size:18px;font-weight:600}
-.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:999px;padding:2px 8px;font-size:10.5px;font-family:var(--mono);color:var(--ink-2);white-space:nowrap}
-.badge.live{border-color:rgba(217,70,63,.5);color:#ef8a85;background:rgba(217,70,63,.08)}
-.badge.ok{border-color:rgba(63,166,106,.45);color:#7ed3a4;background:rgba(63,166,106,.07)}
-.badge.warn{border-color:rgba(201,162,39,.5);color:#e3c565;background:rgba(201,162,39,.07)}
-.ref-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:14px}
-.ref-step{border:1px solid var(--border);border-radius:5px;padding:8px 9px;background:var(--surface)}
-.ref-step .n{font-size:10px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
-.ref-step .p{font-family:var(--mono);font-size:15px;margin:3px 0 5px}
-.ref-step .phase-track{height:4px}
-.ref-step.done{border-color:rgba(63,166,106,.4)}
-.ref-step.now{border-color:rgba(57,135,229,.55)}
-@media(max-width:700px){.ref-steps{grid-template-columns:repeat(2,1fr)}}
-.live-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:10px}
-@media(max-width:900px){.live-grid{grid-template-columns:1fr}}
-.logbox{border-top:1px solid var(--border);margin-top:10px;padding-top:9px}
-.logline{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:3px 0;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
-.logline .k{color:var(--ink-3);text-transform:uppercase;font-size:10px;letter-spacing:.06em;padding-top:1px}
-.logline .v{overflow-wrap:anywhere}
-.result-table td:first-child,.result-table th:first-child{min-width:220px}
-.result-name{font-family:var(--font);font-size:13px}
-.result-sub{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
-.result-row.ref td{color:var(--ink-2)}
-.result-row.best td{background:rgba(63,166,106,.055)}
-.note-list{display:grid;gap:8px;margin-top:4px}
-.note-list p{color:var(--ink-2);font-size:12.5px}
-.note-list b{color:var(--ink)}
-.legend-inline{display:flex;gap:14px;flex-wrap:wrap;color:var(--ink-3);font-size:11.5px;margin-top:8px}
-.legend-inline i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
-@media(max-width:880px){.tabs{overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}}
 </style>
 </head>
 <body>
@@ -578,8 +501,6 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
   <div class="brand">chess-slm</div>
   <div class="tabs">
     <a data-tab="overview" class="active">overview</a>
-    <a data-tab="live">live</a>
-    <a data-tab="results">results</a>
     <a data-tab="metrics">metrics</a>
     <a data-tab="timeline">timeline</a>
     <a data-tab="games">games</a>
@@ -590,10 +511,6 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
 <div class="wrap">
 <!-- overview -->
 <section id="tab-overview">
-  <div class="section">
-    <div class="hero" id="headline"></div>
-  </div>
-
   <div class="section">
     <div class="section-title">notices</div>
     <div class="card" id="notices"></div>
@@ -636,51 +553,6 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
       <div class="card"><div class="card-head"><div class="card-title">kernels</div></div><table class="tbl" id="kernels"></table></div>
       <div class="card"><div class="card-head"><div class="card-title">gpu quota</div><div class="card-note" id="quota-note">weekly reset</div></div><table class="tbl" id="quota"></table></div>
     </div>
-  </div>
-</section>
-
-<!-- live -->
-<section id="tab-live" class="hidden">
-  <div class="section">
-    <div class="section-title" style="margin-top:0">CC-GAVN-R · live pilot</div>
-    <div class="hero" id="live-hero"></div>
-  </div>
-  <div class="section live-grid">
-    <div class="card" id="live-progress"></div>
-    <div class="card" id="live-kernel"></div>
-  </div>
-  <div class="section live-grid">
-    <div class="card" id="live-eval"></div>
-    <div class="card" id="live-spec"></div>
-  </div>
-  <div class="section">
-    <div class="card" id="live-log"></div>
-  </div>
-</section>
-
-<!-- results -->
-<section id="tab-results" class="hidden">
-  <div class="section">
-    <div class="section-title" style="margin-top:0">results</div>
-    <div class="hero" id="res-hero"></div>
-  </div>
-  <div class="section grid2">
-    <div class="card chart-card"><div class="card-head"><div class="card-title">MATE <span class="muted">4,000 rows</span></div></div><div class="chart-body"><canvas id="c-res-mate"></canvas></div></div>
-    <div class="card chart-card"><div class="card-head"><div class="card-title">puzzles <span class="muted">10,000 rows</span></div></div><div class="chart-body"><canvas id="c-res-puz"></canvas></div></div>
-  </div>
-  <div class="section">
-    <div class="card">
-      <div class="card-head"><div class="card-title">leaderboard</div><div class="card-note">frozen protocol · all archived outputs</div></div>
-      <table class="tbl result-table" id="res-table"></table>
-      <div class="legend-inline"><span><i style="background:#3fa66a"></i>best measured</span><span><i style="background:#3a3a39"></i>reference</span><span><i style="background:#3987e5"></i>CC-GAVN</span></div>
-    </div>
-  </div>
-  <div class="section grid2">
-    <div class="card" id="res-base"></div>
-    <div class="card" id="res-ref"></div>
-  </div>
-  <div class="section">
-    <div class="card" id="res-notes"></div>
   </div>
 </section>
 
@@ -732,11 +604,7 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:4p
 <!-- timeline -->
 <section id="tab-timeline" class="hidden">
   <div class="section">
-    <div class="section-title">current research run · CC-GAVN-R</div>
-    <div class="card" id="tl-ref" style="padding:18px 20px"></div>
-  </div>
-  <div class="section">
-    <div class="section-title">completed training · legacy 320k → 1.62m → corrected-v2 → 3.90m steps</div>
+    <div class="section-title">2B continuation · legacy 320k → 1.62m → corrected-v2 → 3.90m steps</div>
     <div class="card tl-hero" id="tl-hero"></div>
   </div>
   <div class="section">
@@ -917,82 +785,20 @@ function evalNumbers(s){
   };
   return {mate:one(s.mate,"correct"),puz:one(s.puzzles,"solved")};
 }
-function evalLabel(path){
-  if(String(path).indexOf("refutation")>=0)return "CC-GAVN-R pilot";
-  const raw=String(path).replace(/^eval-results\\//,"").replace(/\\/(eval-summary|summary)\\.json$/,"");
-  if(raw.indexOf("3896k-final")>=0)return "CC-GAVN 5M · v2 final";
-  if(raw.indexOf("1620k")>=0)return "CC-GAVN 5M · 1.62M final";
-  if(raw.indexOf("320k")>=0)return "CC-GAVN 5M · 320k";
-  const m=raw.match(/(\\d+)k/);
-  if(raw.indexOf("preview")>=0&&m)return "CC-GAVN 5M · "+(parseInt(m[1],10)/1000).toFixed(1)+"M preview";
-  return raw;
-}
 function evalRows(){
   const rows=[];
   for(const p in (snap.evals||{})){const s=snap.evals[p];
     const {mate,puz}=evalNumbers(s);
-    const ck=String(s.checkpoint||"");
-    const sm=ck.match(/checkpoint-(\\d+)/)||String(p).match(/-(\\d+)k-/);
-    const step=sm?parseInt(sm[1],10)*(sm[1].length<=4?1000:1):null;
-    rows.push({label:evalLabel(p),mate:mate,puz:puz,ref:false,step:step,dir:p,
-               final:/final/.test(p)});}
+    rows.push({label:p.replace(/^eval-results\\//,"").replace(/\\/eval-summary\\.json$/,""),mate:mate,puz:puz,ref:false});}
   rows.sort((a,b)=>(b.mate||0)-(a.mate||0));
-  return rows.concat((snap.reference||[]).map(r=>({label:r.name,mate:r.mate,puz:r.puzzles,
-    ref:true,step:null,dir:null,final:false})));
-}
-function phaseLabel(p){
-  return ({source:"source prep",labeling:"oracle labeling",training:"planner training",
-    evaluation:"final evaluation",complete:"complete",failed:"failed",
-    queued:"queued",running:"running"})[p]||"awaiting first tick";
-}
-function sourceLabel(s){
-  return ({downloading_base_checkpoint:"restoring base checkpoint",
-    downloading_games:"downloading Lichess games",downloading_tactics:"downloading Lichess tactics",
-    downloading_disagreements:"downloading disagreement pool",scanning_games:"scanning Lichess games",
-    scanning_tactics:"scanning tactical puzzles",scoring_disagreements:"scoring disagreements",
-    writing_source:"writing source input",source_ready:"source ready",
-    downloading_puzzles:"downloading eval puzzles",downloading_stockfish:"downloading Stockfish"})[s.stage]||
-    (s.stage?String(s.stage).replace(/_/g," "):"preparing source");
-}
-function fmtBytes(n){
-  if(n==null||!isFinite(n))return "—";
-  const u=["B","KB","MB","GB","TB"];let i=0,v=Number(n);
-  while(v>=1024&&i<u.length-1){v/=1024;i++;}
-  return v.toFixed(i?1:0)+" "+u[i];
-}
-function sourceLine(r){
-  const s=r.source||{};
-  const pct=s.pct!=null?Math.round(Number(s.pct))+"%":"…";
-  let detail="";
-  if(s.bytes_total!=null)detail=" · "+fmtBytes(s.bytes_done)+" / "+fmtBytes(s.bytes_total);
-  else if(s.games!=null)detail=" · "+fmt(s.games)+" games";
-  else if(s.rows!=null)detail=" · "+fmt(s.rows)+" rows";
-  return sourceLabel(s)+" · "+pct+detail;
-}
-function fmtDur(s){
-  if(s==null||!isFinite(s))return "—";
-  if(s<3600)return Math.max(1,Math.round(s/60))+"m";
-  if(s<86400)return Math.floor(s/3600)+"h "+Math.round((s%3600)/60)+"m";
-  return Math.floor(s/86400)+"d "+Math.floor((s%86400)/3600)+"h";
-}
-function refStatus(){
-  const r=snap.refutation||{};
-  const k=(snap.kernels||[]).find(x=>x.kernel==="ccgavn-refutation-r0");
-  return {r:r,k:k};
-}
-function refStep(r,key,label){
-  const sourcePct=r.source&&r.source.pct!=null?Number(r.source.pct):0;
-  const pct=key==="source"?(r.source_ready?100:sourcePct):(key==="eval"?(r.eval&&r.eval.complete?100:(r.phase==="evaluation"?55:0)):(key==="labeling"?(r.label_pct||0):(key==="training"?(r.train_pct||0):0)));
-  const pending=!r.source_ready&&(key==="labeling"||key==="training");
-  const note=key==="source"?(r.source_ready?"1,944 exact positions":(r.source?sourceLine(r):"building source")):(key==="labeling"?(r.source_ready?((r.label_done||0)+" / "+(r.label_total||1944)):"after source"):(key==="training"?(r.source_ready?((r.train_step||0)+" / 12,500"):"after labels"):(r.eval&&r.eval.complete?"archived":"not started")));
-  return '<div class="ref-step '+(pct>=100?"done":(pct>0?"now":""))+'" data-ref-step="'+key+'"><div class="n">'+label+'</div><div class="p">'+(pending?"—":Math.round(pct)+"%")+'</div><div class="phase-track"><div class="phase-fill" style="width:'+Math.min(100,pct)+'%"></div></div><div class="chart-note" style="margin-top:4px">'+esc(note)+'</div></div>';
+  return rows.concat(snap.reference||[]);
 }
 function drawBar(id,key,color){
   const el=document.getElementById(id);if(!el||!window.Chart)return;
   const rows=evalRows();
   if(charts[id])charts[id].destroy();
   charts[id]=new Chart(el,{type:"bar",data:{labels:rows.map(r=>r.label),datasets:[{data:rows.map(r=>r[key]),
-    backgroundColor:rows.map(r=>r.ref?"#3a3a39":(r.final?"#3fa66a":color)),borderRadius:2}]},
+    backgroundColor:rows.map(r=>r.ref?"#3a3a39":color),borderRadius:2}]},
     options:{animation:false,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:true}},
       scales:{x:{ticks:{color:"#6f6f6c",maxRotation:60,font:{size:9}},grid:{display:false}},
         y:{suggestedMin:40,suggestedMax:100,ticks:{color:"#6f6f6c",font:{size:10}},grid:{color:"#242423"}}}}});
@@ -1034,7 +840,6 @@ function fmtStep(s){return s>=1e6?(s/1e6).toFixed(2)+"M":(s/1000).toFixed(0)+"k"
 function evalSeries(){
   const rows=[];
   for(const p in (snap.evals||{})){const s=snap.evals[p];
-    if(String(p).indexOf("refutation")>=0)continue;
     const tail=String(s.checkpoint||"").split("checkpoint-")[1];
     const step=tail?parseInt(tail,10):NaN;
     if(!isFinite(step))continue;
@@ -1149,321 +954,6 @@ function renderQuotaDetail(){
     '<table class="tbl"><thead><tr><th>account</th><th>gpu left</th></tr></thead><tbody>'+
     keys.map(a=>"<tr><td>"+esc(a)+'</td><td class="mono">'+esc(q[a])+"h</td></tr>").join("")+"</tbody></table>";
 }
-function renderHeadline(){
-  const rows=evalRows();
-  const base=rows.find(r=>!r.ref&&/v2 final/.test(r.label))||rows.find(r=>!r.ref)||
-    {label:"CC-GAVN 5M · v2 final",mate:92.75,puz:76.2,step:3896658};
-  const teacher=rows.find(r=>r.ref&&r.mate>95)||{mate:98.72,puz:86.13};
-  const {r,k}=refStatus();
-  const phase=r.phase?phaseLabel(r.phase):"awaiting first tick";
-  const active=k&&/RUNNING|QUEUED|PENDING/i.test(k.status||"");
-  const labelDone=r.label_done||0, labelTotal=r.label_total||1944;
-  const trainPct=Math.round(r.train_pct||0);
-  const sourcePhase=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
-  const labelsText=sourcePhase?"—":labelDone+" / "+labelTotal;
-  const plannerText=sourcePhase?"—":trainPct+"%";
-  const gm=base.mate!=null&&teacher.mate!=null?(base.mate-teacher.mate):null;
-  const gp=base.puz!=null&&teacher.puz!=null?(base.puz-teacher.puz):null;
-  const refLine=r.eval&&r.eval.complete
-    ?("MATE "+(r.eval.mate?r.eval.mate.pct:"—")+"% · puzzles "+(r.eval.puzzles?r.eval.puzzles.pct:"—")+"%")
-    :(r.phase==="training"?("planner "+trainPct+"% · step "+fmt(r.train_step||0)+" / 12,500")
-      :(r.phase==="labeling"?("labels "+labelDone+" / "+labelTotal)
-      :(r.phase==="evaluation"?"final 4k / 10k evaluation"
-      :(r.source?sourceLine(r):"source preparation"))));
-  document.getElementById("headline").innerHTML=
-    '<div class="hero-grid"><div>'+
-      '<div class="kicker">latest frozen result · corrected-v2</div>'+
-      '<h1>A <span class="accent">4.76M</span> searchless model at <span class="accent">'+
-        (base.mate!=null?base.mate.toFixed(2):"—")+'%</span> MATE and <span class="accent">'+
-        (base.puz!=null?base.puz.toFixed(2):"—")+'%</span> puzzles.</h1>'+
-      '<p>CC-GAVN 5M finished at checkpoint '+fmt(base.step)+'. The 9M teacher remains '+
-        (gm!=null?Math.abs(gm).toFixed(2):"—")+' pp ahead on MATE and '+
-        (gp!=null?Math.abs(gp).toFixed(2):"—")+' pp ahead on puzzles. '+
-        'The CC-GAVN-R pilot is the next controlled test: can exact refutation targets close any of that gap at the same parameter budget?</p>'+
-      '<div class="hero-metrics">'+
-        '<div class="hero-metric"><div class="k">MATE</div><div class="v">'+(base.mate!=null?base.mate.toFixed(2)+"%":"—")+'</div><div class="s">3,710 / 4,000</div></div>'+
-        '<div class="hero-metric"><div class="k">puzzles</div><div class="v">'+(base.puz!=null?base.puz.toFixed(2)+"%":"—")+'</div><div class="s">7,620 / 10,000</div></div>'+
-        '<div class="hero-metric"><div class="k">parameters</div><div class="v">4.76M</div><div class="s">one-pass searchless</div></div>'+
-        '<div class="hero-metric"><div class="k">gap to 9M</div><div class="v">'+(gm!=null?gm.toFixed(2):"—")+'</div><div class="s">MATE · '+(gp!=null?gp.toFixed(2):"—")+' puzzles</div></div>'+
-      '</div></div>'+
-      '<div class="hero-side"><div class="kicker">CC-GAVN-R · live pilot</div>'+
-        '<div class="phase-line"><b>'+esc(phase)+'</b><span class="badge '+(r.phase==="complete"?"ok":(active?"live":"warn"))+'">'+
-          (r.phase==="complete"?"archived":(active?"active":(r.phase?"waiting":"armed")))+'</span></div>'+
-        '<div class="chart-note" style="margin:6px 0 0">'+esc(refLine)+'</div>'+
-        '<div class="stat-row" style="margin-top:10px">'+
-          '<span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+labelsText+'</span></span>'+
-          '<span class="stat"><span class="stat-label">planner</span><span class="stat-val">'+plannerText+'</span></span>'+
-          '<span class="stat"><span class="stat-label">kernel</span><span class="stat-val">'+(k?esc(k.status):"not launched")+'</span></span>'+
-        '</div>'+
-        '<div class="chart-note" style="margin-top:10px">Automated by GitHub Actions across five Kaggle accounts. Every phase resumes from Hugging Face.</div>'+
-        '<div style="margin-top:8px"><a class="mono dim" href="#live">open live supervisor →</a></div>'+
-      '</div></div>';
-}
-
-function renderLiveHero(){
-  const {r,k}=refStatus();
-  const phase=r.phase?phaseLabel(r.phase):"awaiting first tick";
-  const active=k&&/RUNNING|QUEUED|PENDING/i.test(k.status||"");
-  const done=r.label_done||0,total=r.label_total||1944,tp=Math.round(r.train_pct||0);
-  const sourcePhase=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
-  const sourcePct=r.source&&r.source.pct!=null?Math.round(Number(r.source.pct)):null;
-  const title=r.phase==="complete"?"The pilot has an archived result."
-    :(r.phase==="evaluation"?"The planner is in final evaluation."
-    :(r.phase==="training"?"The planner is training on exact refutation targets."
-    :(r.phase==="labeling"?"Oracle labels are being generated."
-    :(sourcePhase?"Preparing the deterministic pilot source.":"The pilot is waiting for a Kaggle worker."))));
-  const sub=r.phase==="complete"
-    ?("MATE "+(r.eval.mate?r.eval.mate.pct:"—")+"% · puzzles "+(r.eval.puzzles?r.eval.puzzles.pct:"—")+"% on the frozen protocol.")
-    :(sourcePhase?(r.source?("Exact 1,944-row input · "+sourceLine(r)+". Labels begin only after this input is fixed."):"Waiting for the first source-progress upload. Labels begin only after the 1,944-row input is fixed.")
-    :"1,944 positions, exact depth fallback, 12,500 planner steps, then the same 4k MATE and 10k puzzle evaluation as the base model.");
-  document.getElementById("live-hero").innerHTML=
-    '<div class="hero-grid"><div><div class="kicker">CC-GAVN-R · counterfactual refutation</div>'+
-      '<h1>'+esc(title)+'</h1><p>'+esc(sub)+'</p>'+
-      '<div class="hero-metrics">'+
-        '<div class="hero-metric"><div class="k">phase</div><div class="v" style="font-size:16px">'+esc(phase)+'</div><div class="s">'+(active?"kernel active":"supervisor armed")+'</div></div>'+
-        (sourcePhase
-          ? '<div class="hero-metric"><div class="k">source</div><div class="v">'+(sourcePct!=null?sourcePct+"%":"…")+'</div><div class="s">'+esc(r.source?sourceLabel(r.source):"starting")+'</div></div>'+
-            '<div class="hero-metric"><div class="k">labels</div><div class="v">—</div><div class="s">begins after source</div></div>'
-          : '<div class="hero-metric"><div class="k">labels</div><div class="v">'+done+" / "+total+'</div><div class="s">'+(r.label_pct!=null?r.label_pct.toFixed(1)+"%":"0%")+'</div></div>'+
-            '<div class="hero-metric"><div class="k">planner</div><div class="v">'+tp+'%</div><div class="s">step '+fmt(r.train_step||0)+' / 12,500</div></div>')+
-        '<div class="hero-metric"><div class="k">kernel</div><div class="v" style="font-size:16px">'+(k?esc(k.status):"—")+'</div><div class="s">'+(k?esc(k.account):"not launched")+'</div></div>'+
-      '</div></div>'+
-      '<div class="hero-side"><div class="kicker">automation posture</div>'+
-        '<div class="phase-line"><b>GitHub Actions</b><span class="badge ok">supervisor</span></div>'+
-        '<div class="chart-note">A Cloudflare tick dispatches the workflow every ~10 min. The watcher refuses duplicate kernels, backs off after failures, and relaunches on the account with the most GPU quota.</div>'+
-        '<div class="stat-row" style="margin-top:10px">'+
-          '<span class="stat"><span class="stat-label">source</span><span class="stat-val">'+(r.source_ready?"ready":(sourcePct!=null?sourcePct+"%":"pending"))+'</span></span>'+
-          '<span class="stat"><span class="stat-label">label rate</span><span class="stat-val">'+(r.label_rate?r.label_rate.toFixed(2)+"/s":"—")+'</span></span>'+
-          '<span class="stat"><span class="stat-label">eta</span><span class="stat-val">'+fmtDur(r.eta_seconds)+'</span></span>'+
-        '</div>'+
-      '</div></div>';
-}
-
-function renderLiveProgress(){
-  const {r,k}=refStatus();
-  const done=r.label_done||0,total=r.label_total||1944;
-  const accepted=r.accepted||0,rejected=r.rejected||0;
-  const loss=r.train_loss!=null?Number(r.train_loss).toFixed(4):"—";
-  const dev=r.train_dev!=null?Number(r.train_dev).toFixed(4):"—";
-  const pct=r.label_total?Math.round(100*done/r.label_total):0;
-  const sourcePhase=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
-  const src=r.source||{};
-  const srcPct=src.pct!=null?Math.min(100,Math.max(0,Number(src.pct))):0;
-  let body;
-  if(sourcePhase){
-    body='<div class="stat-row">'+
-      '<span class="stat"><span class="stat-label">stage</span><span class="stat-val" style="font-size:12px">'+esc(r.source?sourceLabel(src):"starting")+'</span></span>'+
-      '<span class="stat"><span class="stat-label">downloaded</span><span class="stat-val">'+(src.bytes_done!=null?fmtBytes(src.bytes_done):"—")+'</span><span class="delta">'+(src.bytes_total!=null?"/ "+fmtBytes(src.bytes_total):"")+'</span></span>'+
-      '<span class="stat"><span class="stat-label">scanned</span><span class="stat-val">'+(src.games!=null?fmt(src.games):(src.rows!=null?fmt(src.rows):"—"))+'</span><span class="delta">'+(src.games!=null?"games":"rows")+'</span></span>'+
-      '<span class="stat"><span class="stat-label">labels</span><span class="stat-val">—</span><span class="delta">after source</span></span>'+
-    '</div>'+
-    '<div class="phase-track" style="margin-top:10px"><div class="phase-fill" style="width:'+srcPct+'%"></div></div>'+
-    '<div class="chart-note" style="margin-top:8px">'+esc(sourceLine(r))+' · labels begin only after the 1,944-row input is fixed.</div>';
-  } else {
-    body='<div class="stat-row">'+
-      '<span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+done+" / "+total+'</span><span class="delta">'+pct+'%</span></span>'+
-      '<span class="stat"><span class="stat-label">accepted</span><span class="stat-val">'+accepted+'</span><span class="delta">'+(done?Math.round(100*accepted/Math.max(1,done))+"%":"—")+'</span></span>'+
-      '<span class="stat"><span class="stat-label">rejected</span><span class="stat-val">'+rejected+'</span><span class="delta">'+(done?Math.round(100*rejected/Math.max(1,done))+"%":"—")+'</span></span>'+
-      '<span class="stat"><span class="stat-label">rate</span><span class="stat-val">'+(r.label_rate?r.label_rate.toFixed(2)+"/s":"—")+'</span><span class="delta">rows</span></span>'+
-    '</div>'+
-    '<div class="stat-row" style="margin-top:8px">'+
-      '<span class="stat"><span class="stat-label">planner step</span><span class="stat-val">'+fmt(r.train_step||0)+" / 12,500</span></span>"+
-      '<span class="stat"><span class="stat-label">train loss</span><span class="stat-val">'+loss+'</span></span>'+
-      '<span class="stat"><span class="stat-label">dev top1</span><span class="stat-val">'+dev+'</span></span>'+
-      '<span class="stat"><span class="stat-label">eta</span><span class="stat-val">'+fmtDur(r.eta_seconds)+'</span></span>'+
-    '</div>';
-  }
-  document.getElementById("live-progress").innerHTML=
-    '<div class="card-head"><div class="card-title">pipeline progress</div><span class="badge '+(r.phase==="complete"?"ok":(k&&/RUNNING|QUEUED/i.test(k.status||"")?"live":"warn"))+'">'+esc(r.phase?phaseLabel(r.phase):"awaiting")+'</span></div>'+
-    '<div class="ref-steps">'+refStep(r,"source","source")+refStep(r,"labeling","labels")+refStep(r,"training","planner")+refStep(r,"eval","evaluation")+'</div>'+
-    body+
-    '<div class="chart-note" style="margin-top:8px">'+((sourcePhase?r.source&&r.source.updated_at:r.updated_at)
-      ?"telemetry updated "+esc(ago(new Date((sourcePhase?r.source.updated_at:r.updated_at)).getTime()))
-      :(sourcePhase?"waiting for source telemetry":"no progress.json yet — supervisor waits for the first checkpoint"))+'</div>';
-}
-
-function renderLiveKernel(){
-  const {r,k}=refStatus();
-  const q=k&&snap.quota?snap.quota[k.account]:null;
-  const lines=[
-    ["kernel",k?k.account+"/"+k.kernel:"not launched"],
-    ["status",k?k.status:"waiting"],
-    ["gpu left",q!=null?q+"h":"—"],
-    ["phase",r.top_status||"no run-status.txt yet"],
-    ["labels",r.data_status||"—"],
-    ["planner",r.train_status||"—"],
-  ];
-  document.getElementById("live-kernel").innerHTML=
-    '<div class="card-head"><div class="card-title">worker</div><div class="card-note">kaggle · Hugging Face resume</div></div>'+
-    lines.map(x=>'<div class="logline"><span class="k">'+x[0]+'</span><span class="v">'+esc(x[1])+'</span></div>').join("")+
-    '<div class="chart-note" style="margin-top:8px">The watcher skips accounts running base, 1B, 2B or corpus jobs. A failed pilot backs off before the next relaunch.</div>';
-}
-
-function renderLiveEval(){
-  const {r}=refStatus();
-  const e=r.eval;
-  const rows=evalRows();
-  const base=rows.find(x=>!x.ref&&/v2 final/.test(x.label))||rows.find(x=>!x.ref);
-  const teacher=rows.find(x=>x.ref&&x.mate>95);
-  let body="";
-  if(e&&e.mate&&e.puzzles){
-    body='<div class="hero-metrics" style="margin-top:4px">'+
-      '<div class="hero-metric"><div class="k">MATE</div><div class="v">'+e.mate.pct+'%</div><div class="s">'+e.mate.n+" / "+e.mate.total+'</div></div>'+
-      '<div class="hero-metric"><div class="k">puzzles</div><div class="v">'+e.puzzles.pct+'%</div><div class="s">'+e.puzzles.n+" / "+e.puzzles.total+'</div></div>'+
-      '<div class="hero-metric"><div class="k">vs base</div><div class="v">'+(base&&base.mate!=null?(e.mate.pct-base.mate).toFixed(2):"—")+'</div><div class="s">MATE pp</div></div>'+
-      '<div class="hero-metric"><div class="k">vs 9M</div><div class="v">'+(teacher&&teacher.mate!=null?(e.mate.pct-teacher.mate).toFixed(2):"—")+'</div><div class="s">MATE pp</div></div>'+
-    '</div>';
-  } else {
-    body='<div class="empty" style="padding:6px 0">No archive yet. The same 4,000 MATE and 10,000 puzzle sets are evaluated after step 12,500; the result is written under eval-results/ccgavn-refutation-r0/.</div>';
-  }
-  document.getElementById("live-eval").innerHTML='<div class="card-head"><div class="card-title">pilot evaluation</div><div class="card-note">frozen protocol</div></div>'+body+
-    '<div class="chart-note" style="margin-top:8px">Base final: '+(base&&base.mate!=null?base.mate.toFixed(2)+"% / "+base.puz.toFixed(2)+"%":"—")+
-    ' · 9M teacher: '+(teacher?teacher.mate+"% / "+teacher.puz+"%":"—")+'</div>';
-}
-
-function renderLiveSpec(){
-  document.getElementById("live-spec").innerHTML=
-    '<div class="card-head"><div class="card-title">experiment contract</div><div class="card-note">pre-registered</div></div>'+
-    '<div class="note-list">'+
-      '<p><b>1,944 positions</b> exactly 50/25/25 broad / tactical / disagreements. Every root is re-scored at the exact Stockfish depth; bound scores are never accepted as labels.</p>'+
-      '<p><b>12,500 planner steps</b> on 4.76M-parameter CC-GAVN, then one-pass frozen evaluation. Checkpoints and progress upload every ~15 min.</p>'+
-      '<p><b>Claim rule:</b> the pilot only supports a claim if it clears the base and the pre-registered puzzle gate; otherwise it is reported as a negative result.</p>'+
-    '</div>'+
-    '<div class="chart-note" style="margin-top:8px">Artifacts: <a class="mono dim" href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/refutation-data-r0" target="_blank" rel="noopener">labels ↗</a> · '+
-    '<a class="mono dim" href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/ccgavn-refutation-r0-seed0-v2" target="_blank" rel="noopener">planner ↗</a> · '+
-    '<a class="mono dim" href="https://github.com/Vedang-P/chess-slm-benchmark/actions/workflows/pipeline-tick.yml" target="_blank" rel="noopener">workflow ↗</a></div>';
-}
-
-function renderLiveLog(){
-  const {r,k}=refStatus();
-  const lines=[];
-  if(r.top_status)lines.push(["root",r.top_status]);
-  if(r.data_status)lines.push(["data",r.data_status]);
-  if(r.train_status)lines.push(["train",r.train_status]);
-  if(!lines.length)lines.push(["status","No refutation status file on Hugging Face yet."]);
-  document.getElementById("live-log").innerHTML='<div class="card-head"><div class="card-title">live log</div><div class="card-note mono">'+
-    (r.updated_at?esc(ago(new Date(r.updated_at).getTime())):"waiting")+'</div></div>'+
-    lines.map(x=>'<div class="logline"><span class="k">'+x[0]+'</span><span class="v">'+esc(String(x[1]).slice(0,260))+'</span></div>').join("")+
-    '<div class="chart-note" style="margin-top:8px">Raw files: <a class="mono dim" href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/refutation-r0" target="_blank" rel="noopener">refutation-r0 ↗</a> · '+
-    '<a class="mono dim" href="https://github.com/Vedang-P/chess-slm-benchmark/actions" target="_blank" rel="noopener">actions ↗</a></div>';
-}
-
-function renderResultsHero(){
-  const rows=evalRows();
-  const base=rows.find(r=>!r.ref&&/v2 final/.test(r.label))||rows.find(r=>!r.ref)||
-    {label:"CC-GAVN 5M · v2 final",mate:92.75,puz:76.2,step:3896658};
-  const teacher=rows.find(r=>r.ref&&r.mate>95)||{mate:98.72,puz:86.13};
-  const gm=base.mate!=null&&teacher.mate!=null?base.mate-teacher.mate:null;
-  const gp=base.puz!=null&&teacher.puz!=null?base.puz-teacher.puz:null;
-  document.getElementById("res-hero").innerHTML=
-    '<div class="hero-grid"><div><div class="kicker">frozen protocol · 4k MATE + 10k puzzles</div>'+
-      '<h1>Final base: <span class="accent">'+(base.mate!=null?base.mate.toFixed(2):"—")+'%</span> MATE, <span class="accent">'+(base.puz!=null?base.puz.toFixed(2):"—")+'%</span> puzzles.</h1>'+
-      '<p>One-pass CC-GAVN at checkpoint '+fmt(base.step)+'. '+
-      (gm!=null?"The 9M teacher is "+Math.abs(gm).toFixed(2)+" pp higher on MATE and "+Math.abs(gp).toFixed(2)+" pp higher on puzzles; the parameter gap is 2x.":"")+
-      ' The 1.62M checkpoint and 320k baseline remain below it.</p>'+
-      '<div class="hero-metrics">'+
-        '<div class="hero-metric"><div class="k">MATE</div><div class="v">'+(base.mate!=null?base.mate.toFixed(2)+"%":"—")+'</div><div class="s">3,710 / 4,000</div></div>'+
-        '<div class="hero-metric"><div class="k">puzzles</div><div class="v">'+(base.puz!=null?base.puz.toFixed(2)+"%":"—")+'</div><div class="s">7,620 / 10,000</div></div>'+
-        '<div class="hero-metric"><div class="k">vs 1.62M</div><div class="v">+1.05</div><div class="s">MATE pp</div></div>'+
-        '<div class="hero-metric"><div class="k">vs 1.62M</div><div class="v">+1.89</div><div class="s">puzzle pp</div></div>'+
-      '</div></div>'+
-      '<div class="hero-side"><div class="kicker">what this is</div>'+
-        '<div class="phase-line"><b>CC-GAVN 5M</b><span class="badge ok">archived</span></div>'+
-        '<div class="chart-note">A candidate-conditioned geometry network distilled from a 9M teacher and Stockfish targets. It evaluates every legal move in one pass; no tree search at inference.</div>'+
-        '<div class="stat-row" style="margin-top:10px"><span class="stat"><span class="stat-label">params</span><span class="stat-val">4.76M</span></span><span class="stat"><span class="stat-label">layers</span><span class="stat-val">8</span></span><span class="stat"><span class="stat-label">dim</span><span class="stat-val">224</span></span></div>'+
-      '</div></div>';
-}
-
-function renderResultsTable(){
-  const rows=evalRows();
-  const base=rows.find(r=>!r.ref&&/v2 final/.test(r.label))||rows.find(r=>!r.ref);
-  const teacher=rows.find(r=>r.ref&&r.mate>95)||{mate:98.72};
-  let top=null;
-  for(const r of rows)if(!r.ref&&(top===null||(r.mate||0)>(top.mate||0)))top=r;
-  let html='<thead><tr><th>model</th><th>step</th><th>MATE</th><th>puzzles</th><th>Δ vs base</th><th>gap to 9M</th><th></th></tr></thead><tbody>';
-  rows.forEach(r=>{
-    const dm=base&&base.mate!=null&&r.mate!=null?r.mate-base.mate:null;
-    const dcls=dm==null?"":(dm>0?"delta good":(dm<0?"delta bad":""));
-    const gap=r.mate!=null&&teacher.mate!=null?r.mate-teacher.mate:null;
-    const href=r.dir?"https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/"+String(r.dir).replace(/\\/(eval-summary|summary)\\.json$/,""):"";
-    html+='<tr class="result-row '+(r.ref?"ref":"")+(r===top?" best":"")+'"><td><div class="result-name">'+esc(r.label)+
-      (r.final?' <span class="badge ok">final</span>':'')+'</div><div class="result-sub">'+(r.ref?"reference":"frozen evaluation")+'</div></td><td>'+
-      (r.step?fmt(r.step):"—")+'</td><td>'+(r.mate!=null?r.mate.toFixed(2)+"%":"—")+'</td><td>'+
-      (r.puz!=null?r.puz.toFixed(2)+"%":"—")+'</td><td class="'+dcls+'">'+(dm==null?"—":(dm>0?"+":"")+dm.toFixed(2))+
-      '</td><td>'+(gap==null?"—":(gap>0?"+":"")+gap.toFixed(2))+'</td><td>'+
-      (href?'<a class="dim" href="'+href+'" target="_blank" rel="noopener">hf ↗</a>':"")+'</td></tr>';
-  });
-  document.getElementById("res-table").innerHTML=html+"</tbody>";
-}
-
-function renderResultsBase(){
-  const rows=evalRows().filter(r=>!r.ref&&/CC-GAVN 5M/.test(r.label));
-  const e=rows.find(r=>/v2 final/.test(r.label))||rows[0];
-  document.getElementById("res-base").innerHTML='<div class="card-head"><div class="card-title">base checkpoints</div><div class="card-note">corrected-v2 lineage</div></div>'+
-    '<table class="tbl"><thead><tr><th>checkpoint</th><th>step</th><th>MATE</th><th>puzzles</th></tr></thead><tbody>'+
-    rows.map(r=>'<tr><td>'+esc(r.label)+'</td><td>'+(r.step?fmt(r.step):"—")+'</td><td>'+(r.mate!=null?r.mate.toFixed(2)+"%":"—")+'</td><td>'+(r.puz!=null?r.puz.toFixed(2)+"%":"—")+'</td></tr>').join("")+
-    '</tbody></table><div class="chart-note" style="margin-top:8px">Final checkpoint: <span class="mono">'+(e&&e.dir?esc(e.dir):"ccgavn-5m-seed0-v2/checkpoint-3896658")+'</span>. Test sets were previously exposed during development; compare within protocol, not as an untouched holdout.</div>';
-}
-
-function renderResultsRef(){
-  const {r}=refStatus();
-  const e=r.eval;
-  const base=evalRows().find(x=>!x.ref&&/v2 final/.test(x.label));
-  const teacher=evalRows().find(x=>x.ref&&x.mate>95);
-  let body;
-  if(e&&e.complete&&e.mate&&e.puzzles){
-    body='<div class="hero-metrics" style="margin-top:2px">'+
-      '<div class="hero-metric"><div class="k">MATE</div><div class="v">'+e.mate.pct+'%</div><div class="s">'+e.mate.n+" / "+e.mate.total+'</div></div>'+
-      '<div class="hero-metric"><div class="k">puzzles</div><div class="v">'+e.puzzles.pct+'%</div><div class="s">'+e.puzzles.n+" / "+e.puzzles.total+'</div></div>'+
-      '<div class="hero-metric"><div class="k">vs base</div><div class="v">'+(base&&base.mate!=null?(e.mate.pct-base.mate).toFixed(2):"—")+'</div><div class="s">MATE pp</div></div>'+
-      '<div class="hero-metric"><div class="k">vs 9M</div><div class="v">'+(teacher&&teacher.mate!=null?(e.mate.pct-teacher.mate).toFixed(2):"—")+'</div><div class="s">MATE pp</div></div>'+
-    '</div>';
-  } else {
-    const preSource=r.phase==="source"||(r.phase==="queued"&&!r.source_ready);
-    body='<div class="empty" style="padding:6px 0">In progress: '+esc(r.phase?phaseLabel(r.phase):"awaiting first tick")+'. No result is claimed before the 4k/10k archive is complete.</div>'+
-      '<div class="stat-row"><span class="stat"><span class="stat-label">labels</span><span class="stat-val">'+(preSource?"—":((r.label_done||0)+" / "+(r.label_total||1944)))+'</span></span>'+
-      '<span class="stat"><span class="stat-label">planner</span><span class="stat-val">'+(preSource?"—":((r.train_step||0)+" / 12,500"))+'</span></span>'+
-      '<span class="stat"><span class="stat-label">eta</span><span class="stat-val">'+fmtDur(r.eta_seconds)+'</span></span></div>';
-  }
-  document.getElementById("res-ref").innerHTML='<div class="card-head"><div class="card-title">CC-GAVN-R pilot</div><div class="card-note">1,944 positions · 12.5k steps</div></div>'+body+
-    '<div class="chart-note" style="margin-top:8px">Pre-registered gate: MATE above base and puzzle target ≥90.13%; report a negative result otherwise.</div>';
-}
-
-function renderResultsNotes(){
-  document.getElementById("res-notes").innerHTML='<div class="card-head"><div class="card-title">reading the results</div><div class="card-note">protocol notes</div></div>'+
-    '<div class="note-list">'+
-      '<p><b>Final protocol.</b> MATE is 4,000 rows; puzzles is the official 10,000-row set. Both were used during development, so this is a fixed comparison, not an untouched holdout.</p>'+
-      '<p><b>Same-budget comparison.</b> CC-GAVN is 4.76M parameters. The Ruoss 9M teacher is a reference and roughly 2x larger; the interesting gap is the one that remains at equal budget.</p>'+
-      '<p><b>Refutation pilot.</b> The 1,944-position pilot is a controlled test of exact counterfactual targets, not a scaling run. A complete archive is required before adding it to this table.</p>'+
-      '<p><b>Reproducibility.</b> Checkpoints, eval JSON, run status, and progress files are archived on <a class="mono" href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark" target="_blank" rel="noopener">Hugging Face ↗</a>. The supervisor and site source live in the repository.</p>'+
-    '</div>';
-}
-
-function renderTimelineRef(){
-  const el=document.getElementById("tl-ref");if(!el)return;
-  const {r,k}=refStatus();
-  const phase=r.phase?phaseLabel(r.phase):"armed";
-  const active=k&&/RUNNING|QUEUED|PENDING/i.test(k.status||"");
-  el.innerHTML='<div class="card-head"><div class="card-title">counterfactual refutation training</div><span class="badge '+(r.phase==="complete"?"ok":(active?"live":"warn"))+'">'+esc(phase)+'</span></div>'+
-    '<p class="chart-note" style="margin:8px 0 12px">Reuse the 4.76M CC-GAVN trunk across exact chess transitions. Score every legal candidate, follow two learned opponent replies, train on oracle-labeled future boards and the model\\'s own continuations, then distill the planner back into a one-pass model.</p>'+
-    '<div class="stat-row">'+
-      '<span class="stat"><span class="stat-label">parameter limit</span><span class="stat-val">&lt; 5M</span></span>'+
-      '<span class="stat"><span class="stat-label">pilot</span><span class="stat-val">1,944</span></span>'+
-      '<span class="stat"><span class="stat-label">base final</span><span class="stat-val">92.75% / 76.20%</span></span>'+
-      '<span class="stat"><span class="stat-label">puzzle target</span><span class="stat-val">≥ 90.13%</span></span>'+
-      '<span class="stat"><span class="stat-label">measured gain</span><span class="stat-val">'+(r.eval&&r.eval.complete?"archived":"none yet")+'</span></span>'+
-    '</div>'+
-    '<div class="chart-note" style="margin-top:10px">The pilot is automated: source prep, exact labels, planner training, and final evaluation all resume from Hugging Face; GitHub Actions relaunches across five Kaggle accounts. Current kernel: '+(k?esc(k.account+"/"+k.kernel+" · "+k.status):"not launched")+'.</div>'+
-    '<div class="chart-note" style="margin-top:4px">The score is an experimental target, not a forecast. The planner uses more inference compute than the one-pass teacher.</div>';
-}
-
-function renderLive(){
-  renderLiveHero();renderLiveProgress();renderLiveKernel();renderLiveEval();renderLiveSpec();renderLiveLog();
-}
-function renderResults(){
-  renderResultsHero();renderResultsTable();renderResultsBase();renderResultsRef();renderResultsNotes();
-  drawBar("c-res-mate","mate","#3987e5");drawBar("c-res-puz","puz","#3987e5");
-}
 function renderCharts(){
   const rows=evalRows();
   const topMate=rows.filter(r=>!r.ref&&r.mate!=null)[0];
@@ -1548,8 +1038,6 @@ const TL_HISTORY=[
  ["2026-10-05T17:00:00Z","Stage 2B-A launched (legacy recipe)","102 tags (1.746B rows) warm-started from checkpoint-1,620,000; target 3,896,658 steps; last 16 planned shards labeling in parallel.",[]],
  ["2026-10-06T12:00:00Z","Review: legacy 2B schedule skipped 41/102 shards","The committed trainer rebuilt the full-budget schedule and indexed it by global step, so whole shard blocks in the skipped prefix never trained; also no MATE/puzzle exclusions, LR on group 0 only, castling reflections and dev-sampling RNG issues.",[["warn","41/102 tags never sampled"]]],
  ["2026-10-06T13:00:00Z","Corrected-v2 continuation designed; training disarmed","New prefix warm-starts from the latest legacy checkpoint with a stage-relative schedule over all 102 tags, MATE+puzzle exclusions, all-group LR, checkpoint-independent dev RNG, source-commit pinning, per-example eval resume; audits: 0.0003% benchmark overlap, ~0.24% duplicate positions.",[["warn","awaiting explicit arm"]]],
- ["2026-10-20T00:00:00Z","Final corrected-v2 eval archived","CC-GAVN 5M at checkpoint 3,896,658: MATE 3,710/4,000 (92.75%), official puzzles 7,620/10,000 (76.20%). The 9M teacher remains ahead by 5.97 pp / 9.93 pp.",[["ok","92.75% MATE"],["ok","76.20% puzzles"],["","final 4k + 10k"]]],
- ["2026-10-20T00:05:00Z","CC-GAVN-R pilot implemented; kernel launched","Exact depth fallback, 1,944-position 50/25/25 pilot, resumable labels/training/eval, GitHub Actions supervisor, and live monitor are wired. Training has not produced a result yet.",[["warn","kernel launched"],["ok","28.7h GPU quota"]]],
 ];
 function renderTimeline(){
   const c=(snap.curve||[]).filter(p=>p.step);
@@ -1560,7 +1048,7 @@ function renderTimeline(){
   const etaT=s=>baseT+(s-last.step)/rate*1000;
   const pct=Math.max(0,Math.min(100,(last.step-STAGE1)/(FINAL_STEP-STAGE1)*100));
   const next=TL_TARGETS.find(s=>s>last.step)||FINAL_STEP;
-  const k=(snap.kernels||[]).find(x=>/^ccgavn-/.test(x.kernel)&&!/refutation/.test(x.kernel)&&/RUNNING/i.test(x.status));
+  const k=(snap.kernels||[]).find(x=>/^ccgavn-/.test(x.kernel)&&/RUNNING/i.test(x.status));
   const q=k?(snap.quota||{})[k.account]:null;
   const handoffT=(q!==null&&q!==undefined&&isFinite(parseFloat(q)))?nowT+parseFloat(q)*36e5:null;
   const stat=(kk,v,s)=>'<div class="tl-stat"><div class="k">'+kk+'</div><div class="v">'+v+'</div><div class="s">'+s+'</div></div>';
@@ -1592,7 +1080,6 @@ function renderTimeline(){
   // Evals completed after the hand-written history: append them automatically
   // with their real numbers, so the timeline keeps growing on its own.
   TL_TARGETS.filter(s=>s>500000).forEach(s=>{
-    if(s===3896658)return;
     const e=(snap.evals||{})[tlEvalKey(s)];
     if(!e)return;
     const {mate,puz}=evalNumbers(e);
@@ -1605,13 +1092,9 @@ function renderTimeline(){
       "@"+tlK(s)+" "+(fin?"final eval":"monitoring eval (dev diagnostic)"),
       fin?"4k MATE + official 10k puzzles, archived on HF; not an untouched holdout":"",chips);
   });
-  if(complete){
-    html+=item("done","done","CC-GAVN 5M training complete","final checkpoint "+last.step.toLocaleString()+" · final 4k/10k evaluation archived",[["ok","92.75% MATE"],["ok","76.20% puzzles"]]);
-  }else{
-    html+=item("now","now","training — step "+last.step.toLocaleString()+" ("+pct.toFixed(1)+"%)",
-      (k?"on "+esc(k.account):"no kernel")+" · next eval @"+tlK(next)+" in "+tlIn(etaT(next)-nowT)+" · finish in "+tlIn(etaT(FINAL_STEP)-nowT),
-      [["live",rate.toFixed(2)+" steps/s"],["",Math.round(rate*2048).toLocaleString()+" samples/s"]]);
-  }
+  html+=item("now","now","training — step "+last.step.toLocaleString()+" ("+pct.toFixed(1)+"%)",
+    (k?"on "+esc(k.account):"no kernel")+(complete?" · complete":" · next eval @"+tlK(next)+" in "+tlIn(etaT(next)-nowT)+" · finish in "+tlIn(etaT(FINAL_STEP)-nowT)),
+    [["live",rate.toFixed(2)+" steps/s"],["",Math.round(rate*2048).toLocaleString()+" samples/s"]]);
   TL_TARGETS.filter(s=>s>last.step).forEach(s=>{
     const fin=(s===1620000||s===3896658);
     html+=item("future",tlFmt(new Date(etaT(s))),
@@ -1622,21 +1105,16 @@ function renderTimeline(){
   html+=item("future","tbd","Stage 2B-B / next decision","Final 16 shards (~269M rows) append after stage 2B-A; then decide on further scaling from the shard-content insights.",[]);
   html+=item("future","tbd","write-up","Target: Efficient and On-Device AI Agents Workshop @ NeurIPS 2026.",[]);
   document.getElementById("tl-list").innerHTML=html;
-  renderTimelineRef();
 }
 /* tabs + wiring */
-const TABS=["overview","live","results","metrics","timeline","games"];
 function switchTab(name){
   document.querySelectorAll(".tabs a").forEach(a=>a.classList.toggle("active",a.dataset.tab===name));
-  TABS.forEach(t=>document.getElementById("tab-"+t).classList.toggle("hidden",t!==name));
-  if(name==="live")renderLive();
-  if(name==="results")renderResults();
-  if(name==="timeline")renderTimeline();
-  if(name!=="games"&&name!=="live"&&name!=="results")renderCharts();
+  ["overview","metrics","timeline","games"].forEach(t=>document.getElementById("tab-"+t).classList.toggle("hidden",t!==name));
+  if(name!=="games")renderCharts();
 }
 document.querySelectorAll(".tabs a").forEach(a=>a.onclick=()=>{location.hash=a.dataset.tab;switchTab(a.dataset.tab);});
-const initTab=(location.hash||"").replace("#","");if(TABS.includes(initTab))switchTab(initTab);
-window.addEventListener("hashchange",()=>{const t=(location.hash||"").replace("#","");if(TABS.includes(t))switchTab(t);});
+const initTab=(location.hash||"").replace("#","");if(["overview","metrics","timeline","games"].includes(initTab))switchTab(initTab);
+window.addEventListener("hashchange",()=>{const t=(location.hash||"").replace("#","");if(["overview","metrics","timeline","games"].includes(t))switchTab(t);});
 document.getElementById("b-prev").onclick=()=>jump(ply-1);
 document.getElementById("b-next").onclick=()=>jump(ply+1);
 document.getElementById("b-first").onclick=()=>jump(0);
@@ -1654,8 +1132,7 @@ async function load(){
   const r=await fetch("/api/snapshot?t="+Date.now(),{cache:"no-store"});
   snap=await r.json();
   updateCorpusRate();
-  renderNav();renderNotices();renderRuns();renderStages();renderCorpus();renderInfra();
-  renderHeadline();renderLive();renderResults();renderCharts();renderCkpt();renderTimeline();
+  renderNav();renderNotices();renderRuns();renderStages();renderCorpus();renderInfra();renderCharts();renderCkpt();renderTimeline();
   const sel=document.getElementById("gamesel");const cur=sel.value;
   sel.innerHTML=(snap.games||[]).map((g,i)=>'<option value="'+i+'">'+esc(g.white+" vs "+g.black+" ("+g.result+")")+"</option>").join("");
   if(snap.games&&snap.games.length){sel.value=(cur&&+cur<snap.games.length)?cur:0;selectGame(+sel.value);}else selectGame(-1);

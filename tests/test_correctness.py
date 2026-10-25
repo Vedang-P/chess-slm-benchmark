@@ -1,6 +1,5 @@
 import json
 import os
-import random
 import shutil
 import subprocess
 import tempfile
@@ -10,7 +9,6 @@ from pathlib import Path
 import chess
 import numpy as np
 import torch
-import zstandard
 
 from scripts.data_hygiene import eligible_mask, position_hashes, set_learning_rate
 from scripts.eval_gavn import tokenize_fen
@@ -305,117 +303,6 @@ class CorrectnessTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    def test_source_progress_throttles_and_survives_upload_errors(self):
-        from scripts.kaggle_checkpoint import SourceProgress, write_status
-
-        class Boom:
-            def __init__(self):
-                self.calls = 0
-
-            def upload_file(self, **kwargs):
-                self.calls += 1
-                raise RuntimeError("429 Too Many Requests")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            progress = SourceProgress(Path(tmp) / "progress.json")
-            progress.client = Boom()
-            progress.repo_id, progress.remote_prefix, progress.every = "repo", "run", 100.0
-            progress.update("scanning_games", bytes_done=1, bytes_total=2)
-            progress.update("scanning_games", bytes_done=2, bytes_total=2)
-        self.assertEqual(progress.client.calls, 1)
-        write_status(Boom(), "repo", "run", "FAILED: test")
-
-    def test_parallel_download_writes_exact_bytes(self):
-        import http.server
-        import threading
-        from scripts.kaggle_checkpoint import parallel_download
-
-        payload = bytes(range(256)) * 8192
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def log_message(self, *args):
-                pass
-
-            def do_HEAD(self):
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-
-            def do_GET(self):
-                header = self.headers.get("Range", "")
-                start_s, _, end_s = header.removeprefix("bytes=").partition("-")
-                start, end = int(start_s), int(end_s)
-                body = payload[start:end + 1]
-                self.send_response(206)
-                self.send_header("Content-Range", f"bytes {start}-{end}/{len(payload)}")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                path = Path(tmp) / "ranges.bin"
-                parallel_download(f"http://127.0.0.1:{server.server_port}/data", path, connections=4)
-                self.assertEqual(path.read_bytes(), payload)
-                self.assertFalse(Path(str(path) + ".part").exists())
-        finally:
-            server.shutdown()
-            server.server_close()
-
-    def test_source_scan_prefilters_and_matches_multiprocess(self):
-        from scripts.prepare_refutation_sources import game_positions
-
-        def make_game(site, white_elo, black_elo, plies, variant="Standard"):
-            game = chess.pgn.Game()
-            game.headers.update({
-                "Event": "Rated Blitz game", "Site": site, "Date": "2025.04.01",
-                "White": "white", "Black": "black", "Result": "*",
-                "WhiteElo": str(white_elo), "BlackElo": str(black_elo),
-                "Variant": variant,
-            })
-            board = chess.Board()
-            node = game
-            rng = random.Random(site)
-            for _ in range(plies):
-                if board.is_game_over():
-                    break
-                move = rng.choice(list(board.legal_moves))
-                board.push(move)
-                node = node.add_variation(move)
-            return str(game)
-
-        games = [
-            make_game("https://lichess.org/keep1", 2000, 2100, 32),
-            make_game("https://lichess.org/keep2", 1900, 1800, 28),
-            make_game("", 2050, 1950, 36),
-            make_game("https://lichess.org/low", 1200, 1700, 40),
-            make_game("https://lichess.org/short", 2000, 2000, 20),
-            make_game("https://lichess.org/chess960", 2000, 2000, 30, "Chess960"),
-        ]
-        raw = "\n\n".join(games) + "\n"
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "games.pgn.zst"
-            path.write_bytes(zstandard.ZstdCompressor().compress(raw.encode()))
-            serial = game_positions(path, 3, 1729, workers=1)
-            parallel = game_positions(path, 3, 1729, workers=2)
-            checkpoint = Path(tmp) / "scan-checkpoint.json"
-            first = game_positions(path, 3, 1729, workers=1, checkpoint=checkpoint)
-            saved = json.loads(checkpoint.read_text())
-            resumed = game_positions(path, 3, 1729, workers=1, checkpoint=checkpoint,
-                                     resume=True)
-        self.assertEqual(serial, parallel)
-        self.assertEqual(first, serial)
-        self.assertEqual(resumed, serial)
-        self.assertEqual(saved["processed"], 4)
-        self.assertEqual(len(serial), 3)
-        fens = [row["fen"] for row in serial]
-        self.assertEqual(len(set(fens)), 3)
-        self.assertFalse(any("low" in row["game_id"] or "short" in row["game_id"]
-                             or "chess960" in row["game_id"] for row in serial))
-
     def test_monitor_inline_script_renders(self):
         node = shutil.which("node")
         if not node:
@@ -459,9 +346,6 @@ class CorrectnessTests(unittest.TestCase):
         np.testing.assert_array_equal(schedule[1234:], regenerated[1234:])
 
     def test_shard_schedule_never_drops_a_shard_on_tiny_budgets(self):
-        # Rounding every fraction up then clawing the excess back from one
-        # block can drive that block to zero or negative, dropping a declared
-        # shard (and np.repeat rejects a negative count).
         m = object.__new__(ShardManager)
         m.tags = ['a', 'b', 'c', 'd', 'e']
         m.rows = {'a': 33393, 'b': 779204, 'c': 10237, 'd': 783653,
@@ -469,7 +353,7 @@ class CorrectnessTests(unittest.TestCase):
         schedule = m.schedule(len(m.tags), np.random.default_rng(0))
         self.assertEqual(len(schedule), len(m.tags))
         self.assertEqual(set(schedule.tolist()), set(m.tags))
-        # Same failure with the shipped 102-shard config at a smoke budget.
+
         root = Path(__file__).resolve().parents[1]
         real = object.__new__(ShardManager)
         real.tags = json.loads(

@@ -16,14 +16,14 @@ let the user choose.
 ~12h) MUST upload model weights + training state to Hugging Face
 periodically and support resume from HF.**
 
-- The shared implementation lives in `scripts/kaggle_checkpoint.py` and
-  `scripts/posttrain.py`: it uploads complete checkpoint directories to the
+- The shared implementation lives in `scripts/kaggle_checkpoint.py`; the
+  baseline trainers in `scripts/train_ccgavn.py` and `scripts/train_gavn.py`
+  show how to use it. It uploads complete checkpoint directories to the
   `--hf-repo` dataset on an interval, uploads final artifacts, and resumes
   from the latest complete remote checkpoint.
 - Token: `HF_WRITE_TOKEN` (env or `.env`). Default repo:
   `vedangfake/chess-slm-benchmark`.
-- Every new trainer must meet this contract. `scripts/posttrain.py` is the
-  current reference implementation.
+- Every new trainer must meet this contract.
 - Failure status is also uploaded to HF (`run-status.txt` in the same repo)
   so a killed kernel's error is readable without downloading the multi-GB
   working dir.
