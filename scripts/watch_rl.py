@@ -7,6 +7,7 @@ GitHub Actions invokes it on the existing pipeline tick.
 from __future__ import annotations
 
 import argparse
+import ast
 import csv
 import io
 import json
@@ -116,7 +117,17 @@ def render(config: dict) -> str:
     marker = '"""__CCGAVN_RL_CONFIG__"""'
     if marker not in source:
         raise ValueError("RL kernel config marker missing")
-    return source.replace(marker, '"""' + json.dumps(config, sort_keys=True) + '"""')
+    # A Python string literal must preserve the escapes in nested JSON values
+    # (notably the frozen label manifest). Triple quotes consumed those escapes.
+    rendered = source.replace(marker, repr(json.dumps(config, sort_keys=True)))
+    tree = ast.parse(rendered, filename=str(TEMPLATE))
+    embedded = next((ast.literal_eval(node.value) for node in tree.body
+                     if isinstance(node, ast.Assign)
+                     and any(isinstance(target, ast.Name) and target.id == "CONFIG_JSON"
+                             for target in node.targets)), None)
+    if embedded is None or json.loads(embedded) != config:
+        raise ValueError("rendered Kaggle configuration failed round-trip validation")
+    return rendered
 
 
 def push(account: str, slug: str, config: dict, gpu: bool):
