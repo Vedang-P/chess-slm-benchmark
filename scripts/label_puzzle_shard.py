@@ -211,10 +211,11 @@ def main() -> None:
     remote = f"{args.hf_prefix.strip('/')}/shard-{args.shard:05d}"
     if args.hf_prefix:
         from huggingface_hub import HfApi, hf_hub_download
-        from scripts.kaggle_checkpoint import hf_token
+        from scripts.kaggle_checkpoint import hf_token, write_status
         api = HfApi(token=hf_token(ROOT))
         files = set(api.list_repo_files(args.hf_repo, repo_type="dataset"))
         if f"{remote}/train_set.npz" in files and f"{remote}/meta.json" in files:
+            write_status(api, args.hf_repo, remote, "DONE labels")
             print(f"[labels] {remote} already complete on HF", flush=True)
             return
         if f"{remote}/partial.npz" in files:
@@ -223,6 +224,7 @@ def main() -> None:
                             token=api.token)
             downloaded = args.partial.parent / remote / "partial.npz"
             downloaded.replace(args.partial)
+        write_status(api, args.hf_repo, remote, "IN PROGRESS labels")
 
     def checkpoint(path: Path, roots_done: int, rows_done: int) -> None:
         assert api is not None
@@ -250,6 +252,7 @@ def main() -> None:
                               repo_id=args.hf_repo, repo_type="dataset",
                               allow_patterns=[args.out.name, meta.name],
                               commit_message=f"Complete {remote} Stockfish labels")
+            write_status(api, args.hf_repo, remote, "DONE labels")
         print(json.dumps(result, sort_keys=True), flush=True)
     except Exception as exc:
         if api:

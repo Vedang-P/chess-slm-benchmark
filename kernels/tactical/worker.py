@@ -58,18 +58,31 @@ def pinned_git(url: str, dest: Path, commit: str) -> None:
         raise ValueError(f"pinned checkout mismatch: {actual} != {commit}")
 
 
+def prepare_searchless_tokenizer() -> None:
+    """Make upstream's type-only annotation safe without importing JAX.
+
+    The tokenizer uses jaxtyping only in its return annotation. Kaggle's global
+    Python has preloaded CUDA JAX plugins, so replacing JAX with a CPU build can
+    break unrelated packages. Postponing annotations and removing that unused
+    import leaves tokenizer behavior unchanged and keeps labeling lightweight.
+    """
+    path = SL / "src" / "tokenizer.py"
+    source = path.read_text(encoding="utf-8")
+    expected = ('"""Implements tokenization of FEN strings."""\n\n'
+                'import jaxtyping as jtp\n')
+    replacement = ('"""Implements tokenization of FEN strings."""\n\n'
+                   'from __future__ import annotations\n')
+    if source.count(expected) == 1:
+        path.write_text(source.replace(expected, replacement, 1), encoding="utf-8")
+    elif "from __future__ import annotations" not in source or "import jaxtyping as jtp" in source:
+        raise ValueError("unexpected pinned Searchless tokenizer header")
+    print("[tactical] Searchless tokenizer annotations deferred; JAX not needed for labels",
+          flush=True)
+
+
 def install_base() -> None:
     run([sys.executable, "-m", "pip", "install", "-q", "numpy==1.26.4",
          "python-chess", "pandas==2.2.3", "zstandard", "huggingface_hub"])
-
-
-def install_label_dependencies() -> None:
-    # The pinned Searchless tokenizer evaluates jaxtyping annotations during
-    # import, so label workers need the matching CPU JAX runtime even though
-    # Stockfish labeling itself does not use JAX. Teacher inference has its
-    # separate CUDA-enabled Python 3.11 environment below.
-    run([sys.executable, "-m", "pip", "install", "-q", "numpy==1.26.4",
-         "jax==0.4.35", "jaxlib==0.4.35", "jaxtyping"])
 
 
 def install_teacher() -> Path:
@@ -164,7 +177,6 @@ def shard_tags():
 def label_phase(source: Path, manifest: Path, binary: Path,
                 prefix: str, max_roots: int = 0) -> None:
     files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
-    install_label_dependencies()
     for tag in ([0] if max_roots else shard_tags()):
         remote = f"{prefix}/shard-{tag:05d}"
         if f"{remote}/train_set.npz" in files and f"{remote}/meta.json" in files:
@@ -295,6 +307,7 @@ def main() -> None:
                CFG["source_commit"])
     pinned_git("https://github.com/google-deepmind/searchless_chess.git", SL,
                CFG["searchless_commit"])
+    prepare_searchless_tokenizer()
     sys.path.insert(0, str(REPO))
     if PHASE in ("labels", "demo"):
         source, manifest = source_files()
