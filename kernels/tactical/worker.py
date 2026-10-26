@@ -63,6 +63,15 @@ def install_base() -> None:
          "python-chess", "pandas==2.2.3", "zstandard", "huggingface_hub"])
 
 
+def install_label_dependencies() -> None:
+    # The pinned Searchless tokenizer evaluates jaxtyping annotations during
+    # import, so label workers need the matching CPU JAX runtime even though
+    # Stockfish labeling itself does not use JAX. Teacher inference has its
+    # separate CUDA-enabled Python 3.11 environment below.
+    run([sys.executable, "-m", "pip", "install", "-q", "numpy==1.26.4",
+         "jax==0.4.35", "jaxlib==0.4.35", "jaxtyping"])
+
+
 def install_teacher() -> Path:
     env = WORK / "teachvenv"
     shutil.rmtree(env, ignore_errors=True)
@@ -155,6 +164,7 @@ def shard_tags():
 def label_phase(source: Path, manifest: Path, binary: Path,
                 prefix: str, max_roots: int = 0) -> None:
     files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
+    install_label_dependencies()
     for tag in ([0] if max_roots else shard_tags()):
         remote = f"{prefix}/shard-{tag:05d}"
         if f"{remote}/train_set.npz" in files and f"{remote}/meta.json" in files:

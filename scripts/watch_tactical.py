@@ -206,7 +206,12 @@ def worker_config(phase: str, index: int, commit: str, rows=None) -> dict:
 
 def blocked_failure(client, files: set[str], phase: str, index: int, commit: str) -> bool:
     status = remote_text(client, files, f"{STATUS_PREFIX}/{phase}-acct-{index}.txt")
-    return status.startswith("FAILED") and f"source_commit={commit}" in status
+    if not status.startswith("FAILED"):
+        return False
+    recorded = re.search(r"source_commit=([0-9a-f]{40})", status)
+    # A failure from an older worker revision must not block the corrected
+    # commit. If the marker predates source-commit stamping, fail closed.
+    return recorded is None or recorded.group(1) == commit
 
 
 def record_launch(client, phase: str, index: int, commit: str) -> None:
