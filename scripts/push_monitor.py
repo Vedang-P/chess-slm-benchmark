@@ -83,15 +83,23 @@ def snapshot() -> dict:
                            and (evaluation.get("mate") or {}).get("total") == 4000
                            and (evaluation.get("puzzles") or {}).get("total") == 10000):
         evaluation = None
+    failed_learners = [item for item in accounts
+                       if item["learner"] in ("ERROR", "FAILED")]
+    training_status = remote_text(api, files, f"{RUN}/run-status.txt")
+    if failed_learners and latest < TOTAL_STEPS:
+        failed = ", ".join(item["account"] for item in failed_learners)
+        training_status = (f"FAILED Kaggle learner kernel on {failed}; "
+                           f"last complete checkpoint={latest}")
     return {"updated_at": datetime.now(timezone.utc).isoformat(),
             "run": RUN, "phase": ("evaluated" if evaluation else
+                                   "failed" if failed_learners and latest < TOTAL_STEPS else
                                    "evaluation" if latest >= TOTAL_STEPS else
                                    "training" if steps else "labels"),
             "labels": labels, "accounts": accounts,
             "label_depth": DEPTH, "label_count": sum(item["count"] for item in labels),
             "label_target": ROOTS_PER_ACCOUNT * len(ACCOUNTS),
             "training": {"step": latest, "target": TOTAL_STEPS,
-                         "metrics": metrics, "status": remote_text(api, files, f"{RUN}/run-status.txt"),
+                         "metrics": metrics, "status": training_status,
                          "checkpoint": f"{RUN}/checkpoint-{latest}" if latest else None,
                          "parameter_count": (config or {}).get("parameter_count"),
                          "config": {key: (config or {}).get(key) for key in

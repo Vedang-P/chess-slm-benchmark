@@ -33,6 +33,10 @@ from scripts.repair_checkpoint import make_model, repair
 ROOT = Path(__file__).resolve().parent.parent
 AMP_INIT_SCALE = 128.0
 AMP_MAX_SCALE_RETRIES = 12
+# This exact predecessor has the identical RL recipe/state layout; only its
+# per-file Hub upload path differed. Permit resuming its complete optimizer
+# checkpoint after switching checkpoint persistence to one commit per folder.
+RESUME_COMPATIBLE_COMMITS = {"b9d1fd7b9923f6c83efc7b73b60c1fc25161ee0f"}
 
 
 def gradient_issues(model):
@@ -284,7 +288,7 @@ def run(args):
     else:
         cfg = json.loads((resume / "config.json").read_text(encoding="utf-8"))
         if (cfg["recipe_version"] != "rl-root-v4" or cfg["manifest_sha256"] != manifest_sha
-                or cfg["source_commit"] != source_commit()
+                or cfg["source_commit"] not in {source_commit(), *RESUME_COMPATIBLE_COMMITS}
                 or cfg["label_source_commit"] != args.label_source_commit
                 or cfg["searchless_commit"] != args.searchless_commit
                 or cfg["steps"] != args.steps):

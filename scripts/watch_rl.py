@@ -33,8 +33,13 @@ DEPTH = 14
 ROOTS_PER_ACCOUNT = 2000
 TOTAL_STEPS = 20_000
 LABEL_SLUG = "ccgavn-rl-v2-labels"
-TRAIN_SLUG = "ccgavn-rl-v4-train"
+TRAIN_SLUG = "ccgavn-rl-v5-train"
 SEARCHLESS_COMMIT = "90ae0e6b121673fc3079aaeffa047580bb600c0a"
+# v4 was trained from this commit; its recipe and tensor layout match the
+# corrected uploader-only continuation in this revision. Allow that exact
+# checkpoint source for a stateful resume, then write new checkpoints under
+# the new source commit.
+RESUME_COMPATIBLE_COMMITS = {"b9d1fd7b9923f6c83efc7b73b60c1fc25161ee0f"}
 REWARD_ID = "searchless-centipawns-to-win-probability-v1"
 TEMPLATE = ROOT / "kernels/rl/run.py"
 TAGS = ROOT / "configs/ccgavn-2b-shard-tags.json"
@@ -228,7 +233,7 @@ def main(check_only: bool = False):
         name = f"{RUN}/{checkpoint}/config.json"
         cfg = json.loads(Path(hf_hub_download(HF_REPO, name, repo_type="dataset",
                                               token=api.token)).read_text(encoding="utf-8"))
-        if (cfg.get("source_commit") != current_commit
+        if (cfg.get("source_commit") not in {current_commit, *RESUME_COMPATIBLE_COMMITS}
                 or cfg.get("label_source_commit") != label_commit):
             raise ValueError("RL checkpoint code or frozen-label identity changed")
     if checkpoint and int(checkpoint.rsplit("-", 1)[-1]) >= TOTAL_STEPS:
@@ -253,10 +258,16 @@ def main(check_only: bool = False):
         if status in ACTIVE:
             active.append((account, status))
         elif status in ("ERROR", "FAILED"):
-            raise RuntimeError(f"{account}: Kaggle learner kernel {status}")
+            print(f"[rl-watch] learner kernel {status} on {account}; "
+                  f"last complete checkpoint={checkpoint or 'none'}; "
+                  "leaving the run stopped for inspection", flush=True)
+            return
         elif status == "COMPLETE":
-            raise RuntimeError(f"{account}: learner kernel completed before "
-                               f"the {TOTAL_STEPS}-step checkpoint was persisted")
+            print(f"[rl-watch] learner kernel completed on {account} before "
+                  f"the {TOTAL_STEPS}-step checkpoint was persisted; "
+                  f"last complete checkpoint={checkpoint or 'none'}; "
+                  "leaving the run stopped for inspection", flush=True)
+            return
     if active:
         print(f"[rl-watch] learner active: {active}", flush=True)
         return

@@ -128,21 +128,22 @@ def upload_checkpoint(api_client, repo_id: str, local_dir: Path,
     if not checkpoint.is_dir():
         raise FileNotFoundError(checkpoint)
     files = [p for p in checkpoint.rglob("*") if p.is_file()]
-    # config.json is the commit marker: it goes up last so an interrupted
-    # upload never leaves a checkpoint dir that looks resumable but is not
-    # (latest_remote_checkpoint requires both config.json and state.pt).
-    files.sort(key=lambda p: p.name == "config.json")
+    if not files:
+        raise FileNotFoundError(f"checkpoint has no files: {checkpoint}")
+    # Upload the directory in one Hub commit. Uploading files one-by-one makes
+    # every checkpoint consume several commits; the Hub caps a dataset repo at
+    # 128 commits/hour, which stopped the v4 RL run at step 14,500. A single
+    # folder commit also ensures the config marker and state arrive atomically.
     last_exc: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
-            for path in files:
-                remote = f"{remote_prefix.strip('/')}/{checkpoint_name}/{path.relative_to(checkpoint)}"
-                api_client.upload_file(
-                    path_or_fileobj=str(path),
-                    path_in_repo=remote,
-                    repo_id=repo_id,
-                    repo_type="dataset",
-                )
+            api_client.upload_folder(
+                folder_path=str(checkpoint),
+                path_in_repo=f"{remote_prefix.strip('/')}/{checkpoint_name}",
+                repo_id=repo_id,
+                repo_type="dataset",
+                commit_message=f"Save {remote_prefix.strip('/')}/{checkpoint_name}",
+            )
             print(f"[hf] uploaded {checkpoint_name} ({len(files)} files)", flush=True)
             return
         except Exception as exc:  # Kaggle network flaps; retry the whole dir

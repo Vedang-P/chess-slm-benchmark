@@ -372,7 +372,8 @@ function render(s){
  const evalComplete=!!s.evaluation;
  const active=labels.filter(item=>statusClass(item.kernel)==="running").length;
  const rlRunning=accounts.filter(item=>statusClass(item.learner)==="running").length;
- const phase=evalComplete?"Evaluation complete":step>=target?"Frozen evaluation":step>0||rlRunning?"RL training":"Verifier labels";
+ const runFailed=s.phase==="failed"||statusClass(training.status)==="error";
+ const phase=evalComplete?"Evaluation complete":runFailed?"RL stopped":step>=target?"Frozen evaluation":step>0||rlRunning?"RL training":"Verifier labels";
  const freshness=s.updated_at?age(s.updated_at):"No snapshot";
  const stale=!s.updated_at||Date.now()-new Date(s.updated_at).getTime()>30*60000;
  const pill=byId("live-pill");pill.className="pill"+(stale?" stale":"");
@@ -398,7 +399,7 @@ function render(s){
  const labelDone=count>=labelTarget;
  byId("stages").innerHTML=
  stage(1,"Exact verifier labels",number(count)+" / "+number(labelTarget)+" depth "+(s.label_depth||14)+" all-legal roots",count,labelTarget,labelDone?"done":active?"running":"waiting",labels.length+" shards · "+active+" running")+
- stage(2,"Root-policy RL",number(step)+" / "+number(target)+" complete checkpoint steps",step,target,step>=target?"done":rlRunning?"running":"waiting",training.checkpoint||"Awaiting first checkpoint")+
+ stage(2,"Root-policy RL",number(step)+" / "+number(target)+" complete checkpoint steps",step,target,runFailed?"error":step>=target?"done":rlRunning?"running":"waiting",training.checkpoint||"Awaiting first checkpoint")+
  stage(3,"Frozen evaluation",evalComplete?"4,000 MATE and 10,000 puzzles complete":"Starts after final checkpoint",evalComplete?1:0,1,evalComplete?"done":step>=target?"running":"waiting",evalComplete?"Results archived":"No final score yet");
  byId("account-rows").innerHTML=labels.length?labels.map((item,i)=>{const pool=accounts.find(x=>x.account===item.account)||accounts[i]||{};
   return '<tr><td>'+esc(item.account)+'</td><td><span class="cellbar"><i style="width:'+percent(item.count,item.target)+'%"></i></span><span class="mono">'+number(item.count)+' / '+number(item.target)+'</span></td><td>'+statusSpan(item.kernel)+'</td><td>'+esc(item.status||"—")+'</td><td class="mono">'+esc(pool.gpu_hours==null?"—":Number(pool.gpu_hours).toFixed(1)+"h")+'</td><td>'+statusSpan(pool.learner)+'</td></tr>';
