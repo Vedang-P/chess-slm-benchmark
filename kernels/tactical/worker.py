@@ -23,6 +23,7 @@ if CONFIG_JSON.startswith("__TACTICAL_CONFIG__"):
 CFG = json.loads(CONFIG_JSON)
 PHASE = CFG["phase"]
 ACCOUNT_INDEX = int(CFG["account_index"])
+LABEL_WORKER_INDEX = CFG.get("label_worker_index")
 WORK = Path("/kaggle/working")
 REPO = WORK / "chess-slm-benchmark"
 SL = WORK / "searchless_chess"
@@ -98,15 +99,15 @@ def install_teacher() -> Path:
             uv = shutil.which("uv") or str(Path(sys.executable).parent / "uv")
         run([uv, "python", "install", "3.11"])
         run([uv, "venv", "--python", "3.11", str(env)])
-    pip = str(env / "bin" / "pip")
-    run([pip, "install", "--quiet", "-f",
+    python = env / "bin" / "python"
+    run([str(python), "-m", "ensurepip", "--upgrade"])
+    run([str(python), "-m", "pip", "install", "--quiet", "-f",
          "https://storage.googleapis.com/jax-releases/jax_releases.html",
          "jax==0.4.35", "jaxlib==0.4.35", "jax_cuda12_pjrt==0.4.35",
          "jax_cuda12_plugin==0.4.35", "orbax-checkpoint==0.5.5",
          "dm-haiku==0.0.15", "numpy==1.26.4", "pandas==2.2.3",
          "jaxtyping", "typing-extensions", "python-chess", "zstandard",
          "apache-beam", "grain", "wrapt", "huggingface_hub"])
-    python = env / "bin" / "python"
     run([str(python), "-c",
          "import jax; assert any(d.platform == 'gpu' for d in jax.devices()), jax.devices()"])
     return python
@@ -171,6 +172,9 @@ def official_puzzles() -> Path:
 
 
 def shard_tags():
+    if LABEL_WORKER_INDEX is not None:
+        return range(int(LABEL_WORKER_INDEX), int(CFG["shard_count"]),
+                     int(CFG["label_worker_count"]))
     return range(ACCOUNT_INDEX, int(CFG["shard_count"]), 5)
 
 
@@ -194,7 +198,7 @@ def label_phase(source: Path, manifest: Path, binary: Path,
                "--out", str(folder / "train_set.npz"),
                "--partial", str(folder / "partial.npz"),
                "--stop-after-seconds", str(max(1, remaining - 600)),
-               "--save-every-seconds", "600", "--hf-repo", HF_REPO,
+               "--save-every-seconds", "1500", "--hf-repo", HF_REPO,
                "--hf-prefix", prefix]
         if max_roots:
             cmd += ["--max-roots", str(max_roots)]
@@ -328,19 +332,25 @@ def main() -> None:
 try:
     main()
     state = "DONE" if PHASE == "demo" else "IN PROGRESS"
+    worker_suffix = (f"worker-{int(LABEL_WORKER_INDEX):02d}" if
+                     PHASE == "labels" and LABEL_WORKER_INDEX is not None
+                     else f"acct-{ACCOUNT_INDEX}")
     api.upload_file(path_or_fileobj=(
         f"{state} {PHASE} source_commit={CFG['source_commit']} "
-        f"account_index={ACCOUNT_INDEX}").encode(),
-        path_in_repo=f"{CFG['status_prefix']}/{PHASE}-acct-{ACCOUNT_INDEX}.txt",
+        f"account_index={ACCOUNT_INDEX} label_worker_index={LABEL_WORKER_INDEX}").encode(),
+        path_in_repo=f"{CFG['status_prefix']}/{PHASE}-{worker_suffix}.txt",
         repo_id=HF_REPO, repo_type="dataset",
         commit_message=f"Tactical {PHASE} account {ACCOUNT_INDEX} session finished")
 except Exception as exc:
     import traceback
+    worker_suffix = (f"worker-{int(LABEL_WORKER_INDEX):02d}" if
+                     PHASE == "labels" and LABEL_WORKER_INDEX is not None
+                     else f"acct-{ACCOUNT_INDEX}")
     status = (f"FAILED {PHASE} source_commit={CFG['source_commit']} "
               f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[-4000:]}")
     try:
         api.upload_file(path_or_fileobj=status.encode(),
-                        path_in_repo=f"{CFG['status_prefix']}/{PHASE}-acct-{ACCOUNT_INDEX}.txt",
+                        path_in_repo=f"{CFG['status_prefix']}/{PHASE}-{worker_suffix}.txt",
                         repo_id=HF_REPO, repo_type="dataset",
                         commit_message=f"Tactical {PHASE} account {ACCOUNT_INDEX} failed")
     except Exception as upload_exc:

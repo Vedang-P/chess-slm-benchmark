@@ -15,12 +15,13 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.tactical_config import (  # noqa: E402
-    ACCOUNTS, BASE_STEP, DATA_PREFIX, FINAL_STEP, HF_REPO, INCLUDED_ROOTS,
-    ROOTS_PER_SHARD, RUN, SHARD_COUNT, SOURCE_PREFIX, SOURCE_SHA256, milestones,
+    ACCOUNTS, BASE_STEP, CPU_BATCH_SESSIONS_PER_ACCOUNT, DATA_PREFIX,
+    FINAL_STEP, HF_REPO, INCLUDED_ROOTS, ROOTS_PER_SHARD, RUN, SHARD_COUNT,
+    SOURCE_PREFIX, SOURCE_SHA256, milestones,
 )
 from scripts.watch_tactical import (  # noqa: E402
-    DEMO_PREFIX, DEMO_RUN, EVAL_SLUG, STATUS_PREFIX, WORKER_SLUG,
-    account_slugs, complete_shards, eval_prefix, gpu_quota, kernel_status,
+    DEMO_PREFIX, DEMO_RUN, STATUS_PREFIX, complete_shards, eval_prefix,
+    gpu_quota,
 )
 
 
@@ -92,11 +93,18 @@ def snapshot() -> dict:
                                 "puzzles": summary["puzzles"],
                                 "prefix": eval_prefix(step)})
     accounts = []
+    live_statuses = watch.get("statuses", {})
     for index, account in enumerate(ACCOUNTS, 1):
-        slugs = account_slugs(account)
+        state = live_statuses.get(account, {})
+        label_workers = state.get("labels", {})
+        active_label_workers = sum(
+            1 for status in label_workers.values()
+            if any(word in str(status) for word in ("RUNNING", "QUEUED", "PENDING")))
         accounts.append({"account": f"acct-{index}", "gpu_hours": gpu_quota(account),
-                         "worker": kernel_status(account, WORKER_SLUG, slugs),
-                         "eval": kernel_status(account, EVAL_SLUG, slugs)})
+                         "worker": state.get("worker", "unknown"),
+                         "eval": state.get("eval", "unknown"),
+                         "label_workers_active": active_label_workers,
+                         "label_workers_limit": CPU_BATCH_SESSIONS_PER_ACCOUNT})
     demo = remote_json(client, files, f"{DEMO_PREFIX}/eval-summary.json")
     return {
         "run": RUN, "updated_at": datetime.now(timezone.utc).isoformat(),

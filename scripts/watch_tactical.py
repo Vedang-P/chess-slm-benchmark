@@ -25,7 +25,8 @@ from scripts.kaggle_accounts import env_for_account  # noqa: E402
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.tactical_config import (  # noqa: E402
     ACCOUNTS, BASE_RUN, BASE_STEP, CREDENTIAL_DATASETS, DATA_PREFIX, DEMO_RUN,
-    FINAL_STEP, HF_REPO, INCLUDED_ROOTS, MILESTONE_EVERY, ROOTS_PER_SHARD,
+    CPU_BATCH_SESSIONS_PER_ACCOUNT, FINAL_STEP, HF_REPO, INCLUDED_ROOTS,
+    MILESTONE_EVERY, ROOTS_PER_SHARD,
     FUNCTIONAL_RUN, MODEL_PARAMETERS, RUN, SEARCHLESS_COMMIT, SHARD_COUNT,
     SOURCE_PREFIX, SOURCE_SHA256,
     STOCKFISH16_COMMIT, milestones,
@@ -35,6 +36,8 @@ DEMO_PREFIX = "puzzle-pipeline-demo-v1"
 DEMO_DATA_PREFIX = "puzzle-action-values-demo-v1"
 STATUS_PREFIX = "puzzle-pipeline-v1/status"
 WORKER_SLUG = "ccgavn-puzzle-stage"
+LABEL_WORKER_SLUG = "ccgavn-label-w"
+LABEL_WORKER_COUNT = len(ACCOUNTS) * CPU_BATCH_SESSIONS_PER_ACCOUNT
 EVAL_SLUG = "ccgavn-puzzle-eval"
 ACTIVE = ("RUNNING", "QUEUED", "PENDING")
 FAILED = ("ERROR", "FAILED", "CANCELLED", "CANCELED")
@@ -189,8 +192,13 @@ def push(account: str, slug: str, template: Path, marker: str,
         print(f"[tactical] pushed {slug} on {account}", flush=True)
 
 
-def worker_config(phase: str, index: int, commit: str, rows=None) -> dict:
-    return {"phase": phase, "account_index": index,
+def label_worker_slug(worker_index: int) -> str:
+    return f"{LABEL_WORKER_SLUG}{worker_index:02d}"
+
+
+def worker_config(phase: str, index: int, commit: str, rows=None,
+                  label_worker_index: int | None = None) -> dict:
+    config = {"phase": phase, "account_index": index,
             "source_commit": commit, "searchless_commit": SEARCHLESS_COMMIT,
             "stockfish_commit": STOCKFISH16_COMMIT,
             "source_sha256": SOURCE_SHA256, "source_prefix": SOURCE_PREFIX,
@@ -202,10 +210,17 @@ def worker_config(phase: str, index: int, commit: str, rows=None) -> dict:
             "model_version": "v2", "parameter_count": MODEL_PARAMETERS,
             "run": RUN, "final_step": FINAL_STEP,
             "shard_count": SHARD_COUNT, "rows": rows or {}}
+    if label_worker_index is not None:
+        config["label_worker_index"] = label_worker_index
+        config["label_worker_count"] = LABEL_WORKER_COUNT
+    return config
 
 
-def blocked_failure(client, files: set[str], phase: str, index: int, commit: str) -> bool:
-    status = remote_text(client, files, f"{STATUS_PREFIX}/{phase}-acct-{index}.txt")
+def blocked_failure(client, files: set[str], phase: str, index: int,
+                    commit: str, worker_index: int | None = None) -> bool:
+    suffix = (f"worker-{worker_index:02d}" if worker_index is not None
+              else f"acct-{index}")
+    status = remote_text(client, files, f"{STATUS_PREFIX}/{phase}-{suffix}.txt")
     if not status.startswith("FAILED"):
         return False
     recorded = re.search(r"source_commit=([0-9a-f]{40})", status)
@@ -214,9 +229,12 @@ def blocked_failure(client, files: set[str], phase: str, index: int, commit: str
     return recorded is None or recorded.group(1) == commit
 
 
-def record_launch(client, phase: str, index: int, commit: str) -> None:
+def record_launch(client, phase: str, index: int, commit: str,
+                  worker_index: int | None = None) -> None:
+    worker_suffix = (f"worker-{worker_index:02d}" if worker_index is not None
+                     else f"acct-{index}")
     client.upload_file(path_or_fileobj=f"LAUNCHED {phase} source_commit={commit}".encode(),
-                       path_in_repo=f"{STATUS_PREFIX}/{phase}-acct-{index}.txt",
+                       path_in_repo=f"{STATUS_PREFIX}/{phase}-{worker_suffix}.txt",
                        repo_id=HF_REPO, repo_type="dataset",
                        commit_message=f"Launch tactical {phase} worker {index}")
 
@@ -280,61 +298,97 @@ def main(check_only: bool = False) -> dict:
     slugs = {}
     for index, account in enumerate(ACCOUNTS):
         slugs[account] = account_slugs(account)
+        local_labels = {}
+        for local_slot in range(CPU_BATCH_SESSIONS_PER_ACCOUNT):
+            worker_index = index * CPU_BATCH_SESSIONS_PER_ACCOUNT + local_slot
+            local_labels[worker_index] = kernel_status(
+                account, label_worker_slug(worker_index), slugs[account])
         statuses[account] = {
             "worker": kernel_status(account, WORKER_SLUG, slugs[account]),
             "eval": kernel_status(account, EVAL_SLUG, slugs[account]),
+            "labels": local_labels,
         }
     active_worker = {a for a in ACCOUNTS
                      if any(word in statuses[a]["worker"] for word in ACTIVE)}
     active_eval = {a for a in ACCOUNTS
                    if any(word in statuses[a]["eval"] for word in ACTIVE)}
     commit = demo_commit or git_head()
+    demo_status = "complete" if demo_ok else "waiting for CPU labels"
+    raw = complete_shards(files)
+    if len(raw) < SHARD_COUNT:
+        failed_workers = []
+        active_label_workers = []
+        for worker_index in range(LABEL_WORKER_COUNT):
+            account_index = worker_index // CPU_BATCH_SESSIONS_PER_ACCOUNT
+            account = ACCOUNTS[account_index]
+            status = statuses[account]["labels"][worker_index]
+            if any(word in status for word in FAILED):
+                marker_path = f"{STATUS_PREFIX}/labels-worker-{worker_index:02d}.txt"
+                marker = remote_text(client, files, marker_path)
+                recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
+                if not marker or not recorded or recorded.group(1) == commit:
+                    failed_workers.append({"worker": worker_index, "account": account})
+            elif any(word in status for word in ACTIVE):
+                active_label_workers.append(worker_index)
+        if failed_workers:
+            return {"phase": "blocked", "reason": "Stockfish label worker failed",
+                    "failed_workers": failed_workers, "statuses": statuses}
+        pushed = []
+        blocked = []
+        for worker_index in range(LABEL_WORKER_COUNT):
+            index = worker_index // CPU_BATCH_SESSIONS_PER_ACCOUNT
+            account = ACCOUNTS[index]
+            assigned = set(range(worker_index, SHARD_COUNT, LABEL_WORKER_COUNT))
+            if (assigned <= raw
+                    or worker_index in active_label_workers):
+                continue
+            if blocked_failure(client, files, "labels", index, commit,
+                               worker_index=worker_index):
+                blocked.append({"worker": worker_index, "account": account})
+                continue
+            if not check_only:
+                record_launch(client, "labels", index, commit,
+                              worker_index=worker_index)
+                push(account, label_worker_slug(worker_index), WORKER_TEMPLATE,
+                     "__TACTICAL_CONFIG__",
+                     worker_config("labels", index, commit,
+                                   label_worker_index=worker_index), gpu=False)
+            pushed.append({"worker": worker_index, "account": account})
+        return {"phase": "labels", "ready": len(raw), "target": SHARD_COUNT,
+                "active": sorted(active_label_workers), "pushed": pushed,
+                "blocked": blocked, "workers_per_account": CPU_BATCH_SESSIONS_PER_ACCOUNT,
+                "worker_target": LABEL_WORKER_COUNT, "demo": demo_status,
+                "check_only": check_only}
+
     if not demo_ok:
         if any(blocked_failure(client, files, "demo", i, commit)
                for i in range(len(ACCOUNTS))):
-            return {"phase": "blocked", "reason": "demo worker failed", "statuses": statuses}
+            return {"phase": "labels-complete-demo-blocked", "ready": len(raw),
+                    "target": SHARD_COUNT,
+                    "demo": "blocked: recorded demo failure", "statuses": statuses}
         phase_errors = current_worker_failures(client, files, "demo", statuses,
                                                commit)
         if phase_errors:
-            return {"phase": "blocked", "reason": "demo Kaggle worker failed",
-                    "accounts": sorted(phase_errors), "statuses": statuses}
+            return {"phase": "labels-complete-demo-blocked", "ready": len(raw),
+                    "target": SHARD_COUNT,
+                    "demo": f"blocked: Kaggle failure on {','.join(sorted(phase_errors))}",
+                    "statuses": statuses}
         if active_worker:
-            return {"phase": "demo", "active": sorted(active_worker)}
+            return {"phase": "demo", "active": sorted(active_worker),
+                    "ready": len(raw), "target": SHARD_COUNT}
         quotas = {a: gpu_quota(a) for a in ACCOUNTS}
         usable = [a for a in ACCOUNTS if quotas[a] > 1.0]
         if not usable:
-            return {"phase": "waiting", "reason": "no positive GPU quota", "quotas": quotas}
+            return {"phase": "waiting", "reason": "no positive GPU quota",
+                    "ready": len(raw), "target": SHARD_COUNT, "quotas": quotas}
         account = max(usable, key=lambda a: quotas[a])
         if not check_only:
             index = ACCOUNTS.index(account)
             record_launch(client, "demo", index, commit)
             push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
                  worker_config("demo", index, commit), gpu=True)
-        return {"phase": "demo", "target_account": account, "check_only": check_only}
-
-    raw = complete_shards(files)
-    if len(raw) < SHARD_COUNT:
-        phase_errors = current_worker_failures(client, files, "labels", statuses, commit)
-        if phase_errors:
-            return {"phase": "blocked", "reason": "Stockfish label worker failed",
-                    "accounts": sorted(phase_errors), "statuses": statuses}
-        pushed = []
-        blocked = []
-        for index, account in enumerate(ACCOUNTS):
-            assigned = set(range(index, SHARD_COUNT, len(ACCOUNTS)))
-            if assigned <= raw or account in active_worker:
-                continue
-            if blocked_failure(client, files, "labels", index, commit):
-                blocked.append(account)
-                continue
-            if not check_only:
-                record_launch(client, "labels", index, commit)
-                push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
-                     worker_config("labels", index, commit), gpu=False)
-            pushed.append(account)
-        return {"phase": "labels", "ready": len(raw), "target": SHARD_COUNT,
-                "active": sorted(active_worker), "pushed": pushed, "blocked": blocked,
-                "check_only": check_only}
+        return {"phase": "demo", "target_account": account, "ready": len(raw),
+                "target": SHARD_COUNT, "check_only": check_only}
 
     taught = complete_shards(files, teacher=True)
     if len(taught) < SHARD_COUNT:

@@ -17,6 +17,7 @@ MILESTONE_EVERY = 50_000
 ROOTS_PER_SHARD = 5_000
 INCLUDED_ROOTS = 6_147_346
 SHARD_COUNT = (INCLUDED_ROOTS + ROOTS_PER_SHARD - 1) // ROOTS_PER_SHARD
+CPU_BATCH_SESSIONS_PER_ACCOUNT = 5
 ACCOUNTS = ("vedanggggg", "vedangpandeyyy", "softmaxsimp",
             "samaltmannnn", "shoumikmitra")
 CREDENTIAL_DATASETS = {
