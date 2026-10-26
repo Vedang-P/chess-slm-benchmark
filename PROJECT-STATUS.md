@@ -17,8 +17,11 @@ sets, not untouched holdouts. MATE rows repeat positions.
 
 ## Current experiment
 
-The tactical continuation uses the verified CC-GAVN weights and the original
-trainer, extending its global cosine schedule for 2,000,000 more updates.
+The tactical continuation applies the verified function-preserving transplant
+to the 3,895,352-parameter CC-GAVN model, then uses the original trainer,
+carrying over shared AdamW moments and extending the global cosine schedule for
+2,000,000 more updates. The transplanted model was checked against legal-move
+logits; the conversion gate is a maximum absolute difference below `1e-4`.
 Its source is the SHA256-pinned 6,157,341-row Lichess puzzle export. The
 frozen manifest removes 9,995 verbatim official-puzzle matches, leaving
 6,147,346 puzzle-player roots. Stockfish 16 supplies a 50 ms score for every

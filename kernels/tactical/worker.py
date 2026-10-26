@@ -60,13 +60,22 @@ def pinned_git(url: str, dest: Path, commit: str) -> None:
 
 def install_base() -> None:
     run([sys.executable, "-m", "pip", "install", "-q", "numpy==1.26.4",
-         "python-chess", "pandas==2.2.3", "zstandard", "jaxtyping",
-         "jax[cpu]==0.4.35", "huggingface_hub"])
+         "python-chess", "pandas==2.2.3", "zstandard", "huggingface_hub"])
 
 
 def install_teacher() -> Path:
     env = WORK / "teachvenv"
-    run([sys.executable, "-m", "venv", str(env)])
+    shutil.rmtree(env, ignore_errors=True)
+    py311 = shutil.which("python3.11")
+    if py311:
+        run([py311, "-m", "venv", str(env)])
+    else:
+        uv = shutil.which("uv")
+        if not uv:
+            run([sys.executable, "-m", "pip", "install", "--quiet", "uv==0.8.17"])
+            uv = shutil.which("uv") or str(Path(sys.executable).parent / "uv")
+        run([uv, "python", "install", "3.11"])
+        run([uv, "venv", "--python", "3.11", str(env)])
     pip = str(env / "bin" / "pip")
     run([pip, "install", "--quiet", "-f",
          "https://storage.googleapis.com/jax-releases/jax_releases.html",
@@ -209,7 +218,7 @@ def trainer_command(prefix: str, run_name: str, rows: dict[str, int],
            "--outdir", str(WORK / run_name), "--sl-repo", str(SL),
            "--searchless-commit", CFG["searchless_commit"],
            "--exclusion-puzzles", str(official_puzzles()),
-           "--init-from-hf-run", CFG["base_run"],
+           "--init-from-hf-run", CFG["functional_run"],
            "--init-checkpoint", f"checkpoint-{CFG['base_step']}",
            "--stage-start-step", str(CFG["base_step"]),
            "--steps", str(CFG["final_step"]),
@@ -220,15 +229,26 @@ def trainer_command(prefix: str, run_name: str, rows: dict[str, int],
            "--dev-batch", "8192", "--seed", "0", "--ckpt-every", "50000",
            "--hf-upload-every", "1800", "--session-seconds", "39000",
            "--milestone-every", "50000", "--expect-shards", str(len(rows)),
-           "--model-version", "v1", "--resume-from-hf"]
+           "--model-version", CFG["model_version"], "--resume-from-hf"]
     if session_steps:
         cmd += ["--session-steps", str(session_steps)]
     return cmd
 
 
+def prepare_functional_checkpoint() -> None:
+    from scripts.prepare_tactical_checkpoint import prepare
+    report = prepare(CFG["base_run"], int(CFG["base_step"]),
+                     CFG["functional_run"], HF_REPO, SL, WORK / "transplant")
+    if (int(report.get("new_parameters", 0)) != int(CFG["parameter_count"])
+            or float(report.get("max_logit_delta", 1.0)) > 1e-4):
+        raise ValueError("3.9M functional checkpoint failed its parameter/parity gate")
+    print("[tactical] exact 3.9M transplant verified with optimizer state", flush=True)
+
+
 def demo_phase(source: Path, manifest: Path) -> None:
     prefix = CFG["demo_data_prefix"]
     run_name = CFG["demo_run"]
+    prepare_functional_checkpoint()
     binary = stockfish16()
     label_phase(source, manifest, binary, prefix, max_roots=500)
     teacher_python = install_teacher()
@@ -275,6 +295,7 @@ def main() -> None:
     elif PHASE == "teacher":
         teacher_phase(install_teacher(), teacher_checkpoint(), CFG["data_prefix"])
     elif PHASE == "train":
+        prepare_functional_checkpoint()
         run([sys.executable, "-c", "import torch; assert torch.cuda.is_available()"])
         run(trainer_command(CFG["data_prefix"], CFG["run"], CFG["rows"]), cwd=REPO)
     else:

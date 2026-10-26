@@ -9,9 +9,12 @@ untouched holdouts.
 
 ## Tactical continuation
 
-The next run starts at `ccgavn-5m-seed0-v2/checkpoint-3896658` and performs
-2,000,000 additional updates with the existing model, trainer loss, batch 2048,
-and cosine learning-rate schedule extended to step 5,896,658. It first labels
+The next run starts from `ccgavn-5m-seed0-v2/checkpoint-3896658`, applies the
+verified function-preserving transplant to the **3,895,352-parameter** model,
+and performs 2,000,000 additional updates with the existing trainer loss,
+batch 2048, and cosine learning-rate schedule extended to step 5,896,658.
+The transplant removes 869,440 softmax-null parameters; shared AdamW moments
+are carried over, and new metadata gates start without optimizer history. It first labels
 6,147,346 frozen Lichess puzzle roots, excluding the 9,995 exact matches in
 the official 10,000-puzzle set. Every legal root move gets a Stockfish 16
 50 ms evaluation and a 9M teacher distribution. Five Kaggle accounts prepare

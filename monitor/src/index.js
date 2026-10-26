@@ -1,6 +1,6 @@
 import { HTML } from "./page.js";
 
-const RUN = "ccgavn-5m-puzzles-v1-seed0";
+const RUN = "ccgavn-3.9m-puzzles-v1-seed0";
 const KEY = "tactical_monitor_v1";
 const GITHUB = "https://api.github.com/repos/Vedang-P/chess-slm-benchmark/dispatches";
 const SECURITY = {

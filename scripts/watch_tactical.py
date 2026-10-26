@@ -24,15 +24,15 @@ sys.path.insert(0, str(ROOT))
 from scripts.kaggle_accounts import env_for_account  # noqa: E402
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.tactical_config import (  # noqa: E402
-    ACCOUNTS, BASE_RUN, BASE_STEP, CREDENTIAL_DATASETS, DATA_PREFIX,
+    ACCOUNTS, BASE_RUN, BASE_STEP, CREDENTIAL_DATASETS, DATA_PREFIX, DEMO_RUN,
     FINAL_STEP, HF_REPO, INCLUDED_ROOTS, MILESTONE_EVERY, ROOTS_PER_SHARD,
-    RUN, SEARCHLESS_COMMIT, SHARD_COUNT, SOURCE_PREFIX, SOURCE_SHA256,
+    FUNCTIONAL_RUN, MODEL_PARAMETERS, RUN, SEARCHLESS_COMMIT, SHARD_COUNT,
+    SOURCE_PREFIX, SOURCE_SHA256,
     STOCKFISH16_COMMIT, milestones,
 )
 
 DEMO_PREFIX = "puzzle-pipeline-demo-v1"
 DEMO_DATA_PREFIX = "puzzle-action-values-demo-v1"
-DEMO_RUN = "ccgavn-puzzle-demo-v1"
 STATUS_PREFIX = "puzzle-pipeline-v1/status"
 WORKER_SLUG = "ccgavn-puzzle-stage"
 EVAL_SLUG = "ccgavn-puzzle-eval"
@@ -82,7 +82,9 @@ def demo_complete(client, files: set[str]) -> tuple[bool, str | None]:
             or summary.get("checkpoint") != checkpoint):
         raise ValueError("demo evaluation artifacts do not match the declared smoke contract")
     config = remote_json(client, f"{checkpoint}/config.json")
-    if config.get("stage_start_step") != BASE_STEP or config.get("parameter_count", 0) > 5_000_000:
+    if (config.get("stage_start_step") != BASE_STEP
+            or config.get("model_version") != "v2"
+            or config.get("parameter_count") != MODEL_PARAMETERS):
         raise ValueError("demo learner checkpoint identity/parameter count mismatch")
     return True, str(config["source_commit"])
 
@@ -196,6 +198,8 @@ def worker_config(phase: str, index: int, commit: str, rows=None) -> dict:
             "demo_run": DEMO_RUN, "demo_prefix": DEMO_PREFIX,
             "status_prefix": STATUS_PREFIX, "hf_repo": HF_REPO,
             "base_run": BASE_RUN, "base_step": BASE_STEP,
+            "functional_run": FUNCTIONAL_RUN,
+            "model_version": "v2", "parameter_count": MODEL_PARAMETERS,
             "run": RUN, "final_step": FINAL_STEP,
             "shard_count": SHARD_COUNT, "rows": rows or {}}
 
@@ -203,6 +207,41 @@ def worker_config(phase: str, index: int, commit: str, rows=None) -> dict:
 def blocked_failure(client, files: set[str], phase: str, index: int, commit: str) -> bool:
     status = remote_text(client, files, f"{STATUS_PREFIX}/{phase}-acct-{index}.txt")
     return status.startswith("FAILED") and f"source_commit={commit}" in status
+
+
+def record_launch(client, phase: str, index: int, commit: str) -> None:
+    client.upload_file(path_or_fileobj=f"LAUNCHED {phase} source_commit={commit}".encode(),
+                       path_in_repo=f"{STATUS_PREFIX}/{phase}-acct-{index}.txt",
+                       repo_id=HF_REPO, repo_type="dataset",
+                       commit_message=f"Launch tactical {phase} worker {index}")
+
+
+def current_worker_failures(client, files: set[str], phase: str,
+                            statuses: dict, commit: str,
+                            worker_kind: str = "worker",
+                            indices: range = range(len(ACCOUNTS))) -> list[str]:
+    """Block only on errors belonging to this phase and source revision.
+
+    Kaggle keeps the last kernel status after a failed run. Once code has been
+    corrected, that old ERROR must not prevent the new revision from launching.
+    A missing marker remains a hard stop because the failed version is unknown.
+    """
+    failed = []
+    for index in indices:
+        account = ACCOUNTS[index]
+        status = statuses[account][worker_kind]
+        if not any(word in status for word in FAILED):
+            continue
+        marker = remote_text(client, files,
+                             f"{STATUS_PREFIX}/{phase}-acct-{index}.txt")
+        if not marker:
+            # This account's failed kernel belongs to an earlier phase; only
+            # a phase-specific launch marker makes the failure actionable here.
+            continue
+        recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
+        if not recorded or recorded.group(1) == commit:
+            failed.append(account)
+    return failed
 
 
 def eval_prefix(step: int) -> str:
@@ -244,17 +283,16 @@ def main(check_only: bool = False) -> dict:
                      if any(word in statuses[a]["worker"] for word in ACTIVE)}
     active_eval = {a for a in ACCOUNTS
                    if any(word in statuses[a]["eval"] for word in ACTIVE)}
-    failed_worker = {a for a in ACCOUNTS
-                     if any(word in statuses[a]["worker"] for word in FAILED)}
-    failed_eval = {a for a in ACCOUNTS
-                   if any(word in statuses[a]["eval"] for word in FAILED)}
     commit = demo_commit or git_head()
     if not demo_ok:
-        if blocked_failure(client, files, "demo", 0, commit):
+        if any(blocked_failure(client, files, "demo", i, commit)
+               for i in range(len(ACCOUNTS))):
             return {"phase": "blocked", "reason": "demo worker failed", "statuses": statuses}
-        if failed_worker:
+        phase_errors = current_worker_failures(client, files, "demo", statuses,
+                                               commit)
+        if phase_errors:
             return {"phase": "blocked", "reason": "demo Kaggle worker failed",
-                    "accounts": sorted(failed_worker), "statuses": statuses}
+                    "accounts": sorted(phase_errors), "statuses": statuses}
         if active_worker:
             return {"phase": "demo", "active": sorted(active_worker)}
         quotas = {a: gpu_quota(a) for a in ACCOUNTS}
@@ -263,15 +301,18 @@ def main(check_only: bool = False) -> dict:
             return {"phase": "waiting", "reason": "no positive GPU quota", "quotas": quotas}
         account = max(usable, key=lambda a: quotas[a])
         if not check_only:
+            index = ACCOUNTS.index(account)
+            record_launch(client, "demo", index, commit)
             push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
-                 worker_config("demo", 0, commit), gpu=True)
+                 worker_config("demo", index, commit), gpu=True)
         return {"phase": "demo", "target_account": account, "check_only": check_only}
 
     raw = complete_shards(files)
     if len(raw) < SHARD_COUNT:
-        if failed_worker:
+        phase_errors = current_worker_failures(client, files, "labels", statuses, commit)
+        if phase_errors:
             return {"phase": "blocked", "reason": "Stockfish label worker failed",
-                    "accounts": sorted(failed_worker), "statuses": statuses}
+                    "accounts": sorted(phase_errors), "statuses": statuses}
         pushed = []
         blocked = []
         for index, account in enumerate(ACCOUNTS):
@@ -282,6 +323,7 @@ def main(check_only: bool = False) -> dict:
                 blocked.append(account)
                 continue
             if not check_only:
+                record_launch(client, "labels", index, commit)
                 push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
                      worker_config("labels", index, commit), gpu=False)
             pushed.append(account)
@@ -291,9 +333,10 @@ def main(check_only: bool = False) -> dict:
 
     taught = complete_shards(files, teacher=True)
     if len(taught) < SHARD_COUNT:
-        if failed_worker:
+        phase_errors = current_worker_failures(client, files, "teacher", statuses, commit)
+        if phase_errors:
             return {"phase": "blocked", "reason": "9M teacher worker failed",
-                    "accounts": sorted(failed_worker), "statuses": statuses}
+                    "accounts": sorted(phase_errors), "statuses": statuses}
         quotas = {a: gpu_quota(a) for a in ACCOUNTS}
         pushed = []
         blocked = []
@@ -305,6 +348,7 @@ def main(check_only: bool = False) -> dict:
                 blocked.append(account)
                 continue
             if not check_only:
+                record_launch(client, "teacher", index, commit)
                 push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
                      worker_config("teacher", index, commit), gpu=True)
             pushed.append(account)
@@ -320,9 +364,11 @@ def main(check_only: bool = False) -> dict:
     pending = [step for step in reached if not eval_complete(client, files, step)]
     launched_eval = None
     if pending and not active_eval:
-        if failed_eval:
+        eval_errors = current_worker_failures(client, files, "eval", statuses,
+                                              commit, worker_kind="eval")
+        if eval_errors:
             return {"phase": "blocked", "reason": "evaluation worker failed",
-                    "accounts": sorted(failed_eval), "step": latest, "pending_evals": pending}
+                    "accounts": sorted(eval_errors), "step": latest, "pending_evals": pending}
         quotas = {a: gpu_quota(a) for a in ACCOUNTS}
         usable = [a for a in ACCOUNTS if a not in active_worker and quotas[a] > 1.0]
         if usable:
@@ -333,6 +379,8 @@ def main(check_only: bool = False) -> dict:
                       "searchless_commit": SEARCHLESS_COMMIT,
                       "expect_mate_rows": 4000, "expect_puzzles": 10000}
             if not check_only:
+                index = ACCOUNTS.index(account)
+                record_launch(client, "eval", index, commit)
                 push(account, EVAL_SLUG, EVAL_TEMPLATE,
                      "__EVALPREVIEW_CONFIG__", config, gpu=True)
             launched_eval = account
@@ -343,11 +391,14 @@ def main(check_only: bool = False) -> dict:
         return {"phase": "training", "step": latest,
                 "active": sorted(active_worker), "pending_evals": pending,
                 "eval_account": launched_eval}
-    if blocked_failure(client, files, "train", 0, commit):
+    if any(blocked_failure(client, files, "train", i, commit)
+           for i in range(len(ACCOUNTS))):
         return {"phase": "blocked", "reason": "learner worker failed", "step": latest}
-    if failed_worker:
+    phase_errors = current_worker_failures(client, files, "train", statuses,
+                                           commit)
+    if phase_errors:
         return {"phase": "blocked", "reason": "learner Kaggle worker failed",
-                "accounts": sorted(failed_worker), "step": latest}
+                "accounts": sorted(phase_errors), "step": latest}
     quotas = {a: gpu_quota(a) for a in ACCOUNTS}
     usable = [a for a in ACCOUNTS if a not in active_eval and quotas[a] > 1.0]
     if not usable:
@@ -355,8 +406,10 @@ def main(check_only: bool = False) -> dict:
     rows = frozen_rows(client, files)
     account = max(usable, key=lambda a: quotas[a])
     if not check_only:
+        index = ACCOUNTS.index(account)
+        record_launch(client, "train", index, commit)
         push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
-             worker_config("train", 0, commit, rows), gpu=True)
+             worker_config("train", index, commit, rows), gpu=True)
     return {"phase": "training", "step": latest, "target": FINAL_STEP,
             "account": account, "pending_evals": pending,
             "eval_account": launched_eval, "check_only": check_only}
