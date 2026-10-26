@@ -63,7 +63,8 @@ def npy_shape(path: Path) -> tuple:
 class ShardManager:
     def __init__(self, repo: str, prefix: str, cache_dir: Path,
                  token: str | None = None, log=print, expect_tags: int = 8,
-                 tags: list[str] | None = None):
+                 tags: list[str] | None = None,
+                 row_counts: dict[str, int] | None = None):
         from huggingface_hub import HfApi
         self.repo, self.prefix, self.cache_dir = repo, prefix, Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -89,6 +90,11 @@ class ShardManager:
             raise RuntimeError(
                 f"{repo}:{prefix} has {len(self.tags)} shards, expected {expect_tags}")
         self.rows: dict[str, int] = {}
+        self.frozen_rows = ({str(k): int(v) for k, v in row_counts.items()}
+                            if row_counts is not None else None)
+        if self.frozen_rows is not None:
+            if set(self.frozen_rows) != set(self.tags) or any(v <= 0 for v in self.frozen_rows.values()):
+                raise ValueError("frozen row counts must cover exactly the requested shards")
         self.total = 0
 
     # ---- download (streaming: one shard at a time, evict the previous) ----
@@ -162,6 +168,10 @@ class ShardManager:
         wanted = self.tags if tags is None else list(tags)
         if max_records:
             wanted = wanted[:1]
+        if self.frozen_rows is not None:
+            self.rows.update({tag: self.frozen_rows[tag] for tag in wanted})
+            self.total = sum(self.rows.values())
+            return
         overrides = self._override_rows()
         for tag in wanted:
             if tag in self.rows:

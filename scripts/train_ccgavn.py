@@ -230,6 +230,8 @@ def parse_args():
     p.add_argument("--hf-run", default="ccgavn-5m")
     p.add_argument("--outdir", required=True)
     p.add_argument("--sl-repo", default=os.environ.get("SL_REPO", "/kaggle/working/searchless_chess"))
+    p.add_argument("--searchless-commit", default="",
+                   help="Pinned official tokenizer/evaluation source revision.")
     p.add_argument("--dim", type=int, default=208)
     p.add_argument("--layers", type=int, default=8)
     p.add_argument("--heads", type=int, default=8)
@@ -254,6 +256,13 @@ def parse_args():
     p.add_argument("--max-records", type=int, default=0)
     p.add_argument("--ckpt-every", type=int, default=5000)
     p.add_argument("--hf-upload-every", type=float, default=1800)
+    p.add_argument("--session-seconds", type=float, default=0,
+                   help="Checkpoint and exit after this wall time; resume on the next kernel.")
+    p.add_argument("--session-steps", type=int, default=0,
+                   help="Demo-only operational cap on optimizer updates in this session.")
+    p.add_argument("--milestone-every", type=int, default=0,
+                   help="Force an exact checkpoint every N stage-relative steps.")
+    p.add_argument("--expect-shards", type=int, default=8)
     p.add_argument("--resume-from-hf", action="store_true")
     p.add_argument("--init-from-hf-run", default="",
                    help="Explicit legacy warm start into a NEW corrected run prefix.")
@@ -310,9 +319,14 @@ def main():
     if args.init_from_hf_run and args.init_from_hf_run == args.hf_run:
         raise ValueError("a corrected continuation must use a new HF run prefix")
     shard_tags = None
+    row_counts = None
+    corpus_digest = None
     if args.shard_tags_file:
-        payload = json.loads(Path(args.shard_tags_file).read_text(encoding="utf-8"))
+        frozen_bytes = Path(args.shard_tags_file).read_bytes()
+        corpus_digest = __import__('hashlib').sha256(frozen_bytes).hexdigest()
+        payload = json.loads(frozen_bytes)
         shard_tags = payload.get("tags") if isinstance(payload, dict) else payload
+        row_counts = payload.get("rows") if isinstance(payload, dict) else None
         if not shard_tags:
             raise ValueError(f"{args.shard_tags_file} contains no shard tags")
         print(f"[shards] frozen corpus: {len(shard_tags)} tags "
@@ -341,6 +355,8 @@ def main():
             for key, expected in (("stage_start_step", args.stage_start_step),
                                   ("steps", args.steps),
                                   ("exclusion_digest", exclusion_digest),
+                                  ("corpus_digest", corpus_digest),
+                                  ("searchless_commit", args.searchless_commit or None),
                                   ("model_version", args.model_version)):
                 if resume_config.get(key) != expected:
                     raise ValueError(f"resume changed {key}; define a new stage explicitly")
@@ -389,8 +405,8 @@ def main():
 
     manager = ShardManager(args.hf_repo, args.hf_shards,
                            Path(os.environ.get("SHARD_CACHE", "/kaggle/tmp/shards")),
-                           token=token, expect_tags=1 if args.max_records else 8,
-                           tags=shard_tags)
+                           token=token, expect_tags=1 if args.max_records else args.expect_shards,
+                           tags=shard_tags, row_counts=row_counts)
     manager.ensure_downloaded(max_records=args.max_records)
     manager.count_rows(max_records=args.max_records)
     schedule_rng = np.random.default_rng(args.seed)
@@ -438,6 +454,8 @@ def main():
         print(f"[resume] step={start_step}", flush=True)
     if start_step < args.stage_start_step:
         raise ValueError("checkpoint predates the declared stage")
+    if args.session_seconds < 0 or args.session_steps < 0 or args.milestone_every < 0:
+        raise ValueError("operational session controls must be nonnegative")
     dev_rng = np.random.default_rng(args.seed + 9187)
     print(f"[train] device={device} rows={manager.total:,} params={params:,}", flush=True)
 
@@ -519,8 +537,13 @@ def main():
                   f"ce={ce.item():.4f} reflected={reflected.mean():.2f} elapsed={(time.time()-started)/60:.1f}m", flush=True)
         # The wall-clock interval is itself a checkpoint trigger: otherwise a
         # 5,000-step checkpoint can exceed the recoverability window.
+        stage_steps = step + 1 - args.stage_start_step
+        milestone_due = bool(args.milestone_every and stage_steps % args.milestone_every == 0)
+        session_due = bool((args.session_seconds and time.time() - started >= args.session_seconds)
+                           or (args.session_steps and step + 1 - start_step >= args.session_steps))
         checkpoint_due = ((step + 1) % args.ckpt_every == 0
-                          or step + 1 == args.steps or timer.due())
+                          or step + 1 == args.steps or timer.due()
+                          or milestone_due or session_due)
         if checkpoint_due:
             # This is a held-out, position-disjoint development diagnostic. It
             # is never used as a source of gradients and frozen MATE/puzzles
@@ -552,9 +575,11 @@ def main():
                 "architecture": "cc-gavn-v1",
                 "recipe_version": "corrected-v2",
                 "exclusion_digest": exclusion_digest,
+                "corpus_digest": corpus_digest,
                 "schedule_digest": schedule_digest,
                 "historical_training_caveat": bool(args.init_from_hf_run),
                 "source_commit": source_commit,
+                "searchless_commit": args.searchless_commit or None,
                 "code_drift": bool(args.allow_code_drift),
                 "relation_schema": "v2-live-knight-king-rank-file-diagonal-other+candidate",
                 "canonical_decision_head": "distribution_expectation",
@@ -580,6 +605,11 @@ def main():
             except Exception as exc:
                 print(f"[ckpt] local prune skipped: {exc}", flush=True)
             timer.mark()
+            if session_due:
+                write_status(hf_client, args.hf_repo, args.hf_run,
+                             f"IN PROGRESS checkpoint-{step + 1}; session time reached")
+                print(f"[train] session stop at checkpoint-{step + 1}", flush=True)
+                break
     print(f"[train] done in {(time.time()-started)/3600:.2f}h", flush=True)
 
 

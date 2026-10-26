@@ -41,6 +41,7 @@ Thumbs.db
 
 # Tool state and build output
 .rstack/
+autoresearch/
 .wrangler/
 monitor/node_modules/
 build/

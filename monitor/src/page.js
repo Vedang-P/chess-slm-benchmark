@@ -2,434 +2,115 @@ export const HTML = String.raw`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0b1112">
-<title>CC-GAVN · live research monitor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#081211">
+<title>CC-GAVN · tactical continuation monitor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:dark;--bg:#0b1112;--panel:#111a1b;--panel2:#152021;--line:#293738;--line2:#1f2b2c;--text:#e9f1ed;--muted:#9aadaa;--dim:#718986;--accent:#b8ef83;--teal:#79d9c8;--amber:#f0c47a;--red:#f0a69a}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 "DM Sans",sans-serif}
-button{font:inherit}
-a{color:var(--accent);text-decoration:none}
-a:hover{text-decoration:underline}
-a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.mono{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
-.wrap{max-width:1460px;padding:0 32px;margin:0 auto}
-.top{height:68px;border-bottom:1px solid var(--line);background:#0d1415;position:sticky;top:0;z-index:20}
-.topinner{height:100%;display:flex;align-items:center;gap:36px}
-.brand{display:flex;align-items:center;gap:12px;color:var(--text);font-weight:700;letter-spacing:-.03em;white-space:nowrap}
-.mark{display:grid;grid-template-columns:repeat(2,7px);grid-template-rows:repeat(2,7px);gap:2px;transform:rotate(-12deg)}
-.mark i{background:var(--accent);border-radius:2px}.mark i:nth-child(2),.mark i:nth-child(3){opacity:.4}
-.brand span:last-child{font-size:17px}
-.topnav{display:flex;gap:7px;height:100%;align-items:stretch}
-.topnav button{border:0;background:none;color:var(--muted);padding:0 16px;cursor:pointer;position:relative;font-size:13px;font-weight:700}
-.topnav button[aria-selected=true]{color:var(--text)}
-.topnav button[aria-selected=true]:after{content:"";position:absolute;left:16px;right:16px;bottom:0;height:2px;background:var(--accent)}
-.topright{display:flex;align-items:center;gap:18px;margin-left:auto;white-space:nowrap;font-size:12px;color:var(--muted)}
-.pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:5px 10px;background:var(--panel);font:500 11px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.06em}
-.pill .dot{height:7px;width:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px #b8ef8377}
-.pill.stale .dot{background:var(--amber);box-shadow:none}
-.pill.bad .dot{background:var(--red);box-shadow:none}
-main{padding:36px 0 96px}
-.tabpage[hidden]{display:none}
-.tabpage{scroll-margin-top:86px}
-.eyebrow{font:500 11px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.12em;color:var(--teal)}
-h1,h2,h3,p{margin-top:0}
-h1{font-size:clamp(34px,4.4vw,64px);letter-spacing:-.055em;line-height:1.02;margin:16px 0 14px;font-weight:700}
-h2{font-size:23px;letter-spacing:-.035em;line-height:1.2;margin:0}
-h3{font-size:16px;letter-spacing:-.02em;margin:0}
-.hero{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr);gap:24px;align-items:stretch;margin-bottom:16px}
-.heroleft{padding:30px 32px;border:1px solid var(--line);background:radial-gradient(ellipse at 83% 0%,#244034 0%,transparent 44%),var(--panel);border-radius:14px;min-height:270px;display:flex;flex-direction:column}
-.hero p{color:var(--muted);max-width:60ch;margin:0}
-.herofoot{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:28px}
-.tag{border:1px solid #3b5146;border-radius:5px;padding:5px 8px;color:#c5d7c4;font:500 11px "IBM Plex Mono",monospace}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
-.heroaside{padding:26px 27px;display:flex;flex-direction:column}
-.cardlabel{color:var(--muted);font:500 11px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.08em}
-.bigvalue{font:500 clamp(42px,5vw,68px)/1 "IBM Plex Mono",monospace;letter-spacing:-.06em;margin:20px 0 5px;color:var(--accent)}
-.bigvalue small{font-size:.38em;letter-spacing:0;color:var(--muted)}
-.muted{color:var(--muted)}
-.tiny{font-size:12px}
-.track{height:7px;background:#273333;border-radius:99px;overflow:hidden}
-.track i{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .4s}
-.heroaside .track{margin:16px 0}
-.herometa{display:flex;justify-content:space-between;gap:14px;font:500 12px "IBM Plex Mono",monospace;color:var(--muted)}
-.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:42px}
-.fact{padding:16px 20px;min-height:106px}
-.fact strong{font:500 24px "IBM Plex Mono",monospace;letter-spacing:-.04em;display:block;margin-top:12px}
-.fact .unit{font-size:13px;color:var(--muted);margin-left:5px}
-.section{margin-top:38px}
-.sectionhead{display:flex;align-items:end;justify-content:space-between;gap:15px;margin-bottom:14px}
-.sectionhead p{margin:5px 0 0;color:var(--muted);font-size:13px}
-.sectionhead .aside{color:var(--dim);font:500 11px "IBM Plex Mono",monospace;white-space:nowrap}
-.maincols{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(290px,.85fr);gap:14px}
-.chartcard{padding:20px 21px 15px;min-height:340px}
-.charthead{display:flex;align-items:start;justify-content:space-between;gap:12px}
-.charthead .reading{font:500 18px "IBM Plex Mono",monospace;color:var(--accent)}
-.chartsub{font-size:12px;color:var(--muted);margin-top:5px}
-.legend{display:flex;flex-wrap:wrap;gap:13px;margin:12px 0 0;font:11px "IBM Plex Mono",monospace;color:var(--muted)}
-.legend span{display:inline-flex;align-items:center;gap:6px}
-.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent)}
-.chartbox{height:225px;margin-top:10px;position:relative}
-.chartbox svg{width:100%;height:100%;display:block}
-.chartbox .empty{height:100%;display:grid;place-content:center;text-align:center;color:var(--muted);font-size:13px}
-.chartbox .empty strong{display:block;color:var(--text);font-size:15px;margin-bottom:5px}
-.chartbox text{font:10px "IBM Plex Mono",monospace;fill:var(--dim)}
-.chartbox .grid{stroke:#2c3a3a;stroke-width:1}
-.chartbox .line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.chartbox .point{stroke:var(--panel);stroke-width:2}
-.activity{min-height:340px;display:flex;flex-direction:column}
-.activityhead{padding:20px 20px 13px;border-bottom:1px solid var(--line2);display:flex;justify-content:space-between;align-items:center}
-.activityhead span{color:var(--muted);font:11px "IBM Plex Mono",monospace}
-.feed{overflow:auto;max-height:285px;padding:2px 20px 6px;flex:1}
-.event{padding:14px 0 14px 16px;border-bottom:1px solid var(--line2);position:relative}
-.event:last-child{border-bottom:0}
-.event:before{content:"";position:absolute;left:0;top:21px;width:6px;height:6px;border-radius:50%;background:var(--teal)}
-.event.good:before{background:var(--accent)}.event.bad:before{background:var(--red)}
-.eventtop{display:flex;justify-content:space-between;gap:8px}
-.eventtop strong{font-size:12px}
-.eventtop time{font:10px "IBM Plex Mono",monospace;color:var(--dim);white-space:nowrap}
-.event p{font-size:11px;color:var(--muted);margin:5px 0 0;line-height:1.45}
-.emptyfeed{padding:24px 0;color:var(--muted);font-size:12px}
-.stages{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.stage{padding:19px 19px 17px}
-.stage .topline{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font:11px "IBM Plex Mono",monospace}
-.stage .state{color:var(--dim);text-transform:uppercase}
-.stage .state.running,.stage .state.done{color:var(--accent)}
-.stage .state.error{color:var(--red)}
-.stage h3{margin:18px 0 5px}
-.stage p{color:var(--muted);font-size:12px;min-height:34px;margin:0 0 15px}
-.stage .track{height:5px}
-.stage .foot{font:11px "IBM Plex Mono",monospace;color:var(--dim);margin-top:10px}
-.tablecard{overflow-x:auto}
-table{border-collapse:collapse;width:100%;min-width:680px}
-th,td{text-align:left;padding:12px 18px;border-bottom:1px solid var(--line2)}
-tr:last-child td{border-bottom:0}
-th{font:500 10px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);background:#152021}
-td{font-size:12px}
-td:first-child{font:500 12px "IBM Plex Mono",monospace}
-tr:hover td{background:#172223}
-.cellbar{width:110px;height:5px;background:#2d3a39;border-radius:8px;display:inline-block;vertical-align:middle;margin-right:10px}
-.cellbar i{height:100%;display:block;background:var(--teal);border-radius:8px}
-.statusword{font:500 10px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.03em}
-.statusword.running,.statusword.done{color:var(--accent)}
-.statusword.queued{color:var(--amber)}.statusword.error{color:var(--red)}
-.scoregrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.score{padding:17px 19px}
-.score .who{font:500 10px "IBM Plex Mono",monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
-.score .scoreval{font:500 27px "IBM Plex Mono",monospace;margin:15px 0 6px;letter-spacing:-.04em}
-.score .scoreval.goal{color:var(--accent)}
-.score p{margin:0;color:var(--muted);font-size:11px}
-.notice{border-left:2px solid var(--amber);background:#29251d;color:#e9d4ad;padding:12px 16px;border-radius:0 7px 7px 0;font-size:12px;margin-top:16px}
-.notice[hidden]{display:none}
-.toolbar{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin:20px 0 14px}
-.segmented{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:7px;background:var(--panel)}
-.segmented button{color:var(--muted);border:0;background:none;padding:6px 13px;font:500 11px "IBM Plex Mono",monospace;border-radius:4px;cursor:pointer}
-.segmented button[aria-pressed=true]{background:#263636;color:var(--text)}
-.metricgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
-.metricgrid .chartcard{min-height:325px}
-.metricgrid .chartbox{height:215px}
-.metricgrid .chartcard:first-child,.metricgrid .chartcard:nth-child(2){grid-column:auto}
-.methodintro{max-width:74ch;color:var(--muted);margin:12px 0 28px}
-.methodcols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.methodcard{padding:22px}
-.methodcard h3{margin-bottom:12px}
-.definition{display:grid;grid-template-columns:160px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line2);font-size:12px}
-.definition span{color:var(--muted)}
-.definition strong{font:500 12px "IBM Plex Mono",monospace;overflow-wrap:anywhere}
-.linklist{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
-.linklist a{padding:8px 11px;border:1px solid #42574a;border-radius:6px;font:500 11px "IBM Plex Mono",monospace}
-.bottom{border-top:1px solid var(--line);padding:22px 0 32px;color:var(--dim);font-size:11px}
-.bottom .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-@media(max-width:1050px){.maincols{grid-template-columns:1fr}.activity{min-height:0}.feed{max-height:250px}.facts{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:740px){.wrap{padding:0 18px}.top{height:auto}.topinner{height:auto;min-height:62px;gap:8px;flex-wrap:wrap}.brand span:last-child{font-size:15px}.topright{gap:7px;margin-left:auto}.topright .fresh{display:none}.topnav{order:3;width:100%;height:39px;overflow-x:auto}.topnav button{padding:0 12px;flex:none}.topnav button:first-child{padding-left:0}.topnav button[aria-selected=true]:after{left:0;right:12px}.tabpage{scroll-margin-top:115px}main{padding-top:22px}.hero{grid-template-columns:1fr}.heroleft{padding:25px;min-height:235px}.heroaside{padding:22px}.facts{margin-bottom:30px}.stages{grid-template-columns:1fr}.stage p{min-height:0}.scoregrid{grid-template-columns:1fr}.metricgrid{grid-template-columns:1fr}.methodcols{grid-template-columns:1fr}.sectionhead{align-items:start}.sectionhead .aside{white-space:normal;text-align:right}.definition{grid-template-columns:120px 1fr}.chartcard{padding:18px 13px 10px}.chartbox{height:215px}}
-@media(max-width:430px){.facts{gap:8px}.fact{padding:13px}.fact strong{font-size:20px}.heroleft{padding:21px}.topright .pill{font-size:9px;padding:5px 7px}}
+:root{color-scheme:dark;--bg:#081211;--surface:#101c1a;--surface2:#14221f;--line:#29413b;--text:#e9f3ed;--muted:#9ab0a7;--dim:#708a80;--green:#bcf188;--teal:#75dfc3;--amber:#edc47e;--red:#f0938d}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 'DM Sans',sans-serif}
+a{color:var(--green);text-decoration:none}a:hover{text-decoration:underline}a:focus-visible{outline:2px solid var(--green);outline-offset:3px}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}.wrap{max-width:1440px;margin:auto;padding:0 28px}
+.top{border-bottom:1px solid var(--line);background:#0b1715;position:sticky;top:0;z-index:10}.topin{min-height:65px;display:flex;align-items:center;gap:24px}
+.brand{font-weight:700;letter-spacing:-.035em;font-size:17px;color:var(--text);white-space:nowrap}.brand b{color:var(--green)}
+.nav{display:flex;gap:22px;font-size:12px;margin-left:20px}.nav a{color:var(--muted)}.nav a:hover{color:var(--text)}
+.right{margin-left:auto;display:flex;gap:13px;align-items:center;color:var(--muted);font:11px 'IBM Plex Mono',monospace;white-space:nowrap}
+.badge{border:1px solid var(--line);border-radius:100px;padding:5px 10px;color:var(--green);text-transform:uppercase;letter-spacing:.07em}.badge:before{content:'';display:inline-block;width:7px;height:7px;margin-right:7px;border-radius:50%;background:currentColor}.badge.warn{color:var(--amber)}.badge.bad{color:var(--red)}
+main{padding:32px 0 70px}.eyebrow{font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--teal)}
+h1,h2,h3,p{margin-top:0}h1{font-size:clamp(34px,4.3vw,64px);line-height:1.04;letter-spacing:-.06em;margin:11px 0 14px}h2{font-size:22px;letter-spacing:-.035em;margin:0}h3{font-size:15px;margin:0}
+.hero{display:grid;grid-template-columns:1.45fr .55fr;gap:14px;margin-bottom:14px}.panel{border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.heroMain{min-height:238px;padding:30px;background:radial-gradient(ellipse at 88% 12%,#234438 0%,transparent 45%),var(--surface);display:flex;flex-direction:column}.heroMain p{max-width:70ch;color:var(--muted);margin:0}
+.heroMeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:27px}.tag{border:1px solid #3b5548;border-radius:5px;padding:5px 8px;font:11px 'IBM Plex Mono',monospace;color:#c7ddcb}
+.heroSide{padding:26px;display:flex;flex-direction:column}.cardLabel{font:11px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.big{font:500 clamp(35px,4vw,58px)/1 'IBM Plex Mono',monospace;letter-spacing:-.06em;color:var(--green);margin:19px 0 8px}.big small{font-size:.34em;color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}.track{height:7px;border-radius:10px;background:#2c403a;overflow:hidden}.track i{height:100%;display:block;background:var(--green);width:0;border-radius:10px;transition:width .4s}.heroSide .track{margin:17px 0 9px}
+.split{display:flex;justify-content:space-between;gap:10px;font:11px 'IBM Plex Mono',monospace;color:var(--dim)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat{padding:16px 18px;min-height:113px}.stat strong{display:block;margin-top:15px;font:500 25px 'IBM Plex Mono',monospace;letter-spacing:-.05em}.stat span:last-child{font-size:11px;color:var(--muted)}
+.section{margin-top:37px}.sectionHead{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:13px}.sectionHead p{color:var(--muted);font-size:12px;margin:5px 0 0}.sectionHead .mono{font-size:11px;color:var(--dim)}
+.stages{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stage{padding:17px 18px}.stageNum{font:11px 'IBM Plex Mono',monospace;color:var(--teal)}.stage h3{margin:15px 0 5px}.stage p{color:var(--muted);font-size:11px;min-height:33px;margin:0 0 14px}.stage .track{height:5px}.stageFoot{font:11px 'IBM Plex Mono',monospace;color:var(--dim);margin-top:10px}
+.chartGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.chart{padding:18px 20px 16px;min-height:310px}.chartTop{display:flex;justify-content:space-between;gap:10px}.chartTop strong{font:500 15px 'IBM Plex Mono',monospace;color:var(--green)}.chartSub{font-size:11px;color:var(--muted);margin:4px 0 12px}.chartBox{height:222px}.chartBox svg{width:100%;height:100%;display:block}.empty{height:100%;display:grid;place-content:center;text-align:center;color:var(--muted);font-size:12px}.empty b{color:var(--text);font-size:14px;display:block;margin-bottom:4px}
+.gridline{stroke:#2a403a;stroke-width:1}.plotline{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.plotlabel{font:10px 'IBM Plex Mono',monospace;fill:var(--dim)}
+.cols{display:grid;grid-template-columns:1.25fr .75fr;gap:13px}.tablePanel{overflow:auto}table{width:100%;border-collapse:collapse;min-width:550px}th,td{text-align:left;padding:12px 15px;border-bottom:1px solid #23372f}th{font:10px 'IBM Plex Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);background:var(--surface2)}td{font-size:12px}tr:last-child td{border-bottom:0}td:first-child{font-family:'IBM Plex Mono',monospace}
+.events{padding:18px 19px;max-height:410px;overflow:auto}.event{border-bottom:1px solid #23372f;padding:10px 0 10px 14px;position:relative}.event:last-child{border:0}.event:before{content:'';position:absolute;left:0;top:18px;width:6px;height:6px;border-radius:50%;background:var(--teal)}.event.good:before{background:var(--green)}.event.bad:before{background:var(--red)}.event b{font-size:12px}.event time{font:10px 'IBM Plex Mono',monospace;color:var(--dim);float:right}.event p{font-size:11px;color:var(--muted);margin:4px 0 0}
+.contract{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.contract .panel{padding:20px}.contract h3{margin-bottom:10px}.contract p,.contract li{font-size:12px;color:var(--muted)}.contract ul{padding-left:17px;margin-bottom:0}.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:17px}.links a{border:1px solid #3c594a;border-radius:6px;padding:7px 10px;font:11px 'IBM Plex Mono',monospace}
+.warning{border-left:3px solid var(--amber);background:#29271f;color:#e7d3a7;padding:12px 15px;margin-top:13px;font-size:12px;border-radius:0 6px 6px 0}.warning.bad{border-color:var(--red);background:#322321;color:#f2c0b9}.warning[hidden]{display:none}
+.foot{border-top:1px solid var(--line);padding:21px 0;color:var(--dim);font-size:11px}.foot .wrap{display:flex;justify-content:space-between;gap:10px}
+@media(max-width:1100px){.hero{grid-template-columns:1fr 350px}.stages{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.events{max-height:260px}}
+@media(max-width:760px){.wrap{padding:0 17px}.topin{flex-wrap:wrap;gap:7px;padding-top:11px;padding-bottom:10px}.nav{order:3;margin:4px 0 0;width:100%;overflow:auto}.right{gap:7px}.right #fresh{display:none}main{padding-top:20px}.hero{grid-template-columns:1fr}.heroMain{min-height:215px;padding:22px}.heroSide{padding:22px}.stats,.chartGrid,.contract{grid-template-columns:1fr 1fr}.stat strong{font-size:22px}}
+@media(max-width:520px){.stats,.stages,.chartGrid,.contract{grid-template-columns:1fr}.stat{min-height:93px}.stat strong{margin-top:8px}.sectionHead{align-items:start}.sectionHead .mono{text-align:right}.chart{padding:17px 12px}.heroMain{min-height:230px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.track i{transition:none}}
 </style>
 </head>
 <body>
-<header class="top"><div class="wrap topinner">
-  <a class="brand" href="#overview"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>CC-GAVN <span class="muted">/ research monitor</span></span></a>
-  <nav class="topnav" role="tablist" aria-label="Monitor views">
-    <button id="tab-overview" role="tab" aria-controls="overview" data-tab="overview" aria-selected="true" tabindex="0">Overview</button>
-    <button id="tab-metrics" role="tab" aria-controls="metrics" data-tab="metrics" aria-selected="false" tabindex="-1">Metrics</button>
-    <button id="tab-method" role="tab" aria-controls="method" data-tab="method" aria-selected="false" tabindex="-1">Run contract</button>
-  </nav>
-  <div class="topright"><span class="fresh mono" id="top-fresh">Connecting</span><span class="pill" id="live-pill"><span class="dot"></span><span id="live-text">Connecting</span></span></div>
-</div></header>
-<main class="wrap">
-<section class="tabpage" id="overview" role="tabpanel" aria-labelledby="tab-overview">
-  <div class="hero">
-    <div class="heroleft">
-      <div class="eyebrow">EXPERIMENT 01 / ROOT-POLICY REINFORCEMENT LEARNING</div>
-      <h1>Live run monitor<span style="color:var(--accent)">.</span></h1>
-      <p>Five Kaggle accounts generate exact verifier labels. A compact chess model then trains with group-relative rewards before one frozen evaluation.</p>
-      <div class="herofoot"><span class="tag">ONE PASS / LEGAL MOVE</span><span class="tag">T4 GPU POOL</span><span class="tag">HF RESUMABLE</span><span class="tag" id="phase-tag">PHASE · CONNECTING</span></div>
-    </div>
-    <div class="heroaside card">
-      <span class="cardlabel">Verifier dataset collected</span>
-      <div class="bigvalue" id="hero-percent">—<small>%</small></div>
-      <div class="herometa"><span id="hero-labels">— / 10,000 roots</span><span id="hero-depth">DEPTH 14</span></div>
-      <div class="track"><i id="hero-progress"></i></div>
-      <div class="herometa"><span id="hero-workers">— active verifiers</span><span id="hero-phase">Labels phase</span></div>
-    </div>
-  </div>
-  <div class="facts">
-    <div class="card fact"><span class="cardlabel">Exact labels</span><strong id="fact-labels">—</strong><span class="tiny muted">of 10,000 positions</span></div>
-    <div class="card fact"><span class="cardlabel">RL checkpoint</span><strong id="fact-step">—</strong><span class="tiny muted">of 20,000 updates</span></div>
-    <div class="card fact"><span class="cardlabel">Active accounts</span><strong id="fact-accounts">—</strong><span class="tiny muted">of five in pool</span></div>
-    <div class="card fact"><span class="cardlabel">Frozen puzzle score</span><strong id="fact-score">Pending</strong><span class="tiny muted">10,000 puzzles · target &gt; 86.13%</span></div>
-  </div>
-  <div class="sectionhead"><div><h2>Run activity</h2><p>Observed pipeline states and persisted checkpoint uploads</p></div><span class="aside" id="history-count">History starts with next publish</span></div>
-  <div class="maincols">
-    <div class="card chartcard">
-      <div class="charthead"><div><h3>Verifier labels over time</h3><div class="chartsub">Persisted exact roots across five account shards</div></div><strong class="reading" id="label-reading">—</strong></div>
-      <div class="legend" id="label-legend"></div>
-      <div class="chartbox" id="label-chart"></div>
-    </div>
-    <div class="card activity">
-      <div class="activityhead"><h3>Activity feed</h3><span>NEWEST FIRST</span></div>
-      <div class="feed" id="activity-feed"><div class="emptyfeed">Waiting for the next supervisor publish.</div></div>
-    </div>
-  </div>
-  <section class="section"><div class="sectionhead"><div><h2>Pipeline</h2><p>Completion is based on uploaded state, not queued jobs</p></div><span class="aside" id="snapshot-time">—</span></div>
-    <div class="stages" id="stages"></div>
-  </section>
-  <section class="section"><div class="sectionhead"><div><h2>Five-account pool</h2><p>Verifier state, persisted work, remaining T4 quota, and RL worker</p></div><span class="aside">SOURCE · KAGGLE + HF</span></div>
-    <div class="card tablecard"><table><thead><tr><th>Account</th><th>Labels</th><th>Verifier kernel</th><th>Upload status</th><th>T4 remaining</th><th>RL kernel</th></tr></thead><tbody id="account-rows"><tr><td colspan="6">Waiting for first snapshot</td></tr></tbody></table></div>
-  </section>
-  <section class="section"><div class="sectionhead"><div><h2>Frozen benchmark</h2><p>Only the complete checkpoint-scoped evaluation can populate RL scores</p></div><span class="aside">4,000 MATE · 10,000 PUZZLES</span></div>
-    <div class="scoregrid">
-      <div class="card score"><div class="who">Current baseline / 4.76M</div><div class="scoreval">76.20%</div><p>Puzzles · MATE 92.75%</p></div>
-      <div class="card score"><div class="who">9M teacher / target to beat</div><div class="scoreval">86.13%</div><p>Puzzles · MATE 98.72%</p></div>
-      <div class="card score"><div class="who">Root-policy RL / final</div><div class="scoreval goal" id="score-rl">Pending</div><p id="score-rl-detail">Waiting for frozen evaluation</p></div>
-    </div>
-  </section>
-  <div class="notice" id="problem" hidden></div>
-</section>
-<section class="tabpage" id="metrics" role="tabpanel" aria-labelledby="tab-metrics" hidden>
-  <div class="eyebrow">TRAINING TELEMETRY / COMPLETE HF CHECKPOINTS</div>
-  <h1>Metrics<span style="color:var(--accent)">.</span></h1>
-  <p class="methodintro">Each point comes from a persisted checkpoint. Training losses and the fixed dev probe are shown separately from the final frozen benchmark.</p>
-  <div class="facts">
-    <div class="card fact"><span class="cardlabel">Latest step</span><strong id="metric-step">—</strong><span class="tiny muted">of 20,000</span></div>
-    <div class="card fact"><span class="cardlabel">Dev top-1</span><strong id="metric-top1">—</strong><span class="tiny muted">checkpoint probe only</span></div>
-    <div class="card fact"><span class="cardlabel">Dev mean regret</span><strong id="metric-regret">—</strong><span class="tiny muted">lower is better</span></div>
-    <div class="card fact"><span class="cardlabel">Recorded points</span><strong id="metric-points">—</strong><span class="tiny muted">complete checkpoints</span></div>
-  </div>
-  <div class="toolbar"><div><h2>Checkpoint traces</h2><div class="chartsub">No interpolation or projected result points</div></div><div class="segmented" role="group" aria-label="Chart horizontal axis"><button data-axis="step" aria-pressed="true">Step</button><button data-axis="time" aria-pressed="false">Observed time</button></div></div>
-  <div class="metricgrid" id="metric-grid"></div>
-  <div class="notice">Dev top-1 is a training probe. It is not puzzle accuracy. Frozen puzzle and MATE scores appear only after the full evaluation completes.</div>
-</section>
-<section class="tabpage" id="method" role="tabpanel" aria-labelledby="tab-method" hidden>
-  <div class="eyebrow">PREDECLARED EXPERIMENT CONTRACT</div>
-  <h1>Run contract<span style="color:var(--accent)">.</span></h1>
-  <p class="methodintro">This page documents the live run and the evidence behind each dashboard value. The five accounts share the label workload; training resumes from complete Hugging Face checkpoints.</p>
-  <div class="methodcols">
-    <div class="card methodcard"><h3>Verifier and learner</h3><div id="method-verifier"></div></div>
-    <div class="card methodcard"><h3>Training configuration</h3><div id="method-train"></div></div>
-    <div class="card methodcard"><h3>Frozen success gate</h3>
-      <div class="definition"><span>Puzzles</span><strong>&gt; 86.13% / 10,000</strong></div>
-      <div class="definition"><span>MATE</span><strong>4,000 positions</strong></div>
-      <div class="definition"><span>Teacher</span><strong>9M parameters</strong></div>
-      <div class="definition"><span>Current baseline</span><strong>76.20% puzzle / 92.75% MATE</strong></div>
-      <div class="definition"><span>Claim rule</span><strong>Complete checkpoint-scoped evaluation only</strong></div>
-    </div>
-    <div class="card methodcard"><h3>Sources and artifacts</h3><p class="tiny muted">Snapshots are collected by GitHub Actions from Kaggle and Hugging Face, then published to this Worker. The page refreshes every 30 seconds; the supervisor is scheduled every five minutes. Checkpoint uploads arrive on their training cadence.</p><div class="linklist" id="artifact-links"></div></div>
-  </div>
-</section>
+<header class="top"><div class="wrap topin"><a class="brand" href="#top"><b>◆</b> CC-GAVN <span style="color:var(--dim)">/ live research</span></a><nav class="nav"><a href="#pipeline">Pipeline</a><a href="#results">Results</a><a href="#training">Training</a><a href="#contract">Run contract</a></nav><div class="right"><span id="fresh">Connecting</span><span id="badge" class="badge warn">Connecting</span></div></div></header>
+<main id="top" class="wrap">
+  <div class="hero"><section class="panel heroMain"><span class="eyebrow">FROZEN TACTICAL CONTINUATION · EXPERIMENT 01</span><h1>Two million more steps<span style="color:var(--green)">.</span></h1><p id="stage-summary">Connecting to the live Kaggle and Hugging Face pipeline.</p><div class="heroMeta"><span class="tag">4.76M parameters</span><span class="tag">one pass per candidate</span><span class="tag">5 Kaggle accounts · T4 pool</span><span class="tag">50k-step evaluations</span></div></section><section class="panel heroSide"><span class="cardLabel">Training continuation</span><div class="big"><span id="progress-pct">0.0</span><small>%</small></div><span class="small" id="progress-caption">Awaiting verified demo</span><div class="track"><i id="progress-bar"></i></div><div class="split"><span id="step-now">0 / 2,000,000 updates</span><span id="phase-name">demo</span></div></section></div>
+  <div class="stats"><div class="panel stat"><span class="cardLabel">Stockfish-labeled roots</span><strong id="roots">0</strong><span>of 6,147,346 frozen roots</span></div><div class="panel stat"><span class="cardLabel">9M teacher labels</span><strong id="teacher">0</strong><span>complete root shards</span></div><div class="panel stat"><span class="cardLabel">Latest puzzle score</span><strong id="puzzles">76.20%</strong><span id="puzzle-note">verified starting checkpoint</span></div><div class="panel stat"><span class="cardLabel">Frozen evals</span><strong id="eval-count">0 / 40</strong><span>every 50,000 updates</span></div></div>
+  <div id="alert" class="warning" hidden></div>
+
+  <section id="pipeline" class="section"><div class="sectionHead"><div><h2>Pipeline</h2><p>Each stage advances only after its remote artifacts pass validation.</p></div><span class="mono" id="source-id">Source pinned</span></div><div class="stages"><article class="panel stage"><span class="stageNum">01 / DEMO</span><h3>End-to-end smoke run</h3><p>500 roots → all legal moves → 9M labels → two updates → 10 MATE and 20 puzzles.</p><div class="track"><i id="demo-bar"></i></div><div class="stageFoot" id="demo-foot">pending</div></article><article class="panel stage"><span class="stageNum">02 / DATA</span><h3>Stockfish 16 labels</h3><p>50 ms per legal root move; frozen source and official test IDs excluded.</p><div class="track"><i id="label-bar"></i></div><div class="stageFoot" id="label-foot">0 / 1,230 shards</div></article><article class="panel stage"><span class="stageNum">03 / TEACHER</span><h3>9M distributions</h3><p>Original 128-bin distillation target for every labeled candidate action.</p><div class="track"><i id="teacher-bar"></i></div><div class="stageFoot" id="teacher-foot">0 / 1,230 shards</div></article><article class="panel stage"><span class="stageNum">04 / LEARNER</span><h3>CC-GAVN continuation</h3><p>Original loss, batch 2,048, learning-rate rule, and full HF resume state.</p><div class="track"><i id="train-bar"></i></div><div class="stageFoot" id="train-foot">0 / 2,000,000 updates</div></article></div></section>
+
+  <section id="results" class="section"><div class="sectionHead"><div><h2>Frozen results</h2><p>All 10,000 puzzles and 4,000 MATE rows at each completed milestone.</p></div><span class="mono">Baseline 76.20% · 9M teacher 86.13%</span></div><div class="chartGrid"><div class="panel chart"><div class="chartTop"><h3>Puzzle accuracy</h3><strong id="latest-puzzle">76.20%</strong></div><p class="chartSub">Full sequence solve rate · teacher reference shown as a horizontal line</p><div id="chart-puzzle" class="chartBox"></div></div><div class="panel chart"><div class="chartTop"><h3>MATE accuracy</h3><strong id="latest-mate">92.75%</strong></div><p class="chartSub">4,000 frozen expert-choice rows · starting checkpoint 92.75%</p><div id="chart-mate" class="chartBox"></div></div></div><div class="panel tablePanel" style="margin-top:13px"><table><thead><tr><th>Checkpoint</th><th>Puzzles</th><th>MATE</th><th>Change vs start</th><th>Artifact</th></tr></thead><tbody id="eval-table"><tr><td>3,896,658 · start</td><td>7,620 / 10,000</td><td>3,710 / 4,000</td><td>baseline</td><td><a href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/eval-results/ccgavn-5m-seed0-v2-3896k-final">Verified result ↗</a></td></tr></tbody></table></div></section>
+
+  <section id="training" class="section"><div class="sectionHead"><div><h2>Training telemetry</h2><p>Checkpoint metrics are uploaded from Kaggle to Hugging Face, then collected here.</p></div><span class="mono" id="checkpoint-name">Awaiting first full-run checkpoint</span></div><div class="chartGrid"><div class="panel chart"><div class="chartTop"><h3>Training and development loss</h3><strong id="loss-value">—</strong></div><p class="chartSub">Matched baseline distillation + calibrated value loss</p><div id="chart-loss" class="chartBox"></div></div><div class="panel chart"><div class="chartTop"><h3>Learning rate</h3><strong id="lr-value">—</strong></div><p class="chartSub">Existing trainer cosine rule extended to 5,896,658 total steps</p><div id="chart-lr" class="chartBox"></div></div></div><div class="cols" style="margin-top:13px"><div class="panel tablePanel"><table><thead><tr><th>Checkpoint</th><th>Train loss</th><th>Dev loss</th><th>Learning rate</th><th>Samples/s</th></tr></thead><tbody id="checkpoint-table"><tr><td colspan="5">No new training checkpoint yet.</td></tr></tbody></table></div><div class="panel events"><h3>Live activity</h3><div id="events"><p class="small" style="margin-top:14px">Waiting for the first monitor observation.</p></div></div></div></section>
+
+  <section class="section"><div class="sectionHead"><div><h2>Five-account pool</h2><p>Current Kaggle status and remaining weekly GPU quota, refreshed with the monitor.</p></div><span class="mono">CPU labels · T4 teacher, learner, evaluation</span></div><div class="panel tablePanel"><table><thead><tr><th>Account</th><th>GPU hours left</th><th>Stage worker</th><th>Evaluation worker</th></tr></thead><tbody id="accounts"><tr><td colspan="4">Connecting to Kaggle status.</td></tr></tbody></table></div></section>
+
+  <section id="contract" class="section"><div class="sectionHead"><div><h2>Run contract</h2><p>Fixed before the full training stage starts.</p></div></div><div class="contract"><article class="panel"><h3>Source and exclusion</h3><p>6,157,341 Lichess puzzles in the pinned archive. The 9,995 verbatim matches to the official test sample are removed, leaving 6,147,346 puzzle-player roots.</p><p class="mono" id="sha">SHA256: loading…</p></article><article class="panel"><h3>Labels and learning</h3><p>Every legal move at each root gets a Stockfish 16 50 ms value and the original 9M teacher distribution. The 4.76M model resumes from checkpoint 3,896,658 for 2,000,000 additional updates.</p></article><article class="panel"><h3>Evaluation and persistence</h3><p>Full frozen MATE and puzzle evaluations run every 50,000 updates. Every learner session uploads model, optimizer, RNG, config, and metrics before its 12-hour Kaggle cutoff.</p></article></div><div class="links"><a href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/puzzle-corpus-v1">Frozen source ↗</a><a href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/puzzle-action-values-v1">Labeled corpus ↗</a><a href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/ccgavn-5m-puzzles-v1-seed0">Model checkpoints ↗</a><a href="https://github.com/Vedang-P/chess-slm-benchmark/actions/workflows/pipeline-tick.yml">Supervisor workflow ↗</a></div></section>
 </main>
-<footer class="bottom"><div class="wrap"><span>CC-GAVN · ROOT-POLICY RL MONITOR</span><span id="footer-fresh">Connecting to pipeline</span></div></footer>
+<footer class="foot"><div class="wrap"><span>CC-GAVN · live evidence, checkpoint-scoped</span><span>Refreshes every minute · source of truth: Kaggle + Hugging Face</span></div></footer>
 <script>
-const byId = id => document.getElementById(id);
-const esc = value => String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
-const number = value => Number(value || 0).toLocaleString();
-const percent = (n,d) => d ? Math.max(0,Math.min(100,100*n/d)) : 0;
-const time = value => { const d=new Date(value); return isNaN(d) ? "—" : d.toLocaleString(); };
-const shortTime = value => { const d=new Date(value); return isNaN(d) ? "—" : d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); };
-const age = value => { const n=Date.now()-new Date(value).getTime(); if(!Number.isFinite(n))return "unknown"; if(n<60000)return "just now"; if(n<3600000)return Math.floor(n/60000)+"m ago"; if(n<86400000)return Math.floor(n/3600000)+"h ago"; return Math.floor(n/86400000)+"d ago"; };
-let current = {};
-let axis = "step";
-const metricSpec = [
-  {key:"dev_top1", title:"Dev top-1", sub:"Fixed development probe · higher is better", format:v=>(100*v).toFixed(1)+"%", color:"#b8ef83", domain:[0,1]},
-  {key:"dev_regret", title:"Dev mean regret", sub:"Fixed development probe · lower is better", format:v=>v.toFixed(3), color:"#79d9c8"},
-  {key:"loss", title:"Total loss", sub:"Checkpoint training loss", format:v=>v.toFixed(4), color:"#b8ef83"},
-  {key:"pg", title:"Policy objective", sub:"Group-relative policy gradient component", format:v=>v.toFixed(4), color:"#79d9c8"},
-  {key:"kl", title:"KL term", sub:"Reference policy regularization", format:v=>v.toFixed(4), color:"#f0c47a"},
-  {key:"value", title:"Value term", sub:"Value-head training component", format:v=>v.toFixed(4), color:"#a7b8f2"},
-  {key:"grad_norm", title:"Gradient norm", sub:"After backward pass, before optimizer step", format:v=>v.toFixed(3), color:"#e5a6c9"},
-  {key:"amp_scale", title:"AMP gradient scale", sub:"Loss scale used for the optimizer update", format:v=>v.toLocaleString(), color:"#f0c47a"}
-];
-function setTab(tab) {
-  if(!["overview","metrics","method"].includes(tab))tab="overview";
-  document.querySelectorAll(".tabpage").forEach(node=>node.hidden=node.id!==tab);
-  document.querySelectorAll("[data-tab]").forEach(node=>{
-    const selected=node.dataset.tab===tab;
-    node.setAttribute("aria-selected",String(selected));
-    node.tabIndex=selected?0:-1;
-  });
-  if(location.hash!=="#"+tab)history.replaceState(null,"","#"+tab);
-  if(tab==="metrics")renderMetrics(current);
-}
-document.querySelectorAll("[data-tab]").forEach(node=>node.addEventListener("click",()=>{setTab(node.dataset.tab);window.scrollTo(0,0); }));
-byId("tab-overview").parentElement.addEventListener("keydown",event=>{
-  const tabs=[...document.querySelectorAll("[data-tab]")];
-  const currentIndex=tabs.indexOf(document.activeElement);
-  if(currentIndex<0)return;
-  let next=currentIndex;
-  if(event.key==="ArrowRight")next=(currentIndex+1)%tabs.length;
-  else if(event.key==="ArrowLeft")next=(currentIndex+tabs.length-1)%tabs.length;
-  else if(event.key==="Home")next=0;
-  else if(event.key==="End")next=tabs.length-1;
-  else return;
-  event.preventDefault();setTab(tabs[next].dataset.tab);tabs[next].focus();window.scrollTo(0,0);
-});
-window.addEventListener("hashchange",()=>setTab(location.hash.slice(1)));
-document.querySelectorAll("[data-axis]").forEach(node=>node.addEventListener("click",()=>{
-  axis=node.dataset.axis;
-  document.querySelectorAll("[data-axis]").forEach(button=>button.setAttribute("aria-pressed",String(button.dataset.axis===axis)));
-  renderMetrics(current);
-}));
-function define(label,value){return '<div class="definition"><span>'+esc(label)+'</span><strong>'+esc(value==null||value===""?"Pending":value)+'</strong></div>';}
-function statusClass(value){const x=String(value||"").toUpperCase();if(/\b(?:FAILED|ERROR|INCOMPLETE)\b/.test(x))return "error";if(/\b(?:DONE|COMPLETE|SUCCEEDED)\b/.test(x))return "done";if(/\bRUNNING\b/.test(x))return "running";if(/\b(?:QUEUED|PENDING)\b/.test(x))return "queued";return "waiting";}
-function statusSpan(value){return '<span class="statusword '+statusClass(value)+'">'+esc(value||"—")+'</span>';}
-function stage(index,title,detail,value,target,state,foot){
- return '<div class="card stage"><div class="topline"><span>0'+index+' / 03</span><span class="state '+esc(state)+'">'+esc(state)+'</span></div><h3>'+esc(title)+'</h3><p>'+esc(detail)+'</p><div class="track"><i style="width:'+percent(value,target)+'%"></i></div><div class="foot">'+esc(foot)+'</div></div>';
-}
-function svgChart(container, points, series, opts={}) {
-  const rows=(points||[]).filter(p=>Number.isFinite(Number(p.x))&&series.some(s=>Number.isFinite(Number(p[s.key]))&&p[s.key]!==null));
-  if(!rows.length){container.innerHTML='<div class="empty"><div><strong>'+esc(opts.emptyTitle||"Awaiting first checkpoint")+'</strong>'+esc(opts.emptyText||"Chart begins when a complete data point is published.")+'</div></div>';return;}
-  const W=700,H=220,L=47,R=15,T=14,B=31;
-  let xmin=Math.min(...rows.map(p=>Number(p.x))),xmax=Math.max(...rows.map(p=>Number(p.x)));
-  if(xmin===xmax){xmin-=1;xmax+=1;}
-  const values=rows.flatMap(p=>series.map(s=>p[s.key]).filter(v=>v!==null&&Number.isFinite(Number(v))).map(Number));
-  let ymin=opts.ymin!=null?opts.ymin:Math.min(...values),ymax=opts.ymax!=null?opts.ymax:Math.max(...values);
-  if(ymin===ymax){const pad=Math.max(1,Math.abs(ymin)*.1);ymin-=pad;ymax+=pad;}
-  if(opts.ymin==null&&opts.ymax==null){const pad=(ymax-ymin)*.12;ymin-=pad;ymax+=pad;}
-  const sx=x=>L+(Number(x)-xmin)/(xmax-xmin)*(W-L-R);
-  const sy=y=>T+(ymax-Number(y))/(ymax-ymin)*(H-T-B);
-  const fmtY=opts.formatY|| (v=>Math.abs(v)>=1000?Math.round(v).toLocaleString():Number(v.toFixed(2)).toString());
-  let out='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.aria||"Metric history")+'" preserveAspectRatio="none">';
-  for(let i=0;i<=4;i++){const y=T+(H-T-B)*i/4;out+='<line class="grid" x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'"/><text x="'+(L-7)+'" y="'+(y+3)+'" text-anchor="end">'+esc(fmtY(ymax-(ymax-ymin)*i/4))+'</text>';}
-  const fmtX=opts.formatX|| (v=>Math.round(v).toLocaleString());
-  for(let i=0;i<=4;i++){const x=L+(W-L-R)*i/4;out+='<text x="'+x+'" y="'+(H-7)+'" text-anchor="'+(i===0?"start":i===4?"end":"middle")+'">'+esc(fmtX(xmin+(xmax-xmin)*i/4))+'</text>';}
-  for(const s of series){
-    const pts=rows.filter(p=>p[s.key]!==null&&Number.isFinite(Number(p[s.key])));
-    if(pts.length>1)out+='<polyline class="line" points="'+pts.map(p=>sx(p.x).toFixed(1)+','+sy(p[s.key]).toFixed(1)).join(" ")+'" stroke="'+s.color+'"/>';
-    for(const p of pts){const label=(opts.pointLabel?opts.pointLabel(p):fmtX(p.x))+' · '+s.name+': '+(s.format?s.format(Number(p[s.key])):fmtY(Number(p[s.key])));
-      out+='<circle class="point" cx="'+sx(p.x).toFixed(1)+'" cy="'+sy(p[s.key]).toFixed(1)+'" r="4" fill="'+s.color+'"><title>'+esc(label)+'</title></circle>';
-    }
-  }
-  out+='</svg>';container.innerHTML=out;
-}
-function renderLabelChart(s){
- const observations=s.history?.observations||[];
- byId("history-count").textContent=observations.length+" observed snapshots · "+(s.history?.metrics||[]).length+" checkpoint points";
- byId("label-reading").textContent=number(s.label_count||0)+" / "+number(s.label_target||10000);
- const colors=["#b8ef83","#79d9c8","#f0c47a","#a7b8f2","#e5a6c9"];
- const series=[{key:"total",name:"All accounts",color:"#ffffff",format:v=>number(v)}];
- for(let i=0;i<5;i++)series.push({key:"a"+i,name:"Account "+(i+1),color:colors[i],format:v=>number(v)});
- byId("label-legend").innerHTML=series.map(item=>'<span><i style="background:'+item.color+'"></i>'+esc(item.name)+'</span>').join("");
- const rows=observations.map(p=>({x:new Date(p.at).getTime(),at:p.at,total:Number(p.label_count||0),
-  a0:p.labels?.[0]??0,a1:p.labels?.[1]??0,a2:p.labels?.[2]??0,a3:p.labels?.[3]??0,a4:p.labels?.[4]??0}));
- svgChart(byId("label-chart"),rows,series,{ymin:0,ymax:Number(s.label_target||10000),
-   formatY:v=>number(Math.round(v)),formatX:v=>shortTime(v),pointLabel:p=>time(p.at),
-   emptyTitle:"Timeline collecting observations",emptyText:"The first point appears after the next supervisor publish.",
-   aria:"Persisted verifier labels by account over observed time"});
-}
-function renderMetrics(s){
- const points=s.history?.metrics||[];
- const grid=byId("metric-grid");
- grid.innerHTML=metricSpec.map(item=>'<div class="card chartcard"><div class="charthead"><div><h3>'+esc(item.title)+'</h3><div class="chartsub">'+esc(item.sub)+'</div></div><strong class="reading" id="reading-'+item.key+'">—</strong></div><div class="chartbox" id="chart-'+item.key+'"></div></div>').join("");
- for(const item of metricSpec){
-  const rows=points.filter(p=>p[item.key]!==null&&Number.isFinite(Number(p[item.key]))).map(p=>({x:axis==="step"?p.step:new Date(p.observed_at).getTime(),step:p.step,at:p.observed_at,[item.key]:p[item.key]}));
-  const last=rows.at(-1);byId("reading-"+item.key).textContent=last?item.format(Number(last[item.key])):"—";
-  svgChart(byId("chart-"+item.key),rows,[{key:item.key,name:item.title,color:item.color,format:item.format}],{
-    ymin:item.domain?.[0],ymax:item.domain?.[1],formatY:item.format,
-    formatX:axis==="step"?v=>number(Math.round(v)):v=>shortTime(v),
-    pointLabel:p=>"Step "+number(p.step)+" · first observed "+time(p.at),
-    emptyTitle:"Awaiting first checkpoint",emptyText:"The first complete HF checkpoint will start this trace.",
-    aria:item.title+" by "+(axis==="step"?"RL step":"first observed time")
-  });
- }
- byId("metric-step").textContent=number(s.training?.step||0);
- const latest=points.at(-1);
- byId("metric-top1").textContent=latest?.dev_top1==null?"—":(latest.dev_top1*100).toFixed(1)+"%";
- byId("metric-regret").textContent=latest?.dev_regret==null?"—":Number(latest.dev_regret).toFixed(3);
- byId("metric-points").textContent=number(points.length);
+const $=id=>document.getElementById(id);
+const n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
+const fmt=v=>Math.round(n(v)).toLocaleString();
+const pct=(v,t)=>t>0?Math.max(0,Math.min(100,100*n(v)/t)):0;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const age=s=>{const d=Date.now()-Date.parse(s||'');return Number.isFinite(d)?(d<60000?'just now':Math.floor(d/60000)+'m ago'):'unknown';};
+const setBar=(id,value)=>$(id).style.width=Math.max(0,Math.min(100,value))+'%';
+function empty(id,title,detail){$(id).innerHTML='<div class="empty"><b>'+esc(title)+'</b>'+esc(detail)+'</div>';}
+function plot(id,series,limits,markers){
+  const rows=series.flatMap(s=>s.points||[]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));
+  if(!rows.length){empty(id,'Awaiting measurements','This chart fills after a verified checkpoint or evaluation.');return;}
+  const W=620,H=214,L=46,R=14,T=14,B=28;
+  let xmin=limits?.xmin??Math.min(...rows.map(p=>p[0])),xmax=limits?.xmax??Math.max(...rows.map(p=>p[0]));
+  let ymin=limits?.ymin??Math.min(...rows.map(p=>p[1])),ymax=limits?.ymax??Math.max(...rows.map(p=>p[1]));
+  if(xmax<=xmin)xmax=xmin+1;if(ymax<=ymin)ymax=ymin+1;
+  const x=v=>L+(v-xmin)*(W-L-R)/(xmax-xmin),y=v=>H-B-(v-ymin)*(H-T-B)/(ymax-ymin);
+  let svg='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(series.map(s=>s.name).join(' and '))+' chart">';
+  for(let i=0;i<4;i++){const value=ymin+(ymax-ymin)*i/3,yy=y(value);svg+='<line class="gridline" x1="'+L+'" y1="'+yy+'" x2="'+(W-R)+'" y2="'+yy+'"/><text class="plotlabel" x="2" y="'+(yy+3)+'">'+(Math.abs(value)>=1000?Math.round(value).toLocaleString():value.toFixed(value<1?3:1))+'</text>';}
+  for(const m of markers||[]){const yy=y(m.value);if(yy>=T&&yy<=H-B)svg+='<line x1="'+L+'" y1="'+yy+'" x2="'+(W-R)+'" y2="'+yy+'" stroke="'+m.color+'" stroke-dasharray="4 4" stroke-width="1"/><text class="plotlabel" x="'+(W-R-48)+'" y="'+(yy-4)+'">'+esc(m.label)+'</text>';}
+  for(const s of series){const pts=(s.points||[]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]));if(!pts.length)continue;svg+='<polyline class="plotline" stroke="'+s.color+'" points="'+pts.map(p=>x(p[0])+','+y(p[1])).join(' ')+'"/>';for(const p of pts)svg+='<circle cx="'+x(p[0])+'" cy="'+y(p[1])+'" r="3" fill="'+s.color+'"/>';}
+  svg+='<text class="plotlabel" x="'+L+'" y="'+(H-5)+'">'+fmt(xmin)+'</text><text class="plotlabel" text-anchor="end" x="'+(W-R)+'" y="'+(H-5)+'">'+fmt(xmax)+'</text></svg>';
+  $(id).innerHTML=svg;
 }
 function render(s){
- current=s;
- const labels=Array.isArray(s.labels)?s.labels:[];
- const accounts=Array.isArray(s.accounts)?s.accounts:[];
- const training=s.training||{};
- const step=Number(training.step||0),target=Number(training.target||20000);
- const count=Number(s.label_count||0),labelTarget=Number(s.label_target||10000);
- const evalComplete=!!s.evaluation;
- const active=labels.filter(item=>statusClass(item.kernel)==="running").length;
- const rlRunning=accounts.filter(item=>statusClass(item.learner)==="running").length;
- const runFailed=s.phase==="failed"||statusClass(training.status)==="error";
- const phase=evalComplete?"Evaluation complete":runFailed?"RL stopped":step>=target?"Frozen evaluation":step>0||rlRunning?"RL training":"Verifier labels";
- const freshness=s.updated_at?age(s.updated_at):"No snapshot";
- const stale=!s.updated_at||Date.now()-new Date(s.updated_at).getTime()>30*60000;
- const pill=byId("live-pill");pill.className="pill"+(stale?" stale":"");
- byId("live-text").textContent=stale?"Update delayed":"Live monitor";
- byId("top-fresh").textContent=s.updated_at?"Updated "+freshness:"Connecting";
- byId("footer-fresh").textContent=s.updated_at?"Last pipeline observation "+time(s.updated_at)+" · page polls every 30 seconds":"Waiting for first pipeline snapshot";
- byId("phase-tag").textContent="PHASE · "+phase.toUpperCase();
- byId("hero-percent").innerHTML=percent(count,labelTarget).toFixed(1)+'<small>%</small>';
- byId("hero-labels").textContent=number(count)+" / "+number(labelTarget)+" roots";
- byId("hero-depth").textContent="DEPTH "+(s.label_depth||14);
- byId("hero-progress").style.width=percent(count,labelTarget)+"%";
- byId("hero-workers").textContent=active+" active verifier"+(active===1?"":"s");
- byId("hero-phase").textContent=phase;
- byId("fact-labels").textContent=number(count);
- byId("fact-step").textContent=number(step);
- byId("fact-accounts").textContent=number(new Set([...labels.filter(x=>statusClass(x.kernel)==="running").map(x=>x.account),...accounts.filter(x=>statusClass(x.learner)==="running").map(x=>x.account)]).size);
- byId("fact-score").textContent=evalComplete?(100*s.evaluation.puzzles.solved/s.evaluation.puzzles.total).toFixed(2)+"%":"Pending";
- byId("snapshot-time").textContent=s.updated_at?"OBSERVED "+time(s.updated_at):"AWAITING SNAPSHOT";
- renderLabelChart(s);
- const validEvaluation=!!s.evaluation&&s.evaluation.complete===true&&s.evaluation.returncode===0&&Array.isArray(s.evaluation.errors)&&s.evaluation.errors.length===0;
- const events=(s.events||[]).filter(item=>!(validEvaluation&&item.title==="Evaluation reported an error")).slice().reverse();
- byId("activity-feed").innerHTML=events.length?events.map(item=>'<div class="event '+esc(item.tone)+'"><div class="eventtop"><strong>'+esc(item.title)+'</strong><time title="'+esc(time(item.at))+'">'+esc(age(item.at))+'</time></div><p>'+esc(item.detail)+'</p></div>').join(""):'<div class="emptyfeed">Activity appears after the next supervisor publish.</div>';
- const labelDone=count>=labelTarget;
- byId("stages").innerHTML=
- stage(1,"Exact verifier labels",number(count)+" / "+number(labelTarget)+" depth "+(s.label_depth||14)+" all-legal roots",count,labelTarget,labelDone?"done":active?"running":"waiting",labels.length+" shards · "+active+" running")+
- stage(2,"Root-policy RL",number(step)+" / "+number(target)+" complete checkpoint steps",step,target,runFailed?"error":step>=target?"done":rlRunning?"running":"waiting",training.checkpoint||"Awaiting first checkpoint")+
- stage(3,"Frozen evaluation",evalComplete?"4,000 MATE and 10,000 puzzles complete":"Starts after final checkpoint",evalComplete?1:0,1,evalComplete?"done":step>=target?"running":"waiting",evalComplete?"Results archived":"No final score yet");
- byId("account-rows").innerHTML=labels.length?labels.map((item,i)=>{const pool=accounts.find(x=>x.account===item.account)||accounts[i]||{};
-  return '<tr><td>'+esc(item.account)+'</td><td><span class="cellbar"><i style="width:'+percent(item.count,item.target)+'%"></i></span><span class="mono">'+number(item.count)+' / '+number(item.target)+'</span></td><td>'+statusSpan(item.kernel)+'</td><td>'+esc(item.status||"—")+'</td><td class="mono">'+esc(pool.gpu_hours==null?"—":Number(pool.gpu_hours).toFixed(1)+"h")+'</td><td>'+statusSpan(pool.learner)+'</td></tr>';
- }).join(""):'<tr><td colspan="6">Waiting for first snapshot</td></tr>';
- const score=evalComplete?100*s.evaluation.puzzles.solved/s.evaluation.puzzles.total:null;
- const mate=evalComplete?100*s.evaluation.mate.correct/s.evaluation.mate.total:null;
- byId("score-rl").textContent=evalComplete?score.toFixed(2)+"%":"Pending";
- byId("score-rl-detail").textContent=evalComplete?"MATE "+mate.toFixed(2)+"% · "+(score>86.13?"+"+(score-86.13).toFixed(2):"-"+(86.13-score).toFixed(2))+" pp vs teacher":"Waiting for frozen evaluation";
- const errors=[];
- labels.forEach(item=>{if(statusClass(item.status)==="error")errors.push(item.account+": "+item.status);});
- if(statusClass(training.status)==="error")errors.push("RL: "+String(training.status).split(String.fromCharCode(10)).at(-1));
- if(statusClass(s.evaluation_status)==="error")errors.push("Evaluation: "+String(s.evaluation_status).split(String.fromCharCode(10)).at(-1));
- byId("problem").hidden=!errors.length;byId("problem").textContent=errors.join(" · ");
- const c=training.config||{};
- byId("method-verifier").innerHTML=define("Run",s.run||"ccgavn-rl-root-v4-seed0")+define("Positions",number(labelTarget)+" exact roots")+define("Verifier depth",s.label_depth||14)+define("Account shards",labels.length||5)+define("Learner size",training.parameter_count?number(training.parameter_count)+" parameters":"Awaiting checkpoint")+define("Source checkpoint",c.source_checkpoint);
- byId("method-train").innerHTML=define("Algorithm",c.algorithm||"Awaiting checkpoint")+define("Steps",number(target))+define("Batch roots",c.batch_positions)+define("Trainable / optimized params",number(c.trainable_parameter_count)+" / "+number(c.optimized_parameter_count))+define("Trainable / optimized tensors",number(c.trainable_tensor_count)+" / "+number(c.optimized_tensor_count))+define("Warmup steps",c.warmup_steps)+define("Learning rate",c.lr)+define("Policy temperature",c.policy_temperature)+define("KL coefficient",c.kl_coef)+define("Verifier value coefficient",c.value_coef)+define("AMP start scale",c.amp_init_scale)+define("AMP scale retries",c.amp_max_scale_retries)+define("Learner code commit",c.source_commit)+define("Verifier label code commit",c.label_source_commit)+define("Seed",c.seed);
- const links=s.links||{};
- byId("artifact-links").innerHTML=[["GitHub workflow",links.github],["Verifier labels",links.labels],["RL checkpoints",links.checkpoints],["Evaluation",links.evaluation]].filter(x=>x[1]).map(x=>'<a target="_blank" rel="noopener noreferrer" href="'+esc(x[1])+'">'+esc(x[0])+' ↗</a>').join("");
- if(!byId("metrics").hidden)renderMetrics(s);
+  const c=s.corpus||{},t=s.training||{},evals=s.evaluations||[],m=s.history?.metrics||[];
+  const done=n(t.additional_complete),target=n(t.additional_target,2000000),progress=pct(done,target);
+  $('badge').textContent=s.phase||'unknown';$('badge').className='badge'+(['blocked','supervisor-error'].includes(s.phase)?' bad':Date.now()-Date.parse(s.updated_at)>20*60000?' warn':'');
+  $('fresh').textContent='Updated '+age(s.updated_at);$('stage-summary').textContent=({demo:'The small end-to-end run is validating the complete training path.',labels:'Stockfish 16 is labeling every legal candidate move across the frozen tactical corpus.',teacher:'The 9M teacher is producing 128-bin distributions for the labeled candidates.',training:'The 4.76M CC-GAVN model is continuing with its original training loss and scheduled full evaluations.',evaluation:'Training reached the final checkpoint; frozen evaluation is finishing.',complete:'Training and all final results are complete.',blocked:'A worker reported a failure; the supervisor has paused repeat launches.',waiting:'The supervisor is waiting for a required artifact or GPU quota.'})[s.phase]||'The supervisor is checking the run.';
+  $('progress-pct').textContent=progress.toFixed(1);$('progress-caption').textContent=done?'From verified HF checkpoint':'Awaiting first full-run checkpoint';$('step-now').textContent=fmt(done)+' / '+fmt(target)+' updates';$('phase-name').textContent=s.phase||'waiting';setBar('progress-bar',progress);
+  $('roots').textContent=fmt(c.root_count);$('teacher').textContent=fmt(c.teacher_shards)+' / '+fmt(c.target_shards);
+  $('eval-count').textContent=fmt(evals.length)+' / 40';$('source-id').textContent='SHA256 '+String(c.source_sha256||'').slice(0,12);$('sha').textContent='SHA256: '+String(c.source_sha256||'—');
+  setBar('demo-bar',s.demo?.complete?100:0);setBar('label-bar',pct(c.root_shards,c.target_shards));setBar('teacher-bar',pct(c.teacher_shards,c.target_shards));setBar('train-bar',progress);
+  $('demo-foot').textContent=s.demo?.complete?'passed · artifacts on HF':'pending or running';$('label-foot').textContent=fmt(c.root_shards)+' / '+fmt(c.target_shards)+' shards';$('teacher-foot').textContent=fmt(c.teacher_shards)+' / '+fmt(c.target_shards)+' shards';$('train-foot').textContent=fmt(done)+' / '+fmt(target)+' updates';
+  const latest=evals.at(-1),ps=latest?100*n(latest.puzzles?.solved)/10000:76.2,ms=latest?100*n(latest.mate?.correct)/4000:92.75;
+  $('puzzles').textContent=ps.toFixed(2)+'%';$('puzzle-note').textContent=latest?'checkpoint '+fmt(latest.step):'verified starting checkpoint';$('latest-puzzle').textContent=ps.toFixed(2)+'%';$('latest-mate').textContent=ms.toFixed(2)+'%';
+  const pp=[[3896658,76.2],...evals.map(x=>[x.step,100*n(x.puzzles?.solved)/10000])],mp=[[3896658,92.75],...evals.map(x=>[x.step,100*n(x.mate?.correct)/4000])];
+  plot('chart-puzzle',[{name:'Puzzle accuracy',points:pp,color:'#bcf188'}],{xmin:3896658,xmax:5896658,ymin:Math.min(70,...pp.map(x=>x[1]))-1,ymax:Math.max(88,...pp.map(x=>x[1]))+1},[{value:86.13,label:'9M',color:'#edc47e'}]);
+  plot('chart-mate',[{name:'MATE accuracy',points:mp,color:'#75dfc3'}],{xmin:3896658,xmax:5896658,ymin:Math.min(90,...mp.map(x=>x[1]))-1,ymax:Math.max(99,...mp.map(x=>x[1]))+1},[{value:98.72,label:'9M',color:'#edc47e'}]);
+  $('eval-table').innerHTML='<tr><td>3,896,658 · start</td><td>7,620 / 10,000</td><td>3,710 / 4,000</td><td>baseline</td><td><a href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/eval-results/ccgavn-5m-seed0-v2-3896k-final">Verified result ↗</a></td></tr>'+evals.map(x=>'<tr><td>'+fmt(x.step)+'</td><td>'+fmt(x.puzzles?.solved)+' / 10,000</td><td>'+fmt(x.mate?.correct)+' / 4,000</td><td>'+((100*n(x.puzzles?.solved)/10000)-76.2).toFixed(2)+' pp</td><td><a href="https://huggingface.co/datasets/vedangfake/chess-slm-benchmark/tree/main/'+encodeURIComponent(x.prefix).replaceAll('%2F','/')+'">HF artifact ↗</a></td></tr>').join('');
+  $('checkpoint-name').textContent=t.checkpoint||'Awaiting first full-run checkpoint';const last=m.at(-1);$('loss-value').textContent=last?.loss!=null?last.loss.toFixed(4):'—';$('lr-value').textContent=last?.lr!=null?last.lr.toExponential(2):'—';
+  plot('chart-loss',[{name:'Train loss',points:m.filter(x=>x.loss!=null).map(x=>[x.step,x.loss]),color:'#bcf188'},{name:'Dev loss',points:m.filter(x=>x.dev_loss!=null).map(x=>[x.step,x.dev_loss]),color:'#75dfc3'}]);
+  plot('chart-lr',[{name:'Learning rate',points:m.filter(x=>x.lr!=null).map(x=>[x.step,x.lr]),color:'#edc47e'}]);
+  $('checkpoint-table').innerHTML=m.length?m.slice(-12).reverse().map(x=>'<tr><td>'+fmt(x.step)+'</td><td>'+(x.loss?.toFixed(4)??'—')+'</td><td>'+(x.dev_loss?.toFixed(4)??'—')+'</td><td>'+(x.lr?.toExponential(2)??'—')+'</td><td>'+(x.samples_per_s?.toFixed(1)??'—')+'</td></tr>').join(''):'<tr><td colspan="5">No new training checkpoint yet.</td></tr>';
+  $('events').innerHTML=(s.events||[]).length?(s.events||[]).slice(-16).reverse().map(x=>'<div class="event '+esc(x.tone)+'"><b>'+esc(x.title)+'</b><time>'+esc(age(x.at))+'</time><p>'+esc(x.detail)+'</p></div>').join(''):'<p class="small" style="margin-top:14px">No activity recorded yet.</p>';
+  $('accounts').innerHTML=(s.accounts||[]).map(x=>'<tr><td>'+esc(x.account)+'</td><td>'+n(x.gpu_hours).toFixed(2)+' h</td><td>'+esc(x.worker)+'</td><td>'+esc(x.eval)+'</td></tr>').join('')||'<tr><td colspan="4">Awaiting Kaggle status.</td></tr>';
+  const issue=s.supervisor?.reason||'';const alert=$('alert');alert.hidden=!(['blocked','supervisor-error'].includes(s.phase)||issue&&s.phase==='waiting');if(!alert.hidden){alert.textContent=issue||'Supervisor attention needed';alert.className='warning'+(['blocked','supervisor-error'].includes(s.phase)?' bad':'');}
 }
-async function load(){
- try{const response=await fetch("/api/snapshot",{cache:"no-store"});if(!response.ok)throw Error("HTTP "+response.status);render(await response.json());}
- catch(error){byId("live-pill").className="pill bad";byId("live-text").textContent="Connection error";byId("top-fresh").textContent="Snapshot unavailable";byId("footer-fresh").textContent="Monitor request failed: "+error.message;}
-}
-if("scrollRestoration" in history)history.scrollRestoration="manual";
-setTab(location.hash.slice(1));
-window.scrollTo(0,0);
-window.addEventListener("load",()=>window.scrollTo(0,0));
-load();
-setInterval(load,30000);
-setInterval(()=>{if(current.updated_at){byId("top-fresh").textContent="Updated "+age(current.updated_at);document.querySelectorAll(".event time").forEach((node,i)=>{const events=(current.events||[]).slice().reverse();if(events[i])node.textContent=age(events[i].at);});}},15000);
+async function refresh(){try{const res=await fetch('/api/snapshot',{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);const s=await res.json();if(!s.updated_at){$('fresh').textContent='Awaiting first snapshot';return;}render(s);}catch(e){$('badge').textContent='Connection error';$('badge').className='badge bad';$('fresh').textContent=String(e.message||e);}}
+refresh();setInterval(refresh,60000);
 </script>
-</body></html>`;
+</body>
+</html>`;
