@@ -3,14 +3,12 @@
 HF_REPO = "vedangfake/chess-slm-benchmark"
 SOURCE_PREFIX = "puzzle-corpus-v1"
 DATA_PREFIX = "puzzle-action-values-v1"
-# This first run uses the immutable early-label cohort so model work can start
-# while the remaining CPU label shards continue. It is an interim result, not
-# the eventual full-corpus run.
-RUN = "ccgavn-3.9m-puzzles-1m-cohort-v1-seed0"
-COHORT_MANIFEST = f"{DATA_PREFIX}/cohorts/first-1m-v1.json"
-COHORT_SHARD_COUNT = 200
-COHORT_ROOTS = COHORT_SHARD_COUNT * 5_000
-COHORT_TAGS = tuple(range(COHORT_SHARD_COUNT))
+# Freeze the teacher-complete shards available when the learner is first
+# launched. This lets training begin while CPU labeling and teacher generation
+# continue; the resulting checkpoint is explicitly an interim cohort result.
+RUN = "ccgavn-3.9m-puzzles-teacher-ready-20261028-seed0"
+COHORT_MANIFEST = f"{DATA_PREFIX}/cohorts/teacher-ready-20261028-v1.json"
+COHORT_ID = "teacher-ready-20261028-v1"
 FUNCTIONAL_RUN = "ccgavn-5m-v2-functional-seed0"
 DEMO_RUN = "ccgavn-puzzle-demo-3.9m-v1"
 BASE_RUN = "ccgavn-5m-seed0-v2"

@@ -1,7 +1,7 @@
 import { HTML } from "./page.js";
 
-const RUN = "ccgavn-3.9m-puzzles-1m-cohort-v1-seed0";
-const KEY = "tactical_monitor_v1";
+const RUN = "ccgavn-3.9m-puzzles-teacher-ready-20261028-seed0";
+const KEY = "tactical_monitor_teacher_ready_v1";
 const GITHUB = "https://api.github.com/repos/Vedang-P/chess-slm-benchmark/dispatches";
 const SECURITY = {
   "x-content-type-options": "nosniff",

@@ -1,8 +1,8 @@
 """Coordinate frozen-cohort training alongside full-corpus CPU labeling.
 
-The first 200 verified Stockfish shards are frozen as a 1M-root cohort. The
-smoke demo and 9M teacher labels prepare in parallel with the remaining CPU
-label work; the 2M-step learner starts once the cohort and demo gates pass.
+At launch, freeze all verified raw shards with complete 9M teacher labels.
+CPU labeling and teacher generation continue while the 2M-step learner trains
+on that immutable interim cohort.
 """
 from __future__ import annotations
 
@@ -26,8 +26,8 @@ from scripts.kaggle_accounts import env_for_account  # noqa: E402
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.hf_upload import upload_file as upload_hf_file  # noqa: E402
 from scripts.tactical_config import (  # noqa: E402
-    ACCOUNTS, BASE_RUN, BASE_STEP, COHORT_MANIFEST, COHORT_ROOTS,
-    COHORT_SHARD_COUNT, COHORT_TAGS, CREDENTIAL_DATASETS, DATA_PREFIX, DEMO_RUN,
+    ACCOUNTS, BASE_RUN, BASE_STEP, COHORT_ID, COHORT_MANIFEST,
+    CREDENTIAL_DATASETS, DATA_PREFIX, DEMO_RUN,
     CPU_BATCH_SESSIONS_PER_ACCOUNT, FINAL_STEP, HF_REPO, INCLUDED_ROOTS,
     MILESTONE_EVERY, ROOTS_PER_SHARD,
     FUNCTIONAL_RUN, MODEL_PARAMETERS, RUN, SEARCHLESS_COMMIT, SHARD_COUNT,
@@ -159,27 +159,37 @@ def frozen_shard_digests(client, tags: tuple[int, ...] | list[int]) -> dict[str,
 
 def frozen_cohort(client, files: set[str], raw: set[int],
                   persist: bool = True) -> dict | None:
-    """Create or read the first 1M-root cohort; never extend it after training."""
+    """Create or read a teacher-ready cohort; never extend it after launch."""
     if COHORT_MANIFEST in files:
         cohort = remote_json(client, COHORT_MANIFEST)
-        if (cohort.get("cohort_id") != "first-1m-v1"
+        tags = tuple(int(tag) for tag in cohort.get("tags", ()))
+        expected_keys = {f"{tag:05d}" for tag in tags}
+        expected_roots = sum(min(ROOTS_PER_SHARD,
+                                 INCLUDED_ROOTS - tag * ROOTS_PER_SHARD)
+                             for tag in tags)
+        if (cohort.get("cohort_id") != COHORT_ID
                 or cohort.get("source_sha256") != SOURCE_SHA256
-                or tuple(cohort.get("tags", ())) != COHORT_TAGS
-                or int(cohort.get("roots", 0)) != COHORT_ROOTS
-                or set(cohort.get("rows", {})) != {f"{tag:05d}" for tag in COHORT_TAGS}
-                or set(cohort.get("train_set_sha256", {})) !=
-                   {f"{tag:05d}" for tag in COHORT_TAGS}):
+                or not tags or tuple(sorted(set(tags))) != tags
+                or int(cohort.get("roots", 0)) != expected_roots
+                or set(cohort.get("rows", {})) != expected_keys
+                or set(cohort.get("train_set_sha256", {})) != expected_keys
+                or cohort.get("training_run") != RUN):
             raise ValueError("frozen training cohort manifest identity mismatch")
         return cohort
-    if not set(COHORT_TAGS) <= raw:
+    taught = complete_shards(files, teacher=True)
+    tags = tuple(sorted(raw & taught))
+    if not tags:
         return None
-    rows = frozen_rows(client, files, COHORT_TAGS, require_teacher=False)
-    digests = frozen_shard_digests(client, COHORT_TAGS)
+    rows = frozen_rows(client, files, tags, require_teacher=True)
+    digests = frozen_shard_digests(client, tags)
+    roots = sum(min(ROOTS_PER_SHARD,
+                    INCLUDED_ROOTS - tag * ROOTS_PER_SHARD)
+                for tag in tags)
     cohort = {
-        "cohort_id": "first-1m-v1", "data_prefix": DATA_PREFIX,
+        "cohort_id": COHORT_ID, "data_prefix": DATA_PREFIX,
         "source_sha256": SOURCE_SHA256, "engine": "Stockfish 16",
-        "seconds_per_action": 0.05, "roots": COHORT_ROOTS,
-        "tags": list(COHORT_TAGS), "rows": rows, "train_set_sha256": digests,
+        "seconds_per_action": 0.05, "roots": roots,
+        "tags": list(tags), "rows": rows, "train_set_sha256": digests,
         "training_run": RUN, "base_run": BASE_RUN, "base_step": BASE_STEP,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -188,7 +198,7 @@ def frozen_cohort(client, files: set[str], raw: set[int],
                        (json.dumps(cohort, sort_keys=True,
                                    separators=(",", ":")) + "\n").encode(),
                        COHORT_MANIFEST,
-                       commit_message="Freeze first 1M-root training cohort")
+                       commit_message=f"Freeze {roots:,}-root teacher-ready training cohort")
     return cohort
 
 
@@ -422,9 +432,8 @@ def main(check_only: bool = False) -> dict:
         return {"phase": "blocked", "reason": "Stockfish label worker failed",
                 "failed_workers": failed_workers, "statuses": statuses}
 
-    # Keep the CPU label pool running while GPU stages work on a frozen,
-    # auditable one-million-root snapshot. New shards are deliberately excluded
-    # from this run and remain available for a later full-corpus stage.
+    # Keep all CPU label workers running. The launch-time cohort below only
+    # contains shards whose raw and teacher artifacts have both been verified.
     if len(raw) < SHARD_COUNT:
         pushed = []
         blocked = []
@@ -498,9 +507,11 @@ def main(check_only: bool = False) -> dict:
                 "accounts": sorted(teacher_errors), "labels": label_state,
                 "cohort": {"id": cohort["cohort_id"], "roots": cohort["roots"]},
                 "statuses": statuses}
+    taught_all = complete_shards(files, teacher=True)
+    teacher_pending = sorted(raw - taught_all)
     for index, account in enumerate(ACCOUNTS):
-        assigned = cohort_tags[index::len(ACCOUNTS)]
-        if not assigned or set(assigned) <= cohort_taught or account in active_worker:
+        assigned = teacher_pending[index::len(ACCOUNTS)]
+        if not assigned or account in active_worker:
             continue
         if quotas[account] <= 1.0:
             teacher_blocked.append(account)
@@ -570,10 +581,19 @@ def main(check_only: bool = False) -> dict:
         return {"phase": phase, "step": latest, "pending_evals": pending,
                 "eval_account": launched_eval, "labels": label_state,
                 "cohort": cohort_info, "statuses": statuses}
-    if active_worker:
+    active_train = set()
+    for index, account in enumerate(ACCOUNTS):
+        marker = remote_text(client, files,
+                            f"{STATUS_PREFIX}/train-acct-{index}.txt")
+        recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
+        if (account in active_worker and recorded
+                and recorded.group(1) == commit
+                and marker.startswith(("LAUNCHED train", "IN PROGRESS train"))):
+            active_train.add(account)
+    if active_train:
         phase = "training+labels" if label_state["active"] else "training"
         return {"phase": phase, "step": latest,
-                "active": sorted(active_worker), "pending_evals": pending,
+                "active": sorted(active_train), "pending_evals": pending,
                 "eval_account": launched_eval, "labels": label_state,
                 "cohort": cohort_info, "statuses": statuses}
     if any(blocked_failure(client, files, "train", i, commit)
@@ -599,10 +619,10 @@ def main(check_only: bool = False) -> dict:
     account = max(usable, key=lambda a: quotas[a])
     if not check_only:
         index = ACCOUNTS.index(account)
-        record_launch(client, "train", index, commit)
         push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
              worker_config("train", index, commit, rows,
                            cohort_sha256=cohort["train_set_sha256"]), gpu=True)
+        record_launch(client, "train", index, commit)
     phase = "training+labels" if label_state["active"] else "training"
     return {"phase": phase, "step": latest, "target": FINAL_STEP,
             "account": account, "pending_evals": pending,
