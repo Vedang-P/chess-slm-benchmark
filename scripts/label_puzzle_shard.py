@@ -250,7 +250,6 @@ def main() -> None:
                               repo_id=args.hf_repo, repo_type="dataset",
                               allow_patterns=[args.out.name, meta.name],
                               commit_message=f"Complete {remote} Stockfish labels")
-            write_status(api, args.hf_repo, remote, "DONE labels")
         print(json.dumps(result, sort_keys=True), flush=True)
     except Exception as exc:
         if api:
