@@ -1,8 +1,8 @@
-"""GitHub Actions supervisor for the frozen two-million-step puzzle stage.
+"""Coordinate frozen-cohort training alongside full-corpus CPU labeling.
 
-Stages advance only after remote artifacts pass their declared gates:
-small end-to-end demo -> all Stockfish rows -> all 9M teacher distributions ->
-2M-step learner, with checkpoint-scoped evaluation every 50k steps.
+The first 200 verified Stockfish shards are frozen as a 1M-root cohort. The
+smoke demo and 9M teacher labels prepare in parallel with the remaining CPU
+label work; the 2M-step learner starts once the cohort and demo gates pass.
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 from huggingface_hub import hf_hub_download
@@ -24,7 +25,8 @@ sys.path.insert(0, str(ROOT))
 from scripts.kaggle_accounts import env_for_account  # noqa: E402
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.tactical_config import (  # noqa: E402
-    ACCOUNTS, BASE_RUN, BASE_STEP, CREDENTIAL_DATASETS, DATA_PREFIX, DEMO_RUN,
+    ACCOUNTS, BASE_RUN, BASE_STEP, COHORT_MANIFEST, COHORT_ROOTS,
+    COHORT_SHARD_COUNT, COHORT_TAGS, CREDENTIAL_DATASETS, DATA_PREFIX, DEMO_RUN,
     CPU_BATCH_SESSIONS_PER_ACCOUNT, FINAL_STEP, HF_REPO, INCLUDED_ROOTS,
     MILESTONE_EVERY, ROOTS_PER_SHARD,
     FUNCTIONAL_RUN, MODEL_PARAMETERS, RUN, SEARCHLESS_COMMIT, SHARD_COUNT,
@@ -92,10 +94,19 @@ def demo_complete(client, files: set[str]) -> tuple[bool, str | None]:
     return True, str(config["source_commit"])
 
 
-def frozen_rows(client, files: set[str]) -> dict[str, int]:
-    """Validate all completed raw shards before the learner sees any of them."""
-    if len(complete_shards(files, teacher=True)) != SHARD_COUNT:
-        raise ValueError("teacher corpus is not fully complete")
+def frozen_rows(client, files: set[str], tags: tuple[int, ...] | list[int],
+                require_teacher: bool = True) -> dict[str, int]:
+    """Validate one explicit, immutable shard set before training."""
+    raw = complete_shards(files)
+    taught = complete_shards(files, teacher=True)
+    tags = tuple(int(tag) for tag in tags)
+    if not tags or len(set(tags)) != len(tags):
+        raise ValueError("training cohort shard tags are empty or duplicated")
+    missing = set(tags) - raw
+    if missing:
+        raise ValueError(f"training cohort lacks raw shards: {sorted(missing)[:8]}")
+    if require_teacher and set(tags) - taught:
+        raise ValueError(f"training cohort lacks teacher shards: {sorted(set(tags) - taught)[:8]}")
 
     def fetch(tag: int):
         meta = remote_json(client, f"{DATA_PREFIX}/shard-{tag:05d}/meta.json")
@@ -116,10 +127,59 @@ def frozen_rows(client, files: set[str]) -> dict[str, int]:
         return f"{tag:05d}", rows, expected_roots
 
     with ThreadPoolExecutor(max_workers=16) as pool:
-        result = list(pool.map(fetch, range(SHARD_COUNT)))
-    if sum(item[2] for item in result) != INCLUDED_ROOTS:
-        raise ValueError("frozen corpus root total changed")
+        result = list(pool.map(fetch, tags))
+    expected_total = sum(min(ROOTS_PER_SHARD,
+                             INCLUDED_ROOTS - tag * ROOTS_PER_SHARD)
+                         for tag in tags)
+    if sum(item[2] for item in result) != expected_total:
+        raise ValueError("frozen cohort root total changed")
     return {tag: rows for tag, rows, _ in result}
+
+
+def frozen_shard_digests(client, tags: tuple[int, ...] | list[int]) -> dict[str, str]:
+    def fetch(tag: int):
+        meta = remote_json(client, f"{DATA_PREFIX}/shard-{tag:05d}/meta.json")
+        digest = str(meta.get("train_set_sha256", ""))
+        if not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"shard {tag:05d} has no valid label SHA256")
+        return f"{tag:05d}", digest
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        return dict(pool.map(fetch, tags))
+
+
+def frozen_cohort(client, files: set[str], raw: set[int],
+                  persist: bool = True) -> dict | None:
+    """Create or read the first 1M-root cohort; never extend it after training."""
+    if COHORT_MANIFEST in files:
+        cohort = remote_json(client, COHORT_MANIFEST)
+        if (cohort.get("cohort_id") != "first-1m-v1"
+                or cohort.get("source_sha256") != SOURCE_SHA256
+                or tuple(cohort.get("tags", ())) != COHORT_TAGS
+                or int(cohort.get("roots", 0)) != COHORT_ROOTS
+                or set(cohort.get("rows", {})) != {f"{tag:05d}" for tag in COHORT_TAGS}
+                or set(cohort.get("train_set_sha256", {})) !=
+                   {f"{tag:05d}" for tag in COHORT_TAGS}):
+            raise ValueError("frozen training cohort manifest identity mismatch")
+        return cohort
+    if not set(COHORT_TAGS) <= raw:
+        return None
+    rows = frozen_rows(client, files, COHORT_TAGS, require_teacher=False)
+    digests = frozen_shard_digests(client, COHORT_TAGS)
+    cohort = {
+        "cohort_id": "first-1m-v1", "data_prefix": DATA_PREFIX,
+        "source_sha256": SOURCE_SHA256, "engine": "Stockfish 16",
+        "seconds_per_action": 0.05, "roots": COHORT_ROOTS,
+        "tags": list(COHORT_TAGS), "rows": rows, "train_set_sha256": digests,
+        "training_run": RUN, "base_run": BASE_RUN, "base_step": BASE_STEP,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if persist:
+        client.upload_file(path_or_fileobj=(json.dumps(cohort, sort_keys=True,
+                                                       separators=(",", ":")) + "\n").encode(),
+                           path_in_repo=COHORT_MANIFEST, repo_id=HF_REPO,
+                           repo_type="dataset",
+                           commit_message="Freeze first 1M-root training cohort")
+    return cohort
 
 
 def account_slugs(account: str) -> set[str]:
@@ -146,7 +206,9 @@ def kernel_status(account: str, slug: str, slugs: set[str]) -> str:
                             text=True, timeout=90)
     if result.returncode:
         raise RuntimeError(f"{ref}: status failed: {(result.stdout + result.stderr)[-300:]}")
-    return (result.stdout + result.stderr).strip()
+    lines = [line.strip() for line in (result.stdout + result.stderr).splitlines()
+             if line.strip()]
+    return lines[-1] if lines else ""
 
 
 def gpu_quota(account: str) -> float:
@@ -197,7 +259,9 @@ def label_worker_slug(worker_index: int) -> str:
 
 
 def worker_config(phase: str, index: int, commit: str, rows=None,
-                  label_worker_index: int | None = None) -> dict:
+                  label_worker_index: int | None = None,
+                  teacher_tags: list[int] | None = None,
+                  cohort_sha256: dict[str, str] | None = None) -> dict:
     config = {"phase": phase, "account_index": index,
             "source_commit": commit, "searchless_commit": SEARCHLESS_COMMIT,
             "stockfish_commit": STOCKFISH16_COMMIT,
@@ -213,6 +277,10 @@ def worker_config(phase: str, index: int, commit: str, rows=None,
     if label_worker_index is not None:
         config["label_worker_index"] = label_worker_index
         config["label_worker_count"] = LABEL_WORKER_COUNT
+    if teacher_tags is not None:
+        config["teacher_tags"] = teacher_tags
+    if cohort_sha256 is not None:
+        config["cohort_sha256"] = cohort_sha256
     return config
 
 
@@ -294,45 +362,59 @@ def main(check_only: bool = False) -> dict:
     if missing:
         return {"phase": "waiting", "missing": missing}
     demo_ok, demo_commit = demo_complete(client, files)
-    statuses = {}
     slugs = {}
+    with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
+        for account, refs in zip(ACCOUNTS, pool.map(account_slugs, ACCOUNTS)):
+            slugs[account] = refs
+    status_tasks = {}
     for index, account in enumerate(ACCOUNTS):
-        slugs[account] = account_slugs(account)
+        status_tasks[(account, "worker")] = (account, WORKER_SLUG)
+        status_tasks[(account, "eval")] = (account, EVAL_SLUG)
         local_labels = {}
         for local_slot in range(CPU_BATCH_SESSIONS_PER_ACCOUNT):
             worker_index = index * CPU_BATCH_SESSIONS_PER_ACCOUNT + local_slot
-            local_labels[worker_index] = kernel_status(
-                account, label_worker_slug(worker_index), slugs[account])
-        statuses[account] = {
-            "worker": kernel_status(account, WORKER_SLUG, slugs[account]),
-            "eval": kernel_status(account, EVAL_SLUG, slugs[account]),
-            "labels": local_labels,
-        }
+            status_tasks[(account, f"label-{worker_index}")] = (
+                account, label_worker_slug(worker_index))
+    def query_status(task):
+        account, slug = task
+        return kernel_status(account, slug, slugs[account])
+    with ThreadPoolExecutor(max_workers=LABEL_WORKER_COUNT + 2 * len(ACCOUNTS)) as pool:
+        queried = list(pool.map(query_status, status_tasks.values()))
+    statuses = {account: {"labels": {}} for account in ACCOUNTS}
+    for (account, kind), status in zip(status_tasks, queried):
+        if kind.startswith("label-"):
+            worker_index = int(kind.split("-", 1)[1])
+            statuses[account]["labels"][worker_index] = status
+        else:
+            statuses[account][kind] = status
     active_worker = {a for a in ACCOUNTS
                      if any(word in statuses[a]["worker"] for word in ACTIVE)}
     active_eval = {a for a in ACCOUNTS
                    if any(word in statuses[a]["eval"] for word in ACTIVE)}
     commit = demo_commit or git_head()
-    demo_status = "complete" if demo_ok else "waiting for CPU labels"
     raw = complete_shards(files)
+    failed_workers = []
+    active_label_workers = []
+    for worker_index in range(LABEL_WORKER_COUNT):
+        account_index = worker_index // CPU_BATCH_SESSIONS_PER_ACCOUNT
+        account = ACCOUNTS[account_index]
+        status = statuses[account]["labels"][worker_index]
+        if any(word in status for word in FAILED):
+            marker_path = f"{STATUS_PREFIX}/labels-worker-{worker_index:02d}.txt"
+            marker = remote_text(client, files, marker_path)
+            recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
+            if not marker or not recorded or recorded.group(1) == commit:
+                failed_workers.append({"worker": worker_index, "account": account})
+        elif any(word in status for word in ACTIVE):
+            active_label_workers.append(worker_index)
+    if failed_workers:
+        return {"phase": "blocked", "reason": "Stockfish label worker failed",
+                "failed_workers": failed_workers, "statuses": statuses}
+
+    # Keep the CPU label pool running while GPU stages work on a frozen,
+    # auditable one-million-root snapshot. New shards are deliberately excluded
+    # from this run and remain available for a later full-corpus stage.
     if len(raw) < SHARD_COUNT:
-        failed_workers = []
-        active_label_workers = []
-        for worker_index in range(LABEL_WORKER_COUNT):
-            account_index = worker_index // CPU_BATCH_SESSIONS_PER_ACCOUNT
-            account = ACCOUNTS[account_index]
-            status = statuses[account]["labels"][worker_index]
-            if any(word in status for word in FAILED):
-                marker_path = f"{STATUS_PREFIX}/labels-worker-{worker_index:02d}.txt"
-                marker = remote_text(client, files, marker_path)
-                recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
-                if not marker or not recorded or recorded.group(1) == commit:
-                    failed_workers.append({"worker": worker_index, "account": account})
-            elif any(word in status for word in ACTIVE):
-                active_label_workers.append(worker_index)
-        if failed_workers:
-            return {"phase": "blocked", "reason": "Stockfish label worker failed",
-                    "failed_workers": failed_workers, "statuses": statuses}
         pushed = []
         blocked = []
         for worker_index in range(LABEL_WORKER_COUNT):
@@ -354,66 +436,90 @@ def main(check_only: bool = False) -> dict:
                      worker_config("labels", index, commit,
                                    label_worker_index=worker_index), gpu=False)
             pushed.append({"worker": worker_index, "account": account})
-        return {"phase": "labels", "ready": len(raw), "target": SHARD_COUNT,
-                "active": sorted(active_label_workers), "pushed": pushed,
-                "blocked": blocked, "workers_per_account": CPU_BATCH_SESSIONS_PER_ACCOUNT,
-                "worker_target": LABEL_WORKER_COUNT, "demo": demo_status,
-                "check_only": check_only}
+        label_state = {"ready": len(raw), "target": SHARD_COUNT,
+                       "active": sorted(active_label_workers), "pushed": pushed,
+                       "blocked": blocked, "workers_per_account": CPU_BATCH_SESSIONS_PER_ACCOUNT,
+                       "worker_target": LABEL_WORKER_COUNT}
+    else:
+        label_state = {"ready": len(raw), "target": SHARD_COUNT,
+                       "active": [], "pushed": [], "blocked": []}
 
+    cohort = frozen_cohort(client, files, raw, persist=not check_only)
+    if cohort is None:
+        return {"phase": "labels", "labels": label_state,
+                "ready": len(raw), "target": SHARD_COUNT,
+                "cohort_ready": False, "demo": "waiting for frozen cohort",
+                "statuses": statuses, "check_only": check_only}
+    cohort_tags = [int(tag) for tag in cohort["tags"]]
+    cohort_taught = complete_shards(files, teacher=True) & set(cohort_tags)
+    with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
+        quotas = dict(zip(ACCOUNTS, pool.map(gpu_quota, ACCOUNTS)))
+
+    # The 2-step smoke run remains a gate for the learner, but does not block
+    # parallel 9M teacher preparation for the frozen cohort.
+    demo_pushed = None
     if not demo_ok:
-        if any(blocked_failure(client, files, "demo", i, commit)
-               for i in range(len(ACCOUNTS))):
-            return {"phase": "labels-complete-demo-blocked", "ready": len(raw),
-                    "target": SHARD_COUNT,
-                    "demo": "blocked: recorded demo failure", "statuses": statuses}
         phase_errors = current_worker_failures(client, files, "demo", statuses,
                                                commit)
         if phase_errors:
-            return {"phase": "labels-complete-demo-blocked", "ready": len(raw),
-                    "target": SHARD_COUNT,
-                    "demo": f"blocked: Kaggle failure on {','.join(sorted(phase_errors))}",
+            return {"phase": "blocked", "reason": "end-to-end demo failed",
+                    "accounts": sorted(phase_errors), "labels": label_state,
+                    "cohort": {"id": cohort["cohort_id"], "roots": cohort["roots"]},
                     "statuses": statuses}
-        if active_worker:
-            return {"phase": "demo", "active": sorted(active_worker),
-                    "ready": len(raw), "target": SHARD_COUNT}
-        quotas = {a: gpu_quota(a) for a in ACCOUNTS}
-        usable = [a for a in ACCOUNTS if quotas[a] > 1.0]
-        if not usable:
-            return {"phase": "waiting", "reason": "no positive GPU quota",
-                    "ready": len(raw), "target": SHARD_COUNT, "quotas": quotas}
-        account = max(usable, key=lambda a: quotas[a])
-        if not check_only:
-            index = ACCOUNTS.index(account)
-            record_launch(client, "demo", index, commit)
-            push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
-                 worker_config("demo", index, commit), gpu=True)
-        return {"phase": "demo", "target_account": account, "ready": len(raw),
-                "target": SHARD_COUNT, "check_only": check_only}
+        if not active_worker:
+            usable = [a for a in ACCOUNTS if quotas[a] > 1.0]
+            if usable:
+                account = max(usable, key=lambda a: quotas[a])
+                index = ACCOUNTS.index(account)
+                if not check_only:
+                    record_launch(client, "demo", index, commit)
+                    push(account, WORKER_SLUG, WORKER_TEMPLATE,
+                         "__TACTICAL_CONFIG__", worker_config("demo", index, commit),
+                         gpu=True)
+                demo_pushed = account
+                active_worker.add(account)
 
-    taught = complete_shards(files, teacher=True)
-    if len(taught) < SHARD_COUNT:
-        phase_errors = current_worker_failures(client, files, "teacher", statuses, commit)
-        if phase_errors:
-            return {"phase": "blocked", "reason": "9M teacher worker failed",
-                    "accounts": sorted(phase_errors), "statuses": statuses}
-        quotas = {a: gpu_quota(a) for a in ACCOUNTS}
-        pushed = []
-        blocked = []
-        for index, account in enumerate(ACCOUNTS):
-            assigned = set(range(index, SHARD_COUNT, len(ACCOUNTS)))
-            if assigned <= taught or account in active_worker or quotas[account] <= 1.0:
-                continue
-            if blocked_failure(client, files, "teacher", index, commit):
-                blocked.append(account)
-                continue
-            if not check_only:
-                record_launch(client, "teacher", index, commit)
-                push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
-                     worker_config("teacher", index, commit), gpu=True)
-            pushed.append(account)
-        return {"phase": "teacher", "ready": len(taught), "target": SHARD_COUNT,
-                "active": sorted(active_worker), "pushed": pushed, "blocked": blocked,
-                "quotas": quotas, "check_only": check_only}
+    teacher_pushed = []
+    teacher_blocked = []
+    teacher_errors = current_worker_failures(client, files, "teacher", statuses, commit)
+    if teacher_errors:
+        return {"phase": "blocked", "reason": "9M cohort teacher worker failed",
+                "accounts": sorted(teacher_errors), "labels": label_state,
+                "cohort": {"id": cohort["cohort_id"], "roots": cohort["roots"]},
+                "statuses": statuses}
+    for index, account in enumerate(ACCOUNTS):
+        assigned = cohort_tags[index::len(ACCOUNTS)]
+        if not assigned or set(assigned) <= cohort_taught or account in active_worker:
+            continue
+        if quotas[account] <= 1.0:
+            teacher_blocked.append(account)
+            continue
+        if blocked_failure(client, files, "teacher", index, commit):
+            teacher_blocked.append(account)
+            continue
+        if not check_only:
+            record_launch(client, "teacher", index, commit)
+            push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
+                 worker_config("teacher", index, commit, teacher_tags=assigned),
+                 gpu=True)
+        teacher_pushed.append(account)
+        active_worker.add(account)
+
+    cohort_info = {"id": cohort["cohort_id"], "roots": cohort["roots"],
+                   "shards": len(cohort_tags), "teacher_ready": len(cohort_taught),
+                   "teacher_target": len(cohort_tags)}
+    if len(cohort_taught) < len(cohort_tags):
+        phase = "labels+demo+teacher" if label_state["active"] else "demo+teacher"
+        return {"phase": phase, "labels": label_state, "cohort": cohort_info,
+                "demo": "complete" if demo_ok else "running or queued",
+                "demo_pushed": demo_pushed, "teacher_pushed": teacher_pushed,
+                "teacher_blocked": teacher_blocked, "active": sorted(active_worker),
+                "statuses": statuses, "check_only": check_only}
+    if not demo_ok:
+        return {"phase": "labels+demo" if label_state["active"] else "demo",
+                "labels": label_state, "cohort": cohort_info,
+                "demo": "running or queued", "active": sorted(active_worker),
+                "statuses": statuses, "check_only": check_only}
 
     steps = sorted({int(match.group(1)) for name in files
                     if (match := re.fullmatch(rf"{re.escape(RUN)}/checkpoint-(\d+)/state\.pt", name))
@@ -427,8 +533,10 @@ def main(check_only: bool = False) -> dict:
                                               commit, worker_kind="eval")
         if eval_errors:
             return {"phase": "blocked", "reason": "evaluation worker failed",
-                    "accounts": sorted(eval_errors), "step": latest, "pending_evals": pending}
-        quotas = {a: gpu_quota(a) for a in ACCOUNTS}
+                    "accounts": sorted(eval_errors), "step": latest,
+                    "pending_evals": pending, "statuses": statuses}
+        with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
+            quotas = dict(zip(ACCOUNTS, pool.map(gpu_quota, ACCOUNTS)))
         usable = [a for a in ACCOUNTS if a not in active_worker and quotas[a] > 1.0]
         if usable:
             account = max(usable, key=lambda a: quotas[a])
@@ -443,35 +551,53 @@ def main(check_only: bool = False) -> dict:
                 push(account, EVAL_SLUG, EVAL_TEMPLATE,
                      "__EVALPREVIEW_CONFIG__", config, gpu=True)
             launched_eval = account
+            active_eval.add(account)
     if latest >= FINAL_STEP:
-        return {"phase": "complete" if eval_complete(client, files, FINAL_STEP) else "evaluation",
-                "step": latest, "pending_evals": pending, "eval_account": launched_eval}
+        phase = "complete" if eval_complete(client, files, FINAL_STEP) else "evaluation"
+        if label_state["active"] and phase == "complete":
+            phase = "complete+labels"
+        return {"phase": phase, "step": latest, "pending_evals": pending,
+                "eval_account": launched_eval, "labels": label_state,
+                "cohort": cohort_info, "statuses": statuses}
     if active_worker:
-        return {"phase": "training", "step": latest,
+        phase = "training+labels" if label_state["active"] else "training"
+        return {"phase": phase, "step": latest,
                 "active": sorted(active_worker), "pending_evals": pending,
-                "eval_account": launched_eval}
+                "eval_account": launched_eval, "labels": label_state,
+                "cohort": cohort_info, "statuses": statuses}
     if any(blocked_failure(client, files, "train", i, commit)
            for i in range(len(ACCOUNTS))):
-        return {"phase": "blocked", "reason": "learner worker failed", "step": latest}
+        return {"phase": "blocked", "reason": "learner worker failed", "step": latest,
+                "statuses": statuses}
     phase_errors = current_worker_failures(client, files, "train", statuses,
                                            commit)
     if phase_errors:
         return {"phase": "blocked", "reason": "learner Kaggle worker failed",
-                "accounts": sorted(phase_errors), "step": latest}
-    quotas = {a: gpu_quota(a) for a in ACCOUNTS}
+                "accounts": sorted(phase_errors), "step": latest,
+                "statuses": statuses}
+    with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
+        quotas = dict(zip(ACCOUNTS, pool.map(gpu_quota, ACCOUNTS)))
     usable = [a for a in ACCOUNTS if a not in active_eval and quotas[a] > 1.0]
     if not usable:
-        return {"phase": "waiting", "reason": "no free GPU account", "quotas": quotas}
-    rows = frozen_rows(client, files)
+        return {"phase": "waiting", "reason": "no free GPU account", "quotas": quotas,
+                "labels": label_state, "cohort": cohort_info,
+                "statuses": statuses}
+    rows = frozen_rows(client, files, cohort_tags)
+    if frozen_shard_digests(client, cohort_tags) != cohort.get("train_set_sha256"):
+        raise ValueError("labeled shard content changed after cohort freeze")
     account = max(usable, key=lambda a: quotas[a])
     if not check_only:
         index = ACCOUNTS.index(account)
         record_launch(client, "train", index, commit)
         push(account, WORKER_SLUG, WORKER_TEMPLATE, "__TACTICAL_CONFIG__",
-             worker_config("train", index, commit, rows), gpu=True)
-    return {"phase": "training", "step": latest, "target": FINAL_STEP,
+             worker_config("train", index, commit, rows,
+                           cohort_sha256=cohort["train_set_sha256"]), gpu=True)
+    phase = "training+labels" if label_state["active"] else "training"
+    return {"phase": phase, "step": latest, "target": FINAL_STEP,
             "account": account, "pending_evals": pending,
-            "eval_account": launched_eval, "check_only": check_only}
+            "eval_account": launched_eval, "check_only": check_only,
+            "labels": label_state, "cohort": cohort_info,
+            "statuses": statuses}
 
 
 if __name__ == "__main__":

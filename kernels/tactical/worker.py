@@ -236,7 +236,8 @@ def trainer_command(prefix: str, run_name: str, rows: dict[str, int],
                     session_steps: int = 0) -> list[str]:
     tags_file = WORK / "frozen-tags.json"
     tags_file.write_text(json.dumps({"tags": sorted(rows), "rows": rows,
-                                     "source_sha256": CFG["source_sha256"]},
+                                     "source_sha256": CFG["source_sha256"],
+                                     "train_set_sha256": CFG.get("cohort_sha256")},
                                     sort_keys=True) + "\n")
     cmd = [sys.executable, str(REPO / "scripts" / "train_ccgavn.py"),
            "--hf-shards", prefix, "--shard-tags-file", str(tags_file),
@@ -320,7 +321,8 @@ def main() -> None:
         else:
             label_phase(source, manifest, stockfish16(), CFG["data_prefix"])
     elif PHASE == "teacher":
-        teacher_phase(install_teacher(), teacher_checkpoint(), CFG["data_prefix"])
+        teacher_phase(install_teacher(), teacher_checkpoint(), CFG["data_prefix"],
+                      tags=CFG.get("teacher_tags", shard_tags()))
     elif PHASE == "train":
         prepare_functional_checkpoint()
         run([sys.executable, "-c", "import torch; assert torch.cuda.is_available()"])

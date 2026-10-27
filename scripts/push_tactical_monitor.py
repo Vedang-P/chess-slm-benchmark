@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,8 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.tactical_config import (  # noqa: E402
-    ACCOUNTS, BASE_STEP, CPU_BATCH_SESSIONS_PER_ACCOUNT, DATA_PREFIX,
-    FINAL_STEP, HF_REPO, INCLUDED_ROOTS, ROOTS_PER_SHARD, RUN, SHARD_COUNT,
+    ACCOUNTS, BASE_STEP, COHORT_MANIFEST, CPU_BATCH_SESSIONS_PER_ACCOUNT,
+    DATA_PREFIX, FINAL_STEP, HF_REPO, INCLUDED_ROOTS, ROOTS_PER_SHARD, RUN, SHARD_COUNT,
     SOURCE_PREFIX, SOURCE_SHA256, milestones,
 )
 from scripts.watch_tactical import (  # noqa: E402
@@ -60,6 +61,9 @@ def snapshot() -> dict:
     watch = _watch_state()
     raw = complete_shards(files)
     taught = complete_shards(files, teacher=True)
+    cohort = remote_json(client, files, COHORT_MANIFEST)
+    cohort_tags = set(int(tag) for tag in (cohort or {}).get("tags", []))
+    cohort_teacher = len(cohort_tags & taught)
     partial = []
     for name in files:
         match = re.fullmatch(rf"{re.escape(DATA_PREFIX)}/shard-(\d{{5}})/progress\.json", name)
@@ -94,13 +98,15 @@ def snapshot() -> dict:
                                 "prefix": eval_prefix(step)})
     accounts = []
     live_statuses = watch.get("statuses", {})
+    with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
+        quotas = dict(zip(ACCOUNTS, pool.map(gpu_quota, ACCOUNTS)))
     for index, account in enumerate(ACCOUNTS, 1):
         state = live_statuses.get(account, {})
         label_workers = state.get("labels", {})
         active_label_workers = sum(
             1 for status in label_workers.values()
             if any(word in str(status) for word in ("RUNNING", "QUEUED", "PENDING")))
-        accounts.append({"account": f"acct-{index}", "gpu_hours": gpu_quota(account),
+        accounts.append({"account": f"acct-{index}", "gpu_hours": quotas[account],
                          "worker": state.get("worker", "unknown"),
                          "eval": state.get("eval", "unknown"),
                          "label_workers_active": active_label_workers,
@@ -116,6 +122,12 @@ def snapshot() -> dict:
         "corpus": {"source_rows": 6_157_341, "excluded": 9_995,
                    "target_roots": INCLUDED_ROOTS, "root_shards": len(raw),
                    "teacher_shards": len(taught), "target_shards": SHARD_COUNT,
+                   "training_cohort": ({"id": cohort.get("cohort_id"),
+                                        "roots": cohort.get("roots"),
+                                        "shards": len(cohort_tags),
+                                        "teacher_shards": cohort_teacher,
+                                        "teacher_target_shards": len(cohort_tags)}
+                                       if cohort else None),
                    "root_count": _roots_from_shards(raw) + sum(x["roots"] for x in partial),
                    "teacher_roots": _roots_from_shards(taught),
                    "partial": partial, "source_sha256": SOURCE_SHA256,
@@ -134,6 +146,7 @@ def snapshot() -> dict:
         "accounts": accounts,
         "links": {"source": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{SOURCE_PREFIX}",
                   "corpus": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{DATA_PREFIX}",
+                  "cohort": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{COHORT_MANIFEST}",
                   "checkpoints": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{RUN}",
                   "demo": f"https://huggingface.co/datasets/{HF_REPO}/tree/main/{DEMO_PREFIX}",
                   "actions": "https://github.com/Vedang-P/chess-slm-benchmark/actions/workflows/pipeline-tick.yml"},
