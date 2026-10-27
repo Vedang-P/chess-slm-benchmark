@@ -83,9 +83,18 @@ def demo_complete(client, files: set[str]) -> tuple[bool, str | None]:
             or f"{checkpoint}/config.json" not in files):
         return False, None
     summary = remote_json(client, f"{DEMO_PREFIX}/eval-summary.json")
+    expected_smoke_error = ["partial run (--max-rows) is not a complete evaluation"]
+    reported_checkpoint = Path(str(summary.get("checkpoint", "")))
     if (summary.get("mate", {}).get("total") != 10
+            or summary.get("mate", {}).get("expected") != 10
             or summary.get("puzzles", {}).get("total") != 20
-            or summary.get("checkpoint") != checkpoint):
+            or summary.get("puzzles", {}).get("expected") != 20
+            or not summary.get("partial")
+            or summary.get("complete")
+            or summary.get("returncode") != 1
+            or summary.get("errors") != expected_smoke_error
+            or reported_checkpoint.name != f"checkpoint-{BASE_STEP + 2}"
+            or reported_checkpoint.parent.name != DEMO_RUN):
         raise ValueError("demo evaluation artifacts do not match the declared smoke contract")
     config = remote_json(client, f"{checkpoint}/config.json")
     if (config.get("stage_start_step") != BASE_STEP

@@ -322,7 +322,18 @@ def demo_phase(source: Path, manifest: Path) -> None:
          "--puzzles", str(official_puzzles()), "--num-puzzles", "20",
          "--score", "auto", "--summary-out", str(summary_path)], cwd=REPO)
     summary = json.loads(summary_path.read_text())
-    if summary.get("mate", {}).get("total") != 10 or summary.get("puzzles", {}).get("total") != 20:
+    reported_checkpoint = Path(str(summary.get("checkpoint", "")))
+    expected_smoke_error = ["partial run (--max-rows) is not a complete evaluation"]
+    if (summary.get("mate", {}).get("total") != 10
+            or summary.get("mate", {}).get("expected") != 10
+            or summary.get("puzzles", {}).get("total") != 20
+            or summary.get("puzzles", {}).get("expected") != 20
+            or not summary.get("partial")
+            or summary.get("complete")
+            or summary.get("returncode") != 1
+            or summary.get("errors") != expected_smoke_error
+            or reported_checkpoint.name != f"checkpoint-{CFG['base_step'] + 2}"
+            or reported_checkpoint.parent.name != run_name):
         raise ValueError("demo evaluator did not score its declared rows")
     from scripts.hf_upload import upload_file as upload_hf_file
     upload_hf_file(api, HF_REPO, str(summary_path),
