@@ -208,10 +208,12 @@ def main() -> None:
                         help="remote corpus prefix; enables periodic HF persistence")
     args = parser.parse_args()
     api = None
+    retry_hf_call = None
     remote = f"{args.hf_prefix.strip('/')}/shard-{args.shard:05d}"
     if args.hf_prefix:
         from huggingface_hub import HfApi, hf_hub_download
         from scripts.kaggle_checkpoint import hf_token
+        from scripts.hf_upload import retry_hf_call
         api = HfApi(token=hf_token(ROOT))
         files = set(api.list_repo_files(args.hf_repo, repo_type="dataset"))
         if f"{remote}/train_set.npz" in files and f"{remote}/meta.json" in files:
@@ -233,10 +235,12 @@ def main() -> None:
                                         "identity": {"shard": args.shard,
                                                      "source_sha256": file_sha256(args.source)}},
                                        sort_keys=True) + "\n")
-        api.upload_folder(folder_path=str(path.parent), path_in_repo=remote,
-                          repo_id=args.hf_repo, repo_type="dataset",
-                          allow_patterns=[path.name, progress.name],
-                          commit_message=f"Save {remote} partial labels")
+        retry_hf_call(
+            lambda: api.upload_folder(folder_path=str(path.parent), path_in_repo=remote,
+                                      repo_id=args.hf_repo, repo_type="dataset",
+                                      allow_patterns=[path.name, progress.name],
+                                      commit_message=f"Save {remote} partial labels"),
+            f"partial labels for {remote}")
 
     try:
         result = build(args.source, args.manifest, args.shard, args.stockfish,
@@ -246,10 +250,14 @@ def main() -> None:
         if result["complete"] and api:
             meta = args.out.parent / "meta.json"
             meta.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
-            api.upload_folder(folder_path=str(args.out.parent), path_in_repo=remote,
-                              repo_id=args.hf_repo, repo_type="dataset",
-                              allow_patterns=[args.out.name, meta.name],
-                              commit_message=f"Complete {remote} Stockfish labels")
+            assert retry_hf_call is not None
+            retry_hf_call(
+                lambda: api.upload_folder(folder_path=str(args.out.parent),
+                                          path_in_repo=remote, repo_id=args.hf_repo,
+                                          repo_type="dataset",
+                                          allow_patterns=[args.out.name, meta.name],
+                                          commit_message=f"Complete {remote} Stockfish labels"),
+                f"completed labels for {remote}")
         print(json.dumps(result, sort_keys=True), flush=True)
     except Exception as exc:
         if api:

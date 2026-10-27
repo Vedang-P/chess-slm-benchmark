@@ -10,6 +10,18 @@ budget, weakening a filter, changing what gets scored). Cheap shortcuts
 and reward-hacking are forbidden. If in doubt, surface the tradeoffs and
 let the user choose.
 
+## Persistence on authorized implementation work
+
+When the user has asked for a fix, deployment, or run, do not stop at the
+first implementation failure or at reporting its diagnosis. Continue through
+the authorized code repair, validation, push, restart, and verification of
+the requested end state, with concise progress updates. Do not ask again for
+permission the user has already given. This persistence does not authorize
+changing the experiment's data, model, objective, budget, evaluation, or
+success gates; if a repair would require one of those changes, explain the
+tradeoff and get the user's direction first. Never report the requested work
+as complete until its end state is verified.
+
 ## Persistent requirement: Hugging Face checkpoint persistence
 
 **Every training/eval run that could lose progress (Kaggle kernels die at

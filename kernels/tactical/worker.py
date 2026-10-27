@@ -213,7 +213,26 @@ def label_phase(source: Path, manifest: Path, binary: Path,
 
 def teacher_phase(python: Path, checkpoint: Path, prefix: str,
                   tags=None) -> None:
+    from scripts.hf_upload import upload_files_batch
+
     files = set(api.list_repo_files(HF_REPO, repo_type="dataset"))
+    pending: list[tuple[Path, str, Path]] = []
+
+    def flush_pending() -> None:
+        if not pending:
+            return
+        upload_files_batch(
+            api, HF_REPO,
+            [(local, remote_path) for local, remote_path, _ in pending],
+            commit_message=f"Complete {len(pending)} tactical 9M teacher shards",
+        )
+        for local, remote_path, folder in pending:
+            files.add(remote_path)
+            shutil.rmtree(folder, ignore_errors=True)
+        print(f"[tactical] uploaded {len(pending)} teacher shards in one Hub commit",
+              flush=True)
+        pending.clear()
+
     for tag in (shard_tags() if tags is None else tags):
         remote = f"{prefix}/shard-{tag:05d}"
         if f"{remote}/teacher_logp.npy" in files:
@@ -222,14 +241,20 @@ def teacher_phase(python: Path, checkpoint: Path, prefix: str,
             raise ValueError(f"missing raw labels for {remote}")
         if time.time() - SESSION_STARTED > SESSION_BUDGET - 1800:
             print("[tactical] teacher session budget reached", flush=True)
+            flush_pending()
             return
         folder = WORK / f"teacher-{tag:05d}"
         run([str(python), str(REPO / "scripts" / "label_puzzle_teacher.py"),
              "--shard", str(tag), "--hf-prefix", prefix, "--hf-repo", HF_REPO,
              "--teacher-checkpoint", str(checkpoint), "--sl-repo", str(SL),
-             "--workdir", str(folder), "--batch", "1024"], cwd=REPO)
-        files.add(f"{remote}/teacher_logp.npy")
-        shutil.rmtree(folder)
+             "--workdir", str(folder), "--batch", "1024", "--no-upload"], cwd=REPO)
+        output = folder / "teacher_logp.npy"
+        if not output.is_file():
+            raise FileNotFoundError(f"teacher shard output missing: {output}")
+        pending.append((output, f"{remote}/teacher_logp.npy", folder))
+        if len(pending) >= 5:
+            flush_pending()
+    flush_pending()
 
 
 def trainer_command(prefix: str, run_name: str, rows: dict[str, int],
@@ -299,10 +324,10 @@ def demo_phase(source: Path, manifest: Path) -> None:
     summary = json.loads(summary_path.read_text())
     if summary.get("mate", {}).get("total") != 10 or summary.get("puzzles", {}).get("total") != 20:
         raise ValueError("demo evaluator did not score its declared rows")
-    api.upload_file(path_or_fileobj=str(summary_path),
-                    path_in_repo=f"{CFG['demo_prefix']}/eval-summary.json",
-                    repo_id=HF_REPO, repo_type="dataset",
-                    commit_message="Complete tactical pipeline demo")
+    from scripts.hf_upload import upload_file as upload_hf_file
+    upload_hf_file(api, HF_REPO, str(summary_path),
+                   f"{CFG['demo_prefix']}/eval-summary.json",
+                   commit_message="Complete tactical pipeline demo")
     print("[tactical] DEMO COMPLETE", flush=True)
 
 
@@ -337,12 +362,14 @@ try:
     worker_suffix = (f"worker-{int(LABEL_WORKER_INDEX):02d}" if
                      PHASE == "labels" and LABEL_WORKER_INDEX is not None
                      else f"acct-{ACCOUNT_INDEX}")
-    api.upload_file(path_or_fileobj=(
-        f"{state} {PHASE} source_commit={CFG['source_commit']} "
-        f"account_index={ACCOUNT_INDEX} label_worker_index={LABEL_WORKER_INDEX}").encode(),
-        path_in_repo=f"{CFG['status_prefix']}/{PHASE}-{worker_suffix}.txt",
-        repo_id=HF_REPO, repo_type="dataset",
-        commit_message=f"Tactical {PHASE} account {ACCOUNT_INDEX} session finished")
+    from scripts.hf_upload import upload_file as upload_hf_file
+    upload_hf_file(
+        api, HF_REPO,
+        (f"{state} {PHASE} source_commit={CFG['source_commit']} "
+         f"account_index={ACCOUNT_INDEX} label_worker_index={LABEL_WORKER_INDEX}").encode(),
+        f"{CFG['status_prefix']}/{PHASE}-{worker_suffix}.txt",
+        commit_message=f"Tactical {PHASE} account {ACCOUNT_INDEX} session finished",
+        attempts=4, max_elapsed_s=300.0)
 except Exception as exc:
     import traceback
     worker_suffix = (f"worker-{int(LABEL_WORKER_INDEX):02d}" if
@@ -351,10 +378,12 @@ except Exception as exc:
     status = (f"FAILED {PHASE} source_commit={CFG['source_commit']} "
               f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[-4000:]}")
     try:
-        api.upload_file(path_or_fileobj=status.encode(),
-                        path_in_repo=f"{CFG['status_prefix']}/{PHASE}-{worker_suffix}.txt",
-                        repo_id=HF_REPO, repo_type="dataset",
-                        commit_message=f"Tactical {PHASE} account {ACCOUNT_INDEX} failed")
+        from scripts.hf_upload import upload_file as upload_hf_file
+        upload_hf_file(
+            api, HF_REPO, status.encode(),
+            f"{CFG['status_prefix']}/{PHASE}-{worker_suffix}.txt",
+            commit_message=f"Tactical {PHASE} account {ACCOUNT_INDEX} failed",
+            attempts=4, max_elapsed_s=300.0)
     except Exception as upload_exc:
         print(f"[tactical] could not persist failure: {upload_exc}", flush=True)
     raise

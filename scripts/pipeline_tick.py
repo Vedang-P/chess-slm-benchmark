@@ -19,6 +19,7 @@ from scripts.kaggle_checkpoint import api as make_hf_api
 from scripts.prune_tactical_checkpoints import main as prune_checkpoints
 from scripts.push_tactical_monitor import main as publish_monitor
 from scripts.tactical_config import HF_REPO
+from scripts.hf_upload import upload_file as upload_hf_file
 from scripts.watch_tactical import STATUS_PREFIX, main as supervise
 
 
@@ -28,10 +29,10 @@ STATE = Path(os.environ.get("TACTICAL_STATE_PATH", "/tmp/tactical-state.json"))
 def record_failure(message: str) -> None:
     try:
         client = make_hf_api(ROOT)
-        client.upload_file(path_or_fileobj=message.encode(),
-                           path_in_repo=f"{STATUS_PREFIX}/supervisor.txt",
-                           repo_id=HF_REPO, repo_type="dataset",
-                           commit_message="Record tactical pipeline supervisor failure")
+        upload_hf_file(client, HF_REPO, message.encode(),
+                       f"{STATUS_PREFIX}/supervisor.txt",
+                       commit_message="Record tactical pipeline supervisor failure",
+                       attempts=4, max_elapsed_s=300.0)
     except Exception as exc:
         print(f"[tick] could not persist supervisor failure: {exc}", flush=True)
 

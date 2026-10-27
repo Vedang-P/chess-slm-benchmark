@@ -15,6 +15,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from scripts.hf_upload import retry_hf_call, upload_file as upload_hf_file
+
 
 def hf_token(root: Path | None = None) -> str:
     token = os.environ.get("HF_WRITE_TOKEN") or os.environ.get("HF_TOKEN")
@@ -134,23 +136,17 @@ def upload_checkpoint(api_client, repo_id: str, local_dir: Path,
     # every checkpoint consume several commits; the Hub caps a dataset repo at
     # 128 commits/hour, which stopped the v4 RL run at step 14,500. A single
     # folder commit also ensures the config marker and state arrive atomically.
-    last_exc: Exception | None = None
-    for attempt in range(1, attempts + 1):
-        try:
-            api_client.upload_folder(
-                folder_path=str(checkpoint),
-                path_in_repo=f"{remote_prefix.strip('/')}/{checkpoint_name}",
-                repo_id=repo_id,
-                repo_type="dataset",
-                commit_message=f"Save {remote_prefix.strip('/')}/{checkpoint_name}",
-            )
-            print(f"[hf] uploaded {checkpoint_name} ({len(files)} files)", flush=True)
-            return
-        except Exception as exc:  # Kaggle network flaps; retry the whole dir
-            last_exc = exc
-            print(f"[hf] upload attempt {attempt}/{attempts} failed: {exc}", flush=True)
-            time.sleep(10 * attempt)
-    raise RuntimeError(f"upload failed after {attempts} attempts") from last_exc
+    def upload() -> None:
+        api_client.upload_folder(
+            folder_path=str(checkpoint),
+            path_in_repo=f"{remote_prefix.strip('/')}/{checkpoint_name}",
+            repo_id=repo_id,
+            repo_type="dataset",
+            commit_message=f"Save {remote_prefix.strip('/')}/{checkpoint_name}",
+        )
+    retry_hf_call(upload, f"upload checkpoint {checkpoint_name}",
+                  attempts=max(attempts, 12), max_elapsed_s=5_400.0)
+    print(f"[hf] uploaded {checkpoint_name} ({len(files)} files)", flush=True)
 
 
 def latest_local_checkpoint(root: Path) -> Path | None:
@@ -224,12 +220,9 @@ def write_status(api_client, repo_id: str, remote_prefix: str, status: str) -> N
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         status = f"# {stamp}\n{status}"
     try:
-        api_client.upload_file(
-            path_or_fileobj=status.encode("utf-8"),
-            path_in_repo=f"{remote_prefix.strip('/')}/run-status.txt",
-            repo_id=repo_id,
-            repo_type="dataset",
-        )
+        upload_hf_file(api_client, repo_id, status.encode("utf-8"),
+                       f"{remote_prefix.strip('/')}/run-status.txt",
+                       attempts=4, max_elapsed_s=300.0)
     except Exception as exc:  # rate limits or network flaps must not kill a run
         print(f"[status] upload failed: {exc}", flush=True)
 

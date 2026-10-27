@@ -382,8 +382,12 @@ def main():
                 "Refusing to resume with a changed model, data split, or optimization configuration: "
                 + "; ".join(mismatches)
                 + ". Start a fresh --hf-run for a new experiment.")
+        # A warm start from another run intentionally begins a new corpus and
+        # schedule. Enforce shard identity only when resuming this same run;
+        # otherwise the seed checkpoint's historical training tags would
+        # incorrectly reject the newly frozen cohort.
         remote_tags = resume_config.get("shard_tags")
-        if remote_tags is not None and shard_tags is not None:
+        if not legacy_init and remote_tags is not None and shard_tags is not None:
             if args.allow_shard_superset:
                 missing_from_request = set(remote_tags) - set(shard_tags)
                 if missing_from_request:

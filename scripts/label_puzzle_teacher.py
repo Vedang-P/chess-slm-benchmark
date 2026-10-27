@@ -13,11 +13,12 @@ from huggingface_hub import hf_hub_download
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from scripts.kaggle_checkpoint import api as make_hf_api, write_status  # noqa: E402
+from scripts.hf_upload import upload_file as upload_hf_file  # noqa: E402
 from scripts.shard_data import npz_member_shape  # noqa: E402
 from scripts.freeze_puzzle_corpus import file_sha256  # noqa: E402
 
 
-def label(args) -> dict:
+def label(args, upload: bool = True) -> dict:
     client = make_hf_api(ROOT)
     remote = f"{args.hf_prefix.strip('/')}/shard-{args.shard:05d}"
     files = set(client.list_repo_files(args.hf_repo, repo_type="dataset"))
@@ -56,11 +57,12 @@ def label(args) -> dict:
     normalizer = np.logaddexp.reduce(sample, axis=1)
     if not np.allclose(normalizer, 0.0, atol=2e-3):
         raise ValueError(f"{remote}: unnormalized teacher log probabilities")
-    client.upload_file(path_or_fileobj=str(output),
-                       path_in_repo=f"{remote}/teacher_logp.npy",
-                       repo_id=args.hf_repo, repo_type="dataset",
+    if upload:
+        upload_hf_file(client, args.hf_repo, str(output),
+                       f"{remote}/teacher_logp.npy",
                        commit_message=f"Complete {remote} 9M teacher labels")
-    return {"complete": True, "rows": rows, "remote": remote}
+    return {"complete": True, "rows": rows, "remote": remote,
+            "uploaded": upload}
 
 
 def main() -> None:
@@ -72,9 +74,11 @@ def main() -> None:
     parser.add_argument("--sl-repo", type=Path, required=True)
     parser.add_argument("--workdir", type=Path, required=True)
     parser.add_argument("--batch", type=int, default=1024)
+    parser.add_argument("--no-upload", action="store_true",
+                        help="leave validated output local for a batched worker commit")
     args = parser.parse_args()
     try:
-        print(json.dumps(label(args), sort_keys=True), flush=True)
+        print(json.dumps(label(args, upload=not args.no_upload), sort_keys=True), flush=True)
     except Exception as exc:
         try:
             client = make_hf_api(ROOT)

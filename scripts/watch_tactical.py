@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from scripts.kaggle_accounts import env_for_account  # noqa: E402
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
+from scripts.hf_upload import upload_file as upload_hf_file  # noqa: E402
 from scripts.tactical_config import (  # noqa: E402
     ACCOUNTS, BASE_RUN, BASE_STEP, COHORT_MANIFEST, COHORT_ROOTS,
     COHORT_SHARD_COUNT, COHORT_TAGS, CREDENTIAL_DATASETS, DATA_PREFIX, DEMO_RUN,
@@ -174,11 +175,11 @@ def frozen_cohort(client, files: set[str], raw: set[int],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     if persist:
-        client.upload_file(path_or_fileobj=(json.dumps(cohort, sort_keys=True,
-                                                       separators=(",", ":")) + "\n").encode(),
-                           path_in_repo=COHORT_MANIFEST, repo_id=HF_REPO,
-                           repo_type="dataset",
-                           commit_message="Freeze first 1M-root training cohort")
+        upload_hf_file(client, HF_REPO,
+                       (json.dumps(cohort, sort_keys=True,
+                                   separators=(",", ":")) + "\n").encode(),
+                       COHORT_MANIFEST,
+                       commit_message="Freeze first 1M-root training cohort")
     return cohort
 
 
@@ -301,10 +302,11 @@ def record_launch(client, phase: str, index: int, commit: str,
                   worker_index: int | None = None) -> None:
     worker_suffix = (f"worker-{worker_index:02d}" if worker_index is not None
                      else f"acct-{index}")
-    client.upload_file(path_or_fileobj=f"LAUNCHED {phase} source_commit={commit}".encode(),
-                       path_in_repo=f"{STATUS_PREFIX}/{phase}-{worker_suffix}.txt",
-                       repo_id=HF_REPO, repo_type="dataset",
-                       commit_message=f"Launch tactical {phase} worker {index}")
+    upload_hf_file(client, HF_REPO,
+                   f"LAUNCHED {phase} source_commit={commit}".encode(),
+                   f"{STATUS_PREFIX}/{phase}-{worker_suffix}.txt",
+                   commit_message=f"Launch tactical {phase} worker {index}",
+                   attempts=4, max_elapsed_s=300.0)
 
 
 def current_worker_failures(client, files: set[str], phase: str,
