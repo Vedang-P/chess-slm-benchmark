@@ -321,8 +321,9 @@ def record_launch(client, phase: str, index: int, commit: str,
                   worker_index: int | None = None) -> None:
     worker_suffix = (f"worker-{worker_index:02d}" if worker_index is not None
                      else f"acct-{index}")
+    run_identity = f" run={RUN}" if phase in ("train", "eval") else ""
     upload_hf_file(client, HF_REPO,
-                   f"LAUNCHED {phase} source_commit={commit}".encode(),
+                   f"LAUNCHED {phase}{run_identity} source_commit={commit}".encode(),
                    f"{STATUS_PREFIX}/{phase}-{worker_suffix}.txt",
                    commit_message=f"Launch tactical {phase} worker {index}",
                    attempts=4, max_elapsed_s=300.0)
@@ -408,11 +409,18 @@ def main(check_only: bool = False) -> dict:
             statuses[account]["labels"][worker_index] = status
         else:
             statuses[account][kind] = status
+    commit = demo_commit or git_head()
     active_worker = {a for a in ACCOUNTS
                      if any(word in statuses[a]["worker"] for word in ACTIVE)}
     active_eval = {a for a in ACCOUNTS
                    if any(word in statuses[a]["eval"] for word in ACTIVE)}
-    commit = demo_commit or git_head()
+    for index, account in enumerate(ACCOUNTS):
+        marker = remote_text(client, files, f"{STATUS_PREFIX}/eval-acct-{index}.txt")
+        recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
+        if (account in active_worker and recorded
+                and recorded.group(1) == commit
+                and marker.startswith(f"LAUNCHED eval run={RUN}")):
+            active_eval.add(account)
     raw = complete_shards(files)
     failed_workers = []
     active_label_workers = []
@@ -501,14 +509,17 @@ def main(check_only: bool = False) -> dict:
 
     teacher_pushed = []
     teacher_blocked = []
-    teacher_errors = current_worker_failures(client, files, "teacher", statuses, commit)
+    teacher_errors = (current_worker_failures(client, files, "teacher", statuses, commit)
+                      if set(cohort_tags) - cohort_taught else [])
     if teacher_errors:
         return {"phase": "blocked", "reason": "9M cohort teacher worker failed",
                 "accounts": sorted(teacher_errors), "labels": label_state,
                 "cohort": {"id": cohort["cohort_id"], "roots": cohort["roots"]},
                 "statuses": statuses}
     taught_all = complete_shards(files, teacher=True)
-    teacher_pending = sorted(raw - taught_all)
+    # This run's teacher data is frozen. Keep spare T4 time for training and
+    # milestone evaluations rather than labeling shards outside this cohort.
+    teacher_pending = sorted(set(cohort_tags) - taught_all)
     for index, account in enumerate(ACCOUNTS):
         assigned = teacher_pending[index::len(ACCOUNTS)]
         if not assigned or account in active_worker:
@@ -560,8 +571,20 @@ def main(check_only: bool = False) -> dict:
         with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
             quotas = dict(zip(ACCOUNTS, pool.map(gpu_quota, ACCOUNTS)))
         usable = [a for a in ACCOUNTS if a not in active_worker and quotas[a] > 1.0]
-        if usable:
-            account = max(usable, key=lambda a: quotas[a])
+        active_teachers = []
+        if not usable:
+            for index, account in enumerate(ACCOUNTS):
+                marker = remote_text(client, files,
+                                     f"{STATUS_PREFIX}/teacher-acct-{index}.txt")
+                recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
+                if (account in active_worker and recorded
+                        and recorded.group(1) == commit
+                        and marker.startswith(("LAUNCHED teacher",
+                                               "IN PROGRESS teacher"))):
+                    active_teachers.append(account)
+        candidates = usable or [a for a in active_teachers if quotas[a] > 1.0]
+        if candidates:
+            account = max(candidates, key=lambda a: quotas[a])
             config = {"hf_repo": HF_REPO, "run": RUN,
                       "targets": milestones(), "final_step": FINAL_STEP,
                       "source_commit": commit,
@@ -570,8 +593,15 @@ def main(check_only: bool = False) -> dict:
             if not check_only:
                 index = ACCOUNTS.index(account)
                 record_launch(client, "eval", index, commit)
-                push(account, EVAL_SLUG, EVAL_TEMPLATE,
-                     "__EVALPREVIEW_CONFIG__", config, gpu=True)
+                if account in usable:
+                    push(account, EVAL_SLUG, EVAL_TEMPLATE,
+                         "__EVALPREVIEW_CONFIG__", config, gpu=True)
+                else:
+                    # Reuse a teacher T4 slot when all accounts are occupied.
+                    # The frozen cohort is already teacher-complete; no run
+                    # data is lost, and the next evaluation tick can resume.
+                    push(account, WORKER_SLUG, EVAL_TEMPLATE,
+                         "__EVALPREVIEW_CONFIG__", config, gpu=True)
             launched_eval = account
             active_eval.add(account)
     if latest >= FINAL_STEP:
