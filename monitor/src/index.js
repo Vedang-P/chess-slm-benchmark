@@ -54,6 +54,9 @@ function eventsFrom(previous, current) {
   const status = String(current.training?.status || "");
   if (/\bFAILED\b/.test(status) && status !== previous?.training?.status)
     add("failure", "Learner reported a failure", status.slice(-350), "bad");
+  const warnings = (current.provider_warnings || []).join(" · ");
+  if (warnings && warnings !== (previous?.provider_warnings || []).join(" · "))
+    add("provider", "Provider status unavailable", warnings.slice(-350), "bad");
   return events;
 }
 

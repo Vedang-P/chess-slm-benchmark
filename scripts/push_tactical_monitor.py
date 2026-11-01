@@ -55,6 +55,21 @@ def _roots_from_shards(done: set[int]) -> int:
                for tag in done)
 
 
+def quota_snapshot() -> tuple[dict[str, float | None], list[str]]:
+    """Keep the failure visible without turning a provider outage into stale UI."""
+    quotas: dict[str, float | None] = {}
+    warnings: list[str] = []
+    with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
+        futures = {account: pool.submit(gpu_quota, account) for account in ACCOUNTS}
+        for account, future in futures.items():
+            try:
+                quotas[account] = future.result()
+            except Exception as exc:
+                quotas[account] = None
+                warnings.append(f"{account}: GPU quota unavailable: {type(exc).__name__}: {exc}")
+    return quotas, warnings
+
+
 def snapshot() -> dict:
     client = make_hf_api(ROOT)
     files = set(client.list_repo_files(HF_REPO, repo_type="dataset"))
@@ -98,8 +113,7 @@ def snapshot() -> dict:
                                 "prefix": eval_prefix(step)})
     accounts = []
     live_statuses = watch.get("statuses", {})
-    with ThreadPoolExecutor(max_workers=len(ACCOUNTS)) as pool:
-        quotas = dict(zip(ACCOUNTS, pool.map(gpu_quota, ACCOUNTS)))
+    quotas, provider_warnings = quota_snapshot()
     for index, account in enumerate(ACCOUNTS, 1):
         state = live_statuses.get(account, {})
         label_workers = state.get("labels", {})
@@ -115,6 +129,7 @@ def snapshot() -> dict:
     return {
         "run": RUN, "updated_at": datetime.now(timezone.utc).isoformat(),
         "phase": watch.get("phase", "unknown"), "supervisor": watch,
+        "provider_warnings": provider_warnings,
         "demo": {"complete": bool(demo and demo.get("mate", {}).get("total") == 10
                                    and demo.get("puzzles", {}).get("total") == 20
                                    and f"{DEMO_RUN}/checkpoint-{BASE_STEP + 2}/state.pt" in files),
