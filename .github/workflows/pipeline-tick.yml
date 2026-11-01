@@ -30,7 +30,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: pip install --quiet "kaggle>=2,<3" huggingface_hub numpy python-chess
+        run: |
+          pip install --quiet "kaggle>=2,<3" huggingface_hub numpy python-chess six
+          python -c "import kaggle, six"
       - name: Write Kaggle credentials
         env:
           KAGGLE_ACCESS_TOKEN: ${{ secrets.KAGGLE_ACCESS_TOKEN }}

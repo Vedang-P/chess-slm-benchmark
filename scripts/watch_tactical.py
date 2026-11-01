@@ -410,6 +410,9 @@ def main(check_only: bool = False) -> dict:
         else:
             statuses[account][kind] = status
     commit = demo_commit or git_head()
+    # The validated demo pins the learner/eval source, but a label-only
+    # persistence repair must launch from the corrected repository revision.
+    label_commit = git_head()
     active_worker = {a for a in ACCOUNTS
                      if any(word in statuses[a]["worker"] for word in ACTIVE)}
     active_eval = {a for a in ACCOUNTS
@@ -432,7 +435,7 @@ def main(check_only: bool = False) -> dict:
             marker_path = f"{STATUS_PREFIX}/labels-worker-{worker_index:02d}.txt"
             marker = remote_text(client, files, marker_path)
             recorded = re.search(r"source_commit=([0-9a-f]{40})", marker)
-            if not marker or not recorded or recorded.group(1) == commit:
+            if not marker or not recorded or recorded.group(1) == label_commit:
                 failed_workers.append({"worker": worker_index, "account": account})
         elif any(word in status for word in ACTIVE):
             active_label_workers.append(worker_index)
@@ -452,16 +455,16 @@ def main(check_only: bool = False) -> dict:
             if (assigned <= raw
                     or worker_index in active_label_workers):
                 continue
-            if blocked_failure(client, files, "labels", index, commit,
+            if blocked_failure(client, files, "labels", index, label_commit,
                                worker_index=worker_index):
                 blocked.append({"worker": worker_index, "account": account})
                 continue
             if not check_only:
-                record_launch(client, "labels", index, commit,
+                record_launch(client, "labels", index, label_commit,
                               worker_index=worker_index)
                 push(account, label_worker_slug(worker_index), WORKER_TEMPLATE,
                      "__TACTICAL_CONFIG__",
-                     worker_config("labels", index, commit,
+                     worker_config("labels", index, label_commit,
                                    label_worker_index=worker_index), gpu=False)
             pushed.append({"worker": worker_index, "account": account})
         label_state = {"ready": len(raw), "target": SHARD_COUNT,

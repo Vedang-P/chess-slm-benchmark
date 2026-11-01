@@ -33,6 +33,11 @@ def _retryable(exc: Exception) -> bool:
     response = getattr(exc, "response", None)
     if response is not None:
         code = getattr(response, "status_code", None)
+        # The Hub can reject a freshly uploaded LFS object before its pointer
+        # is available to the commit endpoint. Retry the same upload; all
+        # other bad requests still fail immediately.
+        if code == 400 and "LFS pointer pointed to a file that does not exist" in str(exc):
+            return True
         return code in (408, 425, 429) or (isinstance(code, int) and code >= 500)
     module = type(exc).__module__
     return (isinstance(exc, (TimeoutError, ConnectionError, OSError))
