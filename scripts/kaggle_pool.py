@@ -77,7 +77,13 @@ def gpu_quota(account: str) -> float:
 
 
 def push_kernel(account: str, slug: str, template: Path, marker: str, config: dict,
-                gpu: bool = True) -> None:
+                gpu: bool = True, strict: bool = False) -> None:
+    """Render the template with `config` and push it as a Kaggle script kernel.
+
+    The CLI exits 0 on some refusals ("Kernel push error: Maximum batch CPU session count of
+    5 reached."), so a zero exit code does not prove a session started. `strict` turns that
+    message into an error; it is off by default so the learner's launch path is unchanged.
+    """
     source = template.read_text(encoding="utf-8")
     placeholder = f'"""{marker}"""'
     if source.count(placeholder) != 1:
@@ -95,7 +101,7 @@ def push_kernel(account: str, slug: str, template: Path, marker: str, config: di
             metadata["machine_shape"] = "NvidiaTeslaT4"
         (folder / "kernel-metadata.json").write_text(json.dumps(metadata, indent=2))
         code, out = kaggle(account, "kernels", "push", "-p", str(folder), timeout=300)
-        if code:
+        if code or (strict and "push error" in out.lower()):
             raise RuntimeError(f"{account}/{slug} push failed: {out[-500:]}")
         print(f"[pool] pushed {slug} on {account}", flush=True)
 

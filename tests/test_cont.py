@@ -1063,6 +1063,13 @@ class PlyFleetTests(unittest.TestCase):
     HEAD, OTHER = "a" * 40, "b" * 40
     NOW = 1_000_000.0
 
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
     def decide(self, **kw):
         args = {"remaining": 5, "finished": 2, "kaggle_status": 'x has status "KernelWorkerStatus.COMPLETE"',
                 "worker_status": "OK labels", "commit": self.HEAD, "marker": None, "now": self.NOW}
@@ -1154,6 +1161,35 @@ class PlyFleetTests(unittest.TestCase):
             blocked = watch_ply_labels.tick(None, files, self.HEAD, check_only=True)
             self.assertEqual(blocked["phase"], "blocked")
             self.assertIn("02", blocked["blocked"])
+
+    def test_push_kernel_strict_mode_catches_a_refusal_the_cli_reports_with_exit_zero(self):
+        from scripts import kaggle_pool
+        refusal = "Warning: outdated\nKernel push error: Maximum batch CPU session count of 5 reached."
+        template = self.root / "worker.py"
+        template.write_text('CONFIG = """__X__"""\n')
+        for strict, expect_error in ((False, False), (True, True)):
+            with mock.patch.object(kaggle_pool, "kaggle", lambda *a, **k: (0, refusal)):
+                if expect_error:
+                    with self.assertRaises(RuntimeError) as ctx:
+                        kaggle_pool.push_kernel("vedanggggg", "slug", template, "__X__", {}, gpu=False,
+                                                strict=strict)
+                    self.assertIn("Maximum batch CPU session count", str(ctx.exception))
+                else:       # the learner's default path is unchanged
+                    kaggle_pool.push_kernel("vedanggggg", "slug", template, "__X__", {}, gpu=False,
+                                            strict=strict)
+        with mock.patch.object(kaggle_pool, "kaggle", lambda *a, **k: (0, "Kernel version 1 successfully pushed.")):
+            kaggle_pool.push_kernel("vedanggggg", "slug", template, "__X__", {}, gpu=False, strict=True)
+
+    def test_fleet_launch_reports_a_refused_push_instead_of_recording_it_as_started(self):
+        def fake_push(account, slug, template, marker, config, gpu=True, strict=False):
+            self.assertTrue(strict and not gpu)
+            if slug.endswith("03"):
+                raise RuntimeError("Kernel push error: Maximum batch CPU session count of 5 reached.")
+
+        with mock.patch.object(watch_ply_labels, "push_kernel", fake_push):
+            pushed, errors = watch_ply_labels.launch([2, 3, 4], self.HEAD)
+        self.assertEqual(pushed, [2, 4])
+        self.assertIn("Maximum batch CPU session count", errors[3])
 
     def test_every_worker_has_one_slug_and_a_valid_account(self):
         slugs = {watch_ply_labels.worker_slug(w) for w in range(watch_ply_labels.WORKERS)}

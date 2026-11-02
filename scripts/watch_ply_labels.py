@@ -148,7 +148,7 @@ def launch(workers: list[int], commit: str) -> tuple[list[int], dict[int, str]]:
         for w in (w for w in workers if worker_account(w) == account):
             try:
                 push_kernel(account, worker_slug(w), TEMPLATE, MARKER,
-                            worker_config(w, commit), gpu=False)
+                            worker_config(w, commit), gpu=False, strict=True)
                 pushed.append(w)
             except Exception as exc:
                 errors[w] = f"{type(exc).__name__}: {exc}"[:300]
@@ -213,7 +213,7 @@ def tick(client, files: set[str], commit: str, check_only: bool = False) -> dict
     blocked = {f"{w:02d}": decisions[w]["reason"] + (f": {decisions[w]['detail']}"
                                                      if decisions[w].get("detail") else "")
                for w in by_action.get("blocked", [])}
-    phase = "blocked" if blocked else ("launched" if pushed else "running")
+    phase = ("blocked" if blocked else "degraded" if errors else "launched" if pushed else "running")
     return {**summary, "phase": phase,
             "workers": {k: len(v) for k, v in sorted(by_action.items())},
             "launched": pushed, "launch_errors": {f"{w:02d}": e for w, e in errors.items()},
