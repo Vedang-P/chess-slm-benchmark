@@ -29,6 +29,7 @@ only after its full evaluation completes.
 | Batched exact-rules puzzle and MATE evaluation | `scripts/cont_eval.py` |
 | Sequential five-account supervisor | `scripts/watch_cont.py`, `scripts/cont_tick.py`, `.github/workflows/cont-tick.yml` |
 | Kaggle entry point and helpers | `kernels/cont/worker.py`, `scripts/kaggle_pool.py`, `scripts/launch_cont.py` |
+| Later-ply puzzle roots: shard labeler, work plan, CPU labeling fleet, training pack, run comparison | `scripts/label_ply_shard.py`, `scripts/ply_data.py`, `scripts/build_ply_plan.py`, `scripts/watch_ply_labels.py`, `kernels/cont/label_worker.py`, `scripts/build_ply_pack.py`, `scripts/compare_ply_runs.py` |
 | CC-GAVN model and original trainer | `scripts/train_ccgavn.py`, `scripts/kaggle_checkpoint.py` |
 | Original exact MATE and puzzle evaluation | `scripts/eval_gavn.py` |
 | Live website | `monitor/` |

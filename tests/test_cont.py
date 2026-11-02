@@ -1002,6 +1002,62 @@ class PlyPackTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.builder().add_shard(3, 1, dict(data, actions=data["actions"][:-1]), result)
 
+    def test_pack_script_reads_finished_shards_and_writes_a_verifiable_pack(self):
+        import sys as _sys
+        from scripts import build_ply_pack
+        sha = label_ply_shard.file_sha256
+        plan = {"source_sha256": sha(self.fx.source), "val_csv_sha256": sha(self.fx.val_csv),
+                "test_csv_sha256": sha(self.fx.test_csv), "exclusion_sha256": sha(self.fx.hash_path),
+                "roots_per_shard": 4}
+        hub = {}
+        for ply, shard in ((3, 0), (3, 1), (5, 0)):
+            result = self.fx.build(ply, shard, name=f"p{ply}s{shard}")
+            folder, remote = self.root / f"p{ply}s{shard}", ply_data.shard_dir(ply_data.PREFIX, ply, shard)
+            (folder / "meta.json").write_text(json.dumps(result))
+            hub[f"{remote}/train_set.npz"], hub[f"{remote}/meta.json"] = folder / "train_set.npz", folder / "meta.json"
+        (self.root / "plan.json").write_text(json.dumps(plan))
+        hub.update({f"{ply_data.PREFIX}/plan.json": self.root / "plan.json",
+                    f"{ply_data.PREFIX}/exclusion-hashes.npy": self.fx.hash_path,
+                    "puzzle-corpus-v1/manifest.json": self.fx.manifest,
+                    "cont-v1/val.csv": self.fx.val_csv, "cont-v1/test.csv": self.fx.test_csv})
+
+        def fake_get(api, repo, path, workdir, attempts=5):
+            target = Path(workdir) / path          # a copy: the script deletes shards it has used
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(hub[path], target)
+            return target
+
+        client = mock.Mock(token="t")
+        client.list_repo_files.return_value = list(hub) + [
+            f"{ply_data.PREFIX}/ply5/shard-00001/partial.npz"]           # a partial must not be packed
+        work = self.root / "work"
+        argv = ["build_ply_pack.py", "--workdir", str(work)]
+        with mock.patch.object(build_ply_pack, "hf_get", fake_get), \
+                mock.patch("scripts.kaggle_checkpoint.api", lambda root=None: client), \
+                mock.patch.object(_sys, "argv", argv):
+            build_ply_pack.main()
+        out = work / ply_data.PACK_PREFIX
+        manifest = json.loads((out / "manifest.json").read_text())
+        self.assertEqual(manifest["format"], ply_data.PACK_FORMAT)
+        self.assertEqual(manifest["shards"], {"3": [0, 1], "5": [0]})
+        self.assertEqual(manifest["manifest_sha256"], ply_data.pack_manifest_digest(manifest))
+        for part in manifest["pack_parts"]:
+            self.assertEqual(sha(out / part["file"]), part["sha256"])
+        pack = ply_data.PlyPack.load([out / part["file"] for part in manifest["pack_parts"]])
+        self.assertEqual(len(pack), manifest["pack_stats"]["roots"])
+        self.assertEqual(sorted(set(pack.ply.tolist())), [3, 5])
+        self.assertEqual(sum(part["roots"] for part in manifest["pack_parts"]), len(pack))
+        # a shard that is not the one the plan describes is refused, not repacked
+        meta = json.loads((self.root / "p3s0" / "meta.json").read_text())
+        meta["identity"]["max_roots"] = 40
+        (self.root / "p3s0" / "meta.json").write_text(json.dumps(meta))
+        with mock.patch.object(build_ply_pack, "hf_get", fake_get), \
+                mock.patch("scripts.kaggle_checkpoint.api", lambda root=None: client), \
+                mock.patch.object(_sys, "argv", argv):
+            with self.assertRaises(ValueError) as ctx:
+                build_ply_pack.main()
+        self.assertIn("identity gate", str(ctx.exception))
+
 
 class PlyFleetTests(unittest.TestCase):
     HEAD, OTHER = "a" * 40, "b" * 40

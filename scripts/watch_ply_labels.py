@@ -37,7 +37,7 @@ ENGINES = 4
 SAVE_EVERY_SECONDS = 3600          # one Hub commit per kernel-hour keeps well under the commit cap
 COOLDOWN_S = 900                   # after a push, wait for Kaggle to list the new session
 MAX_NO_PROGRESS = 3                # consecutive launches that finished no shard
-MAX_LAUNCHES_PER_TICK = 10
+MAX_LAUNCHES_PER_TICK = WORKERS     # five pushes per account, accounts in parallel: a few minutes
 PLAN_PATH, PAUSE_PATH = f"{PREFIX}/plan.json", f"{PREFIX}/PAUSE"
 FLEET_MARKERS = f"{STATUS_PREFIX}/ply-label-fleet.json"
 
