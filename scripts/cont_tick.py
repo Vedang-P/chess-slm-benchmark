@@ -40,7 +40,12 @@ def main() -> None:
         print(f"[tick] supervisor error: {detail}\n{traceback.format_exc()[-2500:]}", flush=True)
         record_failure("FAILED " + state["updated_at"] + " " + detail)
     try:
-        publish(state)
+        # The monitor Worker is deployed separately; until MONITOR_ENABLED=true the tick
+        # skips publishing instead of failing against a Worker that does not know cont1.
+        if os.environ.get("MONITOR_ENABLED", "false").lower() == "true":
+            publish(state)
+        else:
+            print("[tick] monitor publishing disabled (MONITOR_ENABLED != true)", flush=True)
     except Exception as exc:
         detail = f"{type(exc).__name__}: {exc}"
         print(f"[tick] monitor error: {detail}\n{traceback.format_exc()[-2500:]}", flush=True)
