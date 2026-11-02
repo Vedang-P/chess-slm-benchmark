@@ -405,5 +405,52 @@ class TrainerIntegrationTests(unittest.TestCase):
             self.assertTrue(list(out.glob("checkpoint-*/state.pt")))
 
 
+
+class MonitorTests(unittest.TestCase):
+    def test_cont1_page_renders_a_realistic_snapshot_without_errors(self):
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not available")
+        root = Path(__file__).resolve().parents[1]
+        snapshot = {
+            "run": "cont1", "updated_at": "2026-11-02T10:00:00+00:00", "phase": "noop",
+            "main_run": "ccgavn-cont1-main", "base_step": 3896658,
+            "reference": {"base_puzzles": 7620, "gate_pct": 86.13},
+            "supervisor": {"reason": "learner active on ['vedanggggg']"},
+            "provider_warnings": [], "links": {"checkpoints": "https://example.org"},
+            "accounts": [{"account": "acct-1", "gpu_hours": 28.5, "learner": "RUNNING"},
+                         {"account": "acct-2", "gpu_hours": None, "learner": "unknown"}],
+            "runs": {
+                "ccgavn-cont1-a2": {"step": 10000, "status": "IN PROGRESS", "baseline": {
+                    "val_pct": 75.9, "val_total": 4000},
+                    "recipe": {"lr": 2e-5, "tactical_groups": 20, "lambda_list": 1.0},
+                    "evaluations": [{"step": 30000, "mate": {"correct": 3700},
+                                     "puzzles": {"solved": 7700}}]},
+                "ccgavn-cont1-main": {"step": 0, "status": "", "baseline": None, "recipe": {},
+                                      "evaluations": []}},
+            "history": {"metrics": {"ccgavn-cont1-a2": [
+                {"step": 5000, "val_pct": 75.5, "tac_hit": 0.61, "dev_dist": 2.91},
+                {"step": 10000, "val_pct": 76.4, "tac_hit": 0.64, "dev_dist": 2.90}]}},
+            "events": [{"title": "t", "detail": "d", "tone": "good", "at": "2026-11-02T09:00:00Z"}]}
+        script = (
+            "import { HTML } from './src/page.js';"
+            "const m=[...HTML.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)][0][1];"
+            "const els={};const el=id=>els[id]??={style:{},hidden:false,textContent:'',innerHTML:'',className:''};"
+            "globalThis.document={getElementById:el};"
+            f"globalThis.fetch=async()=>({{ok:true,json:async()=>({json.dumps(snapshot)})}});"
+            "globalThis.setInterval=()=>0;"
+            "new Function(m)();await new Promise(r=>setTimeout(r,50));"
+            "if(els.badge.textContent!=='noop')throw new Error('badge: '+els.badge.textContent+' / '+els.fresh.textContent);"
+            "if(!els.runs.innerHTML.includes('a2'))throw new Error('run table not rendered');"
+            "if(!els['chart-val'].innerHTML.includes('polyline'))throw new Error('validation chart empty');"
+            "if(els['best-official'].textContent!=='77.00%')throw new Error('best official '+els['best-official'].textContent);"
+            "console.log('rendered');")
+        result = subprocess.run([node, "--input-type=module", "-e", script], cwd=root / "monitor",
+                                capture_output=True, text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, f"stdout={result.stdout}\nstderr={result.stderr}")
+
+
 if __name__ == "__main__":
     unittest.main()
