@@ -5,44 +5,36 @@ best verified CC-GAVN checkpoint has **4,762,088 parameters**, **3,710/4,000
 MATE (92.75%)**, and **7,620/10,000 official puzzles (76.20%)**. The 9M
 Searchless Chess reference scores 98.72% MATE and 86.13% puzzles. The fixed
 benchmarks have been seen during development and are comparison sets, not
-untouched holdouts.
+untouched holdouts. See [PROJECT-STATUS.md](PROJECT-STATUS.md) for the current
+experiment and what has failed.
 
-## Tactical continuation
+## Conservative continuation (cont1)
 
-The next run starts from `ccgavn-5m-seed0-v2/checkpoint-3896658`, applies the
-verified function-preserving transplant to the **3,895,352-parameter** model,
-and performs 2,000,000 additional updates with the existing trainer loss,
-batch 2048, and cosine learning-rate schedule extended to step 5,896,658.
-The transplant removes 869,440 softmax-null parameters; shared AdamW moments
-are carried over, and new metadata gates start without optimizer history. It first labels
-6,147,346 frozen Lichess puzzle roots, excluding the 9,995 exact matches in
-the official 10,000-puzzle set. Every legal root move gets a Stockfish 16
-50 ms evaluation and a 9M teacher distribution. Five Kaggle accounts prepare
-the corpus and rotate T4 learner sessions. Full weights, optimizer, and RNG
-state upload to Hugging Face before each session ends. Exact 4,000 MATE and
-10,000-puzzle evaluations run at every 50,000 continuation steps.
-
-The pipeline must pass a 500-root label, teacher, two-update learner, and
-10 MATE / 20 puzzle smoke test before the full corpus stage starts. The
-[live monitor](https://chess-slm-monitor.vedangpandeyy.workers.dev/) and
-[Hugging Face dataset](https://huggingface.co/datasets/vedangfake/chess-slm-benchmark)
-show the current phase and artifacts. The success gate is **more than 86.13%**
-on all 10,000 official puzzles. A result exists only after its full frozen
-evaluation completes.
+The next run restarts from `ccgavn-5m-seed0-v2/checkpoint-3896658` (via the
+verified 3,895,352-parameter transplant) with a low constant learning rate, an
+EMA of the weights, a broad-replay plus tactical-root batch mix, a listwise loss
+over each root's legal moves, and validation on 4,000 held-out puzzles that are
+disjoint from the official 10,000. Five Kaggle accounts run back-to-back
+11.5-hour learner sessions; every session uploads a complete checkpoint to
+Hugging Face before its cutoff and the next account resumes it. The success
+gate is **more than 86.13%** on all 10,000 official puzzles; a result exists
+only after its full evaluation completes.
 
 ## Main code
 
 | Task | File |
 | --- | --- |
-| Frozen source and exclusions | `scripts/freeze_puzzle_corpus.py` |
-| Stockfish action-value labels | `scripts/label_puzzle_shard.py` |
-| 9M teacher distributions | `scripts/label_puzzle_teacher.py` |
-| CC-GAVN learner and HF resume | `scripts/train_ccgavn.py`, `scripts/kaggle_checkpoint.py` |
-| Exact MATE and puzzle evaluation | `scripts/eval_gavn.py` |
-| Five-account supervisor | `scripts/watch_tactical.py`, `scripts/pipeline_tick.py` |
-| Kaggle entry point | `kernels/tactical/worker.py` |
+| Held-out splits, tactical pack, stateless samplers | `scripts/cont_data.py`, `scripts/build_cont_data.py` |
+| Continuation trainer (EMA, mix, listwise loss, guard, resume) | `scripts/train_cont.py` |
+| Batched exact-rules puzzle and MATE evaluation | `scripts/cont_eval.py` |
+| Sequential five-account supervisor | `scripts/watch_cont.py`, `scripts/cont_tick.py`, `.github/workflows/cont-tick.yml` |
+| Kaggle entry point and helpers | `kernels/cont/worker.py`, `scripts/kaggle_pool.py`, `scripts/launch_cont.py` |
+| CC-GAVN model and original trainer | `scripts/train_ccgavn.py`, `scripts/kaggle_checkpoint.py` |
+| Original exact MATE and puzzle evaluation | `scripts/eval_gavn.py` |
 | Live website | `monitor/` |
 
-The source manifest and run identity are pinned in `scripts/tactical_config.py`.
-Every run that can lose progress must persist complete checkpoints and failure
-status to Hugging Face, as specified in [AGENTS.md](AGENTS.md).
+Run identity and the recipe are pinned in `scripts/cont_config.py`. The earlier
+tactical-continuation code (`scripts/watch_tactical.py`, `kernels/tactical/`)
+is kept for its labeled data and history; its workflow is disabled. Every run
+that can lose progress must persist complete checkpoints and failure status to
+Hugging Face, as specified in [AGENTS.md](AGENTS.md).

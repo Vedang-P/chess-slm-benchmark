@@ -141,17 +141,19 @@ def main(check_only: bool = False) -> dict:
     if decision["action"] != "launch" or check_only:
         return state
     account = decision["account"]
+    config = {"phase": "main", "run": MAIN_RUN, "hf_repo": HF_REPO, "status_prefix": STATUS_PREFIX,
+              "source_commit": head, "searchless_commit": SEARCHLESS_COMMIT,
+              "session_seconds": decision["session_seconds"],
+              "trainer_args": COMMON_ARGS + MAIN_ARGS, "account_index": ACCOUNTS.index(account)}
+    # Push first: a failed push must not count as a launch attempt. If the marker
+    # write fails afterwards, the next tick sees the queued learner and does nothing.
+    push_kernel(account, LEARNER_SLUG, TEMPLATE, "__CONT_CONFIG__", config, gpu=True)
+    state["phase"] = "launched"
     new_marker = {"account": account, "commit": head, "step": step, "attempt": decision["attempt"],
                   "at": state["updated_at"], "at_epoch": time.time()}
     upload_file(client, HF_REPO, json.dumps(new_marker).encode(), marker_path,
                 commit_message=f"Launch cont1 session on {account} at step {step}",
                 attempts=4, max_elapsed_s=300.0)
-    config = {"phase": "main", "run": MAIN_RUN, "hf_repo": HF_REPO, "status_prefix": STATUS_PREFIX,
-              "source_commit": head, "searchless_commit": SEARCHLESS_COMMIT,
-              "session_seconds": decision["session_seconds"],
-              "trainer_args": COMMON_ARGS + MAIN_ARGS, "account_index": ACCOUNTS.index(account)}
-    push_kernel(account, LEARNER_SLUG, TEMPLATE, "__CONT_CONFIG__", config, gpu=True)
-    state["phase"] = "launched"
     return state
 
 
