@@ -26,7 +26,7 @@ RULE = {"min_gain": 20,          # solved-puzzle gain of the treatment at the fi
         "first_ratio": 1.05,     # treatment first-decision failures <= 105% of the control's
         "dev_ratio": 1.01,       # treatment broad dev loss <= 101% of the control's
         "reject_gain": 8}        # at or below this gain the treatment is rejected
-EVAL_STEPS = (10_000, 12_500, 15_000)
+EVAL_STEPS = (20_000, 22_500, 25_000)
 
 
 def mcnemar_exact(only_treatment: int, only_control: int) -> float:

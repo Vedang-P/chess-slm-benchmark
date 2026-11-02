@@ -1240,9 +1240,9 @@ class PlyCompareTests(unittest.TestCase):
             compare_ply_runs.paired(control, dict(treatment, ids=treatment["ids"][::-1]))
 
     def verdict_for(self, early, middle, final, dev):
-        per = {10_000: compare_ply_runs.paired(*self.run_pair(**early)),
-               12_500: compare_ply_runs.paired(*self.run_pair(**middle)),
-               15_000: compare_ply_runs.paired(*self.run_pair(**final))}
+        per = {20_000: compare_ply_runs.paired(*self.run_pair(**early)),
+               22_500: compare_ply_runs.paired(*self.run_pair(**middle)),
+               25_000: compare_ply_runs.paired(*self.run_pair(**final))}
         return compare_ply_runs.verdict(per, dev)
 
     def test_verdict_adopts_only_when_every_criterion_holds(self):
@@ -1250,7 +1250,7 @@ class PlyCompareTests(unittest.TestCase):
         early = dict(good, solved_only_t=35, solved_only_c=15)
         ok = self.verdict_for(early, early, good, {"control": 3.77, "treatment": 3.78})
         self.assertEqual(ok["outcome"], "ADOPT")
-        self.assertEqual(ok["gains"], {10_000: 20, 12_500: 20, 15_000: 30})
+        self.assertEqual(ok["gains"], {20_000: 20, 22_500: 20, 25_000: 30})
         # a good last evaluation alone is not consistent enough
         flat = dict(good, solved_only_t=15, solved_only_c=15)
         lucky = self.verdict_for(flat, flat, good, {"control": 3.77, "treatment": 3.78})

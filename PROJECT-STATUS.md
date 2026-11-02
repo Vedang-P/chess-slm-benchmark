@@ -107,7 +107,7 @@ built from the finished shards. The sealed test puzzles are never read.
 
 Experiment. Two runs start from the EMA weights of the same `ccgavn-cont1-a4` checkpoint with
 the main-run recipe (seed 0, 1,434 broad rows and 20 first-decision groups per step, lr 5e-5,
-listwise loss), 15,000 steps each, validation every 2,500 steps:
+listwise loss), 25,000 steps each (about 4 GPU hours), validation every 2,500 steps:
 
 * `ccgavn-cont1-p0` (control): `--ply-groups 0`;
 * `ccgavn-cont1-p1`: `--ply-groups 10`, ten extra ply-3/5 roots per step drawn uniformly from
@@ -121,10 +121,10 @@ recorded below). With gain = treatment solved minus control solved:
 
 | Check | Requirement (all four for ADOPT) |
 | --- | --- |
-| effect | gain >= +20 puzzles (0.5 point) at step 15,000 and exact McNemar p < 0.05 |
-| consistent | mean gain over steps 10,000 / 12,500 / 15,000 >= +15 |
-| mechanism | later-ply failures <= 90% of the control's and first-decision failures <= 105% of the control's at step 15,000 |
-| broad corpus | broad dev loss <= 101% of the control's at step 15,000 |
+| effect | gain >= +20 puzzles (0.5 point) at step 25,000 and exact McNemar p < 0.05 |
+| consistent | mean gain over steps 20,000 / 22,500 / 25,000 >= +15 |
+| mechanism | later-ply failures <= 90% of the control's and first-decision failures <= 105% of the control's at step 25,000 |
+| broad corpus | broad dev loss <= 101% of the control's at step 25,000 |
 
 REJECT when the final gain is <= +8 puzzles or later-ply failures did not drop; anything
 else is INCONCLUSIVE (the next step would be a second seed pair, not a change to the main
