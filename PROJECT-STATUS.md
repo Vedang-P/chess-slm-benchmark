@@ -210,3 +210,21 @@ The treatment pays 0.6% on the broad dev loss. This is one seed pair on one vali
 it supports proposing `--ply-groups` for the main run, which needs the owner's decision (the
 recipe identity changes, so resuming needs `--allow-recipe-change`), and it says nothing yet
 about the official puzzles or the sealed test puzzles.
+
+### Official 10,000 puzzles (read after the verdict above was committed)
+
+| Run | Puzzles | MATE (4,000) | Failures first / later |
+| --- | ---: | ---: | ---: |
+| control `p0` | 8,642 (86.42%) | 3,795 | 678 / 680 |
+| treatment `p1` | 8,740 (87.40%) | 3,820 | 672 / 588 |
+
+Paired: 189 puzzles solved only by the treatment and 91 only by the control (McNemar
+p < 0.00001). Later-ply failures by ply (control / treatment): ply 3: 440 / 377, ply 5: 175 / 150.
+The pattern matches validation: the first decision barely moves and the labeled plies carry the
+gain. MATE rises a little (3,820 against 3,795) and stays below the 9M reference's 3,949.
+
+Against the 8,613-puzzle gate the control is +29 and the treatment +127. The control already
+clears 86.13% by a margin inside the roughly 0.35-point sampling error of a 10,000-puzzle
+score, so the gate does not separate the runs; the paired difference does. The official puzzles
+were inspected during development, so they are a fixed comparison set and not an untouched
+holdout, and the sealed test puzzles have not been scored.
