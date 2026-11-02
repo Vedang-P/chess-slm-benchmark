@@ -5,6 +5,10 @@ to Hugging Face at its session deadline; the next tick launches a new session on
 the account with the most GPU quota, which resumes from that checkpoint. Failures
 are reported through Hugging Face status files and the monitor, never through
 red GitHub runs, and a crash loop stops itself instead of burning quota.
+
+The same tick also keeps the later-ply CPU labeling kernels alive (see
+scripts/watch_ply_labels.py). That pass is independent of the learner: it runs even
+when the learner pass fails, and an error in it is only reported.
 """
 from __future__ import annotations
 
@@ -123,7 +127,7 @@ def observe(accounts=ACCOUNTS) -> dict[str, dict]:
         return dict(pool.map(one, accounts))
 
 
-def main(check_only: bool = False) -> dict:
+def supervise_learner(check_only: bool = False) -> dict:
     import time
     client = make_hf_api(ROOT)
     files = set(client.list_repo_files(HF_REPO, repo_type="dataset"))
@@ -155,6 +159,37 @@ def main(check_only: bool = False) -> dict:
     upload_file(client, HF_REPO, json.dumps(new_marker).encode(), marker_path,
                 commit_message=f"Launch cont1 session on {account} at step {step}",
                 attempts=4, max_elapsed_s=300.0)
+    return state
+
+
+def label_fleet(check_only: bool = False) -> dict:
+    """One pass over the later-ply labeling fleet; an error is reported, never raised."""
+    try:
+        from scripts import watch_ply_labels
+        client = make_hf_api(ROOT)
+        files = set(client.list_repo_files(HF_REPO, repo_type="dataset"))
+        try:
+            return watch_ply_labels.tick(client, files, git_head(), check_only)
+        except Exception as exc:
+            detail = f"{type(exc).__name__}: {exc}"[:300]
+            path = f"{STATUS_PREFIX}/ply-label-fleet.txt"
+            if detail not in read_text(client, files, path):   # one commit per distinct error
+                upload_file(client, HF_REPO, f"FAILED {datetime.now(timezone.utc).isoformat()} "
+                            f"{detail}".encode(), path, commit_message="Record ply label fleet failure",
+                            attempts=4, max_elapsed_s=300.0)
+            raise
+    except Exception as exc:
+        return {"phase": "error", "reason": f"{type(exc).__name__}: {exc}"[:300],
+                "updated_at": datetime.now(timezone.utc).isoformat()}
+
+
+def main(check_only: bool = False) -> dict:
+    """The learner pass, then the labeling fleet pass (which runs even if the learner pass fails)."""
+    try:
+        state = supervise_learner(check_only)
+    finally:
+        fleet = label_fleet(check_only)
+    state["label_fleet"] = fleet
     return state
 
 

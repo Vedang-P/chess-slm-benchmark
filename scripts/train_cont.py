@@ -49,7 +49,7 @@ from scripts.train_gavn import action_tables  # noqa: E402
 RECIPE_FIELDS = ("dim", "layers", "heads", "broad_rows", "tactical_groups", "lr", "warmup",
                  "ema_decay", "weight_decay", "w_dist", "w_ce", "w_ce_tac", "lambda_list",
                  "tau", "reflect_prob", "seed", "block_steps", "decay_start", "decay_steps",
-                 "rl_weight", "rl_beta", "init_weights")
+                 "rl_weight", "rl_beta", "init_weights", "ply_groups")
 BASE_RUN, BASE_STEP = "ccgavn-5m-v2-functional-seed0", 3_896_658
 
 
@@ -74,6 +74,10 @@ def parse_args(argv=None):
     p.add_argument("--broad-tags-file", default=str(ROOT / "configs/ccgavn-2b-shard-tags.json"))
     p.add_argument("--broad-rows", type=int, default=1434)
     p.add_argument("--tactical-groups", type=int, default=20)
+    p.add_argument("--ply-groups", type=int, default=0,
+                   help="extra tactical groups per step from the later-ply pack "
+                        "(cont-v2/ply-pack); 0 disables it and leaves every batch unchanged")
+    p.add_argument("--ply-dir", default="", help="local dir holding cont-v2/ (skip HF download)")
     p.add_argument("--block-steps", type=int, default=6000)
     p.add_argument("--reflect-prob", type=float, default=0.5)
     p.add_argument("--exclusion-puzzles", required=True, help="official puzzles.csv")
@@ -110,6 +114,8 @@ def parse_args(argv=None):
     p.add_argument("--dev-batch", type=int, default=8192)
     p.add_argument("--allow-recipe-change", action="store_true")
     p.add_argument("--no-official-eval", action="store_true")
+    p.add_argument("--val-detail", action="store_true",
+                   help="also log validation failures per ply and save per-puzzle results")
     return p.parse_args(argv)
 
 
@@ -288,6 +294,19 @@ def main(argv=None):
         pack = TacticalPack.load([cont / part["file"] for part in manifest["pack_parts"]])
         print(f"[data] tactical roots train={len(pack.train_roots):,} dev={len(pack.dev_roots):,} "
               f"rows={len(pack.actions):,}", flush=True)
+    ply_pack, ply_manifest = None, None
+    if args.ply_groups:
+        from huggingface_hub import snapshot_download
+        from scripts.ply_data import PACK_PREFIX, PlyPack
+        ply_root = Path(args.ply_dir) if args.ply_dir else outdir / "data"
+        if not (ply_root / PACK_PREFIX / "manifest.json").exists():
+            snapshot_download(args.hf_repo, repo_type="dataset", token=token,
+                              local_dir=str(ply_root), allow_patterns=[f"{PACK_PREFIX}/*"])
+        ply_manifest = json.loads((ply_root / PACK_PREFIX / "manifest.json").read_text(encoding="utf-8"))
+        ply_pack = PlyPack.load([ply_root / PACK_PREFIX / part["file"]
+                                 for part in ply_manifest["pack_parts"]])
+        print(f"[data] ply roots train={len(ply_pack.train_roots):,} dev={len(ply_pack.dev_roots):,} "
+              f"rows={len(ply_pack.actions):,}", flush=True)
     dev = np.load(cont / "broad-dev.npz")
     dev_tokens = torch.as_tensor(np.asarray(dev["tokens"], dtype=np.int64), device=device)
     dev_actions = torch.as_tensor(np.asarray(dev["actions"], dtype=np.int64), device=device)
@@ -301,6 +320,12 @@ def main(argv=None):
         tactical_dev_roots = pack.dev_roots[
             np.random.default_rng(args.seed + 5).choice(
                 len(pack.dev_roots), size=min(2000, len(pack.dev_roots)), replace=False)]
+
+    ply_dev_roots = None
+    if ply_pack is not None and len(ply_pack.dev_roots):
+        ply_dev_roots = ply_pack.dev_roots[
+            np.random.default_rng(args.seed + 6).choice(
+                len(ply_pack.dev_roots), size=min(2000, len(ply_pack.dev_roots)), replace=False)]
 
     shard_rows = {}
     for path in (ROOT / "configs/chessbench_rows.json", ROOT / "kernels/build-2b/shard_rows.json"):
@@ -362,6 +387,8 @@ def main(argv=None):
                   if args.resume_from_hf else None)
     identity = {"tags_digest": tags_digest, "pack_digest": manifest["manifest_sha256"],
                 "split_digest": manifest["val_csv_sha256"], "exclusion_digest": exclusion_digest}
+    if ply_manifest is not None:          # only runs that use the ply pack carry its identity
+        identity["ply_pack_digest"] = ply_manifest["manifest_sha256"]
     if resume_dir is not None:
         cfg = json.loads((resume_dir / "config.json").read_text(encoding="utf-8"))
         changed = [f"{k}: {cfg.get(k)!r} -> {getattr(args, k)!r}" for k in RECIPE_FIELDS
@@ -391,9 +418,27 @@ def main(argv=None):
         for prm in ref_model.parameters():
             prm.requires_grad_(False)
     print(f"[train] device={device} params={params:,} lr={args.lr} ema={args.ema_decay} "
-          f"broad_rows={args.broad_rows} tactical_groups={args.tactical_groups}", flush=True)
+          f"broad_rows={args.broad_rows} tactical_groups={args.tactical_groups}"
+          + (f" ply_groups={args.ply_groups}" if args.ply_groups else ""), flush=True)
 
     # ---- evaluation helpers
+    def dev_listwise(pk, roots) -> tuple[float, float, float]:
+        """Hit rate, regret and KL of the listwise loss on held-out roots of a pack."""
+        toks, acts, wps, gid, lens = pk.gather(roots)
+        qs = []
+        with torch.inference_mode():
+            for s in range(0, len(acts), 8192):
+                sl = slice(s, s + 8192)
+                qs.append(expected_value(torch, ema_model(
+                    torch.as_tensor(toks[sl], dtype=torch.long, device=device),
+                    torch.as_tensor(acts[sl], dtype=torch.long, device=device)), bucket_values))
+            q = torch.cat(qs)
+            _, kl, hit, regret = listwise_loss(
+                torch, q, torch.as_tensor(wps, device=device),
+                torch.as_tensor(gid, device=device), torch.as_tensor(lens, device=device),
+                args.tau)
+        return float(hit), float(regret), float(kl)
+
     def evaluate_dev() -> dict:
         out = {}
         with torch.inference_mode(), torch.autocast(device_type=device.type, dtype=torch.float16,
@@ -404,21 +449,14 @@ def main(argv=None):
         out.update(dev_dist=float(dist), dev_ce=float(ce),
                    dev_loss=float(args.w_dist * dist + args.w_ce * ce))
         if tactical_dev_roots is not None:
-            toks, acts, wps, gid, lens = pack.gather(tactical_dev_roots)
-            qs = []
-            with torch.inference_mode():
-                for s in range(0, len(acts), 8192):
-                    sl = slice(s, s + 8192)
-                    qs.append(expected_value(torch, ema_model(
-                        torch.as_tensor(toks[sl], dtype=torch.long, device=device),
-                        torch.as_tensor(acts[sl], dtype=torch.long, device=device)), bucket_values))
-                q = torch.cat(qs)
-                _, kl, hit, regret = listwise_loss(
-                    torch, q, torch.as_tensor(wps, device=device),
-                    torch.as_tensor(gid, device=device), torch.as_tensor(lens, device=device),
-                    args.tau)
-            out.update(tac_dev_hit=float(hit), tac_dev_regret=float(regret), tac_dev_kl=float(kl))
+            hit, regret, kl = dev_listwise(pack, tactical_dev_roots)
+            out.update(tac_dev_hit=hit, tac_dev_regret=regret, tac_dev_kl=kl)
+        if ply_dev_roots is not None:
+            hit, regret, kl = dev_listwise(ply_pack, ply_dev_roots)
+            out.update(ply_dev_hit=hit, ply_dev_regret=regret, ply_dev_kl=kl)
         return out
+
+    val_detail: dict = {}      # latest per-puzzle validation results (only with --val-detail)
 
     def evaluate_val() -> dict:
         t0 = time.time()
@@ -426,6 +464,13 @@ def main(argv=None):
         res = evaluate_puzzles(scorer, val_puzzles)
         summary = summarize(res, val_puzzles)
         summary["seconds"] = round(time.time() - t0, 1)
+        if args.val_detail:
+            by_ply: dict[int, int] = {}
+            for r in res:
+                if not r["correct"] and r.get("fail_ply") is not None:
+                    by_ply[r["fail_ply"]] = by_ply.get(r["fail_ply"], 0) + 1
+            summary["failed_by_ply"] = {str(k): v for k, v in sorted(by_ply.items())}
+            val_detail["results"] = res
         return summary
 
     def run_validation(step: int) -> dict:
@@ -435,6 +480,9 @@ def main(argv=None):
                    "val_failed_first_decision": val.get("failed_at_first_decision"),
                    "val_failed_later": val.get("failed_later"),
                    **evaluate_dev()}
+        if args.val_detail:
+            metrics["val_failed_by_ply"] = val["failed_by_ply"]
+            val_detail["step"] = step
         print(f"[val] step={step} puzzles={val['solved']}/{val['total']} ({val['pct']:.2f}%) "
               f"dev_loss={metrics['dev_loss']:.4f} dev_dist={metrics['dev_dist']:.4f} "
               f"tac_hit={metrics.get('tac_dev_hit', float('nan')):.3f} in {val['seconds']}s",
@@ -495,6 +543,22 @@ def main(argv=None):
             flip = np.repeat(trng.random(len(roots)) < args.reflect_prob, lens)
             tt, ta = reflect_horizontal(tt.astype(np.int64), ta, action_map, flip)
             batch.update(tt=tt, ta=ta, tw=tw, gid=gid, lens=lens)
+        if ply_pack is not None:
+            # A third stream, so the broad and first-decision draws are untouched.
+            prng = step_rng(args.seed, step, 3)
+            proots = ply_pack.train_roots[prng.integers(0, len(ply_pack.train_roots),
+                                                        size=args.ply_groups)]
+            pt, pa, pw, pgid, plens = ply_pack.gather(proots)
+            pflip = np.repeat(prng.random(len(proots)) < args.reflect_prob, plens)
+            pt, pa = reflect_horizontal(pt.astype(np.int64), pa, action_map, pflip)
+            if "tt" in batch:
+                batch.update(tt=np.concatenate([batch["tt"], pt]),
+                             ta=np.concatenate([batch["ta"], pa]),
+                             tw=np.concatenate([batch["tw"], pw]),
+                             gid=np.concatenate([batch["gid"], pgid + len(batch["lens"])]),
+                             lens=np.concatenate([batch["lens"], plens]))
+            else:
+                batch.update(tt=pt, ta=pa, tw=pw, gid=pgid, lens=plens)
         return batch
 
     # ---- checkpointing
@@ -516,6 +580,12 @@ def main(argv=None):
             "weights_for_eval": "ema", "cli": vars(args)}
         (ckpt / "config.json").write_text(json.dumps(cfg, indent=2, default=str), encoding="utf-8")
         (ckpt / "metrics.json").write_text(json.dumps(metrics, indent=2, default=str), encoding="utf-8")
+        if args.val_detail and val_detail.get("step") == step:
+            results = val_detail["results"]
+            (ckpt / "val-results.json").write_text(json.dumps({
+                "step": step, "ids": [r["id"] for r in results],
+                "correct": [int(bool(r["correct"])) for r in results],
+                "fail_ply": [r.get("fail_ply") for r in results]}), encoding="utf-8")
         upload_checkpoint(hf, args.hf_repo, outdir, args.hf_run, ckpt.name)
         for old in sorted(outdir.glob("checkpoint-*"),
                           key=lambda p: int(p.name.rsplit("-", 1)[-1]))[:-2]:
@@ -573,14 +643,14 @@ def main(argv=None):
         nb = batch["nb"]
         tokens_t = torch.as_tensor(batch["bt"], dtype=torch.long, device=device)
         actions_t = torch.as_tensor(batch["ba"], dtype=torch.long, device=device)
-        if pack is not None:
+        if "tt" in batch:
             tokens_t = torch.cat([tokens_t, torch.as_tensor(batch["tt"], dtype=torch.long, device=device)])
             actions_t = torch.cat([actions_t, torch.as_tensor(batch["ta"], dtype=torch.long, device=device)])
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=device.type == "cuda"):
             logits = model(tokens_t, actions_t)
             ref_logits = None
-            if ref_model is not None and pack is not None:
+            if ref_model is not None and "tt" in batch:
                 with torch.no_grad():
                     ref_logits = ref_model(tokens_t[nb:], actions_t[nb:])
         if ref_logits is not None:

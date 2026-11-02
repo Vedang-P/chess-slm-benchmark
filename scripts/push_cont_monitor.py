@@ -112,6 +112,7 @@ def snapshot(state: dict) -> dict:
             "phase": state.get("phase", "unknown"), "supervisor": {
                 k: state.get(k) for k in ("phase", "reason", "step", "run", "decision",
                                           "run_status", "updated_at")},
+            "label_fleet": state.get("label_fleet"),
             "provider_warnings": warnings, "reference": REFERENCE, "base_step": BASE_STEP,
             "main_run": MAIN_RUN, "runs": runs, "accounts": accounts,
             "links": {"checkpoints": f"https://huggingface.co/datasets/{HF_REPO}/tree/main",

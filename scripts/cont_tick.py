@@ -50,7 +50,9 @@ def main() -> None:
         detail = f"{type(exc).__name__}: {exc}"
         print(f"[tick] monitor error: {detail}\n{traceback.format_exc()[-2500:]}", flush=True)
         record_failure("FAILED monitor " + datetime.now(timezone.utc).isoformat() + " " + detail)
-    print(json.dumps({k: state.get(k) for k in ("phase", "reason", "step")}, default=str), flush=True)
+    print(json.dumps({k: state.get(k) for k in ("phase", "reason", "step")}
+                     | {"label_fleet": (state.get("label_fleet") or {}).get("phase")},
+                     default=str), flush=True)
 
 
 if __name__ == "__main__":

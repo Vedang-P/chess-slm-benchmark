@@ -1,18 +1,25 @@
 """Tests for the cont1 data layer, evaluator, loss and trainer (CPU, tiny model)."""
 import contextlib
+import csv
 import importlib.util
+import io
 import json
+import math
 import os
 import shutil
+import signal
 import tempfile
+import time
 import unittest
+import zlib
 from pathlib import Path
 from unittest import mock
 
 import chess
+import chess.engine
 import numpy as np
 
-from scripts import cont_data, cont_eval
+from scripts import cont_data, cont_eval, label_ply_shard, ply_data, watch_ply_labels
 from scripts.eval_gavn import tokenize_fen
 
 SL_REPO = Path(os.environ.get(
@@ -348,6 +355,20 @@ class TrainerIntegrationTests(unittest.TestCase):
         (cont / "manifest.json").write_text(json.dumps({
             "pack_parts": [{"file": "pack/part-00.npz"}], "manifest_sha256": "m" * 64,
             "val_csv_sha256": "v" * 64}))
+        ply_tokens, ply_actions, ply_winprob = synthetic_shard(rng, roots=24)
+        ply_starts = cont_data.group_starts(ply_tokens, ply_actions)
+        ply_dev = np.zeros(24, dtype=bool)
+        ply_dev[:4] = True
+        ply_dir = cont.parent / "cont-v2" / "ply-pack"
+        ply_dir.mkdir(parents=True)
+        cont_data.save_pack(ply_dir / "part-00.npz", {
+            "tokens": ply_tokens[ply_starts],
+            "lens": np.diff(np.append(ply_starts, len(ply_tokens))).astype(np.int32),
+            "actions": ply_actions.astype(np.uint16), "winprob": ply_winprob.astype(np.float16),
+            "rating": np.full(24, 1500, dtype=np.uint16), "index": np.arange(24, dtype=np.uint32),
+            "is_dev": ply_dev, "ply": np.where(np.arange(24) % 3 == 0, 5, 3).astype(np.uint8)})
+        (ply_dir / "manifest.json").write_text(json.dumps({
+            "pack_parts": [{"file": "part-00.npz"}], "manifest_sha256": "p" * 64}))
         st, sa, sw = synthetic_shard(rng, roots=24)
         shard = (st, sa, sw, random_teacher(rng, len(st)).astype(np.float16))
         tags_file = root / "tags.json"
@@ -384,6 +405,7 @@ class TrainerIntegrationTests(unittest.TestCase):
         out = root / f"out-{name}"
         argv = ["--hf-run", name, "--init-hf-run", "base", "--init-checkpoint", "checkpoint-1",
                 "--outdir", str(out), "--sl-repo", "x", "--cont-dir", str(cont_dir),
+                "--ply-dir", str(cont_dir),
                 "--broad-tags-file", str(tags_file), "--exclusion-puzzles", "unused",
                 "--dim", "32", "--layers", "2", "--heads", "4", "--broad-rows", "16",
                 "--tactical-groups", "3", "--block-steps", "5", "--warmup", "2", "--lr", "1e-3",
@@ -459,6 +481,67 @@ class TrainerIntegrationTests(unittest.TestCase):
             self.assertTrue(list(out.glob("checkpoint-*/state.pt")))
 
 
+    def test_ply_groups_extend_the_batch_resume_exactly_and_record_their_identity(self):
+        import torch
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            extra = ["--ply-groups", "2"]
+            full, _ = self.run_main(root, "plyfull", ["--max-steps", "12", *extra])
+            cfg = json.loads((full / "checkpoint-12" / "config.json").read_text())
+            self.assertEqual(cfg["ply_groups"], 2)
+            self.assertEqual(cfg["ply_pack_digest"], "p" * 64)
+            metrics = json.loads((full / "checkpoint-12" / "metrics.json").read_text())
+            self.assertTrue(np.isfinite(metrics["ply_dev_hit"]))
+            half, _ = self.run_main(root, "plyhalf", ["--max-steps", "6", *extra])
+            resumed, _ = self.run_main(root, "plyresumed", ["--max-steps", "12", "--resume-from-hf", *extra],
+                                       resume_dir=half / "checkpoint-6")
+            a = torch.load(full / "checkpoint-12" / "state.pt", weights_only=False)
+            b = torch.load(resumed / "checkpoint-12" / "state.pt", weights_only=False)
+            for key in a["model"]:
+                torch.testing.assert_close(a["model"][key], b["model"][key], rtol=0, atol=0)
+            # the extra groups really change training, and a plain run keeps no ply identity
+            plain, _ = self.run_main(root, "plain", ["--max-steps", "12"])
+            c = torch.load(plain / "checkpoint-12" / "state.pt", weights_only=False)
+            self.assertTrue(any(not torch.equal(a["model"][k], c["model"][k]) for k in a["model"]
+                                if a["model"][k].dtype.is_floating_point))
+            plain_cfg = json.loads((plain / "checkpoint-12" / "config.json").read_text())
+            self.assertEqual(plain_cfg["ply_groups"], 0)
+            self.assertNotIn("ply_pack_digest", plain_cfg)
+
+    def test_resume_refuses_a_run_that_adds_the_ply_pack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            half, _ = self.run_main(root, "half", ["--max-steps", "6"])
+            with self.assertRaises(ValueError) as ctx:
+                self.run_main(root, "resumed", ["--max-steps", "12", "--resume-from-hf",
+                                                "--ply-groups", "2"], resume_dir=half / "checkpoint-6")
+            self.assertIn("ply_pack_digest", str(ctx.exception))
+
+    def test_ply_groups_work_without_first_decision_groups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, statuses = self.run_main(Path(tmp), "plyonly", ["--max-steps", "6", "--tactical-groups", "0",
+                                                                "--ply-groups", "3"])
+            self.assertTrue((out / "checkpoint-6" / "state.pt").exists())
+            self.assertTrue(any(s.startswith("DONE") for s in statuses))
+
+    def test_val_detail_saves_per_puzzle_results_and_the_failure_split(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, _ = self.run_main(Path(tmp), "detail", ["--max-steps", "6", "--val-detail"])
+            metrics = json.loads((out / "checkpoint-6" / "metrics.json").read_text())
+            results = json.loads((out / "checkpoint-6" / "val-results.json").read_text())
+            self.assertEqual(len(results["ids"]), 6)
+            self.assertEqual(len(results["correct"]), 6)
+            by_ply = metrics["val_failed_by_ply"]
+            self.assertEqual(sum(by_ply.values()),
+                             metrics["val_failed_first_decision"] + metrics["val_failed_later"])
+            self.assertEqual(sum(1 for c, f in zip(results["correct"], results["fail_ply"])
+                                 if not c and f is not None), sum(by_ply.values()))
+            plain, _ = self.run_main(Path(tmp), "nodetail", ["--max-steps", "6"])
+            self.assertFalse((plain / "checkpoint-6" / "val-results.json").exists())
+            self.assertNotIn("val_failed_by_ply", json.loads(
+                (plain / "checkpoint-6" / "metrics.json").read_text()))
+
+
 
 class MonitorTests(unittest.TestCase):
     def test_cont1_page_renders_a_realistic_snapshot_without_errors(self):
@@ -504,6 +587,527 @@ class MonitorTests(unittest.TestCase):
         result = subprocess.run([node, "--input-type=module", "-e", script], cwd=root / "monitor",
                                 capture_output=True, text=True, timeout=120)
         self.assertEqual(result.returncode, 0, f"stdout={result.stdout}\nstderr={result.stderr}")
+
+
+# ---------------------------------------------------------------- later-ply roots
+class StubTokenizer:
+    @staticmethod
+    def tokenize(fen):
+        return tokenize_fen(fen)
+
+
+def uci_action_table() -> dict[str, int]:
+    names = [chess.square_name(i) for i in range(64)]
+    ucis = ([a + b for a in names for b in names if a != b]
+            + [a + b + p for a in names for b in names if a != b for p in "qrbn"])
+    return {m: i for i, m in enumerate(ucis)}
+
+
+class StubUtils:
+    """Action table and value transform of the pinned searchless utils, without the checkout."""
+    MOVE_TO_ACTION = uci_action_table()
+
+    @staticmethod
+    def centipawns_to_win_probability(centipawns):
+        return 0.5 + 0.5 * (2 / (1 + math.exp(-0.00368208 * centipawns)) - 1)
+
+
+class FakeEngine:
+    """Deterministic pseudo-scores per (position, root move); the Stockfish interface used here."""
+
+    def __init__(self, hook=None):
+        self.id = {"name": "Stockfish 16"}
+        self.calls, self.hook = 0, hook
+
+    def analyse(self, board, limit, root_moves=None, info=None):
+        self.calls += 1
+        if self.hook is not None:
+            self.hook()
+        time.sleep(0.0003)
+        key = f"{board.fen()}|{root_moves[0].uci()}"
+        value = zlib.crc32(key.encode()) % 2400 - 1200
+        score = chess.engine.Mate(2) if value % 211 == 0 else chess.engine.Cp(int(value))
+        return {"score": chess.engine.PovScore(score, chess.WHITE)}
+
+    def close(self):
+        pass
+
+
+def random_puzzle(rng, puzzle_id, n_moves):
+    """A legal line of `n_moves` from a random middlegame position (FEN precedes Moves[0])."""
+    while True:
+        board = chess.Board()
+        for _ in range(int(rng.integers(4, 14))):
+            legal = list(board.legal_moves)
+            if not legal:
+                break
+            board.push(legal[int(rng.integers(len(legal)))])
+        if board.is_game_over():
+            continue
+        fen, moves = board.fen(), []
+        for _ in range(n_moves):
+            legal = sorted(board.legal_moves, key=lambda m: m.uci())
+            if not legal:
+                break
+            move = legal[int(rng.integers(len(legal)))]
+            moves.append(move.uci())
+            board.push(move)
+        if len(moves) == n_moves:
+            return {"PuzzleId": puzzle_id, "FEN": fen, "Moves": " ".join(moves),
+                    "Rating": str(1000 + int(rng.integers(0, 1500)))}
+
+
+class PlyFixture:
+    """A tiny frozen corpus: 30 puzzles (2, 4, 6, 8 moves in turn), two official, one validation,
+    one test. With four roots per shard the first ply-3 shard is P001 P002 P005 P006 and the
+    second ply-5 shard is P015 P018 P019 P022."""
+
+    OFFICIAL, VAL, TEST = ("P003", "P010"), ("P007",), ("P012",)
+
+    def __init__(self, root: Path, bench_ply: int = 3, bench_puzzle: str = "P005"):
+        import zstandard as zstd
+        rng = np.random.default_rng(21)
+        self.rows = [random_puzzle(rng, f"P{i:03d}", (2, 4, 6, 8)[i % 4]) for i in range(30)]
+        header = ["PuzzleId", "FEN", "Moves", "Rating", "RatingDeviation", "Popularity", "NbPlays",
+                  "Themes", "GameUrl", "OpeningTags"]
+        text = io.StringIO()
+        writer = csv.DictWriter(text, fieldnames=header)
+        writer.writeheader()
+        for row in self.rows:
+            writer.writerow({**{k: "" for k in header}, **row})
+        self.source = root / "source.csv.zst"
+        self.source.write_bytes(zstd.ZstdCompressor().compress(text.getvalue().encode()))
+        self.official = set(self.OFFICIAL)
+        self.manifest = root / "manifest.json"
+        self.manifest.write_text(json.dumps({
+            "format": "lichess-puzzle-corpus-v1", "source_sha256": label_ply_shard.file_sha256(self.source),
+            "excluded_ids": sorted(self.official), "included_roots": 28}))
+        cont_data.write_split_csv(root / "val.csv", [r for r in self.rows if r["PuzzleId"] in self.VAL])
+        cont_data.write_split_csv(root / "test.csv", [r for r in self.rows if r["PuzzleId"] in self.TEST])
+        self.val_csv, self.test_csv = root / "val.csv", root / "test.csv"
+        # one benchmark position: the ply-`bench_ply` root of `bench_puzzle`
+        from scripts.data_hygiene import position_hashes
+        row = next(r for r in self.rows if r["PuzzleId"] == bench_puzzle)
+        root_tokens = tokenize_fen(label_ply_shard.root_board(row, bench_ply).fen())
+        self.bench_puzzle, self.bench_ply = bench_puzzle, bench_ply
+        self.hash_path = root / "exclusion-hashes.npy"
+        np.save(self.hash_path, np.unique(position_hashes(root_tokens[None, :])))
+        self.root = root
+
+    def build(self, ply, shard, name="run", engines=1, roots_per_shard=4, **kwargs):
+        engines_made = kwargs.pop("engines_made", [])
+        hook = kwargs.pop("hook", None)
+
+        def factory(_path):
+            engine = FakeEngine(hook)
+            engines_made.append(engine)
+            return engine
+
+        folder = self.root / name
+        with mock.patch.object(label_ply_shard, "OFFICIAL_COUNT", len(self.official)), \
+                mock.patch.object(label_ply_shard, "INCLUDED_ROOTS", 28):
+            return label_ply_shard.build(
+                self.source, self.manifest, ply, shard, Path("stockfish"), folder / "train_set.npz",
+                folder / "partial.npz", Path("sl"), val_csv=self.val_csv, test_csv=self.test_csv,
+                exclusion_path=self.hash_path, engines=engines, engine_factory=factory,
+                modules=(StubTokenizer, StubUtils), roots_per_shard=roots_per_shard, **kwargs)
+
+    def output(self, name="run"):
+        with np.load(self.root / name / "train_set.npz", allow_pickle=False) as data:
+            return {k: data[k] for k in data.files}
+
+
+class PlyLabelTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self._handlers = {n: signal.getsignal(n) for n in (signal.SIGINT, signal.SIGTERM)}
+        label_ply_shard.STOP = False
+        self.fx = PlyFixture(self.root)
+
+    def tearDown(self):
+        for number, handler in self._handlers.items():
+            signal.signal(number, handler)
+        label_ply_shard.STOP = False
+        self._tmp.cleanup()
+
+    def test_root_board_follows_the_line_and_guards_its_inputs(self):
+        row = next(r for r in self.fx.rows if r["PuzzleId"] == "P011")       # 8 moves
+        moves = row["Moves"].split()
+        board = chess.Board(row["FEN"])
+        for uci in moves[:3]:
+            board.push_uci(uci)
+        self.assertEqual(label_ply_shard.root_board(row, 3).fen(), board.fen())
+        for uci in moves[3:5]:
+            board.push_uci(uci)
+        self.assertEqual(label_ply_shard.root_board(row, 5).fen(), board.fen())
+        self.assertEqual(label_ply_shard.root_board(row, 7).turn, board.turn)   # Moves[7] exists
+        with self.assertRaises(ValueError):
+            label_ply_shard.root_board(row, 8)                                 # no stored move
+        with self.assertRaises(ValueError):
+            label_ply_shard.root_board(row, 2)                                 # not a solver decision
+        broken = dict(row, Moves=" ".join(moves[:3] + ["a1a1"] + moves[4:]))
+        with self.assertRaises(ValueError):
+            label_ply_shard.root_board(broken, 5)
+        bad_solution = dict(row, Moves=" ".join(moves[:3] + ["h1h8"]))
+        with self.assertRaises(ValueError):
+            label_ply_shard.root_board(bad_solution, 3)
+
+    def test_ply_one_matches_the_frozen_first_decision_labeler(self):
+        from scripts import label_puzzle_shard
+        row = self.fx.rows[5]
+        engine = FakeEngine()
+        ours = label_ply_shard.label_root(row, 1, engine, StubTokenizer, StubUtils)
+        frozen = label_puzzle_shard.label_root(row, engine, StubTokenizer, StubUtils)
+        for a, b in zip(ours, frozen):
+            np.testing.assert_array_equal(a, b)
+
+    def test_enumeration_numbers_rows_like_the_split_table_and_applies_every_exclusion(self):
+        skip = ply_data.read_ids(self.fx.val_csv, self.fx.test_csv)
+        for ply in (3, 5):
+            got = list(ply_data.eligible_rows(self.fx.source, self.fx.official, skip, ply))
+            ids = [row["PuzzleId"] for _, row in got]
+            want = [r["PuzzleId"] for r in self.fx.rows
+                    if len(r["Moves"].split()) > ply
+                    and r["PuzzleId"] not in self.fx.official | skip]
+            self.assertEqual(ids, want)
+            # the number counts validation/test rows, as the cont-v1 split table does
+            included = [r["PuzzleId"] for r in self.fx.rows if r["PuzzleId"] not in self.fx.official]
+            self.assertEqual([i for i, _ in got], [included.index(x) for x in ids])
+        self.assertEqual(ply_data.count_eligible(self.fx.source, self.fx.official, skip, (3, 5)),
+                         {3: len(list(ply_data.eligible_rows(self.fx.source, self.fx.official, skip, 3))),
+                          5: len(list(ply_data.eligible_rows(self.fx.source, self.fx.official, skip, 5)))})
+        blocks = [ply_data.shard_candidates(self.fx.source, self.fx.official, skip, 3, k, 4)
+                  for k in range(4)]
+        self.assertEqual([len(b) for b in blocks][:2], [4, 4])
+        flat = [ordinal for b in blocks for ordinal, _, _ in b]
+        self.assertEqual(flat, list(range(len(flat))))
+        self.assertEqual(ply_data.shard_candidates(self.fx.source, self.fx.official, skip, 3, 40, 4), [])
+
+    def test_job_order_interleaves_plies_and_partitions_exactly(self):
+        order = ply_data.job_order({3: 10, 5: 4})
+        self.assertEqual(sorted(order), sorted([(3, i) for i in range(10)] + [(5, i) for i in range(4)]))
+        # every prefix holds both plies in about their proportion
+        head = order[:7]
+        self.assertTrue(sum(1 for p, _ in head if p == 5) in (2, 3))
+        self.assertEqual([s for p, s in order if p == 3], list(range(10)))
+        parts = [ply_data.worker_jobs(order, w, 5) for w in range(5)]
+        self.assertEqual(sorted(j for part in parts for j in part), sorted(order))
+        self.assertEqual(ply_data.worker_jobs(order, 0, 5)[0], order[0])
+        with self.assertRaises(ValueError):
+            ply_data.worker_jobs(order, 5, 5)
+
+    def test_identity_names_the_ply_and_every_input(self):
+        base = dict(source_sha256="s", ply=3, shard=2, max_roots=0, val_csv_sha256="v",
+                    test_csv_sha256="t", exclusion_sha256="e")
+        a = ply_data.shard_identity(**base)
+        self.assertEqual(a["ply"], 3)
+        for key, value in (("ply", 5), ("shard", 3), ("exclusion_sha256", "x"), ("max_roots", 7)):
+            self.assertNotEqual(a, ply_data.shard_identity(**{**base, key: value}))
+        with self.assertRaises(ValueError):
+            ply_data.shard_identity(**{**base, "ply": 4})
+
+    def test_labeler_writes_whole_roots_and_drops_only_benchmark_positions(self):
+        skip = ply_data.read_ids(self.fx.val_csv, self.fx.test_csv)
+        cands = ply_data.shard_candidates(self.fx.source, self.fx.official, skip, 3, 0, 4)
+        self.assertIn(self.fx.bench_puzzle, [row["PuzzleId"] for _, _, row in cands])   # in this shard
+        result = self.fx.build(3, 0)
+        self.assertTrue(result["complete"])
+        self.assertEqual((result["candidates"], result["dropped_benchmark"], result["roots"]), (4, 1, 3))
+        data = self.fx.output()
+        self.assertNotIn(self.fx.bench_puzzle, data["puzzle_id"].tolist())
+        self.assertEqual(data["puzzle_id"].tolist(),
+                         [row["PuzzleId"] for _, _, row in cands if row["PuzzleId"] != self.fx.bench_puzzle])
+        self.assertEqual(int(data["lens"].sum()), len(data["actions"]))
+        self.assertTrue((data["ply"] == 3).all())
+        starts = np.cumsum(data["lens"]) - data["lens"]
+        for k, (_, included, row) in enumerate(c for c in cands if c[2]["PuzzleId"] != self.fx.bench_puzzle):
+            board = label_ply_shard.root_board(row, 3)
+            legal = list(board.legal_moves)
+            sl = slice(starts[k], starts[k] + data["lens"][k])
+            self.assertEqual(data["lens"][k], len(legal))
+            np.testing.assert_array_equal(data["tokens"][sl], np.tile(tokenize_fen(board.fen()), (len(legal), 1)))
+            np.testing.assert_array_equal(data["actions"][sl], [StubUtils.MOVE_TO_ACTION[m.uci()] for m in legal])
+            expected = []
+            for m in legal:
+                value = zlib.crc32(f"{board.fen()}|{m.uci()}".encode()) % 2400 - 1200
+                score = 10_000 if value % 211 == 0 else value          # white POV; flip for black
+                expected.append(StubUtils.centipawns_to_win_probability(
+                    score if board.turn == chess.WHITE else -score))
+            np.testing.assert_allclose(data["winprob"][sl], expected, atol=1e-6)
+            self.assertEqual(int(data["index"][k]), included)
+            self.assertEqual(int(data["rating"][k]), int(row["Rating"]))
+        self.assertEqual(result["identity"]["ply"], 3)
+        self.assertEqual(result["train_set_sha256"], label_ply_shard.file_sha256(self.root / "run" / "train_set.npz"))
+        for official_or_split in (*self.fx.OFFICIAL, *self.fx.VAL, *self.fx.TEST):
+            self.assertNotIn(official_or_split, data["puzzle_id"].tolist())
+
+    def test_parallel_engines_match_one_engine_and_all_of_them_work(self):
+        self.fx.build(5, 0, name="one")
+        made = []
+        self.fx.build(5, 0, name="four", engines=4, engines_made=made)
+        self.assertEqual(len(made), 4)
+        self.assertGreater(sum(e.calls > 0 for e in made), 1)
+        one, four = self.fx.output("one"), self.fx.output("four")
+        self.assertEqual(sorted(one), sorted(four))
+        for key in one:
+            np.testing.assert_array_equal(one[key], four[key])
+
+    def test_a_stopped_shard_resumes_to_exactly_the_uninterrupted_result(self):
+        self.fx.build(3, 1, name="whole", roots_per_shard=8)
+        seen = []
+
+        def stop_midway():
+            seen.append(1)
+            if len(seen) == 20:
+                label_ply_shard.STOP = True
+
+        part = self.fx.build(3, 1, name="split", engines=2, hook=stop_midway, roots_per_shard=8)
+        self.assertFalse(part["complete"])
+        self.assertTrue((self.root / "split" / "partial.npz").is_file())
+        self.assertFalse((self.root / "split" / "train_set.npz").exists())
+        label_ply_shard.STOP = False
+        done = self.fx.build(3, 1, name="split", engines=3, roots_per_shard=8)
+        self.assertTrue(done["complete"])
+        whole, split = self.fx.output("whole"), self.fx.output("split")
+        for key in whole:
+            np.testing.assert_array_equal(whole[key], split[key])
+
+    def test_a_partial_from_another_ply_or_shard_is_rejected(self):
+        label_ply_shard.STOP = True
+        self.fx.build(3, 0, name="mix")                    # stops at once: nothing saved
+        label_ply_shard.STOP = False
+        seen = []
+
+        def stop_early():
+            seen.append(1)
+            if len(seen) == 5:
+                label_ply_shard.STOP = True
+
+        self.assertFalse(self.fx.build(3, 0, name="mix", hook=stop_early)["complete"])
+        label_ply_shard.STOP = False
+        with self.assertRaises(ValueError) as ctx:
+            self.fx.build(5, 0, name="mix")
+        self.assertIn("identity", str(ctx.exception))
+        with self.assertRaises(ValueError):
+            self.fx.build(3, 1, name="mix")
+
+    def test_a_shard_past_the_corpus_end_and_a_wrong_engine_fail_loudly(self):
+        with self.assertRaises(ValueError):
+            self.fx.build(3, 40)
+        wrong = FakeEngine()
+        wrong.id = {"name": "Stockfish 17"}
+        with self.assertRaises(ValueError):
+            label_ply_shard._valid_engine(wrong)
+
+
+class PlyPackTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self._handlers = {n: signal.getsignal(n) for n in (signal.SIGINT, signal.SIGTERM)}
+        label_ply_shard.STOP = False
+        self.fx = PlyFixture(self.root, bench_ply=5, bench_puzzle="P018")   # in the second ply-5 shard
+
+    def tearDown(self):
+        for number, handler in self._handlers.items():
+            signal.signal(number, handler)
+        self._tmp.cleanup()
+
+    def shard(self, ply, shard):
+        result = self.fx.build(ply, shard, name=f"p{ply}s{shard}")
+        return self.fx.output(f"p{ply}s{shard}"), result
+
+    def builder(self):
+        return ply_data.PlyPackBuilder(np.load(self.fx.hash_path),
+                                       set(self.fx.OFFICIAL) | set(self.fx.VAL) | set(self.fx.TEST))
+
+    def test_pack_round_trips_roots_adds_ply_and_marks_the_dev_fold(self):
+        from scripts.data_hygiene import position_hashes
+        b = self.builder()
+        shards = [(3, 0), (3, 1), (5, 0)]
+        outputs = {}
+        for ply, shard in shards:
+            data, result = self.shard(ply, shard)
+            outputs[(ply, shard)] = data
+            b.add_shard(ply, shard, data, result)
+        arrays = b.finish()
+        pack = ply_data.PlyPack(arrays)
+        total = sum(len(d["lens"]) for d in outputs.values())
+        self.assertEqual(len(pack), total)
+        self.assertEqual(b.stats["roots"], total)
+        self.assertEqual(sorted(set(pack.ply.tolist())), [3, 5])
+        self.assertEqual(int((pack.ply == 5).sum()), len(outputs[(5, 0)]["lens"]))
+        # gather returns the stored rows of each root, in order
+        k = 0
+        for key in shards:
+            data = outputs[key]
+            starts = np.cumsum(data["lens"]) - data["lens"]
+            for r in range(len(data["lens"])):
+                t, a, w, gid, lens = pack.gather(np.array([k]))
+                sl = slice(starts[r], starts[r] + data["lens"][r])
+                np.testing.assert_array_equal(t, data["tokens"][sl])
+                np.testing.assert_array_equal(a, data["actions"][sl])
+                np.testing.assert_allclose(w, data["winprob"][sl], atol=1e-3)
+                self.assertEqual(int(pack.index[k]), int(data["index"][r]))
+                k += 1
+        hashes = position_hashes(pack.tokens)
+        np.testing.assert_array_equal(pack.is_dev, hashes % np.uint64(100) == 0)
+        self.assertEqual(len(pack.train_roots) + len(pack.dev_roots), len(pack))
+
+    def test_pack_saves_and_loads_through_the_part_files(self):
+        b = self.builder()
+        for ply, shard in ((3, 0), (5, 0)):
+            data, result = self.shard(ply, shard)
+            b.add_shard(ply, shard, data, result)
+        arrays = b.finish()
+        offsets = np.concatenate([[0], np.cumsum(arrays["lens"].astype(np.int64))])
+        cut = len(arrays["lens"]) // 2
+        paths = []
+        for i, (a, c) in enumerate(((0, cut), (cut, len(arrays["lens"])))):
+            piece = {k: arrays[k][a:c] for k in ("tokens", "lens", "rating", "index", "is_dev", "ply")}
+            piece["actions"], piece["winprob"] = (arrays["actions"][offsets[a]:offsets[c]],
+                                                  arrays["winprob"][offsets[a]:offsets[c]])
+            cont_data.save_pack(self.root / f"part-{i}.npz", piece)
+            paths.append(self.root / f"part-{i}.npz")
+        loaded, direct = ply_data.PlyPack.load(paths), ply_data.PlyPack(arrays)
+        for name in ("tokens", "lens", "actions", "winprob", "ply", "index", "is_dev"):
+            np.testing.assert_array_equal(getattr(loaded, name), getattr(direct, name))
+        with self.assertRaises(ValueError):
+            ply_data.PlyPack({k: v for k, v in arrays.items() if k != "ply"})
+
+    def test_pack_refuses_shards_that_break_the_hygiene_rules(self):
+        data, result = self.shard(3, 1)
+        ids = data["puzzle_id"].tolist()
+        for bad in (self.fx.OFFICIAL[0], self.fx.VAL[0], self.fx.TEST[0]):
+            tampered = dict(data, puzzle_id=np.asarray([bad] + ids[1:], dtype="U8"))
+            with self.assertRaises(ValueError) as ctx:
+                self.builder().add_shard(3, 1, tampered, result)
+            self.assertIn("official/validation/test", str(ctx.exception))
+        # a benchmark position that survived labeling: re-label the shard that holds one with
+        # the exclusion set emptied, then pack it against the real set
+        empty = self.root / "none.npy"
+        np.save(empty, np.zeros(0, dtype=np.uint64))
+        keep, self.fx.hash_path = self.fx.hash_path, empty
+        leaked, leaked_result = self.shard(5, 1)
+        self.fx.hash_path = keep
+        self.assertIn(self.fx.bench_puzzle, leaked["puzzle_id"].tolist())
+        with self.assertRaises(ValueError) as ctx:
+            self.builder().add_shard(5, 1, leaked, leaked_result)
+        self.assertIn("benchmark", str(ctx.exception))
+        with self.assertRaises(ValueError):
+            self.builder().add_shard(5, 1, dict(data, ply=np.full(len(data["lens"]), 3, dtype=np.uint8)),
+                                     result)                        # wrong ply for the shard
+        with self.assertRaises(ValueError):
+            self.builder().add_shard(3, 1, dict(data, actions=data["actions"][:-1]), result)
+
+
+class PlyFleetTests(unittest.TestCase):
+    HEAD, OTHER = "a" * 40, "b" * 40
+    NOW = 1_000_000.0
+
+    def decide(self, **kw):
+        args = {"remaining": 5, "finished": 2, "kaggle_status": 'x has status "KernelWorkerStatus.COMPLETE"',
+                "worker_status": "OK labels", "commit": self.HEAD, "marker": None, "now": self.NOW}
+        args.update(kw)
+        return watch_ply_labels.decide_worker(**args)
+
+    def test_a_worker_is_relaunched_only_while_it_has_unfinished_shards(self):
+        self.assertEqual(self.decide()["action"], "launch")
+        self.assertEqual(self.decide(remaining=0)["action"], "done")
+        self.assertEqual(self.decide(kaggle_status='x has status "KernelWorkerStatus.RUNNING"')["action"], "active")
+        self.assertEqual(self.decide(kaggle_status='x has status "KernelWorkerStatus.QUEUED"')["action"], "active")
+        self.assertEqual(self.decide(kaggle_status=None)["action"], "wait")
+        recent = {"commit": self.HEAD, "finished": 2, "attempt": 1, "at_epoch": self.NOW - 60}
+        self.assertEqual(self.decide(marker=recent)["action"], "wait")
+
+    def test_a_failure_blocks_only_its_own_commit(self):
+        failed = f"# 2026-11-02T00:00:00Z\nFAILED labels source_commit={self.HEAD} ValueError: boom"
+        self.assertEqual(self.decide(worker_status=failed)["action"], "blocked")
+        self.assertEqual(self.decide(commit=self.OTHER, worker_status=failed)["action"], "launch")
+        self.assertEqual(self.decide(worker_status="FAILED labels ValueError: unstamped")["action"], "blocked")
+
+    def test_launches_that_finish_nothing_stop_after_three_attempts(self):
+        marker = {"commit": self.HEAD, "finished": 2, "attempt": 1, "at_epoch": self.NOW - 7200}
+        d = self.decide(marker=marker)
+        self.assertEqual((d["action"], d["attempt"]), ("launch", 2))
+        marker["attempt"] = 3
+        self.assertEqual(self.decide(marker=marker)["action"], "blocked")
+        self.assertEqual(self.decide(marker=marker, finished=3)["action"], "launch")     # progress resets
+        self.assertEqual(self.decide(marker=marker, commit=self.OTHER)["action"], "launch")
+
+    def test_unfinished_jobs_follow_the_hub_listing(self):
+        order = ply_data.job_order({3: 6, 5: 3})
+        files = {f"{ply_data.PREFIX}/ply3/shard-00000/train_set.npz", f"{ply_data.PREFIX}/ply3/shard-00000/meta.json",
+                 f"{ply_data.PREFIX}/ply3/shard-00001/train_set.npz",            # labels without meta: not done
+                 f"{ply_data.PREFIX}/ply5/shard-00002/partial.npz",               # a partial is not done
+                 f"{ply_data.PREFIX}/ply5/shard-00001/meta.json",
+                 f"{ply_data.PREFIX}/ply5/shard-00001/train_set.npz"}
+        complete = ply_data.complete_shards(files, ply_data.PREFIX)
+        self.assertEqual(complete, {3: {0}, 5: {1}})
+        pending = watch_ply_labels.unfinished_jobs(order, complete, workers=4)
+        self.assertEqual(sum(len(v) for v in pending.values()), len(order) - 2)
+        self.assertNotIn((3, 0), [j for v in pending.values() for j in v])
+
+    def test_tick_launches_down_workers_with_work_and_respects_pause_and_completion(self):
+        plan = {"plies": {"3": {"shards": 6}, "5": {"shards": 3}}}
+        order = ply_data.job_order({3: 6, 5: 3})
+        files = {watch_ply_labels.PLAN_PATH}
+        store = {watch_ply_labels.PLAN_PATH: json.dumps(plan)}
+        uploads, pushes = [], []
+
+        def fake_read(client, listing, path):
+            return store.get(path, "")
+
+        def fake_launch(workers, commit):
+            pushes.append(list(workers))
+            return list(workers), {}
+
+        def fake_upload(client, repo, data, path, **kw):
+            uploads.append((path, json.loads(data)))
+
+        statuses = {w: 'x has status "KernelWorkerStatus.COMPLETE"' for w in range(9)}
+        statuses[0] = 'x has status "KernelWorkerStatus.RUNNING"'
+        statuses[1] = None
+        with mock.patch.object(watch_ply_labels, "read_text", fake_read), \
+                mock.patch.object(watch_ply_labels, "observe", lambda workers: {w: statuses[w] for w in workers}), \
+                mock.patch.object(watch_ply_labels, "launch", fake_launch), \
+                mock.patch.object(watch_ply_labels, "upload_file", fake_upload):
+            self.assertEqual(watch_ply_labels.tick(None, set(), self.HEAD)["phase"], "disabled")
+            state = watch_ply_labels.tick(None, files, self.HEAD)
+            self.assertEqual(state["phase"], "launched")
+            self.assertEqual(pushes, [[2, 3, 4, 5, 6, 7, 8]])           # not 0 (running), 1 (unknown), 9+ (no work)
+            self.assertEqual(state["workers"]["active"], 1)
+            self.assertEqual(state["workers"]["wait"], 1)
+            self.assertEqual(sorted(uploads[0][1]), [f"{w:02d}" for w in range(2, 9)])
+            self.assertEqual(uploads[0][1]["02"]["commit"], self.HEAD)
+            self.assertEqual(state["shards"], {"total": 9, "complete": 0,
+                                               "by_ply": {"3": {"complete": 0, "total": 6},
+                                                          "5": {"complete": 0, "total": 3}}})
+            checked = watch_ply_labels.tick(None, files, self.HEAD, check_only=True)
+            self.assertEqual(len(pushes), 1)                              # check-only launches nothing
+            self.assertEqual(checked["phase"], "running")
+            paused = watch_ply_labels.tick(None, files | {watch_ply_labels.PAUSE_PATH}, self.HEAD)
+            self.assertEqual(paused["phase"], "paused")
+            self.assertEqual(len(pushes), 1)
+            done = files | {f"{ply_data.PREFIX}/ply{p}/shard-{s:05d}/{name}" for p, s in order
+                            for name in ("train_set.npz", "meta.json")}
+            self.assertEqual(watch_ply_labels.tick(None, done, self.HEAD)["phase"], "complete")
+            store[watch_ply_labels.worker_status_path(2)] = f"FAILED labels source_commit={self.HEAD} boom"
+            blocked = watch_ply_labels.tick(None, files, self.HEAD, check_only=True)
+            self.assertEqual(blocked["phase"], "blocked")
+            self.assertIn("02", blocked["blocked"])
+
+    def test_every_worker_has_one_slug_and_a_valid_account(self):
+        slugs = {watch_ply_labels.worker_slug(w) for w in range(watch_ply_labels.WORKERS)}
+        self.assertEqual(len(slugs), 25)
+        self.assertEqual({watch_ply_labels.worker_account(w) for w in range(25)},
+                         set(watch_ply_labels.ACCOUNTS))
+        self.assertEqual([watch_ply_labels.worker_account(w) for w in (0, 4, 5, 24)],
+                         [watch_ply_labels.ACCOUNTS[i] for i in (0, 0, 1, 4)])
+        cfg = watch_ply_labels.worker_config(7, self.HEAD)
+        self.assertEqual((cfg["worker_index"], cfg["worker_count"], cfg["engines"]), (7, 25, 4))
+        self.assertTrue(watch_ply_labels.TEMPLATE.read_text().count(f'"""{watch_ply_labels.MARKER}"""') == 1)
 
 
 if __name__ == "__main__":
