@@ -118,7 +118,11 @@ finish their session; delete the kernels to stop them now) and delete it to resu
 Four engines per kernel make each 50 ms search see about 39% fewer nodes than a lone engine
 (490k against 799k nodes/s per engine), but on 60 roots the mean win-probability gap to
 solo labels was 0.0100 and 0.0085 against 0.0088 between two four-engine passes, and the
-best move agreed on every root: no shift measurable at that sample size.
+best move agreed on every root: no shift measurable at that sample size. A larger check against
+ground truth: on 15,000 roots each, the puzzle's stored solution is the Stockfish-best move in
+99.85% of the solo-labeled first-decision roots (shards 0-2), 99.84% of the four-engine ply-3
+roots and 99.86% of the ply-5 roots (mean regret of the stored solution 0.00012, 0.00006 and
+0.00006).
 
 Experiment. Two runs start from the EMA weights of the same `ccgavn-cont1-a4` checkpoint with
 the main-run recipe (seed 0, 1,434 broad rows and 20 first-decision groups per step, lr 5e-5,
