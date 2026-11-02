@@ -129,6 +129,16 @@ listwise loss), 25,000 steps each (about 4 GPU hours), validation every 2,500 st
   the pack's training roots (about 70% ply 3, 30% ply 5) on their own RNG stream, so the
   broad and first-decision draws are identical to the control's.
 
+As launched (2026-11-02, before either run started): both runs branch from
+`ccgavn-cont1-a4/checkpoint-50000` (EMA weights; validation there 3,495 / 4,000 = 87.375%,
+268 first-decision and 237 later-ply failures). The pack is `cont-v2/ply-pack` with manifest
+digest `e3e04e11...bf2b4`, built from the 75 shards finished at 14:32 UTC: ply 3 shards
+0-52 (264,801 roots) and ply 5 shards 0-21 (109,741 roots), 370,682 training roots, 3,860
+held-out dev roots, 458 benchmark-position roots dropped by the labelers. Control on
+`vedangpandeyyy`, treatment on `softmaxsimp`, launched with `--max-steps 25000 --val-every
+2500 --ckpt-every 2500 --val-detail`. A replay of the weekly quota (r1 and c1 still running)
+shows the main line keeps training until the Friday reset with both runs taken out.
+
 Decision rule, fixed before either run starts. The only data used for the decision is the
 4,000-puzzle validation set (EMA weights, the harness rules), compared puzzle by puzzle
 (`scripts/compare_ply_runs.py`; the official 10,000 puzzles are not read until the verdict is
