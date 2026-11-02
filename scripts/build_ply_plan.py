@@ -8,7 +8,6 @@ first-decision pack, and must reproduce that pack's hash count.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import sys
 import time

@@ -7,7 +7,8 @@ GPU learner: a tick relaunches a worker whose kernel is no longer running while 
 still has unfinished shards, and reports everything else. Failures go to Hugging Face
 status files and the monitor snapshot, never to a red GitHub run.
 
-Pause the fleet by creating ``puzzle-ply-v1/PAUSE`` on the Hub; delete it to resume.
+Create ``puzzle-ply-v1/PAUSE`` on the Hub to stop launching and relaunching workers (running
+kernels finish their session; delete the kernels to stop them now) and delete it to resume.
 """
 from __future__ import annotations
 

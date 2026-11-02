@@ -105,6 +105,21 @@ dropped by hash. Twenty-five CPU kernels (five per account, four Stockfish proce
 label the shards and the cont tick keeps them alive; `cont-v2/ply-pack` is the training pack
 built from the finished shards. The sealed test puzzles are never read.
 
+Labeling fleet. Workers are Kaggle CPU kernels `ccgavn-ply-label-w00` to `w24` (five per
+account, four Stockfish processes each, 10.5-hour sessions that resume partial shards from
+the Hub). A shard is the next 5,000 eligible puzzles in source order; the benchmark-position
+drop happens inside it, so a finished shard holds 4,980-5,000 roots (the drop rate was
+0.3% on the first ply-5 shards, against 0.08% for first-decision roots). The cont tick
+relaunches any worker that stopped while it still has unfinished shards, and the monitor
+snapshot carries a `label_fleet` summary (phase, blocked workers, shards done). Each worker
+writes `cont-pipeline/status/ply-label-wNN.txt`; one that failed is not relaunched on the
+same commit. Create `puzzle-ply-v1/PAUSE` on the Hub to stop launching (running kernels
+finish their session; delete the kernels to stop them now) and delete it to resume.
+Four engines per kernel make each 50 ms search see about 39% fewer nodes than a lone engine
+(490k against 799k nodes/s per engine), but on 60 roots the mean win-probability gap to
+solo labels was 0.0100 and 0.0085 against 0.0088 between two four-engine passes, and the
+best move agreed on every root: no shift measurable at that sample size.
+
 Experiment. Two runs start from the EMA weights of the same `ccgavn-cont1-a4` checkpoint with
 the main-run recipe (seed 0, 1,434 broad rows and 20 first-decision groups per step, lr 5e-5,
 listwise loss), 25,000 steps each (about 4 GPU hours), validation every 2,500 steps:
