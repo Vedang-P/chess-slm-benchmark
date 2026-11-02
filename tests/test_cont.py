@@ -289,6 +289,19 @@ class LossTests(unittest.TestCase):
         exact_policy_loss(torch, qq, w3, torch.zeros(3, dtype=torch.long), torch.tensor([3]), tau)[0].backward()
         self.assertLess(float(qq.grad[2]), 0.0)     # d(loss)/dq of the best move is negative
 
+    def test_exact_policy_loss_accepts_half_precision_reference_values(self):
+        """On GPU the reference expectation comes out of an fp16 autocast region."""
+        import torch
+        from scripts.train_cont import exact_policy_loss
+        lens = torch.tensor([3, 2])
+        gid = torch.repeat_interleave(torch.arange(2), lens)
+        q = torch.rand(5, requires_grad=True)
+        loss, _, kl = exact_policy_loss(torch, q, torch.rand(5), gid, lens, 0.05,
+                                        torch.rand(5).half(), 0.05)
+        loss.backward()
+        self.assertEqual(loss.dtype, torch.float32)
+        self.assertTrue(torch.isfinite(q.grad).all())
+
     def test_lr_schedule_warms_up_holds_and_decays(self):
         from scripts.train_cont import lr_at
         a = mock.Mock(lr=2e-5, warmup=100, decay_start=-1, decay_steps=0)

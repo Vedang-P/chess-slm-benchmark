@@ -163,6 +163,8 @@ def exact_policy_loss(torch, q, wp, gid, lens, tau: float, q_ref=None, beta: flo
     against a frozen reference so the policy cannot drift into degenerate play.
     Returns (loss, J, kl): the means over roots.
     """
+    q, wp = q.float(), wp.float()
+    q_ref = None if q_ref is None else q_ref.float()
     groups, longest = int(lens.numel()), int(lens.max())
     starts = torch.cumsum(lens, 0) - lens
     pos = torch.arange(q.numel(), device=q.device) - starts[gid]
@@ -577,10 +579,12 @@ def main(argv=None):
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=device.type == "cuda"):
             logits = model(tokens_t, actions_t)
+            ref_logits = None
             if ref_model is not None and pack is not None:
                 with torch.no_grad():
-                    batch["q_ref"] = expected_value(torch, ref_model(tokens_t[nb:], actions_t[nb:]),
-                                                    bucket_values)
+                    ref_logits = ref_model(tokens_t[nb:], actions_t[nb:])
+        if ref_logits is not None:
+            batch["q_ref"] = expected_value(torch, ref_logits, bucket_values)   # fp32, no autocast
         loss, diag, total_rows = batch_loss(torch, logits, batch, args, bucket_values)
         if not torch.isfinite(loss):
             nonfinite += 1
