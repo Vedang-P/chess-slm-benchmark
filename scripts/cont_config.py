@@ -47,5 +47,14 @@ ARMS = {
     "a4": {"note": "a2 at 2.5x the learning rate",
            "args": MIX_30 + ["--lambda-list", "1.0", "--lr", "5e-5"]},
 }
+# Stage 2: both branches start from the EMA weights of arm a4 at step 30,000 and
+# differ only in the exact-expectation RL term (the control keeps --rl-weight 0).
+STAGE2_INIT = ["--init-hf-run", "ccgavn-cont1-a4", "--init-checkpoint", "checkpoint-30000",
+               "--init-weights", "ema"]
+A4_RECIPE = MIX_30 + ["--lambda-list", "1.0", "--lr", "5e-5"]
+ARMS["r1"] = {"note": "stage 2: exact-expectation RL (beta 0.05) from a4@30k EMA",
+              "args": A4_RECIPE + STAGE2_INIT + ["--rl-weight", "1.0", "--rl-beta", "0.05"]}
+ARMS["c1"] = {"note": "stage 2 control: same branch point and data, no RL term",
+              "args": A4_RECIPE + STAGE2_INIT + ["--rl-weight", "0"]}
 ARM_STEPS = 30_000
 ARM_RUN_PREFIX = "ccgavn-cont1-"

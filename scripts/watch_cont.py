@@ -19,21 +19,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from scripts.cont_config import (ACCOUNTS, COMMON_ARGS, HF_REPO, LEARNER_SLUG,  # noqa: E402
-                                 MIN_SESSION_SECONDS, QUOTA_RESERVE_H, SEARCHLESS_COMMIT,
-                                 SESSION_SECONDS, STATUS_PREFIX)
+from scripts.cont_config import (A4_RECIPE, ACCOUNTS, COMMON_ARGS, HF_REPO,  # noqa: E402
+                                 LEARNER_SLUG, MIN_SESSION_SECONDS, QUOTA_RESERVE_H,
+                                 SEARCHLESS_COMMIT, SESSION_SECONDS, STATUS_PREFIX)
 from scripts.hf_upload import upload_file  # noqa: E402
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.kaggle_pool import (account_slugs, gpu_quota, is_active, kernel_status,  # noqa: E402
                                  push_kernel)
 
 TEMPLATE = ROOT / "kernels" / "cont" / "worker.py"
-# Filled in from the sprint: the arm that validated best becomes the main recipe.
-MAIN_RUN = "ccgavn-cont1-main"
-MAIN_ARGS: list[str] = [
-    "--broad-rows", "1434", "--tactical-groups", "20", "--lambda-list", "1.0",
+# The sprint's best arms (a3, a4) both cleared the gate at step 30,000; a4 (30% tactical,
+# lr 5e-5) forgot less of the broad corpus, so the main run is a4 continued without a step
+# limit. It resumes arm a4's own checkpoint, optimizer and EMA, with the identical recipe.
+MAIN_RUN = "ccgavn-cont1-a4"
+MAIN_ARGS: list[str] = A4_RECIPE + [
     "--val-every", "10000", "--ckpt-every", "10000", "--milestone-every", "100000",
-    "--guard-after", "30000", "--guard-drop", "3.0",
+    "--guard-after", "40000", "--guard-drop", "3.0",
 ]
 COOLDOWN_S = 600
 MAX_NO_PROGRESS = 2
