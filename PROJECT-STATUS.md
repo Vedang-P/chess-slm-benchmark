@@ -167,3 +167,46 @@ different seed); the treatment also sees about 50% more tactical rows per step (
 that is not concentrated in later-ply failures is evidence of generic tactical supervision
 rather than of later-ply supervision; and validation is rating-matched to the official
 puzzles but drawn from the same Lichess distribution as the training roots.
+
+### Result on validation (recorded before the official 10,000 puzzles were read)
+
+Both runs finished 25,000 steps (`ccgavn-cont1-p0` control, `ccgavn-cont1-p1` with
+`--ply-groups 10`). The branch point scored 3,495 of 4,000 on validation (87.375%).
+Puzzles solved on the 4,000 held-out validation puzzles, EMA weights:
+
+| Step | Control | Treatment | Gain |
+| ---: | ---: | ---: | ---: |
+| 2,500 | 3,497 | 3,503 | +6 |
+| 5,000 | 3,487 | 3,515 | +28 |
+| 7,500 | 3,479 | 3,513 | +34 |
+| 10,000 | 3,480 | 3,511 | +31 |
+| 12,500 | 3,472 | 3,515 | +43 |
+| 15,000 | 3,480 | 3,522 | +42 |
+| 17,500 | 3,473 | 3,520 | +47 |
+| 20,000 | 3,483 | 3,521 | +38 |
+| 22,500 | 3,482 | 3,519 | +37 |
+| 25,000 | 3,484 (87.10%) | 3,524 (88.10%) | +40 |
+
+The rule's four checks, all computed by `scripts/compare_ply_runs.py` from the saved
+per-puzzle results: **ADOPT**.
+
+| Check | Observed |
+| --- | --- |
+| effect | +40 puzzles at step 25,000 (82 solved only by the treatment, 42 only by the control), exact McNemar p = 0.0004 |
+| consistent | mean gain over steps 20,000 / 22,500 / 25,000 is +38.3 (+38, +37, +40) |
+| mechanism | later-ply failures 217 vs 250 (86.8% of the control's); first-decision failures 259 vs 266 (97.4%) |
+| broad corpus | broad dev loss 3.7916 vs 3.7693 (100.6% of the control's) |
+
+Failures by ply of the first wrong decision (control / treatment): ply 1: 266 / 259,
+ply 3: 157 / 132, ply 5: 70 / 58, ply 7 and later: 23 / 27. The gain is the intended one:
+the second and third decisions, the plies that were labeled.
+
+Reading it carefully. The control does not improve on the branch point (3,495 to 3,484;
+the optimizer restart costs a few puzzles and the main run itself has been flat at 87.4% to
+87.5% on validation since step 50,000), so the treatment's +29 over the branch point is the
+whole improvement that either run shows. The gap opens within the first 5,000 steps and then
+stays between +31 and +47 instead of growing, so more steps of the same data may not add more.
+The treatment pays 0.6% on the broad dev loss. This is one seed pair on one validation set:
+it supports proposing `--ply-groups` for the main run, which needs the owner's decision (the
+recipe identity changes, so resuming needs `--allow-recipe-change`), and it says nothing yet
+about the official puzzles or the sealed test puzzles.

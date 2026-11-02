@@ -100,6 +100,8 @@ def main() -> None:
     p.add_argument("--treatment", required=True)
     p.add_argument("--steps", type=int, nargs="+", default=list(EVAL_STEPS))
     p.add_argument("--hf-repo", default="vedangfake/chess-slm-benchmark")
+    p.add_argument("--table", action="store_true",
+                   help="print the per-step comparison only (the verdict needs the last three steps)")
     args = p.parse_args()
     from scripts.kaggle_checkpoint import api as make_api
     client = make_api(ROOT)
@@ -117,7 +119,8 @@ def main() -> None:
               f"{s['failures']['control']['first']}/{s['failures']['control']['later']}, treatment "
               f"{s['failures']['treatment']['first']}/{s['failures']['treatment']['later']}", flush=True)
     print(f"broad dev loss at step {max(args.steps)}: {dev}", flush=True)
-    print(json.dumps(verdict(per_step, dev), indent=2, sort_keys=True), flush=True)
+    if not args.table:
+        print(json.dumps(verdict(per_step, dev), indent=2, sort_keys=True), flush=True)
 
 
 if __name__ == "__main__":
