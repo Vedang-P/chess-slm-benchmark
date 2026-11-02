@@ -24,8 +24,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from scripts.cont_config import (A4_RECIPE, ACCOUNTS, COMMON_ARGS, HF_REPO,  # noqa: E402
-                                 LEARNER_SLUG, MIN_SESSION_SECONDS, QUOTA_RESERVE_H,
-                                 SEARCHLESS_COMMIT, SESSION_SECONDS, STATUS_PREFIX)
+                                 LEARNER_SLUG, MIN_SESSION_SECONDS, PLY_MAIN_ARGS,
+                                 QUOTA_RESERVE_H, SEARCHLESS_COMMIT, SESSION_SECONDS,
+                                 STATUS_PREFIX)
 from scripts.hf_upload import upload_file  # noqa: E402
 from scripts.kaggle_checkpoint import api as make_hf_api  # noqa: E402
 from scripts.kaggle_pool import (account_slugs, gpu_quota, is_active, kernel_status,  # noqa: E402
@@ -34,12 +35,13 @@ from scripts.kaggle_pool import (account_slugs, gpu_quota, is_active, kernel_sta
 TEMPLATE = ROOT / "kernels" / "cont" / "worker.py"
 # The sprint's best arms (a3, a4) both cleared the gate at step 30,000; a4 (30% tactical,
 # lr 5e-5) forgot less of the broad corpus, so the main run is a4 continued without a step
-# limit. It resumes arm a4's own checkpoint, optimizer and EMA, with the identical recipe.
+# limit. It resumes arm a4's own checkpoint, optimizer and EMA, with the identical recipe plus,
+# since the matched later-ply experiment, the later-ply groups.
 MAIN_RUN = "ccgavn-cont1-a4"
 MAIN_ARGS: list[str] = A4_RECIPE + [
     "--val-every", "10000", "--ckpt-every", "10000", "--milestone-every", "100000",
     "--guard-after", "40000", "--guard-drop", "3.0",
-]
+] + PLY_MAIN_ARGS    # later-ply roots: adopted after the matched experiment (PROJECT-STATUS.md)
 COOLDOWN_S = 600
 MAX_NO_PROGRESS = 2
 STALL_SECONDS = 3 * 3600   # an active learner with no new checkpoint this long is reported as stalled

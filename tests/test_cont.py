@@ -518,6 +518,50 @@ class TrainerIntegrationTests(unittest.TestCase):
                                                 "--ply-groups", "2"], resume_dir=half / "checkpoint-6")
             self.assertIn("ply_pack_digest", str(ctx.exception))
 
+    def test_a_run_saved_before_ply_support_adopts_the_pack_once_and_then_stays_pinned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old, _ = self.run_main(root, "old", ["--max-steps", "6"])
+            path = old / "checkpoint-6" / "config.json"
+            cfg = json.loads(path.read_text())
+            for key in ("ply_groups", "ply_pack_digest"):        # what the trainer wrote before this feature
+                cfg.pop(key, None)
+            path.write_text(json.dumps(cfg))
+            adopted, _ = self.run_main(root, "adopted", ["--max-steps", "12", "--resume-from-hf",
+                                                         "--ply-groups", "2"], resume_dir=old / "checkpoint-6")
+            saved = json.loads((adopted / "checkpoint-12" / "config.json").read_text())
+            self.assertEqual((saved["ply_groups"], saved["ply_pack_digest"]), (2, "p" * 64))
+            # once adopted, the same flags resume, and any change is refused
+            self.run_main(root, "again", ["--max-steps", "18", "--resume-from-hf", "--ply-groups", "2"],
+                          resume_dir=adopted / "checkpoint-12")
+            with self.assertRaises(ValueError) as ctx:
+                self.run_main(root, "more", ["--max-steps", "18", "--resume-from-hf", "--ply-groups", "3"],
+                              resume_dir=adopted / "checkpoint-12")
+            self.assertIn("ply_groups", str(ctx.exception))
+            manifest = self._fx[0] / "cont-v2" / "ply-pack" / "manifest.json"
+            original = manifest.read_text()
+            manifest.write_text(json.dumps({"pack_parts": [{"file": "part-00.npz"}], "manifest_sha256": "z" * 64}))
+            try:
+                with self.assertRaises(ValueError) as ctx:
+                    self.run_main(root, "swap", ["--max-steps", "18", "--resume-from-hf", "--ply-groups", "2"],
+                                  resume_dir=adopted / "checkpoint-12")
+            finally:
+                manifest.write_text(original)
+            self.assertIn("ply_pack_digest", str(ctx.exception))
+
+    def test_ply_pack_prefix_selects_the_pack_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.run_main(root, "seed", ["--max-steps", "1"])               # builds the shared fixture
+            fixture = self._fx[0] / "cont-v2"
+            shutil.copytree(fixture / "ply-pack", fixture / "ply-pack-other")
+            (fixture / "ply-pack-other" / "manifest.json").write_text(json.dumps({
+                "pack_parts": [{"file": "part-00.npz"}], "manifest_sha256": "q" * 64}))
+            out, _ = self.run_main(root, "other", ["--max-steps", "6", "--ply-groups", "2",
+                                                   "--ply-pack-prefix", "cont-v2/ply-pack-other"])
+            cfg = json.loads((out / "checkpoint-6" / "config.json").read_text())
+            self.assertEqual(cfg["ply_pack_digest"], "q" * 64)
+
     def test_ply_groups_work_without_first_decision_groups(self):
         with tempfile.TemporaryDirectory() as tmp:
             out, statuses = self.run_main(Path(tmp), "plyonly", ["--max-steps", "6", "--tactical-groups", "0",
@@ -1047,6 +1091,14 @@ class PlyPackTests(unittest.TestCase):
         self.assertEqual(len(pack), manifest["pack_stats"]["roots"])
         self.assertEqual(sorted(set(pack.ply.tolist())), [3, 5])
         self.assertEqual(sum(part["roots"] for part in manifest["pack_parts"]), len(pack))
+        named = ["build_ply_pack.py", "--workdir", str(work), "--pack-prefix", "cont-v2/ply-pack-x"]
+        with mock.patch.object(build_ply_pack, "hf_get", fake_get), \
+                mock.patch("scripts.kaggle_checkpoint.api", lambda root=None: client), \
+                mock.patch.object(_sys, "argv", named):
+            build_ply_pack.main()
+        extra = json.loads((work / "cont-v2" / "ply-pack-x" / "manifest.json").read_text())
+        self.assertEqual(extra["pack_prefix"], "cont-v2/ply-pack-x")
+        self.assertEqual(extra["pack_parts"], manifest["pack_parts"])      # same shards, same bytes
         # a shard that is not the one the plan describes is refused, not repacked
         meta = json.loads((self.root / "p3s0" / "meta.json").read_text())
         meta["identity"]["max_roots"] = 40
@@ -1284,6 +1336,19 @@ class PlyCompareTests(unittest.TestCase):
         self.assertEqual(gap["best_move_agreement"], 0.5)        # the second root's solo best lost
         with self.assertRaises(ValueError):
             ply_label_bench.compare(solo, [(actions[::-1], solo[0][1]), solo[1]])
+
+    def test_main_run_recipe_carries_the_tested_ply_dose_and_parses(self):
+        from scripts import train_cont, watch_cont
+        base = ["--hf-run", "r", "--outdir", "o", "--exclusion-puzzles", "p"]
+        args = train_cont.parse_args(base + cont_config.COMMON_ARGS + watch_cont.MAIN_ARGS)
+        self.assertEqual((args.ply_groups, args.ply_pack_prefix, args.val_detail),
+                         (10, cont_config.PLY_MAIN_PACK, True))
+        self.assertEqual((args.tactical_groups, args.broad_rows, args.lr, args.lambda_list, args.seed),
+                         (20, 1434, 5e-5, 1.0, 0))                       # the recipe it already had
+        self.assertEqual(args.ply_groups, int(cont_config.ARMS["p1"]["args"][-1]))     # the tested dose
+        self.assertNotIn("--allow-recipe-change", watch_cont.MAIN_ARGS)  # the guard stays on
+        self.assertEqual(train_cont.parse_args(base).ply_pack_prefix, ply_data.PACK_PREFIX)
+        self.assertEqual(train_cont.parse_args(base).ply_groups, 0)      # off unless asked for
 
     def test_ply_arms_differ_only_in_ply_groups_and_start_from_the_main_run(self):
         p0, p1 = cont_config.ARMS["p0"]["args"], cont_config.ARMS["p1"]["args"]

@@ -78,6 +78,8 @@ def parse_args(argv=None):
                    help="extra tactical groups per step from the later-ply pack "
                         "(cont-v2/ply-pack); 0 disables it and leaves every batch unchanged")
     p.add_argument("--ply-dir", default="", help="local dir holding cont-v2/ (skip HF download)")
+    p.add_argument("--ply-pack-prefix", default="cont-v2/ply-pack",
+                   help="Hub folder of the later-ply pack (also its subfolder under --ply-dir)")
     p.add_argument("--block-steps", type=int, default=6000)
     p.add_argument("--reflect-prob", type=float, default=0.5)
     p.add_argument("--exclusion-puzzles", required=True, help="official puzzles.csv")
@@ -297,14 +299,14 @@ def main(argv=None):
     ply_pack, ply_manifest = None, None
     if args.ply_groups:
         from huggingface_hub import snapshot_download
-        from scripts.ply_data import PACK_PREFIX, PlyPack
+        from scripts.ply_data import PlyPack
         ply_root = Path(args.ply_dir) if args.ply_dir else outdir / "data"
-        if not (ply_root / PACK_PREFIX / "manifest.json").exists():
+        ply_folder = ply_root / args.ply_pack_prefix
+        if not (ply_folder / "manifest.json").exists():
             snapshot_download(args.hf_repo, repo_type="dataset", token=token,
-                              local_dir=str(ply_root), allow_patterns=[f"{PACK_PREFIX}/*"])
-        ply_manifest = json.loads((ply_root / PACK_PREFIX / "manifest.json").read_text(encoding="utf-8"))
-        ply_pack = PlyPack.load([ply_root / PACK_PREFIX / part["file"]
-                                 for part in ply_manifest["pack_parts"]])
+                              local_dir=str(ply_root), allow_patterns=[f"{args.ply_pack_prefix}/*"])
+        ply_manifest = json.loads((ply_folder / "manifest.json").read_text(encoding="utf-8"))
+        ply_pack = PlyPack.load([ply_folder / part["file"] for part in ply_manifest["pack_parts"]])
         print(f"[data] ply roots train={len(ply_pack.train_roots):,} dev={len(ply_pack.dev_roots):,} "
               f"rows={len(ply_pack.actions):,}", flush=True)
     dev = np.load(cont / "broad-dev.npz")
@@ -393,7 +395,12 @@ def main(argv=None):
         cfg = json.loads((resume_dir / "config.json").read_text(encoding="utf-8"))
         changed = [f"{k}: {cfg.get(k)!r} -> {getattr(args, k)!r}" for k in RECIPE_FIELDS
                    if k in cfg and cfg[k] != getattr(args, k)]
-        changed += [f"{k}: changed" for k, v in identity.items() if cfg.get(k) != v]
+        # A run saved before the ply pack existed has no `ply_groups` in its config. Its first
+        # resume with --ply-groups may introduce the pack's identity; every later change
+        # (groups, pack digest, anything else) is refused as before.
+        adopting_ply = "ply_groups" not in cfg and "ply_pack_digest" in identity
+        changed += [f"{k}: changed" for k, v in identity.items()
+                    if cfg.get(k) != v and not (adopting_ply and k == "ply_pack_digest")]
         if changed and not args.allow_recipe_change:
             raise ValueError("resume would change the recipe or data identity: " + "; ".join(changed)
                              + " (start a new --hf-run, or pass --allow-recipe-change)")

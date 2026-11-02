@@ -65,5 +65,10 @@ ARMS["p0"] = {"note": "later-ply control: main-run recipe from a main-run checkp
               "args": A4_RECIPE + PLY_INIT + ["--ply-groups", "0"]}
 ARMS["p1"] = {"note": "later-ply roots: the control plus 10 ply-3/5 groups per step",
               "args": A4_RECIPE + PLY_INIT + ["--ply-groups", "10"]}
+# The main run adopts the later-ply roots that won the matched p0/p1 experiment (PROJECT-STATUS.md),
+# at the tested dose. Its pack is built from every shard finished when it was adopted; a pack of a
+# different shard set gets its own folder, so the experiment's pack stays reproducible.
+PLY_MAIN_PACK = "cont-v2/ply-pack-main-v1"
+PLY_MAIN_ARGS = ["--ply-groups", "10", "--ply-pack-prefix", PLY_MAIN_PACK, "--val-detail"]
 ARM_STEPS = 30_000
 ARM_RUN_PREFIX = "ccgavn-cont1-"

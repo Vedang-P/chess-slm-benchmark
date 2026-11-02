@@ -228,3 +228,30 @@ clears 86.13% by a margin inside the roughly 0.35-point sampling error of a 10,0
 score, so the gate does not separate the runs; the paired difference does. The official puzzles
 were inspected during development, so they are a fixed comparison set and not an untouched
 holdout, and the sealed test puzzles have not been scored.
+
+### Adoption into the main run (2026-11-02, on the owner's go-ahead)
+
+The main run (`ccgavn-cont1-a4`) now trains with `--ply-groups 10`, the dose that was tested, and
+`--val-detail`, from its own pack `cont-v2/ply-pack-main-v1` (manifest digest `4ae8541b...ec991`):
+every shard finished at 19:55 UTC, 352 in all. Ply 3 contributes 250 shards (1,249,044 roots) and
+ply 5 contributes 102 (508,792 roots); 1,740,113 roots are for training and 17,723 are held out
+as a dev fold; 2,164 benchmark-position roots were dropped. At ten groups per step that is about
+one pass over the pack per day, close to the first-decision pack's rate. The experiment's pack
+stays untouched at `cont-v2/ply-pack`, so `p1` remains reproducible.
+
+It takes effect at the next learner session: the running one started at 11:19 UTC with the old
+recipe and ends about 22:49 UTC, and the tick then resumes the same checkpoint, optimizer and EMA
+with the new flags. A run saved before ply support may take the pack's identity in on that first
+resume and nothing else may change; afterwards the groups and the pack are pinned like the rest of
+the recipe (changing them needs `--allow-recipe-change`, which is also the way back). Checked
+before the change was pushed: the new trainer, with the groups off, continues a checkpoint
+written by the previous trainer bit for bit, and with the groups on it resumes the same
+checkpoint without any override.
+
+What was not tested: the experiment restarted from the EMA weights with a fresh optimizer, while
+the main run resumes with its optimizer state, so the restart dip should not recur but that exact
+path is new. To watch: validation every 10,000 steps with failures by ply (`val_failed_by_ply`),
+`ply_dev_hit`, and the broad dev loss (the treatment paid 0.6%). The main run's official
+evaluation at step 100,000 still uses the old recipe and is the "before" number; the one at step
+200,000 is the first "after". The sealed test puzzles stay untouched, and the 86.13% gate is
+judged only on the official and sealed sets.

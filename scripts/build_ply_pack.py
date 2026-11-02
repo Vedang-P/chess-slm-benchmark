@@ -56,13 +56,15 @@ def main() -> None:
     p.add_argument("--hf-repo", default=HF_REPO)
     p.add_argument("--plies", type=int, nargs="+", default=list(PLIES))
     p.add_argument("--max-shards", type=int, default=0, help="per ply; 0 = every finished shard")
+    p.add_argument("--pack-prefix", default=PACK_PREFIX,
+                   help="Hub folder for this pack; give each pack of a different shard set its own")
     p.add_argument("--upload", action="store_true")
     args = p.parse_args()
 
     from scripts.kaggle_checkpoint import api as make_api
     api = make_api(ROOT)
     work = args.workdir
-    out = work / PACK_PREFIX
+    out = work / args.pack_prefix
     out.mkdir(parents=True, exist_ok=True)
     started = time.time()
 
@@ -122,7 +124,7 @@ def main() -> None:
     del arrays
 
     summary = {
-        "format": PACK_FORMAT, "plan_sha256": file_sha256(plan_path),
+        "format": PACK_FORMAT, "pack_prefix": args.pack_prefix, "plan_sha256": file_sha256(plan_path),
         "source_sha256": plan["source_sha256"], "exclusion_sha256": plan["exclusion_sha256"],
         "val_csv_sha256": plan["val_csv_sha256"], "test_csv_sha256": plan["test_csv_sha256"],
         "roots_per_shard": ROOTS_PER_SHARD, "plies": args.plies, "pack_stats": builder.stats,
@@ -137,11 +139,11 @@ def main() -> None:
     if args.upload:
         from scripts.hf_upload import retry_hf_call
         retry_hf_call(lambda: api.upload_folder(
-            folder_path=str(out), path_in_repo=PACK_PREFIX, repo_id=args.hf_repo,
+            folder_path=str(out), path_in_repo=args.pack_prefix, repo_id=args.hf_repo,
             repo_type="dataset",
             commit_message=f"Add the later-ply training pack ({builder.stats['roots']:,} roots)"),
             "upload ply pack")
-        print(f"[ply-pack] uploaded {PACK_PREFIX}", flush=True)
+        print(f"[ply-pack] uploaded {args.pack_prefix}", flush=True)
 
 
 if __name__ == "__main__":
