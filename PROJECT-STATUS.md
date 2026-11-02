@@ -252,6 +252,8 @@ What was not tested: the experiment restarted from the EMA weights with a fresh 
 the main run resumes with its optimizer state, so the restart dip should not recur but that exact
 path is new. To watch: validation every 10,000 steps with failures by ply (`val_failed_by_ply`),
 `ply_dev_hit`, and the broad dev loss (the treatment paid 0.6%). The main run's official
-evaluation at step 100,000 still uses the old recipe and is the "before" number; the one at step
-200,000 is the first "after". The sealed test puzzles stay untouched, and the 86.13% gate is
+evaluation at step 100,000 used the old recipe and is the "before" number: 8,701 of 10,000
+(87.01%) and 3,819 of 4,000 on MATE, validation 3,490 of 4,000 (87.25%), so the main run on its
+own already clears the 8,613-puzzle reference by 88 puzzles. The one at step 200,000 is the first
+"after". The sealed test puzzles stay untouched, and the 86.13% gate is
 judged only on the official and sealed sets.
