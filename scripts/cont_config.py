@@ -56,5 +56,14 @@ ARMS["r1"] = {"note": "stage 2: exact-expectation RL (beta 0.05) from a4@30k EMA
               "args": A4_RECIPE + STAGE2_INIT + ["--rl-weight", "1.0", "--rl-beta", "0.05"]}
 ARMS["c1"] = {"note": "stage 2 control: same branch point and data, no RL term",
               "args": A4_RECIPE + STAGE2_INIT + ["--rl-weight", "0"]}
+# Later-ply experiment: both branches start from the EMA weights of one main-run checkpoint
+# (--init-checkpoint is given at launch) with the main-run recipe, and differ only in
+# --ply-groups. Length and logging flags (--max-steps 15000 --val-every 2500 --ckpt-every
+# 2500 --val-detail) go on the launch command so the launch log records them.
+PLY_INIT = ["--init-hf-run", "ccgavn-cont1-a4", "--init-weights", "ema"]
+ARMS["p0"] = {"note": "later-ply control: main-run recipe from a main-run checkpoint, no ply roots",
+              "args": A4_RECIPE + PLY_INIT + ["--ply-groups", "0"]}
+ARMS["p1"] = {"note": "later-ply roots: the control plus 10 ply-3/5 groups per step",
+              "args": A4_RECIPE + PLY_INIT + ["--ply-groups", "10"]}
 ARM_STEPS = 30_000
 ARM_RUN_PREFIX = "ccgavn-cont1-"

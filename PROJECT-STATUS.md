@@ -86,3 +86,55 @@ branch point and data (runs r1 and c1, both from the a4 EMA weights at step 30,0
 The [monitor](https://chess-slm-monitor.vedangpandeyy.workers.dev/) shows
 validation curves per run, official evaluations, pool quota and supervisor
 state.
+
+## Later-ply roots (cont2 experiment)
+
+Question: does dense Stockfish supervision of the *later* decisions on a puzzle's solution
+line lift puzzle accuracy? In arm a4 at step 30,000 the 4,000 validation puzzles failed 273
+times at the first model decision and 257 times at later plies (official 10,000: 687 vs 688).
+The tactical pack holds only first-decision roots, and the listwise loss cut first-decision
+failures by 55% but later-ply failures by only 7%, so later plies are now half of the errors.
+
+Data (`puzzle-ply-v1` on the Hub). For every Lichess puzzle with a stored move at that ply,
+the board after `Moves[0..ply-1]` for ply 3 and 5 (the solver's second and third decision),
+labelled with every legal move by the frozen Stockfish 16, 50 ms root-move recipe. 5,227,036
+ply-3 roots (1,046 shards) and 2,118,555 ply-5 roots (424 shards) of 5,000 puzzles each.
+Official puzzles and the validation/test puzzles are excluded by id, and every position in
+the benchmark exclusion set (the 104,092 reflection-orbit hashes of the cont-v1 pack) is
+dropped by hash. Twenty-five CPU kernels (five per account, four Stockfish processes each)
+label the shards and the cont tick keeps them alive; `cont-v2/ply-pack` is the training pack
+built from the finished shards. The sealed test puzzles are never read.
+
+Experiment. Two runs start from the EMA weights of the same `ccgavn-cont1-a4` checkpoint with
+the main-run recipe (seed 0, 1,434 broad rows and 20 first-decision groups per step, lr 5e-5,
+listwise loss), 15,000 steps each, validation every 2,500 steps:
+
+* `ccgavn-cont1-p0` (control): `--ply-groups 0`;
+* `ccgavn-cont1-p1`: `--ply-groups 10`, ten extra ply-3/5 roots per step drawn uniformly from
+  the pack's training roots (about 70% ply 3, 30% ply 5) on their own RNG stream, so the
+  broad and first-decision draws are identical to the control's.
+
+Decision rule, fixed before either run starts. The only data used for the decision is the
+4,000-puzzle validation set (EMA weights, the harness rules), compared puzzle by puzzle
+(`scripts/compare_ply_runs.py`; the official 10,000 puzzles are not read until the verdict is
+recorded below). With gain = treatment solved minus control solved:
+
+| Check | Requirement (all four for ADOPT) |
+| --- | --- |
+| effect | gain >= +20 puzzles (0.5 point) at step 15,000 and exact McNemar p < 0.05 |
+| consistent | mean gain over steps 10,000 / 12,500 / 15,000 >= +15 |
+| mechanism | later-ply failures <= 90% of the control's and first-decision failures <= 105% of the control's at step 15,000 |
+| broad corpus | broad dev loss <= 101% of the control's at step 15,000 |
+
+REJECT when the final gain is <= +8 puzzles or later-ply failures did not drop; anything
+else is INCONCLUSIVE (the next step would be a second seed pair, not a change to the main
+run). ADOPT means "propose adding `--ply-groups` to the main run", which is the owner's call.
+The 86.13% gate and the evaluation are unchanged and are judged only on the official 10,000
+puzzles and the sealed test puzzles, never on this experiment.
+
+What the design cannot show: a single pair does not measure run-to-run training noise (the
+consistency and mechanism checks guard against a lucky final evaluation, not against a
+different seed); the treatment also sees about 50% more tactical rows per step (17% more rows in all), so a gain
+that is not concentrated in later-ply failures is evidence of generic tactical supervision
+rather than of later-ply supervision; and validation is rating-matched to the official
+puzzles but drawn from the same Lichess distribution as the training roots.

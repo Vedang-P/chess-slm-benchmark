@@ -19,7 +19,8 @@ import chess
 import chess.engine
 import numpy as np
 
-from scripts import cont_data, cont_eval, label_ply_shard, ply_data, watch_ply_labels
+from scripts import (compare_ply_runs, cont_config, cont_data, cont_eval, label_ply_shard,
+                     ply_data, watch_ply_labels)
 from scripts.eval_gavn import tokenize_fen
 
 SL_REPO = Path(os.environ.get(
@@ -1108,6 +1109,82 @@ class PlyFleetTests(unittest.TestCase):
         cfg = watch_ply_labels.worker_config(7, self.HEAD)
         self.assertEqual((cfg["worker_index"], cfg["worker_count"], cfg["engines"]), (7, 25, 4))
         self.assertTrue(watch_ply_labels.TEMPLATE.read_text().count(f'"""{watch_ply_labels.MARKER}"""') == 1)
+
+
+class PlyCompareTests(unittest.TestCase):
+    def run_pair(self, solved_only_t, solved_only_c, both, first_t, first_c, later_t, later_c):
+        """Two runs on the same puzzles with the given discordant pairs and failure counts."""
+        n = solved_only_t + solved_only_c + both + 60
+        ids = [f"p{i}" for i in range(n)]
+        c, t = np.zeros(n, dtype=bool), np.zeros(n, dtype=bool)
+        t[:solved_only_t] = True
+        c[solved_only_t:solved_only_t + solved_only_c] = True
+        c[solved_only_t + solved_only_c:solved_only_t + solved_only_c + both] = True
+        t[solved_only_t + solved_only_c:solved_only_t + solved_only_c + both] = True
+
+        def plies(correct, first, later):
+            out, idx = [None] * n, [i for i in range(n) if not correct[i]]
+            for k, i in enumerate(idx[:first + later]):
+                out[i] = 1 if k < first else 3
+            return out
+
+        return ({"ids": ids, "correct": c.astype(int).tolist(), "fail_ply": plies(c, first_c, later_c)},
+                {"ids": ids, "correct": t.astype(int).tolist(), "fail_ply": plies(t, first_t, later_t)})
+
+    def test_exact_mcnemar_matches_known_values(self):
+        self.assertEqual(compare_ply_runs.mcnemar_exact(0, 0), 1.0)
+        self.assertEqual(compare_ply_runs.mcnemar_exact(5, 5), 1.0)
+        self.assertAlmostEqual(compare_ply_runs.mcnemar_exact(10, 0), 2 / 1024)
+        self.assertAlmostEqual(compare_ply_runs.mcnemar_exact(0, 10), 2 / 1024)
+        self.assertAlmostEqual(compare_ply_runs.mcnemar_exact(3, 1), 2 * 5 / 16)     # n=4: (1+4)/16 twice
+
+    def test_paired_counts_gain_discordant_pairs_and_failure_split(self):
+        control, treatment = self.run_pair(40, 10, 100, first_t=20, first_c=20, later_t=15, later_c=30)
+        s = compare_ply_runs.paired(control, treatment)
+        self.assertEqual((s["only_treatment"], s["only_control"], s["gain"]), (40, 10, 30))
+        self.assertEqual(s["failures"]["treatment"], {"first": 20, "later": 15, "by_ply": {"1": 20, "3": 15}})
+        self.assertLess(s["mcnemar_p"], 0.001)
+        with self.assertRaises(ValueError):
+            compare_ply_runs.paired(control, dict(treatment, ids=treatment["ids"][::-1]))
+
+    def verdict_for(self, early, middle, final, dev):
+        per = {10_000: compare_ply_runs.paired(*self.run_pair(**early)),
+               12_500: compare_ply_runs.paired(*self.run_pair(**middle)),
+               15_000: compare_ply_runs.paired(*self.run_pair(**final))}
+        return compare_ply_runs.verdict(per, dev)
+
+    def test_verdict_adopts_only_when_every_criterion_holds(self):
+        good = dict(solved_only_t=45, solved_only_c=15, both=200, first_t=40, first_c=40, later_t=30, later_c=45)
+        early = dict(good, solved_only_t=35, solved_only_c=15)
+        ok = self.verdict_for(early, early, good, {"control": 3.77, "treatment": 3.78})
+        self.assertEqual(ok["outcome"], "ADOPT")
+        self.assertEqual(ok["gains"], {10_000: 20, 12_500: 20, 15_000: 30})
+        # a good last evaluation alone is not consistent enough
+        flat = dict(good, solved_only_t=15, solved_only_c=15)
+        lucky = self.verdict_for(flat, flat, good, {"control": 3.77, "treatment": 3.78})
+        self.assertFalse(lucky["checks"]["consistent"])
+        self.assertEqual(lucky["outcome"], "INCONCLUSIVE")
+        # the gain must come from later plies
+        wrong = dict(good, later_t=44, first_t=30)
+        self.assertFalse(self.verdict_for(early, early, wrong,
+                                          {"control": 3.77, "treatment": 3.78})["checks"]["mechanism"])
+        # forgetting the broad corpus fails the last check
+        hurt = self.verdict_for(early, early, good, {"control": 3.77, "treatment": 3.90})
+        self.assertFalse(hurt["checks"]["broad_loss"])
+        self.assertEqual(hurt["outcome"], "INCONCLUSIVE")
+
+    def test_verdict_rejects_a_flat_or_worse_treatment(self):
+        flat = dict(solved_only_t=12, solved_only_c=10, both=200, first_t=40, first_c=40, later_t=44, later_c=45)
+        out = self.verdict_for(flat, flat, flat, {"control": 3.77, "treatment": 3.77})
+        self.assertEqual(out["outcome"], "REJECT")
+
+    def test_ply_arms_differ_only_in_ply_groups_and_start_from_the_main_run(self):
+        p0, p1 = cont_config.ARMS["p0"]["args"], cont_config.ARMS["p1"]["args"]
+        self.assertEqual(p0[:-1], p1[:-1])
+        self.assertEqual((p0[-2:], p1[-2:]), (["--ply-groups", "0"], ["--ply-groups", "10"]))
+        self.assertEqual(p0[p0.index("--init-hf-run") + 1], "ccgavn-cont1-a4")
+        self.assertEqual(p0[p0.index("--init-weights") + 1], "ema")
+        self.assertNotIn("--init-checkpoint", p0)         # chosen at launch, identically for both
 
 
 if __name__ == "__main__":
