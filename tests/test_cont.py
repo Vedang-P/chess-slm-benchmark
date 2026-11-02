@@ -20,7 +20,7 @@ import chess.engine
 import numpy as np
 
 from scripts import (compare_ply_runs, cont_config, cont_data, cont_eval, label_ply_shard,
-                     ply_data, watch_ply_labels)
+                     ply_data, ply_label_bench, watch_ply_labels)
 from scripts.eval_gavn import tokenize_fen
 
 SL_REPO = Path(os.environ.get(
@@ -1233,6 +1233,21 @@ class PlyCompareTests(unittest.TestCase):
         flat = dict(solved_only_t=12, solved_only_c=10, both=200, first_t=40, first_c=40, later_t=44, later_c=45)
         out = self.verdict_for(flat, flat, flat, {"control": 3.77, "treatment": 3.77})
         self.assertEqual(out["outcome"], "REJECT")
+
+    def test_label_bench_compares_two_labelings_move_by_move(self):
+        actions = np.arange(4, dtype=np.uint16)
+        solo = [(actions, np.array([0.2, 0.5, 0.9, 0.1], dtype=np.float32)),
+                (actions, np.array([0.6, 0.6, 0.3, 0.2], dtype=np.float32))]
+        loaded = [(actions, np.array([0.25, 0.45, 0.85, 0.15], dtype=np.float32)),    # same best move
+                  (actions, np.array([0.5, 0.7, 0.3, 0.2], dtype=np.float32))]         # best moved 0 -> 1
+        gap = ply_label_bench.compare(solo, loaded)
+        self.assertEqual(gap["moves"], 8)
+        self.assertAlmostEqual(gap["mean_abs_winprob_gap"], 0.05, places=5)     # 0.05 and 0.05 per root
+        self.assertAlmostEqual(gap["mean_signed_winprob_gap"], 0.0, places=5)   # the shifts cancel
+        self.assertAlmostEqual(gap["p95_abs_winprob_gap"], 0.1, places=5)
+        self.assertEqual(gap["best_move_agreement"], 0.5)        # the second root's solo best lost
+        with self.assertRaises(ValueError):
+            ply_label_bench.compare(solo, [(actions[::-1], solo[0][1]), solo[1]])
 
     def test_ply_arms_differ_only_in_ply_groups_and_start_from_the_main_run(self):
         p0, p1 = cont_config.ARMS["p0"]["args"], cont_config.ARMS["p1"]["args"]

@@ -71,14 +71,24 @@ def label_all(stockfish: Path, boards: list[chess.Board], ids: list[str], parall
 
 
 def compare(a: list, b: list) -> dict:
-    """Mean absolute win-probability gap and how often the best move agrees (ties count)."""
-    gaps, agree = [], 0
+    """Win-probability gaps between two labelings (b - a) and how often the best move agrees.
+
+    A tie for the best value counts as agreement. The signed mean is the bias of `b` against
+    `a`; the absolute mean and 95th percentile are the size of the disagreement.
+    """
+    abs_gaps, signed, per_root, agree = [], [], [], 0
     for (actions_a, wp_a), (actions_b, wp_b) in zip(a, b):
         if not np.array_equal(actions_a, actions_b):
             raise ValueError("labeled actions differ between passes")
-        gaps.append(float(np.abs(wp_a - wp_b).mean()))
+        abs_gaps.append(np.abs(wp_b - wp_a))
+        signed.append(wp_b - wp_a)
+        per_root.append(float(np.abs(wp_b - wp_a).mean()))
         agree += int(wp_b[int(np.argmax(wp_a))] >= wp_b.max() - 1e-6)
-    return {"mean_abs_winprob_gap": float(np.mean(gaps)), "best_move_agreement": agree / len(a)}
+    flat_abs, flat_signed = np.concatenate(abs_gaps), np.concatenate(signed)
+    return {"mean_abs_winprob_gap": float(np.mean(per_root)),
+            "mean_signed_winprob_gap": float(flat_signed.mean()),
+            "p95_abs_winprob_gap": float(np.percentile(flat_abs, 95)),
+            "best_move_agreement": agree / len(a), "moves": int(len(flat_abs))}
 
 
 def main() -> None:
