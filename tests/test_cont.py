@@ -257,6 +257,38 @@ class LossTests(unittest.TestCase):
         self.assertEqual(float(hit), 0.0)
         self.assertAlmostEqual(float(regret), 0.8, places=4)
 
+    def test_exact_policy_loss_matches_a_naive_loop_and_anchors_to_the_reference(self):
+        import torch
+        from scripts.train_cont import exact_policy_loss
+        torch.manual_seed(1)
+        lens = torch.tensor([3, 4, 2])
+        gid = torch.repeat_interleave(torch.arange(3), lens)
+        q = torch.rand(int(lens.sum()), requires_grad=True)
+        q_ref = torch.rand(int(lens.sum()))
+        wp = torch.rand(int(lens.sum()))
+        tau, beta = 0.05, 0.3
+        loss, value, kl = exact_policy_loss(torch, q, wp, gid, lens, tau, q_ref, beta)
+        js, kls, o = [], [], 0
+        for n in lens.tolist():
+            pi = torch.softmax(q[o:o + n] / tau, 0)
+            ref = torch.softmax(q_ref[o:o + n] / tau, 0)
+            js.append((pi * wp[o:o + n]).sum())
+            kls.append((pi * (pi.log() - ref.log())).sum())
+            o += n
+        torch.testing.assert_close(loss, -(torch.stack(js) - beta * torch.stack(kls)).mean())
+        torch.testing.assert_close(value, torch.stack(js).mean())
+        torch.testing.assert_close(kl, torch.stack(kls).mean())
+        loss.backward()
+        self.assertTrue(torch.isfinite(q.grad).all())
+        # with the reference equal to the policy the KL is zero and the loss is -J
+        same, _, k0 = exact_policy_loss(torch, q.detach(), wp, gid, lens, tau, q.detach(), beta)
+        self.assertAlmostEqual(float(k0), 0.0, places=6)
+        # moving value toward the best move lowers the loss
+        qq = torch.tensor([0.4, 0.5, 0.6], requires_grad=True)
+        w3 = torch.tensor([0.2, 0.3, 0.9])
+        exact_policy_loss(torch, qq, w3, torch.zeros(3, dtype=torch.long), torch.tensor([3]), tau)[0].backward()
+        self.assertLess(float(qq.grad[2]), 0.0)     # d(loss)/dq of the best move is negative
+
     def test_lr_schedule_warms_up_holds_and_decays(self):
         from scripts.train_cont import lr_at
         a = mock.Mock(lr=2e-5, warmup=100, decay_start=-1, decay_steps=0)
@@ -386,6 +418,15 @@ class TrainerIntegrationTests(unittest.TestCase):
                 torch.testing.assert_close(a["ema"][key], b["ema"][key], rtol=0, atol=0)
             self.assertTrue(any(not torch.equal(a["model"][k], a["ema"][k]) for k in a["model"]
                                 if a["model"][k].dtype.is_floating_point))
+
+    def test_stage2_rl_term_runs_and_records_its_diagnostics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, statuses = self.run_main(Path(tmp), "rl", ["--max-steps", "6", "--rl-weight", "1.0",
+                                                            "--rl-beta", "0.05"])
+            self.assertTrue((out / "checkpoint-6" / "state.pt").exists())
+            cfg = json.loads((out / "checkpoint-6" / "config.json").read_text())
+            self.assertEqual(cfg["rl_weight"], 1.0)
+            self.assertTrue(any(s.startswith("DONE") for s in statuses))
 
     def test_resume_refuses_a_changed_recipe(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -48,7 +48,8 @@ from scripts.train_gavn import action_tables  # noqa: E402
 
 RECIPE_FIELDS = ("dim", "layers", "heads", "broad_rows", "tactical_groups", "lr", "warmup",
                  "ema_decay", "weight_decay", "w_dist", "w_ce", "w_ce_tac", "lambda_list",
-                 "tau", "reflect_prob", "seed", "block_steps", "decay_start", "decay_steps")
+                 "tau", "reflect_prob", "seed", "block_steps", "decay_start", "decay_steps",
+                 "rl_weight", "rl_beta", "init_weights")
 BASE_RUN, BASE_STEP = "ccgavn-5m-v2-functional-seed0", 3_896_658
 
 
@@ -89,6 +90,12 @@ def parse_args(argv=None):
     p.add_argument("--w-ce-tac", type=float, default=1.0)
     p.add_argument("--lambda-list", type=float, default=1.0)
     p.add_argument("--tau", type=float, default=0.05)
+    # stage 2: exact-expectation policy optimisation against a frozen reference
+    p.add_argument("--rl-weight", type=float, default=0.0, help="0 disables the RL term")
+    p.add_argument("--rl-beta", type=float, default=0.05, help="KL(pi || pi_ref) coefficient")
+    p.add_argument("--init-weights", choices=["model", "ema"], default="model",
+                   help="which weights of the init checkpoint to start from (and to freeze as "
+                        "the RL reference)")
     p.add_argument("--seed", type=int, default=0)
     # cadence / control
     p.add_argument("--max-steps", type=int, default=0, help="stage steps; 0 = until session end")
@@ -148,6 +155,33 @@ def listwise_loss(torch, q, wp, gid, lens, tau: float):
     return ce.mean(), (ce - entropy).mean(), hit.detach(), regret.detach()
 
 
+def exact_policy_loss(torch, q, wp, gid, lens, tau: float, q_ref=None, beta: float = 0.0):
+    """Negative expected return of the softmax policy over each root's legal moves.
+
+    Every legal move has a Stockfish value, so J = sum_a pi(a) * R(a) is computed
+    exactly (no sampled groups, no advantage noise). `beta` penalises KL(pi || pi_ref)
+    against a frozen reference so the policy cannot drift into degenerate play.
+    Returns (loss, J, kl): the means over roots.
+    """
+    groups, longest = int(lens.numel()), int(lens.max())
+    starts = torch.cumsum(lens, 0) - lens
+    pos = torch.arange(q.numel(), device=q.device) - starts[gid]
+    pad = -1e4
+    logits = torch.full((groups, longest), pad, device=q.device)
+    reward = torch.zeros((groups, longest), device=q.device)
+    logits[gid, pos] = q / tau
+    reward[gid, pos] = wp
+    logp = torch.log_softmax(logits, dim=1)
+    pi = logp.exp()
+    value = (pi * reward).sum(1)
+    kl = torch.zeros_like(value)
+    if q_ref is not None and beta:
+        ref = torch.full((groups, longest), pad, device=q.device)
+        ref[gid, pos] = q_ref / tau
+        kl = (pi * (logp - torch.log_softmax(ref, dim=1))).sum(1)
+    return -(value - beta * kl).mean(), value.mean().detach(), kl.mean().detach()
+
+
 def expected_value(torch, logits, bucket_values):
     return torch.softmax(logits.float(), -1) @ bucket_values
 
@@ -185,10 +219,18 @@ def batch_loss(torch, logits, batch, args, bucket_values):
             with torch.no_grad():
                 list_loss, _, hit, regret = listwise_loss(torch, q.detach(), tw, gid, lens, args.tau)
         diag.update(ce_t=ce_t.mean().detach(), list=list_loss.detach(), hit=hit, regret=regret)
+        if getattr(args, "rl_weight", 0) and "q_ref" in batch:
+            rl, value, kl = exact_policy_loss(
+                torch, q, tw, gid, lens, args.tau,
+                torch.as_tensor(batch["q_ref"], device=device), args.rl_beta)
+            diag.update(rl_value=value, rl_kl=kl)
+            rl_term = args.rl_weight * (n_tac / (nb + n_tac)) * rl
     total = nb + n_tac
     loss = torch.cat(parts).sum() / total
     if args.lambda_list and n_tac:
         loss = loss + args.lambda_list * (n_tac / total) * list_loss
+    if n_tac and "rl_value" in diag:
+        loss = loss + rl_term
     return loss, diag, total
 
 
@@ -295,6 +337,23 @@ def main(argv=None):
             torch._foreach_mul_(ema_dst, args.ema_decay)
             torch._foreach_add_(ema_dst, ema_src, alpha=1 - args.ema_decay)
 
+    def load_init_weights() -> dict:
+        """Weights of the init checkpoint (raw or EMA), validated against this model."""
+        from huggingface_hub import snapshot_download
+        dest = outdir / "init"
+        snapshot_download(args.hf_repo, repo_type="dataset", token=token, local_dir=str(dest),
+                          allow_patterns=[f"{args.init_hf_run}/{args.init_checkpoint}/*"])
+        init_dir = dest / args.init_hf_run / args.init_checkpoint
+        init_cfg = json.loads((init_dir / "config.json").read_text(encoding="utf-8"))
+        if (init_cfg.get("architecture") != "cc-gavn-v1"
+                or init_cfg.get("model_version") != args.model_version
+                or init_cfg.get("parameter_count") != params):
+            raise ValueError("init checkpoint does not match the requested architecture")
+        saved = torch.load(init_dir / "state.pt", map_location=device, weights_only=False)
+        if args.init_weights == "ema" and "ema" not in saved:
+            raise ValueError("init checkpoint has no EMA weights")
+        return saved["ema" if args.init_weights == "ema" else "model"]
+
     # ---- resume or initialise
     start_step, baseline = 0, None
     resume_dir = (download_latest(hf, args.hf_repo, args.hf_run, outdir / "hf-resume")
@@ -317,20 +376,18 @@ def main(argv=None):
         start_step, baseline = int(state["step"]), cfg.get("baseline")
         print(f"[resume] step={start_step}", flush=True)
     else:
-        from huggingface_hub import snapshot_download
-        dest = outdir / "init"
-        snapshot_download(args.hf_repo, repo_type="dataset", token=token, local_dir=str(dest),
-                          allow_patterns=[f"{args.init_hf_run}/{args.init_checkpoint}/*"])
-        init_dir = dest / args.init_hf_run / args.init_checkpoint
-        init_cfg = json.loads((init_dir / "config.json").read_text(encoding="utf-8"))
-        if (init_cfg.get("architecture") != "cc-gavn-v1"
-                or init_cfg.get("model_version") != args.model_version
-                or init_cfg.get("parameter_count") != params):
-            raise ValueError("init checkpoint does not match the requested architecture")
-        state = torch.load(init_dir / "state.pt", map_location=device, weights_only=False)
-        raw_model.load_state_dict(state["model"])
-        ema_model.load_state_dict(state["model"])
-        print(f"[init] {args.init_hf_run}/{args.init_checkpoint}", flush=True)
+        init_weights = load_init_weights()
+        raw_model.load_state_dict(init_weights)
+        ema_model.load_state_dict(init_weights)
+        print(f"[init] {args.init_hf_run}/{args.init_checkpoint} ({args.init_weights} weights)",
+              flush=True)
+    ref_model = None
+    if args.rl_weight:
+        # The frozen reference for the KL anchor is the init weights, on every session.
+        ref_model = copy.deepcopy(raw_model).eval()
+        ref_model.load_state_dict(load_init_weights())
+        for prm in ref_model.parameters():
+            prm.requires_grad_(False)
     print(f"[train] device={device} params={params:,} lr={args.lr} ema={args.ema_decay} "
           f"broad_rows={args.broad_rows} tactical_groups={args.tactical_groups}", flush=True)
 
@@ -520,6 +577,10 @@ def main(argv=None):
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=device.type == "cuda"):
             logits = model(tokens_t, actions_t)
+            if ref_model is not None and pack is not None:
+                with torch.no_grad():
+                    batch["q_ref"] = expected_value(torch, ref_model(tokens_t[nb:], actions_t[nb:]),
+                                                    bucket_values)
         loss, diag, total_rows = batch_loss(torch, logits, batch, args, bucket_values)
         if not torch.isfinite(loss):
             nonfinite += 1
@@ -541,7 +602,7 @@ def main(argv=None):
         ckpt_due = (step % args.ckpt_every == 0 or timer.due() or val_due or milestone)
         if step % 100 == 0 or val_due or ckpt_due:
             rate = rows_seen / max(1.0, time.time() - t_loop)
-            last_metrics.update(train_loss=float(loss), train_dist=float(diag["dist"]),
+            last_metrics.update(train_loss=float(loss.detach()), train_dist=float(diag["dist"]),
                                 train_list=float(diag["list"]), train_hit=float(diag["hit"]),
                                 grad_norm=grad_norm, lr=lr, samples_per_s=rate)
             if step % 100 == 0:
